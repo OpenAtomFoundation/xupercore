@@ -1,0 +1,34 @@
+# Project specific files
+plugins/
+output/
+xvm/compile/wabt/build/
+contractsdk/cpp/build
+event_client
+
+# Compiled source
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.d
+
+# OSX trash
+.DS_Store
+
+# vim
+.*.sw*
+
+# vscode
+.vscode
+
+# Go test binaries
+*.test
+
+# idea
+.idea
+
+# Log files
+*.log
+*.log.wf
