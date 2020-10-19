@@ -1,0 +1,6 @@
+# network config
+port: 8300
+# bootNode节点自身不能配置bootNodes
+bootNodes:
+  - "/ip4/127.0.0.1/tcp/8300/p2p/QmNT4x6e15y7BhCPdVJjLA5M5tdpSKeSfdRb8JZ6MQcpvE"
+isStorePeers: true
