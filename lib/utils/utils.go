@@ -1,13 +1,26 @@
-package logs
+package utils
 
 import (
 	"fmt"
 	"math/rand"
+	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"time"
 )
+
+// FileExists reports whether the named file or directory exists.
+func FileIsExist(name string) bool {
+	if _, err := os.Stat(name); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+
+	return true
+}
 
 // Generate unique id, Not strictly unique
 // But the probability of repetition is very low
@@ -46,4 +59,16 @@ func GetFuncCall(callDepth int) (string, string) {
 
 	fline := filename + ":" + strconv.Itoa(line)
 	return fline, function
+}
+
+// 获取当前源文件目录
+func GetCurFileDir() string {
+	_, filename, _, _ := runtime.Caller(1)
+	return path.Dir(filename)
+}
+
+// 获取当前执行目录
+func GetCurExecDir() string {
+	curDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
+	return curDir
 }

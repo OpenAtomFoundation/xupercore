@@ -1,12 +1,20 @@
 package logs
 
 import (
+	"fmt"
+	"os"
 	"sync"
 	"testing"
 )
 
 func TestInfo(t *testing.T) {
-	log, err := GetLogFitter(nil)
+	// 初始化日志
+	confFile := getConfFile()
+	logDir := getLogDir()
+	fmt.Printf("conf:%s dir:%s\n", confFile, logDir)
+	InitLog(confFile, logDir)
+
+	log, err := NewLogger("")
 	if err != nil {
 		t.Errorf("new logger fail.err:%v", err)
 	}
@@ -16,6 +24,8 @@ func TestInfo(t *testing.T) {
 		wg.Add(1)
 		go func(num int) {
 			defer wg.Done()
+
+			log, _ := NewLogger("")
 			log.Info("info1", "a", 1, "b", 2, "c", 3, "num", num)
 			log.Debug("test", "a", 1, "b", 2, "c", 3, "num", num)
 			log.Trace("test", "a", 1, "b", 2, "c", 3, "num", num)
@@ -38,4 +48,8 @@ func TestInfo(t *testing.T) {
 	wg.Wait()
 	log.Debug("msg", "log_id", "123456---111111")
 	log.Trace("msg")
+
+	// 清理输出的日志文件
+	os.RemoveAll(logDir)
+	fmt.Printf("remove dir:%s\n", logDir)
 }

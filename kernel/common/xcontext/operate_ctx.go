@@ -1,11 +1,14 @@
 package xcontext
 
 import (
+	"fmt"
+
+	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 )
 
-// 通用操作级上下文，有特殊需要的自己定义
-// 不是所有的方法都需要，按需选用
+// 通用操作级上下文，不需要扩展的场景直接选用
+// 有特殊需要扩展的自行定义。不是所有的方法都需要，按需选用
 type ComOperateCtx interface {
 	BaseCtx
 	GetTimer() *timer.XTimer

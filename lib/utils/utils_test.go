@@ -1,4 +1,4 @@
-package logs
+package utils
 
 import (
 	"fmt"
@@ -9,11 +9,18 @@ import (
 
 const (
 	// producer Concurrent
-	ProducerConcurrent = 10
+	ProducerConcurrent = 1000
 	// Total generate number
-	ProducerGenTotal = 100
+	ProducerGenTotal = 100000
 )
 
+func TestFileIsExist(t *testing.T) {
+	exist := FileIsExist("/home/rd/test/")
+	fmt.Println(exist)
+}
+
+// 用来验证logId生成算法的冲突率，1000并发下生成十万个id
+// 冲突概率小于十万分之一，使用在日志记录场景下足够了
 func TestGenLogId(t *testing.T) {
 	ch := make(chan string, ProducerConcurrent)
 	wg := &sync.WaitGroup{}
@@ -96,4 +103,12 @@ func wait(wg *sync.WaitGroup, tch <-chan string) <-chan int {
 func TestGetFuncCall(t *testing.T) {
 	file, fc := GetFuncCall(1)
 	fmt.Println(file, fc)
+}
+
+func TestGetCurFileDir(t *testing.T) {
+	fmt.Println(GetCurFileDir())
+}
+
+func TestGetCurExecDir(t *testing.T) {
+	fmt.Println(GetCurExecDir())
 }
