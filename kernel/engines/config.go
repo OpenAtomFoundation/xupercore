@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/xuperchain/xupercore/kernel/common/utils"
+	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/spf13/viper"
 )
@@ -18,6 +18,8 @@ type EnvConfig struct {
 	DataDir string `yaml:"dataDir,omitempty"`
 	// log file directory
 	LogDir string `yaml:"logDir,omitempty"`
+	// log config file name
+	LogConf string `yaml:"logConf,omitempty"`
 }
 
 func LoadEnvConf(cfgFile string) (*EnvConfig, error) {
@@ -32,10 +34,12 @@ func LoadEnvConf(cfgFile string) (*EnvConfig, error) {
 
 func GetDefEnvConf() *EnvConfig {
 	return &EnvConfig{
-		RootPath: "./",
+		// 默认设置为当前执行目录
+		RootPath: utils.GetCurExecDir(),
 		ConfDir:  "conf",
 		DataDir:  "data",
 		LogDir:   "logs",
+		LogConf:  "log.yaml",
 	}
 }
 
@@ -58,21 +62,10 @@ func (t *EnvConfig) loadConf(cfgFile string) error {
 	return nil
 }
 
-func (t *EnvConfig) GenAbsPath(dir string) string {
+func (t *EnvConfig) GenDirAbsPath(dir string) string {
 	return filepath.Join(t.RootPath, dir)
 }
 
-// For testing.
-const (
-	DefConfFile = "conf/env.yaml"
-)
-
-// For testing.
-func GetEnvConfFile() string {
-	var utPath = utils.GetXchainRootPath()
-	if utPath == "" {
-		panic("XCHAIN_ROOT_PATH environment variable not set")
-	}
-
-	return filepath.Join(utPath, DefConfFile)
+func (t *EnvConfig) GenConfFilePath(fName string) string {
+	return filepath.Join(t.GenDirAbsPath(t.ConfDir), fName)
 }

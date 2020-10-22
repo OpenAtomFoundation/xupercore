@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"sync"
+
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 // Reserve common key
@@ -16,6 +18,37 @@ const (
 const (
 	DefaultCallDepth = 4
 )
+
+// Lvl is a type for predefined log levels.
+type Lvl int
+
+// List of predefined log Levels
+const (
+	LvlError Lvl = iota
+	LvlWarn
+	LvlInfo
+	LvlTrace
+	LvlDebug
+)
+
+// LvlFromString returns the appropriate Lvl from a string name.
+// Useful for parsing command line args and configuration files.
+func LvlFromString(lvlString string) Lvl {
+	switch lvlString {
+	case "debug":
+		return LvlDebug
+	case "trace":
+		return LvlTrace
+	case "info":
+		return LvlInfo
+	case "warn":
+		return LvlWarn
+	case "error":
+		return LvlError
+	}
+
+	return LvlDebug
+}
 
 // 底层日志库约束接口
 type LogDriver interface {
@@ -40,6 +73,7 @@ type Logger interface {
 }
 
 // Logger Fitter
+// 方便系统对日志输出做自定义扩展
 type LogFitter struct {
 	logger       LogDriver
 	logId        string
@@ -49,18 +83,23 @@ type LogFitter struct {
 	infoFields   []interface{}
 	infoFieldLck *sync.RWMutex
 	callDepth    int
+	minLvl       Lvl
 }
 
-func NewLogger(logger LogDriver, logId string) (*LogFitter, error) {
-	if logger == nil {
-		return nil, fmt.Errorf("new logger param error")
+func NewLogger(logId string) (*LogFitter, error) {
+	// 基础日志实例和日志配置采用单例模式
+	lock.RLock()
+	defer lock.RUnlock()
+	if logConf == nil || logHandle == nil {
+		return nil, fmt.Errorf("log not init")
 	}
+
 	if logId == "" {
-		logId = GenLogId()
+		logId = utils.GenLogId()
 	}
 
 	lf := &LogFitter{
-		logger:       logger,
+		logger:       logHandle,
 		logId:        logId,
 		pid:          os.Getpid(),
 		commFields:   make([]interface{}, 0),
@@ -68,6 +107,7 @@ func NewLogger(logger LogDriver, logId string) (*LogFitter, error) {
 		infoFields:   make([]interface{}, 0),
 		infoFieldLck: &sync.RWMutex{},
 		callDepth:    DefaultCallDepth,
+		minLvl:       LvlFromString(logConf.Level),
 	}
 
 	return lf, nil
@@ -100,35 +140,35 @@ func (t *LogFitter) SetInfoField(key string, value interface{}) {
 }
 
 func (t *LogFitter) Error(msg string, ctx ...interface{}) {
-	if !t.isInit() {
+	if !t.isInit() || LvlError > t.minLvl {
 		return
 	}
 	t.logger.Error(msg, t.fmtCommLogger(ctx...)...)
 }
 
 func (t *LogFitter) Warn(msg string, ctx ...interface{}) {
-	if !t.isInit() {
+	if !t.isInit() || LvlWarn > t.minLvl {
 		return
 	}
 	t.logger.Warn(msg, t.fmtCommLogger(ctx...)...)
 }
 
 func (t *LogFitter) Info(msg string, ctx ...interface{}) {
-	if !t.isInit() {
+	if !t.isInit() || LvlInfo > t.minLvl {
 		return
 	}
 	t.logger.Info(msg, t.fmtInfoLogger(ctx...)...)
 }
 
 func (t *LogFitter) Trace(msg string, ctx ...interface{}) {
-	if !t.isInit() {
+	if !t.isInit() || LvlTrace > t.minLvl {
 		return
 	}
 	t.logger.Trace(msg, t.fmtCommLogger(ctx...)...)
 }
 
 func (t *LogFitter) Debug(msg string, ctx ...interface{}) {
-	if !t.isInit() {
+	if !t.isInit() || LvlDebug > t.minLvl {
 		return
 	}
 
@@ -143,7 +183,7 @@ func (t *LogFitter) getCommField() []interface{} {
 }
 
 func (t *LogFitter) genBaseField() []interface{} {
-	fileLine, _ := GetFuncCall(t.callDepth)
+	fileLine, _ := utils.GetFuncCall(t.callDepth)
 
 	comCtx := make([]interface{}, 0)
 	// 保持log_id是第一个写入，方便替换
