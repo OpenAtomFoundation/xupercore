@@ -1,4 +1,4 @@
-package logs
+package config
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 )
 
 // LogConfig is the log config of node
-type LogConfig struct {
+type LogConf struct {
 	Module   string `yaml:"module,omitempty"`
 	Filename string `yaml:"filename,omitempty"`
 	// 日志格式：logfmt、json
@@ -28,7 +28,7 @@ type LogConfig struct {
 	BufSize int `yaml:"bufSize,omitempty"`
 }
 
-func LoadLogConf(cfgFile string) (*LogConfig, error) {
+func LoadLogConf(cfgFile string) (*LogConf, error) {
 	cfg := GetDefLogConf()
 	err := cfg.loadConf(cfgFile)
 	if err != nil {
@@ -38,8 +38,8 @@ func LoadLogConf(cfgFile string) (*LogConfig, error) {
 	return cfg, nil
 }
 
-func GetDefLogConf() *LogConfig {
-	return &LogConfig{
+func GetDefLogConf() *LogConf {
+	return &LogConf{
 		Module:   "xchain",
 		Filename: "xchain",
 		Fmt:      "logfmt",
@@ -54,7 +54,7 @@ func GetDefLogConf() *LogConfig {
 	}
 }
 
-func (t *LogConfig) loadConf(cfgFile string) error {
+func (t *LogConf) loadConf(cfgFile string) error {
 	if cfgFile == "" || !utils.FileIsExist(cfgFile) {
 		return fmt.Errorf("config file set error.path:%s", cfgFile)
 	}

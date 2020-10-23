@@ -10,9 +10,10 @@ import (
 
 // Reserve common key
 const (
-	CommFieldLogId = "log_id"
-	CommFieldPid   = "pid"
-	CommFieldCall  = "call"
+	CommFieldLogId  = "log_id"
+	CommFieldSubMod = "s_mod"
+	CommFieldPid    = "pid"
+	CommFieldCall   = "call"
 )
 
 const (
@@ -84,9 +85,11 @@ type LogFitter struct {
 	infoFieldLck *sync.RWMutex
 	callDepth    int
 	minLvl       Lvl
+	subMod       string
 }
 
-func NewLogger(logId string) (*LogFitter, error) {
+// 需要先调用InitLog全局初始化
+func NewLogger(logId, subMod string) (*LogFitter, error) {
 	// 基础日志实例和日志配置采用单例模式
 	lock.RLock()
 	defer lock.RUnlock()
@@ -96,6 +99,9 @@ func NewLogger(logId string) (*LogFitter, error) {
 
 	if logId == "" {
 		logId = utils.GenLogId()
+	}
+	if subMod == "" {
+		subMod = logConf.Module
 	}
 
 	lf := &LogFitter{
@@ -108,6 +114,7 @@ func NewLogger(logId string) (*LogFitter, error) {
 		infoFieldLck: &sync.RWMutex{},
 		callDepth:    DefaultCallDepth,
 		minLvl:       LvlFromString(logConf.Level),
+		subMod:       subMod,
 	}
 
 	return lf, nil
@@ -188,6 +195,7 @@ func (t *LogFitter) genBaseField() []interface{} {
 	comCtx := make([]interface{}, 0)
 	// 保持log_id是第一个写入，方便替换
 	comCtx = append(comCtx, CommFieldLogId, t.logId)
+	comCtx = append(comCtx, CommFieldSubMod, t.subMod)
 	comCtx = append(comCtx, CommFieldCall, fileLine)
 	comCtx = append(comCtx, CommFieldPid, t.pid)
 

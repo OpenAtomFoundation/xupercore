@@ -3,8 +3,11 @@ package logs
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 func TestInfo(t *testing.T) {
@@ -14,7 +17,7 @@ func TestInfo(t *testing.T) {
 	fmt.Printf("conf:%s dir:%s\n", confFile, logDir)
 	InitLog(confFile, logDir)
 
-	log, err := NewLogger("")
+	log, err := NewLogger("", "test1")
 	if err != nil {
 		t.Errorf("new logger fail.err:%v", err)
 	}
@@ -25,7 +28,7 @@ func TestInfo(t *testing.T) {
 		go func(num int) {
 			defer wg.Done()
 
-			log, _ := NewLogger("")
+			log, _ := NewLogger("", "test2")
 			log.Info("info1", "a", 1, "b", 2, "c", 3, "num", num)
 			log.Debug("test", "a", 1, "b", 2, "c", 3, "num", num)
 			log.Trace("test", "a", 1, "b", 2, "c", 3, "num", num)
@@ -52,4 +55,14 @@ func TestInfo(t *testing.T) {
 	// 清理输出的日志文件
 	os.RemoveAll(logDir)
 	fmt.Printf("remove dir:%s\n", logDir)
+}
+
+func getConfFile() string {
+	dir := utils.GetCurFileDir()
+	return filepath.Join(dir, "config/conf/log.yaml")
+}
+
+func getLogDir() string {
+	dir := utils.GetCurFileDir()
+	return filepath.Join(dir, "logs")
 }

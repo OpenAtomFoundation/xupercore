@@ -72,3 +72,12 @@ func GetCurExecDir() string {
 	curDir, _ := filepath.Abs(filepath.Dir(os.Args[0]))
 	return curDir
 }
+
+func GetHostName() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		hostname = "127.0.0.1"
+	}
+
+	return hostname
+}

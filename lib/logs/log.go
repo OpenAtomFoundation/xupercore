@@ -7,11 +7,12 @@ import (
 	"sync"
 
 	log "github.com/xuperchain/log15"
+	lconf "github.com/xuperchain/xupercore/lib/logs/config"
 )
 
 // 日志实例采用单例模式
 var logHandle LogDriver
-var logConf *LogConfig
+var logConf *lconf.LogConf
 var once sync.Once
 var lock sync.RWMutex
 
@@ -23,7 +24,7 @@ func InitLog(cfgFile, logDir string) {
 	// 避免重复调用时重复初始化
 	once.Do(func() {
 		// 加载日志配置
-		cfg, err := LoadLogConf(cfgFile)
+		cfg, err := lconf.LoadLogConf(cfgFile)
 		if err != nil {
 			panic(fmt.Sprintf("Load log config fail.path:%s err:%s", cfgFile, err))
 		}
@@ -39,7 +40,7 @@ func InitLog(cfgFile, logDir string) {
 }
 
 // OpenLog create and open log stream using LogConfig
-func OpenLog(lc *LogConfig, logDir string) (LogDriver, error) {
+func OpenLog(lc *lconf.LogConf, logDir string) (LogDriver, error) {
 	infoFile := filepath.Join(logDir, lc.Filename+".log")
 	wfFile := filepath.Join(logDir, lc.Filename+".log.wf")
 	os.MkdirAll(logDir, os.ModePerm)

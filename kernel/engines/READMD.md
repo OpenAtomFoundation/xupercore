@@ -10,3 +10,23 @@
 xuperos: 面向公链场景区块链网络内核实现。
 
 xchain: 面向联盟联盟场景区块链网络内核实现。
+
+## 使用示例
+
+```
+
+// 加载内核运行环境配置
+envCfgPath := "/home/rd/xx/conf/env.yaml"
+envCfg, _ := engines.LoadEnvConf(envCfgPath)
+
+// 创建内核引擎实例
+engine, _ := engines.CreateBCEngine("xchain", envCfg)
+
+// 引擎控制操作
+engine.Start()
+engine.Stop()
+engine.GetEngineCtx()
+engine.GetChainCtx()
+engine.SubmitTx()
+
+```
