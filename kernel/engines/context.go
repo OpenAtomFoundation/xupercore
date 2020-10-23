@@ -2,69 +2,102 @@
 package engines
 
 import (
-	"sync"
-
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 // 区块链执行引擎级context，维护区块链运行环境
 type BCEngineCtx interface {
 	xcontext.BaseCtx
+	GetEnvConf() *EnvConfig
+	GetNetHD() XNetwork
+	GetCryptoHD() XCrypto
 }
 
 type BCEngineCtxImpl struct {
 	// 基础上下文
 	xcontext.BaseCtxImpl
-	// 日志驱动
-	logDrv logs.LogDriver
-	// 系统级配置
-	sysCfg *SysConfig
-	// 网络
-	net network.Network
-	// 加密插件
-	// crypto
+	// 内核运行环境配置
+	envCfg *EnvConfig
+	// 网络组件句柄
+	netHD XNetwork
+	// 加密组件句柄
+	cryptoHD XCrypto
 }
 
-func (t *BCEngineCtxImpl) GetSysConf() {
+func (t *BCEngineCtxImpl) GetEnvConf() *EnvConfig {
+	if t == nil || t.envCfg == nil {
+		return nil
+	}
 
+	return t.envCfg
 }
 
-func (t *BCEngineCtxImpl) GetNet() {
+func (t *BCEngineCtxImpl) GetNetHD() XNetwork {
+	if t == nil || t.netHD == nil {
+		return nil
+	}
 
+	return t.netHD
+}
+
+func (t *BCEngineCtxImpl) GetCryptoHD() XCrypto {
+	if t == nil || t.cryptoHD == nil {
+		return nil
+	}
+
+	return t.cryptoHD
 }
 
 // 链级别上下文，维护链级别上下文，每条平行链各有一个
 type ChainCtx interface {
 	xcontext.BaseCtx
+	GetLedgerHD() XLedger
+	GetConsHD() XConsensus
+	GetContractHD() XContract
+	GetPermHD() XPermission
 }
 
 type ChainCtxImpl struct {
 	// 基础上下文
 	xcontext.BaseCtxImpl
-	// 链名
-	bcname string
-	// 账本，由于账本并非通用实现，所以定义为interface，使用时由具体引擎转义
-	// 引擎utils包需要提供转义方法，由应用方根据需要选择调用
-	ledger interface{}
+	// 账本
+	ledgerHD XLedger
 	// 共识
-	conse consensus.Consensus
+	consHD XConsensus
 	// 合约
-	contract
+	contractHD XContract
+	// 权限
+	permHD XPermission
 }
 
-func CreateChainCtx(ledger ledger.Ledger, conse consensus.Consensus) (ChainCtx, error) {
+func (t *ChainCtxImpl) GetLedgerHD() XLedger {
+	if t == nil || t.ledgerHD == nil {
+		return nil
+	}
 
+	return t.ledgerHD
 }
 
-func GetBCName() string {
+func (t *ChainCtxImpl) GetConsHD() XConsensus {
+	if t == nil || t.consHD == nil {
+		return nil
+	}
 
+	return t.consHD
 }
 
-func GetLedger() ledger.Ledger {
+func (t *ChainCtxImpl) GetContractHD() XContract {
+	if t == nil || t.contractHD == nil {
+		return nil
+	}
 
+	return t.contractHD
 }
 
-func GetConse() consensus.Consensus {
+func (t *ChainCtxImpl) GetPermHD() XPermission {
+	if t == nil || t.permHD == nil {
+		return nil
+	}
 
+	return t.permHD
 }

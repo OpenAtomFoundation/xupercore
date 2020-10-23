@@ -53,11 +53,14 @@ func newBCEngine(name string) BCEngine {
 
 // 采用工厂模式，对上层统一区块链执行引擎创建操作
 // 区块链执行引擎注册通过init实现，由应用方选择要使用的引擎
-func CreateBCEngine(egName string, logDrv logs.LogDriver, envCfg *EnvConfig) (BCEngine, error) {
+func CreateBCEngine(egName string, envCfg *EnvConfig) (BCEngine, error) {
 	// 检查参数
-	if egName == "" || logDrv == nil || envCfg == nil {
+	if egName == "" || envCfg == nil {
 		return nil, fmt.Errorf("create bc engine failed because some param unset")
 	}
+
+	// 初始化日志实例，失败会panic
+	logs.InitLog(envCfg.GenConfFilePath(envCfg.LogConf), envCfg.GenDirAbsPath(envCfg.LogDir))
 
 	// 创建区块链执行引擎
 	engine := newBCEngine(egName)
@@ -66,7 +69,7 @@ func CreateBCEngine(egName string, logDrv logs.LogDriver, envCfg *EnvConfig) (BC
 	}
 
 	// 初始化区块链执行引擎
-	err := engine.Init(logDrv, envCfg)
+	err := engine.Init(envCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create bc engine failed because init engine error.err:%v", err)
 	}

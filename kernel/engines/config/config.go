@@ -1,4 +1,4 @@
-package engines
+package config
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type EnvConfig struct {
+type EnvConf struct {
 	// Program running root directory
 	RootPath string `yaml:"rootPath,omitempty"`
 	// config file directory
@@ -20,9 +20,11 @@ type EnvConfig struct {
 	LogDir string `yaml:"logDir,omitempty"`
 	// log config file name
 	LogConf string `yaml:"logConf,omitempty"`
+	// server config file name
+	ServConf string `yaml:"servConf,omitempty"`
 }
 
-func LoadEnvConf(cfgFile string) (*EnvConfig, error) {
+func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 	cfg := GetDefEnvConf()
 	err := cfg.loadConf(cfgFile)
 	if err != nil {
@@ -32,18 +34,19 @@ func LoadEnvConf(cfgFile string) (*EnvConfig, error) {
 	return cfg, nil
 }
 
-func GetDefEnvConf() *EnvConfig {
-	return &EnvConfig{
+func GetDefEnvConf() *EnvConf {
+	return &EnvConf{
 		// 默认设置为当前执行目录
 		RootPath: utils.GetCurExecDir(),
 		ConfDir:  "conf",
 		DataDir:  "data",
 		LogDir:   "logs",
 		LogConf:  "log.yaml",
+		ServConf: "server.yaml",
 	}
 }
 
-func (t *EnvConfig) loadConf(cfgFile string) error {
+func (t *EnvConf) loadConf(cfgFile string) error {
 	if cfgFile == "" || !utils.FileIsExist(cfgFile) {
 		return fmt.Errorf("config file set error.path:%s", cfgFile)
 	}
@@ -62,10 +65,10 @@ func (t *EnvConfig) loadConf(cfgFile string) error {
 	return nil
 }
 
-func (t *EnvConfig) GenDirAbsPath(dir string) string {
+func (t *EnvConf) GenDirAbsPath(dir string) string {
 	return filepath.Join(t.RootPath, dir)
 }
 
-func (t *EnvConfig) GenConfFilePath(fName string) string {
+func (t *EnvConf) GenConfFilePath(fName string) string {
 	return filepath.Join(t.GenDirAbsPath(t.ConfDir), fName)
 }
