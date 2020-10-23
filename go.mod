@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/BurntSushi/toml v0.3.1 // indirect
-	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d // indirect
+	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/ddliu/motto v0.3.1 // indirect
 	github.com/docker/go-connections v0.4.1-0.20180821093606-97c2040d34df // indirect
 	github.com/docker/go-units v0.4.0 // indirect
@@ -41,7 +41,7 @@ require (
 	github.com/xuperchain/log15 v0.0.0-20190620081506-bc88a9198230
 	github.com/xuperchain/wagon v0.6.1-0.20200313164333-db544e251599 // indirect
 	github.com/xuperchain/xuperchain v0.0.0-20200203053733-ba46d3bc58b5
-	golang.org/x/crypto v0.0.0-20190927123631-a832865fa7ad // indirect
+	golang.org/x/crypto v0.0.0-20190927123631-a832865fa7ad
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2 // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
 	google.golang.org/genproto v0.0.0-20190927181202-20e1ac93f88c // indirect
