@@ -5,8 +5,21 @@ import (
 	"sort"
 	"sync"
 
+	econf "github.com/xuperchain/xupercore/kernel/engines/config"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
+
+// 区块链引擎
+// 考虑到引擎的可扩展性，只约束最基本接口，具体暴露接口可由各引擎实现个性化扩展
+// 各引擎提供类型转换函数，由上层引擎使用者调用引擎提供的类型转换函数转换后使用
+type BCEngine interface {
+	// 初始化引擎
+	Init(*econf.EnvConf) error
+	// 启动引擎
+	Run()
+	// 退出引擎，需要幂等
+	Stop()
+}
 
 // 创建engine实例方法
 type NewBCEngineFunc func() BCEngine
@@ -51,15 +64,15 @@ func newBCEngine(name string) BCEngine {
 	return nil
 }
 
-// 采用工厂模式，对上层统一区块链执行引擎创建操作
-// 区块链执行引擎注册通过init实现，由应用方选择要使用的引擎
-func CreateBCEngine(egName string, envCfg *EnvConfig) (BCEngine, error) {
+// 采用工厂模式，对上层统一区块链执行引擎创建操作，方便框架开发
+// 区块链执行引擎注册通过init实现，由应用方选择具体要使用的引擎
+func CreateBCEngine(egName string, envCfg *econf.EnvConf) (BCEngine, error) {
 	// 检查参数
 	if egName == "" || envCfg == nil {
 		return nil, fmt.Errorf("create bc engine failed because some param unset")
 	}
 
-	// 初始化日志实例，失败会panic
+	// 初始化日志实例，失败会panic，日志初始化操作是幂等的
 	logs.InitLog(envCfg.GenConfFilePath(envCfg.LogConf), envCfg.GenDirAbsPath(envCfg.LogDir))
 
 	// 创建区块链执行引擎

@@ -62,6 +62,7 @@ func (t *RpcServMG) RunRpcServ() error {
 
 }
 
+// 需要幂等
 func (t *RpcServMG) StopRpcServ() {
 	if t.servHD != nil {
 		// 优雅关闭grpc server

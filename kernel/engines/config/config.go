@@ -18,10 +18,14 @@ type EnvConf struct {
 	DataDir string `yaml:"dataDir,omitempty"`
 	// log file directory
 	LogDir string `yaml:"logDir,omitempty"`
+	// engine config file name
+	EngineConf string `yaml:"engineConf,omitempty"`
 	// log config file name
 	LogConf string `yaml:"logConf,omitempty"`
 	// server config file name
 	ServConf string `yaml:"servConf,omitempty"`
+	// network config file name
+	NetConf string `yaml:"netConf,omitempty"`
 }
 
 func LoadEnvConf(cfgFile string) (*EnvConf, error) {
@@ -37,13 +41,23 @@ func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 func GetDefEnvConf() *EnvConf {
 	return &EnvConf{
 		// 默认设置为当前执行目录
-		RootPath: utils.GetCurExecDir(),
-		ConfDir:  "conf",
-		DataDir:  "data",
-		LogDir:   "logs",
-		LogConf:  "log.yaml",
-		ServConf: "server.yaml",
+		RootPath:   utils.GetCurExecDir(),
+		ConfDir:    "conf",
+		DataDir:    "data",
+		LogDir:     "logs",
+		EngineConf: "engine.yaml",
+		LogConf:    "log.yaml",
+		ServConf:   "server.yaml",
+		NetConf:    "network.yaml",
 	}
+}
+
+func (t *EnvConf) GenDirAbsPath(dir string) string {
+	return filepath.Join(t.RootPath, dir)
+}
+
+func (t *EnvConf) GenConfFilePath(fName string) string {
+	return filepath.Join(t.GenDirAbsPath(t.ConfDir), fName)
 }
 
 func (t *EnvConf) loadConf(cfgFile string) error {
@@ -63,12 +77,4 @@ func (t *EnvConf) loadConf(cfgFile string) error {
 	}
 
 	return nil
-}
-
-func (t *EnvConf) GenDirAbsPath(dir string) string {
-	return filepath.Join(t.RootPath, dir)
-}
-
-func (t *EnvConf) GenConfFilePath(fName string) string {
-	return filepath.Join(t.GenDirAbsPath(t.ConfDir), fName)
 }

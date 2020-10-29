@@ -1,4 +1,4 @@
-package xuper
+package xuperos
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines"
 )
 
-type XuperChain struct {
+type XuperOSChain struct {
 	// 链级上下文
 	sysCtx engines.ChainCtx
 	// 交易处理器
@@ -15,22 +15,22 @@ type XuperChain struct {
 	miner Miner
 }
 
-func CreateChain() (*XuperChain, error) {
+func CreateChain() (*XuperOSChain, error) {
 
 }
 
-func LoadChain(path string) (*XuperChain, error) {
+func LoadChain(path string) (*XuperOSChain, error) {
 
 }
 
-func (t *XuperChain) SubmitTx() {
+func (t *XuperOSChain) SubmitTx() {
 
 }
 
-func (t *XuperChain) Start() {
+func (t *XuperOSChain) Start() {
 
 }
 
-func (t *XuperChain) Stop() {
+func (t *XuperOSChain) Stop() {
 
 }
