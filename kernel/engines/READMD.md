@@ -23,10 +23,12 @@ envCfg, _ := engines.LoadEnvConf(envCfgPath)
 engine, _ := engines.CreateBCEngine("xchain", envCfg)
 
 // 引擎控制操作
+engine.Init()
 engine.Start()
 engine.Stop()
-engine.GetEngineCtx()
-engine.GetChainCtx()
-engine.SubmitTx()
+
+// 引擎开放接口
+xosEngine, _ xuperos.TransEngineType(engine)
+xosEngine.SubmitTx()
 
 ```

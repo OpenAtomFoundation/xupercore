@@ -14,3 +14,23 @@ contract: 系统合约，考虑到系统合约和链强相关，放到引擎中�
 
 超级链开放网络。
 
+    Init()
+    Start()
+    Stop()
+    ProcessTx()
+    ProcessBlock()
+    QueryTx()
+    QueryForbiddenTx()
+    QueryBlock()
+    QueryBlockByHeight()
+    ChainState()
+    QueryMethodACL()
+    QueryAccountACL()
+    ListAccount()
+    ListUtxo()
+    Balance()
+    FrozenBalance()
+    BalanceDetail()
+    PreExec()
+    ListContract()
+    ContractState()

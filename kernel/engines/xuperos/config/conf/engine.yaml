@@ -1,0 +1,4 @@
+# root链链名
+rootChain: xuper
+# 网络插件类型
+netModule: p2pv2
