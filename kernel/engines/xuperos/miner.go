@@ -1,6 +1,6 @@
 // 矿工
 // 1.触发同步区块检查 2.共识或者出块权利时打包出块
-package xuper
+package xuperos
 
 import (
 	"github.com/xuperchain/xupercore/kernel/engines"

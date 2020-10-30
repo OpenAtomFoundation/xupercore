@@ -2,7 +2,6 @@ package xutils
 
 import (
 	"os"
-	"path/filepath"
 
 	"github.com/xuperchain/xupercore/lib/utils"
 )

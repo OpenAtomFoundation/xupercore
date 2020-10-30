@@ -6,12 +6,10 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines"
 	econf "github.com/xuperchain/xupercore/kernel/engines/config"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
 	sconf "github.com/xuperchain/xupercore/server/config"
-
-	// 选择要使用的领域组件驱动
-	_ "github.com/xuperchain/xupercore/bcs/ledger/xuperledger"
-	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
+	// import要使用的领域组件驱动
 )
 
 type StartupCmd struct {
@@ -38,6 +36,7 @@ func GetStartupCmd() *StartupCmd {
 	// 设置命令行参数并绑定变量
 	startupCmdIns.cmd.Flags().StringVarP(&envCfgPath, "conf", "c", "",
 		"engine environment config file path")
+
 	return httpServerCmdIns
 }
 
@@ -53,13 +52,17 @@ func StartupXchain(envCfgPath string) error {
 	logs.InitLog(envConf.GenConfFilePath(envCfg.LogConf), envCfg.GenDirAbsPath(envCfg.LogDir))
 
 	// 实例化区块链引擎
-	engine, err := engines.CreateBCEngine(xuperos.BCEngineName, envConf)
+	engine, err := engines.CreateBCEngine(def.BCEngineName, envConf)
 	if err != nil {
 		return err
 	}
 	// 实例化rpc server
-	rpcServ := rpc.NewRpcServMG()
+	rpcServ, err := rpc.NewRpcServMG(servConf, engine)
+	if err != nil {
+		return err
+	}
 
+	// 启动服务和区块链引擎
 	wg := &sync.WaitGroup{}
 	wg.Add(2)
 	engChan := runEngine(engine)
@@ -71,20 +74,22 @@ func StartupXchain(envCfgPath string) error {
 	go func() {
 		for {
 			select {
-			case <-engChan:
+			case err := <-engChan:
 				wg.Done()
 				rpcServ.Exit()
-			case <-runRpcServ():
+			case err := <-runRpcServ():
 				wg.Done()
-				engine.Exit()
+				engine.Stop()
 			case <-sigChan:
 				rpcServ.Exit()
-				engine.Exit()
+				engine.Stop()
 			}
 		}
 	}()
 
+	// 等待异步任务全部退出
 	wg.Wait()
+	return nil
 }
 
 func loadConf(envCfgPath string) (econf.EnvConf, sconf.ServConf, error) {
@@ -120,7 +125,7 @@ func runRpcServ(servMG *rpc.RpcServMG) <-chan error {
 
 	// 启动服务，监听退出信号
 	go func() {
-		err := <-servMG.Run()
+		err := servMG.Run()
 		exitCh <- err
 	}()
 

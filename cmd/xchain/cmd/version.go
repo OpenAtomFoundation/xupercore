@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// 通过编译参数设置
 var (
 	buildVersion = ""
 	commitHash   = ""

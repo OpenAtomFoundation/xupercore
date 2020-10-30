@@ -5,6 +5,7 @@ import (
 	"sort"
 	"sync"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nbase "github.com/xuperchain/xupercore/kernel/network/base"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 )
@@ -58,8 +59,8 @@ func createP2PServ(name string) nbase.P2PServer {
 // network对外提供的接口
 type Network interface {
 	// send msg
-	SendMsg(fctx nctx.FuncCtx, msg *xuperp2p.XuperMessage, opts ...MessageOption) error
-	SendMsgWithResp(fctx nctx.FuncCtx, msg *xuperp2p.XuperMessage,
+	SendMsg(ctx *xctx.BaseCtx, msg *xuperp2p.XuperMessage, opts ...MessageOption) error
+	SendMsgWithResp(ctx *xctx.BaseCtx, msg *xuperp2p.XuperMessage,
 		opts ...MessageOption) ([]*xuperp2p.XuperMessage, error)
 	// query info
 	GetNetURL() string
@@ -77,11 +78,11 @@ type Network interface {
 // 如果有领域内公共逻辑，可以在这层扩展，对上层暴露高级接口
 // 暂时没有特殊的逻辑，先简单透传，预留方便后续扩展
 type NetworkImpl struct {
-	octx    nctx.ObjCtx
+	netCtx  *nctx.NetCtx
 	p2pServ nbase.P2PServer
 }
 
-func CreateNetwork(servName string, octx nctx.ObjCtx) (Network, error) {
+func CreateNetwork(servName string, netCtx *nctx.NetCtx) (Network, error) {
 	// check param
 	if octx == nil || !octx.IsVaild() {
 		return nil, fmt.Errorf("new network failed because context set error")
@@ -93,34 +94,34 @@ func CreateNetwork(servName string, octx nctx.ObjCtx) (Network, error) {
 		return nil, fmt.Errorf("new network failed because service not exist.name:%s", servName)
 	}
 	// init p2p server
-	err := p2pServ.Init(octx)
+	err := p2pServ.Init(netCtx)
 	if err != nil {
 		return nil, fmt.Errorf("new network failed because init p2p service error.err:%v", err)
 	}
 	// start p2p server
 	p2pServ.Start()
 
-	return &NetworkImpl{octx, p2pServ}, nil
+	return &NetworkImpl{netCtx, p2pServ}, nil
 }
 
-func (t *NetworkImpl) SendMsg(fctx nctx.FuncCtx, msg *xuperp2p.XuperMessage,
+func (t *NetworkImpl) SendMsg(ctx *xctx.BaseCtx, msg *xuperp2p.XuperMessage,
 	opts ...MessageOption) error {
 
-	if !t.isInit() || fctx == nil || msg == nil {
+	if !t.isInit() || ctx == nil || msg == nil {
 		return fmt.Errorf("network not init or param set error")
 	}
 
-	return t.p2pServ.SendMessage(fctx, msg, opts)
+	return t.p2pServ.SendMessage(ctx, msg, opts)
 }
 
-func (t *NetworkImpl) SendMsgWithResp(fctx nctx.FuncCtx, msg *xuperp2p.XuperMessage,
+func (t *NetworkImpl) SendMsgWithResp(ctx *xctx.BaseCtx, msg *xuperp2p.XuperMessage,
 	opts ...MessageOption) ([]*xuperp2p.XuperMessage, error) {
 
-	if !t.isInit() || fctx == nil || msg == nil {
+	if !t.isInit() || ctx == nil || msg == nil {
 		return fmt.Errorf("network not init or param set error")
 	}
 
-	return t.p2pServ.SendMessageWithResponse(fctx, msg, opts)
+	return t.p2pServ.SendMessageWithResponse(ctx, msg, opts)
 }
 
 func (t *NetworkImpl) GetNetURL() string {
@@ -165,13 +166,13 @@ func (t *NetworkImpl) SetXchainAddr(bcname string, info *XchainAddrInfo) {
 
 func (t *NetworkImpl) NewSubscriber(msgChan chan *xuperp2p.XuperMessage,
 	msgType xuperp2p.XuperMessage_MessageType, handle XuperHandler, msgFrom string,
-	octx nctx.ObjCtx) (Subscriber, error) {
+	netCtx *nctx.NetCtx) (Subscriber, error) {
 
-	if !t.isInit() || msgChan == nil || octx == nil {
+	if !t.isInit() || msgChan == nil || netCtx == nil {
 		return fmt.Errorf("network not init or param set error")
 	}
 
-	return t.p2pServ.NewSubscriber(msgChan, msgType, handle, msgFrom, octx)
+	return t.p2pServ.NewSubscriber(msgChan, msgType, handle, msgFrom, netCtx)
 }
 
 func (t *NetworkImpl) Register(sub Subscriber) (Subscriber, error) {
@@ -191,7 +192,7 @@ func (t *NetworkImpl) UnRegister(sub Subscriber) error {
 }
 
 func (t *NetworkImpl) isInit() bool {
-	if t.octx == nil || t.p2pServ == nil {
+	if t.netCtx == nil || t.p2pServ == nil {
 		return false
 	}
 

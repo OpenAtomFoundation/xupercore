@@ -3,7 +3,8 @@ package config
 import (
 	"fmt"
 
-	"github.com/xuperchain/xupercore/kernel/common/utils"
+	"github.com/xuperchain/xupercore/kernel/common/xutils"
+	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/spf13/viper"
 )
@@ -114,11 +115,11 @@ const (
 )
 
 // For testing.
-// 为了方便单测运行，设置一个环境变量XCHAIN_UT_PATH，统一从这个目标加载配置和数据
+// 为了方便单测运行，设置一个环境变量X_ROOT_PATH，统一从这个目标加载配置和数据
 func GetNetConfFile() string {
-	var utPath = utils.GetXchainRootPath()
+	var utPath = xutils.GetXRootPath()
 	if utPath == "" {
-		panic("XCHAIN_ROOT_PATH environment variable not set")
+		panic("X_ROOT_PATH environment variable not set")
 	}
 	return utPath + DefConfFile
 }

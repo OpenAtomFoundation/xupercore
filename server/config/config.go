@@ -10,7 +10,11 @@ import (
 
 type ServConf struct {
 	// rpc server listen port
-	Port               int   `yaml:"port,omitempty"`
+	RpcPort            int   `yaml:"rpcPort,omitempty"`
+	TlsRpcPort         int   `yaml:"tlsRpcPort,omitempty"`
+	MetricPort         int   `yaml:"metricPort,omitempty"`
+	EnableMetric       bool  `yaml:"enableMetric,omitempty"`
+	TLS                bool  `yaml:"tls,omitempty"`
 	MaxMsgSize         int   `yaml:"maxMsgSize,omitempty"`
 	ReadBufSize        int   `yaml:"readBufSize,omitempty"`
 	WriteBufSize       int   `yaml:"writeBufSize,omitempty"`
@@ -30,7 +34,11 @@ func LoadServConf(cfgFile string) (*ServConf, error) {
 
 func GetDefServConf() *ServConf {
 	return &ServConf{
-		Port:               37101,
+		RpcPort:            37101,
+		TlsRpcPort:         37102,
+		MetricPort:         37100,
+		EnableMetric:       true,
+		TLS:                false,
 		MaxMsgSize:         128 << 20,
 		ReadBufSize:        32 << 10,
 		WriteBufSize:       32 << 10,
