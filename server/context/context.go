@@ -1,9 +1,9 @@
 package context
 
 import (
-	"context"
 	"fmt"
 
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/server/common"
@@ -11,20 +11,20 @@ import (
 
 // 请求级别上下文
 type ReqCtx interface {
-	GetEngine() engines.BCEngine
+	GetEngine() def.Engine
 	GetLog() logs.Logger
 	GetTimer() *timer.XTimer
 	GetClientIp() string
 }
 
 type ReqCtxImpl struct {
-	engine   engines.BCEngine
+	engine   def.Engine
 	log      logs.Logger
 	timer    *timer.XTimer
 	clientIp string
 }
 
-func NewReqCtx(engine engines.BCEngine, reqId, clientIp string) (ReqCtx, error) {
+func NewReqCtx(engine def.Engine, reqId, clientIp string) (ReqCtx, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("new request context failed because engine is nil")
 	}
@@ -44,7 +44,7 @@ func NewReqCtx(engine engines.BCEngine, reqId, clientIp string) (ReqCtx, error) 
 	return ctx, nil
 }
 
-func (t *ReqCtxImpl) GetEngine() engines.BCEngine {
+func (t *ReqCtxImpl) GetEngine() def.Engine {
 	return t.engine
 }
 

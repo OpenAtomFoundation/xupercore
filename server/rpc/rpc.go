@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/xuperchain/xupercore/kernel/engines"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/server/common"
@@ -19,7 +19,7 @@ type RpcServ struct {
 	log    logs.Logger
 }
 
-func NewRpcServ(engine engines.BCEngine, log logs.Logger) *RpcServ {
+func NewRpcServ(engine def.Engine, log logs.Logger) *RpcServ {
 	return &RpcServ{
 		engine: engine,
 		log:    log,

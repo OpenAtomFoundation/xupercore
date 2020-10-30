@@ -4,66 +4,113 @@ import (
 	"errors"
 
 	"github.com/xuperchain/xupercore/kernel/engines"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/server/common"
 	sconf "github.com/xuperchain/xupercore/server/config"
+	"github.com/xuperchain/xupercore/server/pb"
 
+	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 // rpc server启停控制管理
 type RpcServMG struct {
-	scfg    *sconf.ServConf
-	engine  engines.BCEngine
-	log     logs.Logger
-	rpcServ *RpcServer
-	servHD  *grpc.Server
-	isInit  bool
-	exitCh  chan error
+	scfg      *sconf.ServConf
+	engine    def.Engine
+	log       logs.Logger
+	rpcServ   *RpcServer
+	servHD    *grpc.Server
+	tlsServHD *grpc.Server
+	isInit    bool
+	exitOnce  *sync.Once
 }
 
-func NewRpcServMG(scfg *sconf.ServConf, engine engines.BCEngine) *RpcServMG {
-	log := logs.NewLogger("", SubModName)
+func NewRpcServMG(scfg *sconf.ServConf, engine engines.BCEngine) (*RpcServMG, error) {
+	if scfg == nil || engine == nil {
+		return nil, fmt.Errorf("param error")
+	}
+	xosEngine, err := xuperos.EngineConvert(engine)
+	if err != nil {
+		return nil, fmt.Errorf("not xuperos engine")
+	}
+
+	log := logs.NewLogger("", common.SubModName)
 	return &RpcServMG{
-		scfg:    scfg,
-		engine:  engine,
-		log:     log,
-		rpcServ: NewRpcServ(engine, log),
-		exitCh:  make(chan error),
+		scfg:     scfg,
+		engine:   xosEngine,
+		log:      log,
+		rpcServ:  NewRpcServ(engine, log),
+		isInit:   true,
+		exitOnce: &sync.Once{},
 	}
 }
 
 // 启动rpc服务
-func (t *RpcServMG) Run() <-chan error {
+func (t *RpcServMG) Run() error {
 	if !t.isInit {
-		t.exitCh <- errors.New("RpcServMG not init")
-		return t.exitCh
+		return errors.New("RpcServMG not init")
 	}
 
 	// 启动rpc server，阻塞直到退出
-	err := t.RunRpcServ()
+	err := t.runRpcServ()
 	if err != nil {
-		t.logger.Error("grpc server abnormal exit.err:%v", err)
+		t.log.Error("grpc server abnormal exit.err:%v", err)
+		return err
 	}
-	t.exitCh <- err
 
-	return t.exitCh
+	t.log.Trace("grpc server exit")
+	return nil
 }
 
-// 退出rpc服务，释放相关资源
+// 退出rpc服务，释放相关资源，需要幂等
 func (t *RpcServMG) Exit() {
 	if !t.isInit {
 		return
 	}
 
-	t.StopRpcServ()
+	t.exitOnce.Do(func() {
+		t.stopRpcServ()
+	})
 }
 
-func (t *RpcServMG) RunRpcServ() error {
+// 启动rpc服务，阻塞直到退出
+func (t *RpcServMG) runRpcServ() error {
+	rpcOptions := make([]grpc.ServerOption, 0)
+	unaryInterceptors := make([]grpc.UnaryServerInterceptor, 0)
+	unaryInterceptors = append(unaryInterceptors, t.rpcServ.UnaryInterceptor())
+	rpcOptions = append(rpcOptions,
+		middleware.WithUnaryServerChain(unaryInterceptors...),
+		grpc.MaxMsgSize(t.scfg.MaxMsgSize),
+		grpc.ReadBufferSize(t.scfg.ReadBufSize),
+		grpc.InitialWindowSize(t.scfg.InitWindowSize),
+		grpc.InitialConnWindowSize(t.scfg.InitConnWindowSize),
+		grpc.WriteBufferSize(t.scfg.WriteBufSize),
+	)
 
+	t.servHD = grpc.NewServer(rpcOptions...)
+	pb.RegisterXchainServer(t.servHD, t.rpcServ)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf("%d", t.scfg.RpcPort))
+	if err != nil {
+		t.log.Error("failed to listen", "err", err.Error())
+		return fmt.Errorf("failed to listen")
+	}
+
+	reflection.Register(t.servHD)
+	if err := t.servHD.Serve(lis); err != nil {
+		t.log.Error("failed to serve", "err", err.Error())
+		return err
+	}
+
+	t.log.Trace("rpc server exit")
+	return nil
 }
 
 // 需要幂等
-func (t *RpcServMG) StopRpcServ() {
+func (t *RpcServMG) stopRpcServ() {
 	if t.servHD != nil {
 		// 优雅关闭grpc server
 		t.servHD.GracefulStop()

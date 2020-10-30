@@ -18,6 +18,8 @@ type EnvConf struct {
 	DataDir string `yaml:"dataDir,omitempty"`
 	// log file directory
 	LogDir string `yaml:"logDir,omitempty"`
+	// tls file directory
+	TlsDir string `yaml:"tlsDir,omitempty"`
 	// engine config file name
 	EngineConf string `yaml:"engineConf,omitempty"`
 	// log config file name
@@ -45,6 +47,7 @@ func GetDefEnvConf() *EnvConf {
 		ConfDir:    "conf",
 		DataDir:    "data",
 		LogDir:     "logs",
+		TlsDir:     "tls",
 		EngineConf: "engine.yaml",
 		LogConf:    "log.yaml",
 		ServConf:   "server.yaml",
