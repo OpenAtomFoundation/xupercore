@@ -3,19 +3,22 @@ package rpc
 import (
 	"context"
 	"fmt"
+	"net"
+	"reflect"
+	"strings"
 
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
-	"github.com/xuperchain/xupercore/server/common"
 	sctx "github.com/xuperchain/xupercore/server/context"
 	"github.com/xuperchain/xupercore/server/pb"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
 )
 
 type RpcServ struct {
-	engine engines.BCEngine
+	engine def.Engine
 	log    logs.Logger
 }
 
@@ -79,20 +82,22 @@ func (t *RpcServ) access(gctx context.Context, reqHeader *pb.ReqHeader,
 	// 获取客户端ip
 	clientIp, err := t.getClietIP(gctx)
 	if err != nil {
-		t.log.Error("access proc failed because get client ip failed.err:%v", err)
+		t.log.Error("access proc failed because get client ip failed", "error", err)
 		return nil, fmt.Errorf("get client ip failed")
 	}
 
 	// 创建请求上下文
 	rctx, err := sctx.NewReqCtx(t.engine, reqHeader.GetLogId(), clientIp)
 	if err != nil {
-		t.log.Error("access proc failed because create request context failed.err:%v", err)
+		t.log.Error("access proc failed because create request context failed", "error", err)
 		return nil, fmt.Errorf("create request context failed")
 	}
 
 	// 输出access log
-	rctx.GetLog().Trace("received request", "from", reqHeader.GetSelfName(),
-		"client_ip", clientIp, others...)
+	logFields := make([]interface{}, 0)
+	logFields = append(logFields, "from", reqHeader.GetSelfName(), "client_ip", clientIp)
+	logFields = append(logFields, others...)
+	rctx.GetLog().Trace("received request", logFields...)
 
 	return rctx, nil
 }
@@ -101,8 +106,10 @@ func (t *RpcServ) access(gctx context.Context, reqHeader *pb.ReqHeader,
 // others必须是KV格式，K为string
 func (t *RpcServ) ending(rctx sctx.ReqCtx, respHeader *pb.RespHeader, others ...interface{}) {
 	// 输出ending log
-	rctx.GetLog().Info("request done", "error", respHeader.GetError(),
-		"cost_time", rctx.GetTimer().Print(), others...)
+	logFields := make([]interface{}, 0)
+	logFields = append(logFields, "error", respHeader.GetError(), "cost_time", rctx.GetTimer().Print())
+	logFields = append(logFields, others...)
+	rctx.GetLog().Info("request done", logFields...)
 }
 
 func (t *RpcServ) getClietIP(gctx context.Context) (string, error) {

@@ -7,9 +7,9 @@ import (
 )
 
 // 示例接口
-func (t *RpcServ) CheckAlive(gctx context.Context, req *BaseReq) (*BaseResp, error) {
+func (t *RpcServ) CheckAlive(gctx context.Context, req *pb.BaseReq) (*pb.BaseResp, error) {
 	// 默认响应
-	resp := &BaseResp{t.defRespHeader(req.GetHeader())}
+	resp := &pb.BaseResp{Header: t.defRespHeader(req.GetHeader())}
 
 	// 初始化请求上下文以及记录请求日志
 	rctx, err := t.access(gctx, req.GetHeader(), "from", req.GetHeader().GetSelfName())

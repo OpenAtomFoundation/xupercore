@@ -16,17 +16,17 @@ func NewRelyAgent(engine def.Engine) *RelyAgentImpl {
 	return &RelyAgentImpl{engine}
 }
 
-func (t *RelyAgentImpl) CreateNetwork() (XNetwork, error) {
+func (t *RelyAgentImpl) CreateNetwork() (def.XNetwork, error) {
 	/*
-		envCfg := t.engine.GetEngineCtx().EnvCfg
-	    netCtx, err := nctx.CreateNetCtx(envCfg.GenConfFilePath(envCfg.NetConf))
-	    if err != nil {
-	        return nil, fmt.Errorf("create engine ctx failed because create network ctx failed.err:%v", err)
-	    }
-	    netHD, err := network.CreateNetwork(netCtx)
-	    if err != nil {
-	        return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)
-	    }
+			envCfg := t.engine.GetEngineCtx().EnvCfg
+		    netCtx, err := nctx.CreateNetCtx(envCfg.GenConfFilePath(envCfg.NetConf))
+		    if err != nil {
+		        return nil, fmt.Errorf("create engine ctx failed because create network ctx failed.err:%v", err)
+		    }
+		    netHD, err := network.CreateNetwork(netCtx)
+		    if err != nil {
+		        return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)
+		    }
 	*/
 
 	return nil, fmt.Errorf("the interface is not implemented")

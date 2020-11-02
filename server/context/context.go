@@ -49,11 +49,11 @@ func (t *ReqCtxImpl) GetEngine() def.Engine {
 }
 
 func (t *ReqCtxImpl) GetLog() logs.Logger {
-	return t.Log
+	return t.log
 }
 
 func (t *ReqCtxImpl) GetTimer() *timer.XTimer {
-	return t.Timer
+	return t.timer
 }
 
 func (t *ReqCtxImpl) GetClientIp() string {

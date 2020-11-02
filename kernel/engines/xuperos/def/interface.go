@@ -6,7 +6,6 @@ import (
 )
 
 type Chain interface {
-	Init()
 	Start()
 	Stop()
 	ProcessTx()
@@ -19,6 +18,7 @@ type Chain interface {
 // 依赖接口而不是依赖具体实现
 type Engine interface {
 	engines.BCEngine
+	SetRelyAgent(RelyAgent) error
 	Get(string) Chain
 	Set(string, Chain)
 	GetChains() []string

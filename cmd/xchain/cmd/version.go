@@ -8,9 +8,9 @@ import (
 
 // 通过编译参数设置
 var (
-	buildVersion = ""
-	commitHash   = ""
-	buildDate    = ""
+	buildVersion = "0.0.0"
+	commitHash   = "default"
+	buildDate    = "default"
 )
 
 type versionCmd struct {
@@ -18,7 +18,7 @@ type versionCmd struct {
 }
 
 func GetVersionCmd() *versionCmd {
-	versionCmdIns = new(versionCmd)
+	versionCmdIns := new(versionCmd)
 
 	versionCmdIns.cmd = &cobra.Command{
 		Use:     "version",
