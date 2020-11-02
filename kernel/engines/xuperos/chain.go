@@ -1,8 +1,6 @@
 package xuperos
 
 import (
-	"fmt"
-
 	"github.com/xuperchain/xupercore/kernel/engines"
 )
 

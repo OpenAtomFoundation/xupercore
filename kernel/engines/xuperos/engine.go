@@ -9,7 +9,6 @@ import (
 	envconf "github.com/xuperchain/xupercore/kernel/engines/config"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
-	"github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 )
@@ -24,6 +23,8 @@ type XuperOSEngine struct {
 	chains sync.Map
 	// p2p网络事件处理
 	netEvent *xnet.NetEvent
+	// 依赖代理组件
+	relyAgent def.RelyAgent
 }
 
 func NewXuperOSEngine() *XuperOSEngine {
@@ -58,6 +59,8 @@ func (t *XuperOSEngine) Init(ecfg *envconf.EnvConf) error {
 	}
 	t.engCtx = engCtx
 	t.log = t.engCtx.GetLog()
+	// 默认设置为正式实现，单元测试提供Set方法替换为mock实现
+	t.relyAgent = NewRelyAgent(t)
 	t.log.Trace("init engine context succ")
 
 	// 加载区块链，初始化链上下文
@@ -77,6 +80,16 @@ func (t *XuperOSEngine) Init(ecfg *envconf.EnvConf) error {
 	t.log.Trace("init register subscriber network event succ")
 
 	t.log.Trace("init engine succ")
+	return nil
+}
+
+// 供单测时设置rely agent为mock agent，非并发安全
+func (t *XuperOSEngine) SetRelyAgent(agent def.RelyAgent) error {
+	if agent == nil {
+		return fmt.Errorf("param error")
+	}
+
+	t.relyAgent = agent
 	return nil
 }
 
@@ -184,11 +197,7 @@ func (t *XuperOSEngine) createEngCtx(envCfg *envconf.EnvConf) (*def.EngineCtx, e
 	}
 
 	// 实例化网络
-	netCtx, err := nctx.CreateNetCtx(envCfg.GenConfFilePath(envCfg.NetConf))
-	if err != nil {
-		return nil, fmt.Errorf("create engine ctx failed because create network ctx failed.err:%v", err)
-	}
-	netHD, err := network.CreateNetwork(envCfg.GetNetMod(), netCtx)
+	netHD, err := t.relyAgent.CreateNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)
 	}
