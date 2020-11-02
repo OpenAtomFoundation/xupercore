@@ -1,28 +1,18 @@
 package xuperos
 
 import (
-	"github.com/xuperchain/xupercore/kernel/engines"
+	"fmt"
+
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 )
 
 type XuperOSChain struct {
 	// 链级上下文
-	sysCtx engines.ChainCtx
-	// 交易处理器
-	txProc TxProcessor
-	// 矿工
-	miner Miner
+	chainCtx def.ChainCtx
 }
 
-func CreateChain() (*XuperOSChain, error) {
-
-}
-
-func LoadChain(path string) (*XuperOSChain, error) {
-
-}
-
-func (t *XuperOSChain) SubmitTx() {
-
+func LoadChain(dataDir string) (*XuperOSChain, error) {
+	return nil, fmt.Errorf("the interface is not implemented")
 }
 
 func (t *XuperOSChain) Start() {
@@ -31,4 +21,20 @@ func (t *XuperOSChain) Start() {
 
 func (t *XuperOSChain) Stop() {
 
+}
+
+func (t *XuperOSChain) ProcessTx() {
+
+}
+
+func (t *XuperOSChain) ProcessBlock() {
+
+}
+
+func (t *XuperOSChain) PreExec() {
+
+}
+
+func (t *XuperOSChain) GetChainCtx() *def.ChainCtx {
+	return nil
 }

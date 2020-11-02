@@ -2,6 +2,9 @@ package rpc
 
 import (
 	"errors"
+	"fmt"
+	"net"
+	"sync"
 
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos"
@@ -21,7 +24,7 @@ type RpcServMG struct {
 	scfg      *sconf.ServConf
 	engine    def.Engine
 	log       logs.Logger
-	rpcServ   *RpcServer
+	rpcServ   *RpcServ
 	servHD    *grpc.Server
 	tlsServHD *grpc.Server
 	isInit    bool
@@ -37,15 +40,17 @@ func NewRpcServMG(scfg *sconf.ServConf, engine engines.BCEngine) (*RpcServMG, er
 		return nil, fmt.Errorf("not xuperos engine")
 	}
 
-	log := logs.NewLogger("", common.SubModName)
-	return &RpcServMG{
+	log, _ := logs.NewLogger("", common.SubModName)
+	obj := &RpcServMG{
 		scfg:     scfg,
 		engine:   xosEngine,
 		log:      log,
-		rpcServ:  NewRpcServ(engine, log),
+		rpcServ:  NewRpcServ(engine.(def.Engine), log),
 		isInit:   true,
 		exitOnce: &sync.Once{},
 	}
+
+	return obj, nil
 }
 
 // 启动rpc服务

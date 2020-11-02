@@ -16,7 +16,7 @@ type BCEngine interface {
 	// 初始化引擎
 	Init(*econf.EnvConf) error
 	// 启动引擎
-	Run()
+	Start() error
 	// 退出引擎，需要幂等
 	Stop()
 }

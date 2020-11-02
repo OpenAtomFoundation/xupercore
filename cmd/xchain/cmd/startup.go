@@ -1,15 +1,20 @@
 package cmd
 
 import (
-	"fmt"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/xuperchain/xupercore/kernel/engines"
 	econf "github.com/xuperchain/xupercore/kernel/engines/config"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
 	sconf "github.com/xuperchain/xupercore/server/config"
+	"github.com/xuperchain/xupercore/server/rpc"
 	// import要使用的领域组件驱动
+
+	"github.com/spf13/cobra"
 )
 
 type StartupCmd struct {
@@ -17,13 +22,13 @@ type StartupCmd struct {
 }
 
 func GetStartupCmd() *StartupCmd {
-	startupCmdIns = new(StartupCmd)
+	startupCmdIns := new(StartupCmd)
 
 	// 定义命令行参数变量
 	var envCfgPath string
 
 	startupCmdIns.cmd = &cobra.Command{
-		Use:           "xchain startup [flag]",
+		Use:           "startup",
 		Short:         "Start up the blockchain node.",
 		Example:       "xchain startup --conf /home/rd/xchain/conf/env.yaml",
 		SilenceUsage:  true,
@@ -37,7 +42,7 @@ func GetStartupCmd() *StartupCmd {
 	startupCmdIns.cmd.Flags().StringVarP(&envCfgPath, "conf", "c", "",
 		"engine environment config file path")
 
-	return httpServerCmdIns
+	return startupCmdIns
 }
 
 // 启动节点
@@ -49,7 +54,7 @@ func StartupXchain(envCfgPath string) error {
 	}
 
 	// 初始化日志
-	logs.InitLog(envConf.GenConfFilePath(envCfg.LogConf), envCfg.GenDirAbsPath(envCfg.LogDir))
+	logs.InitLog(envConf.GenConfFilePath(envConf.LogConf), envConf.GenDirAbsPath(envConf.LogDir))
 
 	// 实例化区块链引擎
 	engine, err := engines.CreateBCEngine(def.BCEngineName, envConf)
@@ -74,10 +79,10 @@ func StartupXchain(envCfgPath string) error {
 	go func() {
 		for {
 			select {
-			case err := <-engChan:
+			case <-engChan:
 				wg.Done()
 				rpcServ.Exit()
-			case err := <-runRpcServ():
+			case <-rpcChan:
 				wg.Done()
 				engine.Stop()
 			case <-sigChan:
@@ -92,7 +97,7 @@ func StartupXchain(envCfgPath string) error {
 	return nil
 }
 
-func loadConf(envCfgPath string) (econf.EnvConf, sconf.ServConf, error) {
+func loadConf(envCfgPath string) (*econf.EnvConf, *sconf.ServConf, error) {
 	// 加载环境配置
 	envConf, err := econf.LoadEnvConf(envCfgPath)
 	if err != nil {
@@ -113,7 +118,7 @@ func runEngine(engine engines.BCEngine) <-chan error {
 
 	// 启动引擎，监听退出信号
 	go func() {
-		err := <-engine.Run()
+		err := engine.Start()
 		exitCh <- err
 	}()
 

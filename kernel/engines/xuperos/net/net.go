@@ -20,7 +20,7 @@ func NewNetEvent(engine def.Engine) (*NetEvent, error) {
 	}
 
 	// 注册监听事件
-	err := t.Subscriber()
+	err := obj.Subscriber()
 	if err != nil {
 		return nil, fmt.Errorf("new net event failed because register subscriber error.err:%v", err)
 	}
@@ -37,5 +37,5 @@ func (t *NetEvent) Stop() {
 }
 
 func (t *NetEvent) Subscriber() error {
-
+	return fmt.Errorf("the interface is not implemented")
 }
