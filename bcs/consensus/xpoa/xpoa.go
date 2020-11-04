@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	consensus.Register("xpoa", xpoa.NewXpoaConsensus)
+	consensus.Register("xpoa", NewXpoaConsensus)
 }
 
 type XpoaConsensus struct {
@@ -47,8 +47,8 @@ func (xc *XpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 }
 
 // GetStatus 获取区块链共识信息
-func (xc *XpoaConsensus) GetConsensusStatus() cbase.ConsensusStatus {
-	return &XpoaStatus{}
+func (xc *XpoaConsensus) GetConsensusStatus() (cbase.ConsensusStatus, error) {
+	return &XpoaStatus{}, nil
 }
 
 func (xc *XpoaConsensus) KernMethodRegister() []func() {

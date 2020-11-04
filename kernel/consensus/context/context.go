@@ -3,7 +3,6 @@ package context
 
 import (
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/lib/timer"
 )
 
 type ConsensusComponent int
@@ -17,17 +16,13 @@ type BlockInterface interface {
 	GetProposer() string
 	GetHeight() int64
 	GetBlockid() []byte
-	GetConsensusStorage() interface{} // 不能再叫GetJustify了
+	GetConsensusStorage() []byte // 不能再叫GetJustify了
 	GetTimestamp() int64
 }
 
 type MetaInterface interface {
 	GetTrunkHeight() int64
 	GetTipBlockid() []byte
-}
-
-type TransactionInterface interface {
-	GetDesc() []byte
 }
 
 // 特定共识的字段标示
@@ -49,7 +44,6 @@ type LedgerCtxInConsensus interface {
 	GetMeta() MetaInterface
 	QueryBlock([]byte) BlockInterface
 	QueryBlockByHeight(int64) BlockInterface
-	QueryTransaction() TransactionInterface
 	Truncate() error
 	GetConsensusConf() []byte
 	GetGenesisBlock() BlockInterface
@@ -59,17 +53,17 @@ type P2pCtxInConsensus interface {
 	GetLocalAddress() string
 	GetCurrentPeerAddress() []string
 	// TODO: 接上network封装的两个func
-	SendMessage() error
-	SendMessageWithResponse() ([]byte, error)
+	// SendMessage() error
+	// SendMessageWithResponse() ([]byte, error)
 }
 
 type CryptoClientInConsensus interface {
 	// TODO: 接上密码库的func
-	GetEcdsaPrivateKeyFromJSON([]byte) ([]byte, error)
-	MakeVoteMsgSign() error
-	MakePhaseMsgSign() error
-	VerifyPhaseMsgSign() error
-	VerifyVoteMsgSign() error
+	// GetEcdsaPrivateKeyFromJSON([]byte) ([]byte, error)
+	// MakeVoteMsgSign() error
+	// MakePhaseMsgSign() error
+	// VerifyPhaseMsgSign() error
+	// VerifyVoteMsgSign() error
 }
 
 // 共识领域级上下文
@@ -90,19 +84,6 @@ func CreateConsensusCtx(bcName string, ledger LedgerCtxInConsensus, p2p P2pCtxIn
 		P2p:          p2p,
 		CryptoClient: cryptoClient,
 	}
-}
-
-// 操作级上下文，不是所有的方法都需要独立上下文，按需选用
-type ConsensusOperateCtx interface {
-	xcontext.BaseCtx
-	GetTimer() *timer.XTimer
-	GetLogid() string
-}
-
-type ConsensusOperateCtxImpl struct {
-	xcontext.BaseCtxImpl
-	// 便于记录各阶段处理耗时
-	Timer *timer.XTimer
 }
 
 // kernel.KContext的fake定义
