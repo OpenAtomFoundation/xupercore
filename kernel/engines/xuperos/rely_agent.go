@@ -31,3 +31,7 @@ func (t *RelyAgentImpl) CreateNetwork() (def.XNetwork, error) {
 
 	return nil, fmt.Errorf("the interface is not implemented")
 }
+
+func (t *RelyAgentImpl) CreateLedger() (def.XLedger, error) {
+	return nil, fmt.Errorf("the interface is not implemented")
+}

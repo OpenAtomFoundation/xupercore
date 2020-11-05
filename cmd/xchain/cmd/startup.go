@@ -77,14 +77,15 @@ func StartupXchain(envCfgPath string) error {
 	sigChan := make(chan os.Signal)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {
+		// 退出调用幂等
 		for {
 			select {
 			case <-engChan:
-				wg.Done()
 				rpcServ.Exit()
-			case <-rpcChan:
 				wg.Done()
+			case <-rpcChan:
 				engine.Stop()
+				wg.Done()
 			case <-sigChan:
 				rpcServ.Exit()
 				engine.Stop()
@@ -113,13 +114,13 @@ func loadConf(envCfgPath string) (*econf.EnvConf, *sconf.ServConf, error) {
 	return envConf, servConf, nil
 }
 
-func runEngine(engine engines.BCEngine) <-chan error {
-	exitCh := make(chan error)
+func runEngine(engine engines.BCEngine) <-chan bool {
+	exitCh := make(chan bool)
 
 	// 启动引擎，监听退出信号
 	go func() {
-		err := engine.Start()
-		exitCh <- err
+		engine.Start()
+		exitCh <- true
 	}()
 
 	return exitCh

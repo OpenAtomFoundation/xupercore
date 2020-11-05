@@ -28,6 +28,7 @@ func NewNetEvent(engine def.Engine) (*NetEvent, error) {
 	return obj, nil
 }
 
+// 阻塞
 func (t *NetEvent) Start() {
 
 }

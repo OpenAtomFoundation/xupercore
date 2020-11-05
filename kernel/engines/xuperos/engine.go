@@ -16,6 +16,7 @@ import (
 )
 
 // xuperos执行引擎，为公链场景订制区块链引擎
+// 采用多链架构，支持多链，考虑到面向公链场景，暂时不支持群组
 type XuperOSEngine struct {
 	// 引擎运行环境上下文
 	engCtx *def.EngineCtx
@@ -27,6 +28,8 @@ type XuperOSEngine struct {
 	netEvent *xnet.NetEvent
 	// 依赖代理组件
 	relyAgent def.RelyAgent
+	// 管理异步任务退出状态
+	exitWG sync.WaitGroup
 }
 
 func NewXuperOSEngine() engines.BCEngine {
@@ -95,20 +98,39 @@ func (t *XuperOSEngine) SetRelyAgent(agent def.RelyAgent) error {
 	return nil
 }
 
-// 启动执行引擎
-func (t *XuperOSEngine) Start() error {
-	// 启动每条链的矿工
+// 启动执行引擎，阻塞等待
+func (t *XuperOSEngine) Start() {
+	// 遍历启动每条链
+	t.chains.Range(func(k, v interface{}) bool {
+		chainHD := v.(def.Chain)
+		t.log.Trace("begin start chain " + k.(string))
 
-	// 启动定时任务
+		go func() {
+			t.exitWG.Add(1)
+			defer t.exitWG.Done()
+
+			// 启动链
+			chainHD.Start()
+			t.log.Trace("chain " + k.(string) + "exit")
+		}()
+
+		return true
+	})
 
 	// 启动P2P网络事件消费
+	go func() {
+		t.exitWG.Add(1)
+		defer t.exitWG.Done()
+		t.netEvent.Start()
+	}()
 
-	return fmt.Errorf("the interface is not implemented")
+	// 阻塞等待，直到所有异步任务成功退出
+	t.exitWG.Wait()
 }
 
 // 关闭执行引擎，需要幂等
 func (t *XuperOSEngine) Stop() {
-	// 关闭P2Pw网络
+	// 关闭P2P网络
 
 	// 关闭定时任务
 
