@@ -23,6 +23,10 @@ type EngineCtx struct {
 type ChainCtx struct {
 	// 基础上下文
 	xctx.BaseCtx
+	// 链名
+	BCName string
+	// 网络
+	Net XNetwork
 	// 账本
 	Ledger XLedger
 	// 共识
@@ -33,4 +37,6 @@ type ChainCtx struct {
 	Permission XPermission
 	// 加密
 	Crypto XCrypto
+	// 结点账户信息
+	AddrInfo *NodeAddrInfo
 }

@@ -8,8 +8,8 @@ import (
 type Chain interface {
 	Start()
 	Stop()
-	ProcessTx()
-	ProcessBlock()
+	ProcTx()
+	ProcBlocks()
 	PreExec()
 	GetChainCtx() *ChainCtx
 }
@@ -31,6 +31,7 @@ type Engine interface {
 // 定义该引擎对各组件依赖接口约束
 type RelyAgent interface {
 	CreateNetwork() (XNetwork, error)
+	CreateLedger() (XLedger, error)
 }
 
 // 定义引擎对网络组件依赖接口约束
