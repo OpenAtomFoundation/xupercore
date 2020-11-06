@@ -2,12 +2,6 @@ syntax = "proto3";
 
 package pb;
 
-message Header {
-  string logid = 1; //如果logid没填写，生成一个
-  string from_node =
-      2; // call rpc client address，客户端可以为空，节点一定要写自己的address
-}
-
 // 签名详情
 message SignatureInfo {
   string PublicKey = 1;
@@ -48,47 +42,20 @@ message Acl {
 
 // 查询Acl
 message AclStatus {
-  Header header = 1;
-  string bcname = 2;
-  string accountName = 3;
-  string contractName = 4;
-  string methodName = 5;
-  bool confirmed = 6;
-  Acl acl = 7;
-}
-
-// Identity authentication request
-message IdentityAuth {
-  bytes sign = 1;
-  bytes pubkey = 2;
-  string addr = 3;
-  string peerID = 4;
-  string timestamp = 5;
-}
-
-// Identity authentication requests
-message IdentityAuths { repeated IdentityAuth auth = 1; }
-
-enum ResourceType {
-  CPU = 0;
-  MEMORY = 1;
-  DISK = 2;
-  XFEE = 3; // the fee used in kernel contract
-}
-
-message ResourceLimit {
-  ResourceType type = 1;
-  int64 limit = 2;
+  string bcname = 1;
+  string accountName = 2;
+  string contractName = 3;
+  string methodName = 4;
+  bool confirmed = 5;
+  Acl acl = 6;
 }
 
 message AK2AccountRequest {
-  Header header = 1;
-  string bcname = 2;
-  string address = 3;
+  string bcname = 1;
+  string address = 2;
 }
 
 message AK2AccountResponse {
-  Header header = 1;
-  string bcname = 2;
-  repeated string account = 3;
+  string bcname = 1;
+  repeated string account = 2;
 }

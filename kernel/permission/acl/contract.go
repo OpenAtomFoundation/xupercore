@@ -2,134 +2,26 @@ package acl
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
-	"github.com/xuperchain/xupercore/bcs/permission/acl/utils"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/kernel"
-	"github.com/xuperchain/xupercore/kernel/permission"
-	"github.com/xuperchain/xupercore/kernel/permission/base"
-	pctx "github.com/xuperchain/xupercore/kernel/permission/context"
-	"github.com/xuperchain/xupercore/kernel/permission/pb"
+	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
+	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 )
 
-const (
-	StatusOK = 200
-)
-
-// Manager manages all ACL releated data, providing read/write interface for ACL table
-type Manager struct {
-	Ctx pctx.PermissionCtx
+type KernMethod struct {
+	BcName string
 }
 
-// NewACLManager create instance of ACLManager
-func NewACLManager(ctx pctx.PermissionCtx) base.PermissionImpl {
-	return &Manager{
-		Ctx: ctx,
+func NewKernContractMethod(bcName string) *KernMethod {
+	t := &KernMethod{
+		BcName: bcName,
 	}
+	return t
 }
 
-func init() {
-	permission.Register("acl", NewACLManager)
-	t := &Manager{}
-	kernel.RegisterKernMethod("$acl", "NewAccount", t.NewAccount)
-	kernel.RegisterKernMethod("$acl", "SetAccountACL", t.SetAccountACL)
-	kernel.RegisterKernMethod("$acl", "SetMethodACL", t.SetMethodACL)
-}
-
-// GetAccountACL get acl of an account
-func (mgr *Manager) GetAccountACL(ctx pctx.PermissionCtx, accountName string) (*pb.Acl, error) {
-	acl, confirmed, err := mgr.GetAccountACLWithConfirmed(ctx, accountName)
-	if err != nil {
-		return nil, err
-	}
-	if acl != nil && !confirmed {
-		return nil, errors.New("acl in unconfirmed")
-	}
-	return acl, nil
-}
-
-// GetContractMethodACL get acl of contract method
-func (mgr *Manager) GetContractMethodACL(ctx pctx.PermissionCtx, contractName, methodName string) (*pb.Acl, error) {
-	acl, confirmed, err := mgr.GetContractMethodACLWithConfirmed(ctx, contractName, methodName)
-	if err != nil {
-		return nil, err
-	}
-	if acl != nil && !confirmed {
-		return nil, errors.New("acl in unconfirmed")
-	}
-	return acl, nil
-}
-
-// GetAccountACLWithConfirmed implements reading ACL of an account with confirmed state
-func (mgr *Manager) GetAccountACLWithConfirmed(ctx pctx.PermissionCtx, accountName string) (*pb.Acl, bool, error) {
-	data, err := ctx.KCtx.GetObject(utils.GetAccountBucket(), []byte(accountName))
-	if err != nil || data == nil {
-		return nil, false, err
-	}
-	exists, err := ctx.Ledger.HasTransaction(data)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// 反序列化
-	acl := &pb.Acl{}
-	json.Unmarshal(data, acl)
-
-	return acl, exists, nil
-}
-
-// GetContractMethodACLWithConfirmed implements reading ACL of a contract method with confirmed state
-func (mgr *Manager) GetContractMethodACLWithConfirmed(ctx pctx.PermissionCtx, contractName, methodName string) (*pb.Acl, bool, error) {
-	key := utils.MakeContractMethodKey(contractName, methodName)
-	data, err := ctx.KCtx.GetObject(utils.GetContractBucket(), []byte(key))
-	if err != nil || data == nil {
-		return nil, false, err
-	}
-	exists, err := ctx.Ledger.HasTransaction(data)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// 反序列化
-	acl := &pb.Acl{}
-	json.Unmarshal(data, acl)
-
-	return acl, exists, nil
-}
-
-// GetAccountAddresses get the addresses belongs to contract account
-func (mgr *Manager) GetAccountAddresses(ctx pctx.PermissionCtx, accountName string) ([]string, error) {
-	acl, err := mgr.GetAccountACL(ctx, accountName)
-	if err != nil {
-		return nil, err
-	}
-
-	return mgr.getAddressesByACL(acl)
-}
-
-func (mgr *Manager) getAddressesByACL(acl *pb.Acl) ([]string, error) {
-	addresses := make([]string, 0)
-
-	switch acl.GetPm().GetRule() {
-	case pb.PermissionRule_SIGN_THRESHOLD:
-		for ak := range acl.GetAksWeight() {
-			addresses = append(addresses, ak)
-		}
-	case pb.PermissionRule_SIGN_AKSET:
-		for _, set := range acl.GetAkSets().GetSets() {
-			aks := set.GetAks()
-			addresses = append(addresses, aks...)
-		}
-	default:
-		return nil, errors.New("Unknown permission rule")
-	}
-
-	return addresses, nil
-}
-
-func (mgr *Manager) NewAccount(ctx kernel.KContext) (*contract.Response, error) {
+func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	// json -> pb.Acl
 	accountName := args["account_name"]
@@ -145,7 +37,7 @@ func (mgr *Manager) NewAccount(ctx kernel.KContext) (*contract.Response, error) 
 		return nil, validErr
 	}
 
-	bcname := mgr.Ctx.BcName
+	bcname := t.BcName
 	if bcname == "" {
 		return nil, fmt.Errorf("block name is empty")
 	}
@@ -182,7 +74,7 @@ func (mgr *Manager) NewAccount(ctx kernel.KContext) (*contract.Response, error) 
 	}, nil
 }
 
-func (mgr *Manager) SetAccountACL(ctx kernel.KContext) (*contract.Response, error) {
+func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	// json -> pb.Acl
 	accountName := args["account_name"]
@@ -219,7 +111,7 @@ func (mgr *Manager) SetAccountACL(ctx kernel.KContext) (*contract.Response, erro
 	}, nil
 }
 
-func (mgr *Manager) SetMethodACL(ctx kernel.KContext) (*contract.Response, error) {
+func (t *KernMethod) SetMethodACL(ctx kernel.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	contractNameBuf := args["contract_name"]
 	methodNameBuf := args["method_name"]

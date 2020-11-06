@@ -15,8 +15,6 @@ const (
 	accountBcnameSep       = "@"
 	addressAccountSep      = "\x01"
 	accountContractValue   = "true"
-	newAccountGasAmount    = 1000
-	ak2AccountValue        = "true"
 )
 
 // GetContract2AccountBucket get the bucket name of contract to account map

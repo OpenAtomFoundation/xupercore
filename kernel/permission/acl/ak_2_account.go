@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/xuperchain/xupercore/kernel/contract/kernel"
+	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
-	"github.com/xuperchain/xupercore/kernel/permission/pb"
 )
 
 func updateThresholdWithDel(ctx kernel.KContext, aksWeight map[string]float64, accountName string) error {
