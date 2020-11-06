@@ -2,8 +2,8 @@
 package def
 
 import (
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	envconf "github.com/xuperchain/xupercore/kernel/engines/config"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 )
 
@@ -12,7 +12,7 @@ type EngineCtx struct {
 	// 基础上下文
 	xctx.BaseCtx
 	// 运行环境配置
-	EnvCfg *envconf.EnvConf
+	EnvCfg *xconf.EnvConf
 	// 引擎配置
 	EngCfg *engconf.EngineConf
 	// 网络组件句柄
@@ -34,7 +34,7 @@ type ChainCtx struct {
 	// 合约
 	Contract XContract
 	// 权限
-	Permission XPermission
+	Acl XAcl
 	// 加密
 	Crypto XCrypto
 	// 结点账户信息

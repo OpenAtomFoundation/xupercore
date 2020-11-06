@@ -51,7 +51,7 @@ type XContract interface {
 }
 
 // 定引擎义对权限组件依赖接口约束
-type XPermission interface {
+type XAcl interface {
 }
 
 // 定义引擎对加密组件依赖接口约束

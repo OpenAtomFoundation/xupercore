@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
-	envconf "github.com/xuperchain/xupercore/kernel/engines/config"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	xnet "github.com/xuperchain/xupercore/kernel/engines/xuperos/net"
@@ -56,7 +56,7 @@ func EngineConvert(engine engines.BCEngine) (def.Engine, error) {
 }
 
 // 初始化执行引擎环境上下文
-func (t *XuperOSEngine) Init(ecfg *envconf.EnvConf) error {
+func (t *XuperOSEngine) Init(ecfg *xconf.EnvConf) error {
 	// 初始化引擎运行上下文
 	engCtx, err := t.createEngCtx(ecfg)
 	if err != nil {
@@ -205,7 +205,7 @@ func (t *XuperOSEngine) loadChains() error {
 	return nil
 }
 
-func (t *XuperOSEngine) createEngCtx(envCfg *envconf.EnvConf) (*def.EngineCtx, error) {
+func (t *XuperOSEngine) createEngCtx(envCfg *xconf.EnvConf) (*def.EngineCtx, error) {
 	if envCfg == nil {
 		return nil, fmt.Errorf("create engine ctx failed because env config is nil")
 	}
