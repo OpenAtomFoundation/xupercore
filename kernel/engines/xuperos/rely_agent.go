@@ -16,6 +16,7 @@ func NewRelyAgent(engine def.Engine) *RelyAgentImpl {
 	return &RelyAgentImpl{engine}
 }
 
+// 创建并启动p2p网络
 func (t *RelyAgentImpl) CreateNetwork() (def.XNetwork, error) {
 	/*
 			envCfg := t.engine.GetEngineCtx().EnvCfg
@@ -23,11 +24,17 @@ func (t *RelyAgentImpl) CreateNetwork() (def.XNetwork, error) {
 		    if err != nil {
 		        return nil, fmt.Errorf("create engine ctx failed because create network ctx failed.err:%v", err)
 		    }
+
 		    netHD, err := network.CreateNetwork(netCtx)
 		    if err != nil {
 		        return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)
 		    }
+
 	*/
 
+	return nil, fmt.Errorf("the interface is not implemented")
+}
+
+func (t *RelyAgentImpl) CreateLedger() (def.XLedger, error) {
 	return nil, fmt.Errorf("the interface is not implemented")
 }
