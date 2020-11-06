@@ -103,7 +103,7 @@ func (t *XuperOSEngine) Start() {
 	// 遍历启动每条链
 	t.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(def.Chain)
-		t.log.Trace("begin start chain " + k.(string))
+		t.log.Trace("start chain " + k.(string))
 
 		go func() {
 			t.exitWG.Add(1)
