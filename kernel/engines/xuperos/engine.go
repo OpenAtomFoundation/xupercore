@@ -105,8 +105,8 @@ func (t *XuperOSEngine) Start() {
 		chainHD := v.(def.Chain)
 		t.log.Trace("start chain " + k.(string))
 
+		t.exitWG.Add(1)
 		go func() {
-			t.exitWG.Add(1)
 			defer t.exitWG.Done()
 
 			// 启动链
@@ -118,8 +118,8 @@ func (t *XuperOSEngine) Start() {
 	})
 
 	// 启动P2P网络事件消费
+	t.exitWG.Add(1)
 	go func() {
-		t.exitWG.Add(1)
 		defer t.exitWG.Done()
 		t.netEvent.Start()
 	}()
@@ -132,7 +132,7 @@ func (t *XuperOSEngine) Start() {
 func (t *XuperOSEngine) Stop() {
 	// 关闭P2P网络
 
-	// 关闭定时任务
+	// 关闭网络事件处理循环
 
 	// 关闭矿工
 }
@@ -216,7 +216,7 @@ func (t *XuperOSEngine) createEngCtx(envCfg *envconf.EnvConf) (*def.EngineCtx, e
 		return nil, fmt.Errorf("create engine ctx failed because engine config load err.err:%v", err)
 	}
 
-	// 实例化网络
+	// 实例化&启动p2p网络
 	netHD, err := t.relyAgent.CreateNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)
