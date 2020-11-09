@@ -1,14 +1,12 @@
 package consensus
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
-	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/mock"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -34,7 +32,7 @@ type FakeConsensusStatus struct {
 	version            int64
 	beginBlockId       []byte
 	stepConsensusIndex int64
-	consensusType      int
+	consensusName      string
 	smr                stateMachineInterface
 }
 
@@ -50,8 +48,8 @@ func (s *FakeConsensusStatus) GetStepConsensusIndex() int64 {
 	return s.stepConsensusIndex
 }
 
-func (s *FakeConsensusStatus) GetConsensusType() int {
-	return s.consensusType
+func (s *FakeConsensusStatus) GetConsensusName() string {
+	return s.consensusName
 }
 
 func (s *FakeConsensusStatus) GetCurrentValidatorsInfo() []byte {
@@ -73,7 +71,13 @@ func init() {
 }
 
 func NewFakeConsensus(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) base.ConsensusImplInterface {
-	return &FakeConsensusImp{}
+	status := &FakeConsensusStatus{
+		beginBlockId:  cCfg.BeginBlockid,
+		consensusName: cCfg.ConsensusName,
+	}
+	return &FakeConsensusImp{
+		status: status,
+	}
 }
 
 func (con *FakeConsensusImp) CompeteMaster(height int64) (bool, bool, error) {
@@ -107,7 +111,13 @@ type AnotherConsensusImp struct {
 }
 
 func NewAnotherConsensus(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) base.ConsensusImplInterface {
-	return &AnotherConsensusImp{}
+	status := &FakeConsensusStatus{
+		beginBlockId:  cCfg.BeginBlockid,
+		consensusName: cCfg.ConsensusName,
+	}
+	return &AnotherConsensusImp{
+		status: status,
+	}
 }
 
 func (con *AnotherConsensusImp) CompeteMaster(height int64) (bool, bool, error) {
@@ -164,24 +174,24 @@ func GetConsensusCtx(ledger *mock.FakeLedger) cctx.ConsensusCtx {
 func TestNewPluggableConsensus(t *testing.T) {
 	l := mock.NewFakeLedger()
 	ctx := GetConsensusCtx(l)
-	_, err := NewPluggableConsensus(ctx)
+	pc, err := NewPluggableConsensus(ctx)
 	if err != nil {
 		t.Error("NewPluggableConsensus error", err)
+		return
+	}
+	status, err := pc.GetConsensusStatus()
+	if err != nil {
+		t.Error("GetConsensusStatus error", err)
+		return
+	}
+	if status.GetConsensusName() != "fake" {
+		t.Error("GetConsensusName error", err)
+		return
 	}
 }
 
 func GetNewConsensusConf() []byte {
-	args := context.ConsensusConfig{
-		ConsensusName: "Another",
-		BeginBlockid:  []byte{byte(2)},
-		Timestamp:     time.Now().UnixNano(),
-		BaseComponent: context.Empty,
-	}
-	result, err := json.Marshal(args)
-	if err != nil {
-		return nil
-	}
-	return result
+	return []byte("{\"name\":\"Another\",\"config\":\"\"}")
 }
 
 func TestUpdateConsensus(t *testing.T) {
@@ -205,6 +215,16 @@ func TestUpdateConsensus(t *testing.T) {
 	f(kctx, int64(3))
 	if len(np.stepConsensus.cons) != 2 {
 		t.Error("Update consensus error!")
+		return
+	}
+	status, err := np.GetConsensusStatus()
+	if err != nil {
+		t.Error("GetConsensusStatus error", err)
+		return
+	}
+	if status.GetConsensusName() != "Another" {
+		t.Error("GetConsensusName error", err)
+		return
 	}
 }
 

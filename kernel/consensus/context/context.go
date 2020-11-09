@@ -28,13 +28,11 @@ type MetaInterface interface {
 // 特定共识的字段标示
 type ConsensusConfig struct {
 	// 获取本次共识的类型名称
-	ConsensusName string `json:"consensusName,omitempty"`
+	ConsensusName string `json:"name"`
+	// 获取本次共识专属属性
+	Config string `json:"config"`
 	// 获取本次共识的起始Blockid，即起始高度的上一区块blockid
-	BeginBlockid []byte
-	// 获取本次共识的时间戳
-	Timestamp int64 `json:"timestamp,omitempty"`
-	// 获取本次共识使用的base组件
-	BaseComponent ConsensusComponent `json:"baseComponent,omitempty"`
+	BeginBlockid []byte `json:"-"`
 }
 
 // 使用到的ledger接口

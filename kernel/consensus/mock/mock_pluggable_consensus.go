@@ -1,7 +1,6 @@
 package mock
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -89,17 +88,7 @@ func (m *FakeMeta) GetTipBlockid() []byte {
 }
 
 func GetGenesisConsensusConf() []byte {
-	args := context.ConsensusConfig{
-		ConsensusName: "fake",
-		BeginBlockid:  []byte{byte(0)},
-		Timestamp:     time.Now().UnixNano(),
-		BaseComponent: context.Empty,
-	}
-	result, err := json.Marshal(args)
-	if err != nil {
-		return nil
-	}
-	return result
+	return []byte("{\"name\":\"fake\",\"config\":\"\"}")
 }
 
 type FakeLedger struct {

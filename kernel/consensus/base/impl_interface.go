@@ -30,7 +30,7 @@ type ConsensusStatus interface {
 	// 获取共识item所在consensus slice中的index
 	GetStepConsensusIndex() int64
 	// 获取共识类型
-	GetConsensusType() int
+	GetConsensusName() string
 	// 获取当前状态机term
 	GetCurrentTerm() int64
 	// 获取当前矿工信息
