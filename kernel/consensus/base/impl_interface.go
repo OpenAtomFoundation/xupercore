@@ -17,14 +17,16 @@ type ConsensusImplInterface interface {
 	ProcessConfirmBlock(block cctx.BlockInterface) error
 	// GetStatus 获取区块链共识信息
 	GetConsensusStatus() (ConsensusStatus, error)
+	// 共识实例的挂起逻辑
+	Stop() error
 }
 
 /* ConsensusStatus 定义了一个共识实例需要返回的各种状态，需特定共识实例实现相应接口
  */
 type ConsensusStatus interface {
 	GetVersion() int64
-	// pluggable consensus共识item起始高度和上一blockid
-	GetConsensusBeginInfo() (int64, []byte)
+	// pluggable consensus共识item起始上一blockid
+	GetConsensusBeginInfo() []byte
 	// 获取共识item所在consensus slice中的index
 	GetStepConsensusIndex() int64
 	// 获取共识类型

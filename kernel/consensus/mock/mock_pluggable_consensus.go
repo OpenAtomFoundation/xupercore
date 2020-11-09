@@ -91,7 +91,6 @@ func (m *FakeMeta) GetTipBlockid() []byte {
 func GetGenesisConsensusConf() []byte {
 	args := context.ConsensusConfig{
 		ConsensusName: "fake",
-		BeginHeight:   int64(1),
 		BeginBlockid:  []byte{byte(0)},
 		Timestamp:     time.Now().UnixNano(),
 		BaseComponent: context.Empty,

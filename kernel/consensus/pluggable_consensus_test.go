@@ -32,7 +32,6 @@ type stateMachineInterface interface {
 
 type FakeConsensusStatus struct {
 	version            int64
-	beginHeight        int64
 	beginBlockId       []byte
 	stepConsensusIndex int64
 	consensusType      int
@@ -43,8 +42,8 @@ func (s *FakeConsensusStatus) GetVersion() int64 {
 	return s.version
 }
 
-func (s *FakeConsensusStatus) GetConsensusBeginInfo() (int64, []byte) {
-	return s.beginHeight, s.beginBlockId
+func (s *FakeConsensusStatus) GetConsensusBeginInfo() []byte {
+	return s.beginBlockId
 }
 
 func (s *FakeConsensusStatus) GetStepConsensusIndex() int64 {
@@ -98,6 +97,10 @@ func (con *FakeConsensusImp) GetConsensusStatus() (base.ConsensusStatus, error) 
 	return con.status, nil
 }
 
+func (con *FakeConsensusImp) Stop() error {
+	return nil
+}
+
 type AnotherConsensusImp struct {
 	smr    FakeSMRStruct
 	status *FakeConsensusStatus
@@ -126,6 +129,10 @@ func (con *AnotherConsensusImp) ProcessConfirmBlock(block cctx.BlockInterface) e
 
 func (con *AnotherConsensusImp) GetConsensusStatus() (base.ConsensusStatus, error) {
 	return con.status, nil
+}
+
+func (con *AnotherConsensusImp) Stop() error {
+	return nil
 }
 
 type FakeCryptoClient struct{}
@@ -166,7 +173,6 @@ func TestNewPluggableConsensus(t *testing.T) {
 func GetNewConsensusConf() []byte {
 	args := context.ConsensusConfig{
 		ConsensusName: "Another",
-		BeginHeight:   int64(3),
 		BeginBlockid:  []byte{byte(2)},
 		Timestamp:     time.Now().UnixNano(),
 		BaseComponent: context.Empty,
@@ -183,16 +189,23 @@ func TestUpdateConsensus(t *testing.T) {
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
 	newHeight := l.GetMeta().GetTrunkHeight() + 1
-	_, _, _ = pc.CompeteMaster(newHeight)
+	_, _, err := pc.CompeteMaster(newHeight)
+	if err != nil {
+		t.Error("CompeteMaster error! height = ", newHeight)
+		return
+	}
 	// 此时pc.nextHeight == 3
 	kctx := mock.NewFakeKContextImpl(GetNewConsensusConf())
-	np, ok := pc.(PluggableConsensus)
+	np, ok := pc.(*PluggableConsensus)
 	if !ok {
 		t.Error("Transfer PluggableConsensus error!")
 		return
 	}
 	f := mock.ContractRegister(np.updateConsensus)
 	f(kctx, int64(3))
+	if len(np.stepConsensus.cons) != 2 {
+		t.Error("Update consensus error!")
+	}
 }
 
 func TestCompeteMaster(t *testing.T) {

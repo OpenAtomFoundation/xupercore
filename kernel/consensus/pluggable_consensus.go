@@ -13,7 +13,6 @@ import (
 var (
 	EmptyConsensusListErr = errors.New("Consensus list of PluggableConsensus is empty.")
 	EmptyConsensusName    = errors.New("Consensus name can not be empty")
-	BeginHeightErr        = errors.New("Consensus begin height <= 0")
 	BeginBlockIdErr       = errors.New("Consensus begin blockid err")
 	BuildConsensusError   = errors.New("Build consensus Error")
 	UpdateTriggerError    = errors.New("Update trigger height invalid")
@@ -22,9 +21,8 @@ var (
 
 // StepConsensus封装了可插拔共识需要的共识数组
 type StepConsensus struct {
-	cons      []ConsensusInterface
-	stepIndex int64        // 共识指针
-	mutex     sync.RWMutex // mutex保护StepConsensus数据结构cons的读写操作
+	cons  []ConsensusInterface
+	mutex sync.RWMutex // mutex保护StepConsensus数据结构cons的读写操作
 }
 
 // 向可插拔共识数组put item
@@ -32,19 +30,18 @@ func (sc *StepConsensus) put(con ConsensusInterface) error {
 	sc.mutex.Lock()
 	defer sc.mutex.Unlock()
 	sc.cons = append(sc.cons, con)
-	sc.stepIndex++
 	return nil
 }
 
 // 获取最新的共识实例
-func (sc *StepConsensus) get() ConsensusInterface {
+func (sc *StepConsensus) tail() ConsensusInterface {
 	//getCurrentConsensusComponent
 	sc.mutex.RLock()
 	sc.mutex.RUnlock()
 	if len(sc.cons) == 0 {
 		return nil
 	}
-	return sc.cons[sc.stepIndex-1]
+	return sc.cons[len(sc.cons)-1]
 }
 
 /* PluggableConsensus 实现了consensus_interface接口
@@ -57,24 +54,29 @@ type PluggableConsensus struct {
 }
 
 // 获取目前PluggableConsensus共识列表共识句柄
-func (pc PluggableConsensus) getCurrentConsensusComponent() ConsensusInterface {
-	return pc.stepConsensus.get()
+func (pc *PluggableConsensus) getCurrentConsensusComponent() ConsensusInterface {
+	return pc.stepConsensus.tail()
 }
 
 /* CompeteMaster 矿工检查当前自己是否需要挖矿
- * param: height仅为打印需要的标示，实际还是需要账本当前最高的高度作为输入
+ * param: height仅为打印需要的标示，实际还是需要账本当前最高 的高度作为输入
  */
-func (pc PluggableConsensus) CompeteMaster(height int64) (bool, bool, error) {
+func (pc *PluggableConsensus) CompeteMaster(height int64) (bool, bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
+		pc.ctx.BCtx.XLog.Error("Pluggable Consensus::CompeteMaster::Cannot get consensus Instance.")
 		return false, false, EmptyConsensusListErr
 	}
 	pc.nextHeight = height
 	return con.CompeteMaster(height)
 }
 
+func (pc *PluggableConsensus) GetHeight() int64 {
+	return pc.nextHeight
+}
+
 // 调用具体实例的CheckMinerMatch()
-func (pc PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		return false, EmptyConsensusListErr
@@ -83,7 +85,7 @@ func (pc PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.Bl
 }
 
 // 调用具体实例的ProcessBeforeMiner()
-func (pc PluggableConsensus) ProcessBeforeMiner(timestamp int64) (map[string]interface{}, bool, error) {
+func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) (map[string]interface{}, bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		return nil, false, EmptyConsensusListErr
@@ -92,7 +94,7 @@ func (pc PluggableConsensus) ProcessBeforeMiner(timestamp int64) (map[string]int
 }
 
 // 调用具体实例的ProcessConfirmBlock()
-func (pc PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
+func (pc *PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		return EmptyConsensusListErr
@@ -101,7 +103,7 @@ func (pc PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) erro
 }
 
 // 调用具体实例的GetConsensusStatus()
-func (pc PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
+func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		return nil, EmptyConsensusListErr
@@ -113,7 +115,7 @@ func (pc PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error) 
  * 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
  * 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
  */
-func (pc PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, height int64) error {
+func (pc *PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, height int64) error {
 	if height > pc.nextHeight {
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::trigger height error! Use old one.", "pluggable height", pc.nextHeight, "trigger height", height)
 		return UpdateTriggerError
@@ -126,7 +128,12 @@ func (pc PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, heig
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::parse consensus configuration error! Use old one.", "error", err.Error())
 		return err
 	}
-	cfg.BeginBlockid = pc.ctx.Ledger.QueryBlockByHeight(height).GetBlockid()
+	block := pc.ctx.Ledger.QueryBlockByHeight(height - 1)
+	if block == nil {
+		pc.ctx.BCtx.XLog.Error("Pluggable Consensus::updateConsensus::Cannot find latest block, update fail.")
+		return BeginBlockIdErr
+	}
+	cfg.BeginBlockid = block.GetBlockid()
 	consensusItem, err := pc.makeConsensusItem(pc.ctx, cfg)
 	if err != nil {
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::make consensu item error! Use old one.", "error", err.Error())
@@ -137,18 +144,27 @@ func (pc PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, heig
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
 		return BuildConsensusError
 	}
+	lastCon, ok := pc.getCurrentConsensusComponent().(base.ConsensusImplInterface)
+	if !ok {
+		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::last consensus transfer error! Stop.")
+		return BuildConsensusError
+	}
+	// 停止上一共识实例，主要包括注册的P2P msg等
+	lastCon.Stop()
 	return pc.stepConsensus.put(transCon)
 }
 
 // 初次创建PluggableConsensus实例，初始化cons列表
 func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
-	pc := PluggableConsensus{
+	// ATTENTION: 重启问题, 无法恢复stepConsensus栈问题
+	pc := &PluggableConsensus{
 		ctx: cCtx,
 		stepConsensus: &StepConsensus{
-			cons:      []ConsensusInterface{},
-			stepIndex: int64(0),
+			cons: []ConsensusInterface{},
 		},
 	}
+	// 向合约注册升级方法
+	// cCtx.GetKContract().Register("updateConsensus", pc.updateConsensus)
 	consensusBuf := cCtx.Ledger.GetConsensusConf()
 	// 解析提取字段生成ConsensusConfig
 	cfg := cctx.ConsensusConfig{}
@@ -168,7 +184,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 }
 
 // 创建单个特定共识，返回特定共识接口
-func (pc PluggableConsensus) makeConsensusItem(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) (base.ConsensusImplInterface, error) {
+func (pc *PluggableConsensus) makeConsensusItem(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) (base.ConsensusImplInterface, error) {
 	if cCfg.ConsensusName == "" {
 		cCtx.BCtx.XLog.Error("Pluggable Consensus::makeConsensusItem::consensus name is empty")
 		return nil, EmptyConsensusName
@@ -201,9 +217,6 @@ func Register(name string, f NewStepConsensus) {
 func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) (base.ConsensusImplInterface, error) {
 	if cCfg.ConsensusName == "" {
 		return nil, EmptyConsensusName
-	}
-	if cCfg.BeginHeight <= 0 {
-		return nil, BeginHeightErr
 	}
 	if cCfg.BeginBlockid == nil {
 		return nil, BeginBlockIdErr

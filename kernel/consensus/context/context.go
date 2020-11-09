@@ -29,8 +29,6 @@ type MetaInterface interface {
 type ConsensusConfig struct {
 	// 获取本次共识的类型名称
 	ConsensusName string `json:"consensusName,omitempty"`
-	// 获取本次共识的起始高度
-	BeginHeight int64 `json:"beginHeight,omitempty"`
 	// 获取本次共识的起始Blockid，即起始高度的上一区块blockid
 	BeginBlockid []byte
 	// 获取本次共识的时间戳
