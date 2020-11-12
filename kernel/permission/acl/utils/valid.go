@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 )
+
 func IsAccount(name string) int {
 	if name == "" {
 		return -1

@@ -11,17 +11,22 @@ import (
 )
 
 type KernMethod struct {
-	BcName string
+	BcName                   string
+	NewAccountResourceAmount int64
 }
 
-func NewKernContractMethod(bcName string) *KernMethod {
+func NewKernContractMethod(bcName string, NewAccountResourceAmount int64) *KernMethod {
 	t := &KernMethod{
-		BcName: bcName,
+		BcName:                   bcName,
+		NewAccountResourceAmount: NewAccountResourceAmount,
 	}
 	return t
 }
 
 func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error) {
+	/*if ctx.ResourceLimit.XFee < t.NewAccountResourceAmount {
+		return nil, fmt.Errorf("gas not enough, expect no less than %d", t.NewAccountResourceAmount)
+	}*/
 	args := ctx.Args()
 	// json -> pb.Acl
 	accountName := args["account_name"]
@@ -65,7 +70,7 @@ func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error)
 		return nil, err
 	}
 
-	//todo ctx.AddResourceUsed(ctx.NewAccountResourceAmount)
+	//ctx.AddResourceUsed(t.NewAccountResourceAmount)
 
 	return &contract.Response{
 		Status:  StatusOK,
@@ -75,6 +80,9 @@ func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error)
 }
 
 func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, error) {
+	/*if ctx.ResourceLimit.XFee < t.NewAccountResourceAmount/1000 {
+		return nil, fmt.Errorf("gas not enough, expect no less than %d", t.NewAccountResourceAmount/1000)
+	}*/
 	args := ctx.Args()
 	// json -> pb.Acl
 	accountName := args["account_name"]
@@ -102,7 +110,7 @@ func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, err
 		return nil, err
 	}
 
-	//todo ctx.AddResourceUsed(ctx.NewAccountResourceAmount / 1000)
+	//ctx.AddResourceUsed(t.NewAccountResourceAmount / 1000)
 
 	return &contract.Response{
 		Status:  StatusOK,
@@ -112,6 +120,9 @@ func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, err
 }
 
 func (t *KernMethod) SetMethodACL(ctx kernel.KContext) (*contract.Response, error) {
+	/*if ctx.ResourceLimit.XFee < t.NewAccountResourceAmount/1000 {
+		return nil, fmt.Errorf("gas not enough, expect no less than %d", t.NewAccountResourceAmount/1000)
+	}*/
 	args := ctx.Args()
 	contractNameBuf := args["contract_name"]
 	methodNameBuf := args["method_name"]
@@ -135,7 +146,7 @@ func (t *KernMethod) SetMethodACL(ctx kernel.KContext) (*contract.Response, erro
 		return nil, err
 	}
 
-	//todo ctx.AddXFeeUsed(ctx.NewAccountResourceAmount / 1000)
+	//ctx.AddXFeeUsed(t.NewAccountResourceAmount / 1000)
 	return &contract.Response{
 		Status:  StatusOK,
 		Message: "success",

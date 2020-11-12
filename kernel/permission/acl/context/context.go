@@ -6,15 +6,14 @@ import (
 )
 
 type LedgerCtx interface {
-	HasTransaction(txId []byte) (bool, error)
+	//全局ctx Resource
+	GetGenesisItem(item string) interface{}
+	GetConfirmedAccountACL(accountName string) ([]byte, error)
+	GetConfirmedMethodACL(contractName, methodName string) ([]byte, error)
 }
 
 type FakeContract interface {
 	RegisterKernMethod(contract, method string, handle kernel.KernMethod)
-}
-
-type XModelCtx interface {
-	Get(bucket string, key []byte) ([]byte, error)
 }
 
 type PermissionCtx struct {
@@ -22,7 +21,6 @@ type PermissionCtx struct {
 	BCtx     xcontext.BaseCtx
 	Ledger   LedgerCtx
 	Register FakeContract
-	XModel   XModelCtx
 }
 
 func CreatePermissionCtx(bcName string, bCtx xcontext.BaseCtx, leger LedgerCtx, register FakeContract) PermissionCtx {

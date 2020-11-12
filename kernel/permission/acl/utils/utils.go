@@ -14,7 +14,7 @@ import (
 	pctx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 )
 
-func IdentifyAK(akuri string, sign *pb.SignatureInfo, msg []byte) (bool, error){
+func IdentifyAK(akuri string, sign *pb.SignatureInfo, msg []byte) (bool, error) {
 	if sign == nil {
 		return false, errors.New("sign is nil")
 	}
@@ -26,7 +26,7 @@ func IdentifyAK(akuri string, sign *pb.SignatureInfo, msg []byte) (bool, error){
 	return VerifySign(ak, sign, msg)
 }
 
-func IdentifyAccount(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account string, aksuri []string) (bool, error){
+func IdentifyAccount(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account string, aksuri []string) (bool, error) {
 	// aks and signs could have zero length for permission rule Null
 	if aclMgr == nil {
 		return false, fmt.Errorf("Invalid Param, aclMgr=%v", aclMgr)
@@ -41,7 +41,7 @@ func IdentifyAccount(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account
 	return validatePermTree(pnode, true)
 }
 
-func CheckContractMethodPerm(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, aksuri []string, contractName, methodName string) (bool, error){
+func CheckContractMethodPerm(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, aksuri []string, contractName, methodName string) (bool, error) {
 	// aks and signs could have zero length for permission rule Null
 	if aclMgr == nil {
 		return false, fmt.Errorf("Invalid Param, aclMgr=%v", aclMgr)
@@ -142,7 +142,7 @@ func VerifySign(ak string, si *pb.SignatureInfo, data []byte) (bool, error) {
 		return false, err
 	}
 
-	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJSON(bytespk)
+	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJsonStr(string(bytespk[:]))
 	if err != nil {
 		return false, err
 	}
