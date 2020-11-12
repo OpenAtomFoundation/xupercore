@@ -5,7 +5,6 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 )
 
 type XuperOSChain struct {
@@ -15,6 +14,8 @@ type XuperOSChain struct {
 	log logs.Logger
 	// 矿工
 	miner *miner
+	// 依赖代理组件
+	relyAgent def.ChainRelyAgent
 }
 
 // 从本地存储加载链
@@ -28,6 +29,16 @@ func LoadChain(dataDir string) (*XuperOSChain, error) {
 	// 实例化矿工
 
 	return nil, fmt.Errorf("the interface is not implemented")
+}
+
+// 供单测时设置rely agent为mock agent，非并发安全
+func (t *XuperOSChain) SetRelyAgent(agent def.ChainRelyAgent) error {
+	if agent == nil {
+		return fmt.Errorf("param error")
+	}
+
+	t.relyAgent = agent
+	return nil
 }
 
 func (t *XuperOSChain) Start() {
