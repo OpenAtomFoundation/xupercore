@@ -52,27 +52,3 @@ func NewChainRelyAgent(chain def.Chain) *ChainRelyAgentImpl {
 func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
 	return contract.CreateManager("default", new(chainCore))
 }
-
-// chainCore is the implement of contract.ChainCore
-type chainCore struct {
-}
-
-// BCName get blockchain name
-func (c *chainCore) BCName() string {
-	return ""
-}
-
-// GetAccountAddress get addresses associated with account name
-func (c *chainCore) GetAccountAddresses(accountName string) ([]string, error) {
-	return []string{}, nil
-}
-
-// VerifyContractPermission verify permission of calling contract
-func (c *chainCore) VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error) {
-	return true, nil
-}
-
-// VerifyContractOwnerPermission verify contract ownership permisson
-func (c *chainCore) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
-	return nil
-}

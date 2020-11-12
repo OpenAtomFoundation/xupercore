@@ -23,6 +23,7 @@ func LoadChain(dataDir string) (*XuperOSChain, error) {
 	// 初始化链环境上下文
 
 	// 注册合约
+	RegisterKernMethod()
 
 	// 注册VAT
 
@@ -43,10 +44,12 @@ func (t *XuperOSChain) SetRelyAgent(agent def.ChainRelyAgent) error {
 
 func (t *XuperOSChain) Start() {
 	// 启动矿工
+	t.miner.start()
 }
 
 func (t *XuperOSChain) Stop() {
 	// 停止矿工
+	t.miner.stop()
 
 	// 释放资源
 }
