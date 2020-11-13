@@ -20,6 +20,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.5.1 // indirect
+	github.com/syndtr/goleveldb v1.0.0
 	github.com/xuperchain/log15 v0.0.0-20190620081506-bc88a9198230
 	github.com/xuperchain/wagon v0.6.1-0.20200313164333-db544e251599 // indirect
 	github.com/xuperchain/xuperchain v0.0.0-20200203053733-ba46d3bc58b5
