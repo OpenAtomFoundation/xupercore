@@ -1,5 +1,5 @@
 // package txn deals with tx data
-package txn
+package tx
 
 import (
 	"errors"
@@ -11,6 +11,21 @@ import (
 // Transaction is the internal represents of transaction
 type Transaction struct {
 	*pb.Transaction
+}
+
+// 生成奖励TX
+func GenerateAwardTx() *Transaction {
+
+}
+
+// 生成只有Desc的空交易
+func GenerateEmptyTx() {
+
+}
+
+// 通过创世块配置生成创世区块交易
+func GenerateRootTx() {
+
 }
 
 func ParseContractTransferRequest(requests []*pb.InvokeRequest) (string, *big.Int, error) {

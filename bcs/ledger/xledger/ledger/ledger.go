@@ -1074,13 +1074,6 @@ func (l *Ledger) QueryBlockByHeight(height int64) (*pb.InternalBlock, error) {
 	return l.QueryBlock(blockID)
 }
 
-// QueryLastBlock query last block by height
-func (l *Ledger) QueryLastBlock() (*pb.InternalBlock, error) {
-	lastBlockHeight := l.meta.GetTrunkHeight()
-
-	return l.QueryBlockByHeight(lastBlockHeight)
-}
-
 // GetBaseDB get internal db instance
 func (l *Ledger) GetBaseDB() kvdb.Database {
 	return l.baseDB
@@ -1118,51 +1111,61 @@ func (l *Ledger) removeBlocks(fromBlockid []byte, toBlockid []byte, batch kvdb.B
 
 // Truncate truncate ledger and set tipblock to utxovmLastID
 func (l *Ledger) Truncate(utxovmLastID []byte) error {
-	batchWrite := l.baseDB.NewBatch()
+	l.xlog.Info("start truncate ledger", "blockid", global.F(utxovmLastID))
 
+	// 获取账本锁
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
+	batchWrite := l.baseDB.NewBatch()
 	newMeta := proto.Clone(l.meta).(*pb.LedgerMeta)
 	newMeta.TipBlockid = utxovmLastID
-	block, findErr := l.fetchBlock(utxovmLastID)
-	if findErr != nil {
-		l.xlog.Warn("failed to find utxovm last block", "findErr", findErr)
-		return findErr
+
+	// 获取裁剪目标区块信息
+	block, err := l.fetchBlock(utxovmLastID)
+	if err != nil {
+		l.xlog.Warn("failed to find utxovm last block", "err", err, "blockid", global.F(utxovmLastID))
+		return err
 	}
+	// 查询分支信息
 	branchTips, err := l.GetBranchInfo(block.Blockid, block.Height)
 	if err != nil {
 		l.xlog.Warn("failed to find all branch tips", "err", err)
 		return err
 	}
+
+	// 逐个分支裁剪到目标高度
 	for _, branchTip := range branchTips {
 		deletedBlockid := []byte(branchTip)
-		rmErr := l.removeBlocks(deletedBlockid, block.Blockid, batchWrite)
-		if rmErr != nil {
-			l.xlog.Warn("failed to remove garbage blocks", "from", global.F(l.meta.TipBlockid), "to", global.F(block.Blockid))
-			return rmErr
+		// 裁剪到目标高度
+		err = l.removeBlocks(deletedBlockid, block.Blockid, batchWrite)
+		if err != nil {
+			l.xlog.Warn("failed to remove garbage blocks", "from", global.F(l.meta.TipBlockid),
+				"to", global.F(block.Blockid))
+			return err
 		}
-		// update branch head
-		updateBranchErr := l.updateBranchInfo(block.Blockid, deletedBlockid, block.Height, batchWrite)
-		if updateBranchErr != nil {
-			l.xlog.Warn("Truncated failed when calling updateBranchInfo", "updateBranchErr", updateBranchErr)
-			return updateBranchErr
+		// 更新分支高度信息
+		err = l.updateBranchInfo(block.Blockid, deletedBlockid, block.Height, batchWrite)
+		if err != nil {
+			l.xlog.Warn("truncate failed when calling updateBranchInfo", "err", err)
+			return err
 		}
-	}
-	newMeta.TrunkHeight = block.Height
-	metaBuf, pbErr := proto.Marshal(newMeta)
-	if pbErr != nil {
-		l.xlog.Warn("failed to marshal pb meta")
-		return pbErr
-	}
-	batchWrite.Put([]byte(pb.MetaTablePrefix), metaBuf)
-	kvErr := batchWrite.Write()
-	if kvErr != nil {
-		l.xlog.Warn("batch write failed when Truncate", "kvErr", kvErr)
-		return kvErr
 	}
 
+	newMeta.TrunkHeight = block.Height
+	metaBuf, err := proto.Marshal(newMeta)
+	if err != nil {
+		l.xlog.Warn("failed to marshal pb meta")
+		return err
+	}
+	batchWrite.Put([]byte(pb.MetaTablePrefix), metaBuf)
+	err = batchWrite.Write()
+	if err != nil {
+		l.xlog.Warn("batch write failed when truncate", "err", err)
+		return err
+	}
 	l.meta = newMeta
+
 	l.xlog.Info("truncate blockid succeed")
 	return nil
 }
