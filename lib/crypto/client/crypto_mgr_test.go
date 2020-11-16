@@ -27,12 +27,12 @@ func Test_CreateCryptoClientByPK(t *testing.T) {
 	}
 	msg := []byte("This is test msg")
 
-	ecdPubKey, err := cc.GetEcdsaPublicKeyFromJSON([]byte(pubKey))
+	ecdPubKey, err := cc.GetEcdsaPublicKeyFromJsonStr(pubKey)
 	if err != nil {
 		t.Errorf("GetEcdsaPublicKeyFromJSON failed, err=%v\n", err)
 		return
 	}
-	ecdPrivkey, err := cc.GetEcdsaPrivateKeyFromJSON([]byte(priKey))
+	ecdPrivkey, err := cc.GetEcdsaPrivateKeyFromJsonStr(priKey)
 	if err != nil {
 		t.Errorf("GetEcdsaPrivateKeyFromJSON failed, err=%v\n", err)
 		return

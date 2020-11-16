@@ -6,10 +6,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/xuperchain/xupercore/lib/crypto/account"
+	"github.com/xuperchain/crypto/core/account"
 	"github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/crypto/client/gm"
-	"github.com/xuperchain/xupercore/lib/crypto/client/schnorr"
 	"github.com/xuperchain/xupercore/lib/crypto/client/xchain"
 )
 
@@ -68,7 +67,6 @@ func CreateCryptoClient(cryptoType string) (base.CryptoClient, error) {
 func init() {
 	Register(CryptoTypeDefault, NewCryptoFunc(eccdefault.GetInstance))
 	Register(CryptoTypeGM, NewCryptoFunc(gm.GetInstance))
-	Register(CryptoTypeSchnorr, NewCryptoFunc(schnorr.GetInstance))
 }
 
 // CreateCryptoClientFromJSONPublicKey create CryptoClient by json encoded public key

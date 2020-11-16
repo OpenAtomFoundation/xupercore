@@ -7,7 +7,7 @@ package base
 import (
 	"crypto/ecdsa"
 
-	"github.com/xuperchain/xupercore/lib/crypto/account"
+	"github.com/xuperchain/crypto/common/account"
 )
 
 // CryptoCore core features of crypto including Encrypt/Decrypt/Sign/Verify
@@ -22,13 +22,13 @@ type CryptoCore interface {
 	VerifyECDSA(k *ecdsa.PublicKey, signature, msg []byte) (valid bool, err error)
 
 	// 统一签名验签接口，支持普通签名、多重签名、环签名的验签
-	XuperVerify(keys []*ecdsa.PublicKey, signature, message []byte) (bool, error)
+	//XuperVerify(keys []*ecdsa.PublicKey, signature, message []byte) (bool, error)
 
 	// 使用ECIES加密
-	Encrypt(publicKey *ecdsa.PublicKey, msg []byte) (cypherText []byte, err error)
+	EncryptByEcdsaKey(publicKey *ecdsa.PublicKey, msg []byte) (cypherText []byte, err error)
 
 	// 使用ECIES解密
-	Decrypt(privateKey *ecdsa.PrivateKey, cypherText []byte) (msg []byte, err error)
+	DecryptByEcdsaKey(privateKey *ecdsa.PrivateKey, cypherText []byte) (msg []byte, err error)
 
 	// 通过公钥来计算地址
 	GetAddressFromPublicKey(pub *ecdsa.PublicKey) (string, error)
@@ -84,7 +84,7 @@ type KeyUtils interface {
 	GetEcdsaPrivateKeyFromFileByPassword(path string, password string) (*ecdsa.PrivateKey, error)
 
 	// 从二进制加密字符串获取真实私钥的byte格式
-	GetBinaryEcdsaPrivateKeyFromString(encryptPrivateKey string, password string) ([]byte, error)
+	//GetBinaryEcdsaPrivateKeyFromString(encryptPrivateKey string, password string) ([]byte, error)
 
 	// 从导出的公钥文件读取公钥
 	GetEcdsaPublicKeyFromFile(filename string) (*ecdsa.PublicKey, error)
@@ -93,16 +93,16 @@ type KeyUtils interface {
 	GenerateEntropy(bitSize int) ([]byte, error)
 
 	// 从导出的私钥文件读取私钥
-	GetEcdsaPrivateKeyFromJSON(jsonBytes []byte) (*ecdsa.PrivateKey, error)
+	GetEcdsaPrivateKeyFromJsonStr(keyStr string) (*ecdsa.PrivateKey, error)
 
 	// 从导出的公钥文件读取公钥
-	GetEcdsaPublicKeyFromJSON(jsonBytes []byte) (*ecdsa.PublicKey, error)
+	GetEcdsaPublicKeyFromJsonStr(keyStr string) (*ecdsa.PublicKey, error)
 
 	// 获取ECC私钥的json格式的表达
-	GetEcdsaPrivateKeyJSONFormat(k *ecdsa.PrivateKey) (string, error)
+	GetEcdsaPrivateKeyJsonFormatStr(k *ecdsa.PrivateKey) (string, error)
 
 	// 获取ECC公钥的json格式的表达
-	GetEcdsaPublicKeyJSONFormat(k *ecdsa.PrivateKey) (string, error)
+	GetEcdsaPublicKeyJsonFormatStr(k *ecdsa.PrivateKey) (string, error)
 }
 
 // MultiSig 多重签名相关接口, interface for Multisig

@@ -2,7 +2,8 @@ package gm
 
 import (
 	"bytes"
-	"github.com/xuperchain/xupercore/lib/crypto/account"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -22,7 +23,22 @@ func generateKey() error {
 }
 
 func readKey() ([]byte, []byte, []byte, error) {
-	return account.GetAccInfoFromFile(keypath)
+	addr, err := ioutil.ReadFile(keypath + "/address")
+	if err != nil {
+		fmt.Printf("GetAccInfoFromFile error load address error = %v", err)
+		return nil, nil, nil, err
+	}
+	pubkey, err := ioutil.ReadFile(keypath + "/public.key")
+	if err != nil {
+		fmt.Printf("GetAccInfoFromFile error load pubkey error = %v", err)
+		return nil, nil, nil, err
+	}
+	prikey, err := ioutil.ReadFile(keypath + "/private.key")
+	if err != nil {
+		fmt.Printf("GetAccInfoFromFile error load prikey error = %v", err)
+		return nil, nil, nil, err
+	}
+	return addr, pubkey, prikey, err
 }
 
 func cleanKey() {
@@ -48,26 +64,26 @@ func Test_Gm(t *testing.T) {
 
 	msg := []byte("this is a test msg")
 
-	xcc := &GmCryptoClient{}
-	pubkey, err := xcc.GetEcdsaPublicKeyFromJSON(pub)
+	gmc := &GmCryptoClient{}
+	pubkey, err := gmc.GetEcdsaPublicKeyFromJsonStr(string(pub[:]))
 	if err != nil {
 		t.Errorf("GetEcdsaPublicKeyFromJSON failed, err=%v\n", err)
 		return
 	}
-	privkey, err := xcc.GetEcdsaPrivateKeyFromJSON(priv)
+	privkey, err := gmc.GetEcdsaPrivateKeyFromJsonStr(string(priv[:]))
 	if err != nil {
 		t.Errorf("GetEcdsaPrivateKeyFromJSON failed, err=%v\n", err)
 		return
 	}
 
 	// test encrypt and decrypt
-	ciper, err := xcc.Encrypt(pubkey, msg)
+	ciper, err := gmc.EncryptByEcdsaKey(pubkey, msg)
 	if err != nil {
 		t.Errorf("encrypt data failed, err=%v\n", err)
 		return
 	}
 
-	decode, err := xcc.Decrypt(privkey, ciper)
+	decode, err := gmc.DecryptByEcdsaKey(privkey, ciper)
 	if err != nil {
 		t.Errorf("Decrypt data failed, err=%v\n", err)
 		return
@@ -79,13 +95,13 @@ func Test_Gm(t *testing.T) {
 	}
 
 	// test sign and verify
-	sign, err := xcc.SignECDSA(privkey, msg)
+	sign, err := gmc.SignECDSA(privkey, msg)
 	if err != nil {
 		t.Errorf("SignECDSA failed, err=%v\n", err)
 		return
 	}
 
-	ok, err := xcc.VerifyECDSA(pubkey, sign, msg)
+	ok, err := gmc.VerifyECDSA(pubkey, sign, msg)
 	if err != nil {
 		t.Errorf("VerifyECDSA data failed, err=%v\n", err)
 		return
