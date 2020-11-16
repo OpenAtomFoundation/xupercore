@@ -2,23 +2,31 @@
 package def
 
 import (
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines"
+	"github.com/xuperchain/xupercore/kernel/network"
 )
 
 type Chain interface {
+	SetRelyAgent(ChainRelyAgent) error
 	Start()
 	Stop()
-	ProcessTx()
-	ProcessBlock()
+	ProcTx()
+	ProcBlocks()
 	PreExec()
 	GetChainCtx() *ChainCtx
+}
+
+// 定义该引擎对各组件依赖接口约束
+type ChainRelyAgent interface {
+	CreateContractManager() (contract.Manager, error)
 }
 
 // 定义xuperos引擎对外暴露接口
 // 依赖接口而不是依赖具体实现
 type Engine interface {
 	engines.BCEngine
-	SetRelyAgent(RelyAgent) error
+	SetRelyAgent(EngineRelyAgent) error
 	Get(string) Chain
 	Set(string, Chain)
 	GetChains() []string
@@ -29,12 +37,9 @@ type Engine interface {
 }
 
 // 定义该引擎对各组件依赖接口约束
-type RelyAgent interface {
-	CreateNetwork() (XNetwork, error)
-}
-
-// 定义引擎对网络组件依赖接口约束
-type XNetwork interface {
+type EngineRelyAgent interface {
+	CreateNetwork() (network.Network, error)
+	CreateLedger() (XLedger, error)
 }
 
 // 定义引擎对账本组件依赖接口约束
@@ -45,12 +50,8 @@ type XLedger interface {
 type XConsensus interface {
 }
 
-// 定义引擎对合约组件依赖接口约束
-type XContract interface {
-}
-
 // 定引擎义对权限组件依赖接口约束
-type XPermission interface {
+type XAcl interface {
 }
 
 // 定义引擎对加密组件依赖接口约束

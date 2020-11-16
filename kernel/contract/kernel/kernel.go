@@ -9,12 +9,10 @@ type KContext interface {
 	AuthRequire() []string
 
 	// 状态修改接口
-	PutObject(bucket string, key []byte, value []byte) error
-	GetObject(bucket string, key []byte) ([]byte, error)
-	DeleteObject(bucket string, key []byte) error
-	NewIterator(bucket string, start, limit []byte) Iterator
+	contract.XMState
 
 	AddResourceUsed(delta contract.Limits)
+	ResourceLimit() contract.Limits
 }
 
 // Iterator iterates over key/value pairs in key order
