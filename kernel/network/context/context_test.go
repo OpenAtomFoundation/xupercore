@@ -1,6 +1,7 @@
 package context
 
 import (
+	"github.com/xuperchain/xupercore/lib/utils"
 	"testing"
 
 	"github.com/xuperchain/xupercore/kernel/network/config"
@@ -8,18 +9,23 @@ import (
 	"github.com/xuperchain/xupercore/lib/timer"
 )
 
-var log logs.LogDriver
+var log *logs.LogFitter
 
 func GetLog() (logs.Logger, error) {
-	if log == nil {
-		lg, err := logs.GetLog()
-		if err != nil {
-			return nil, err
-		}
-		log = lg
+	if log != nil {
+		return log, nil
 	}
 
-	return logs.GetLogFitter(log)
+	curDir := utils.GetCurFileDir() + "/../../.."
+	logs.InitLog(curDir+"/conf/log.yaml", curDir+"/logs")
+	xlog, err := logs.NewLogger("123567890")
+	if err != nil {
+		return nil, err
+	}
+
+	xlog.SetCommField("submodule", "p2p")
+	log = xlog
+	return log, nil
 }
 
 func TestCreateDomainCtx(t *testing.T) {

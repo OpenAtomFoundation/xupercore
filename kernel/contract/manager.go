@@ -25,6 +25,9 @@ type ChainCore interface {
 	VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error)
 	// VerifyContractOwnerPermission verify contract ownership permisson
 	VerifyContractOwnerPermission(contractName string, authRequire []string) error
+
+	// KernRegistry() kernel.Registry
+
 	// QueryTransaction query confirmed tx
 	// QueryTransaction(txid []byte) (*pb.Transaction, error)
 	// QueryBlock query block
