@@ -3,6 +3,7 @@ package context
 
 import (
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 )
 
 type ConsensusComponent int
@@ -12,7 +13,7 @@ const (
 	ChainedBFT                           // 使用了chained-bft组件
 )
 
-// 对区块结构的限制
+// BlockInterface 对区块结构的限制
 type BlockInterface interface {
 	GetProposer() string
 	GetHeight() int64
@@ -30,13 +31,13 @@ type BlockInterface interface {
 	GetSign() []byte
 }
 
-// ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
+// MetaInterface ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
 type MetaInterface interface {
 	GetTrunkHeight() int64
 	GetTipBlockid() []byte
 }
 
-// 特定共识的字段标示
+// ConsensusConfig 特定共识的字段标示
 type ConsensusConfig struct {
 	// 获取本次共识的类型名称
 	ConsensusName string `json:"name"`
@@ -44,9 +45,11 @@ type ConsensusConfig struct {
 	Config string `json:"config"`
 	// 获取本次共识的起始高度
 	BeginHeight int64 `json:"-"`
+	// 本次共识在consensus slice中的index
+	Index int `json:"-"`
 }
 
-// 使用到的ledger接口
+// LedgerCtxInConsensus 使用到的ledger接口
 type LedgerCtxInConsensus interface {
 	GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
 	QueryBlock([]byte) (BlockInterface, error)
@@ -58,12 +61,14 @@ type LedgerCtxInConsensus interface {
 	VerifyMerkle(BlockInterface) error // 用于验证merkel跟是否合法
 }
 
+// FakeXMReader
 // TODO: 后续在此处更新ledger的XMReader接口定义, or合约中定义
 type FakeXMReader interface {
 	Get(bucket string, key []byte) ([]byte, error)
 	Select(bucket string, startKey []byte, endKey []byte) error
 }
 
+// P2pCtxInConsensus 依赖p2p接口
 type P2pCtxInConsensus interface {
 	GetLocalAddress() string
 	GetCurrentPeerAddress() []string
@@ -72,6 +77,7 @@ type P2pCtxInConsensus interface {
 	// SendMessageWithResponse() ([]byte, error)
 }
 
+// CryptoClientInConsensus 依赖加密接口
 type CryptoClientInConsensus interface {
 	// TODO: 接上密码库的func
 	GetEcdsaPublicKeyFromJSON([]byte) ([]byte, error)
@@ -84,7 +90,7 @@ type CryptoClientInConsensus interface {
 	// VerifyVoteMsgSign() error
 }
 
-// 共识领域级上下文
+// ConsensusCtx 共识领域级上下文
 type ConsensusCtx struct {
 	BcName string
 	// 共识定义的账本接口
@@ -94,7 +100,7 @@ type ConsensusCtx struct {
 	CryptoClient CryptoClientInConsensus
 }
 
-// 创建共识上下文，外界调用
+// CreateConsensusCtx 创建共识上下文，外界调用
 func CreateConsensusCtx(bcName string, ledger LedgerCtxInConsensus, p2p P2pCtxInConsensus,
 	cryptoClient CryptoClientInConsensus, bCtx xcontext.BaseCtx) ConsensusCtx {
 	return ConsensusCtx{
@@ -106,15 +112,8 @@ func CreateConsensusCtx(bcName string, ledger LedgerCtxInConsensus, p2p P2pCtxIn
 	}
 }
 
-// kernel.KContext的fake定义
-// TODO: 接上合约的func
-type FakeKContext interface {
-	Arg() map[string][]byte
-	PutObject(bucket string, key []byte, value []byte) error
-	GetObject(bucket string, key []byte) ([]byte, error)
-}
-
-type FakeKernMethod func(ctx FakeKContext, height int64) error
+// 多定义一个height
+type FakeKernMethod func(ctx kernel.KContext, height int64) error
 
 type FakeRegistry interface {
 	RegisterKernMethod(contract, method string, handler FakeKernMethod)

@@ -30,7 +30,7 @@ type stateMachineInterface interface {
 type FakeConsensusStatus struct {
 	version            int64
 	beginHeight        int64
-	stepConsensusIndex int64
+	stepConsensusIndex int
 	consensusName      string
 	smr                stateMachineInterface
 }
@@ -43,7 +43,7 @@ func (s *FakeConsensusStatus) GetConsensusBeginInfo() int64 {
 	return s.beginHeight
 }
 
-func (s *FakeConsensusStatus) GetStepConsensusIndex() int64 {
+func (s *FakeConsensusStatus) GetStepConsensusIndex() int {
 	return s.stepConsensusIndex
 }
 

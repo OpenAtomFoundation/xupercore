@@ -43,7 +43,7 @@ var (
 	ContractCallErr       = errors.New("contract call error")
 )
 
-// StepConsensus封装了可插拔共识需要的共识数组
+// StepConsensus 封装了可插拔共识需要的共识数组
 type StepConsensus struct {
 	cons  []ConsensusInterface
 	mutex sync.RWMutex // mutex保护StepConsensus数据结构cons的读写操作
@@ -101,11 +101,7 @@ func (pc *PluggableConsensus) CompeteMaster(height int64) (bool, bool, error) {
 	return con.CompeteMaster(height)
 }
 
-func (pc *PluggableConsensus) GetHeight() int64 {
-	return pc.nextHeight
-}
-
-// 调用具体实例的CheckMinerMatch()
+// CheckMinerMatch 调用具体实例的CheckMinerMatch()
 func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
@@ -114,7 +110,7 @@ func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.B
 	return con.CheckMinerMatch(ctx, block)
 }
 
-// 调用具体实例的ProcessBeforeMiner()
+// ProcessBeforeMinerm调用具体实例的ProcessBeforeMiner()
 func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
@@ -123,7 +119,7 @@ func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte,
 	return con.ProcessBeforeMiner(timestamp)
 }
 
-// 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
+// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
 func (pc *PluggableConsensus) CalculateBlock(block cctx.BlockInterface) error {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
@@ -132,7 +128,7 @@ func (pc *PluggableConsensus) CalculateBlock(block cctx.BlockInterface) error {
 	return con.CalculateBlock(block)
 }
 
-// 调用具体实例的ProcessConfirmBlock()
+// ProcessConfirmBlock 调用具体实例的ProcessConfirmBlock()
 func (pc *PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
@@ -141,7 +137,7 @@ func (pc *PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) err
 	return con.ProcessConfirmBlock(block)
 }
 
-// 调用具体实例的GetConsensusStatus()
+// GetConsensusStatus 调用具体实例的GetConsensusStatus()，返回接口
 func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
@@ -175,13 +171,13 @@ func (pc *PluggableConsensus) readConsensus(ctx kernel.KContext) (*contract.Resp
  * 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
  * 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
  */
-func (pc *PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, height int64) error {
+func (pc *PluggableConsensus) updateConsensus(contractCtx kernel.KContext, height int64) error {
 	if height > pc.nextHeight {
 		pc.ctx.BCtx.XLog.Error("Pluggable Consensus::updateConsensus::trigger height error! Use old one.", "pluggable height", pc.nextHeight, "trigger height", height)
 		return UpdateTriggerError
 	}
 
-	args := contractCtx.Arg() //map[string][]byte
+	args := contractCtx.Args() //map[string][]byte
 	consensusNameBytes := args["name"]
 	consensusName := string(consensusNameBytes)
 	if _, dup := consensusMap[consensusName]; dup {
@@ -194,6 +190,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, hei
 		ConsensusName: consensusName,
 		Config:        string(consensusConfigBytes),
 		BeginHeight:   height,
+		Index:         pc.stepConsensus.len(),
 	}
 	consensusItem, err := pc.makeConsensusItem(pc.ctx, cfg)
 	if err != nil {
@@ -226,6 +223,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, hei
 		ConsensusName: consensusName,
 		Config:        string(consensusConfigBytes),
 		BeginHeight:   height,
+		Index:         pc.stepConsensus.len(),
 	}
 	c[len(c)] = newObject
 	newBytes, err := json.Marshal(c)
@@ -252,7 +250,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx cctx.FakeKContext, hei
  * TODO: 共识回滚，更新原有共识列表，遍历PluggableConsensus共识列表并删除目标高度以上的共识实例，并启动原共识实例
  * ????? 该方法调用时机和调用入口
  */
-func (pc *PluggableConsensus) rollbackConsensus(contractCtx cctx.FakeKContext, height int64) error {
+func (pc *PluggableConsensus) rollbackConsensus(contractCtx kernel.KContext, height int64) error {
 	return nil
 }
 
@@ -260,7 +258,7 @@ func FakeCreateXMCache(reader context.FakeXMReader) interface{} {
 	return reader
 }
 
-// 初次创建PluggableConsensus实例，初始化cons列表
+// NewPluggableConsensus 初次创建PluggableConsensus实例，初始化cons列表
 func NewPluggableConsensus(cCtx cctx.ConsensusCtx, kContractHandler context.FakeRegistry, kContractManager contract.Manager) (ConsensusInterface, error) {
 	pc := &PluggableConsensus{
 		ctx: cCtx,
@@ -291,6 +289,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx, kContractHandler context.Fake
 			return nil, err
 		}
 		cfg.BeginHeight = 0
+		cfg.Index = 0
 		genesisConsensus, err := pc.makeConsensusItem(cCtx, cfg)
 		if err != nil {
 			pc.ctx.BCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::make first consensus item error!", "error", err.Error())
@@ -319,7 +318,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx, kContractHandler context.Fake
 	return pc, nil
 }
 
-// 创建单个特定共识，返回特定共识接口
+// makeConsensusItem 创建单个特定共识，返回特定共识接口
 func (pc *PluggableConsensus) makeConsensusItem(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) (base.ConsensusImplInterface, error) {
 	if cCfg.ConsensusName == "" {
 		cCtx.BCtx.XLog.Error("Pluggable Consensus::makeConsensusItem::consensus name is empty")
@@ -338,7 +337,7 @@ var consensusMap = make(map[string]NewStepConsensus)
 
 type NewStepConsensus func(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) base.ConsensusImplInterface
 
-// 不同类型的共识需要提前完成注册
+// Register 不同类型的共识需要提前完成注册
 func Register(name string, f NewStepConsensus) {
 	if f == nil {
 		panic("Pluggable Consensus::Register::new function is nil")
@@ -349,7 +348,7 @@ func Register(name string, f NewStepConsensus) {
 	consensusMap[name] = f
 }
 
-// 新建可插拔共识实例
+// NewPluginConsensus 新建可插拔共识实例
 func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) (base.ConsensusImplInterface, error) {
 	if cCfg.ConsensusName == "" {
 		return nil, EmptyConsensusName

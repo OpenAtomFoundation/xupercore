@@ -13,7 +13,7 @@ type ConsensusImplInterface interface {
 	CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error)
 	// ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
 	ProcessBeforeMiner(timestamp int64) (bool, []byte, error)
-	// 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
+	// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
 	CalculateBlock(block cctx.BlockInterface) error
 	// ProcessConfirmBlock 用于确认块后进行相应的处理
 	ProcessConfirmBlock(block cctx.BlockInterface) error
@@ -39,7 +39,7 @@ type ConsensusStatus interface {
 	// pluggable consensus共识item起始高度
 	GetConsensusBeginInfo() int64
 	// 获取共识item所在consensus slice中的index
-	GetStepConsensusIndex() int64
+	GetStepConsensusIndex() int
 	// 获取共识类型
 	GetConsensusName() string
 	// 获取当前状态机term

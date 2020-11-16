@@ -21,17 +21,19 @@ var (
 	InternalErr       = errors.New("Consensus module found internal error")
 )
 
-const MAX_TRIES = 65535
+const MAX_TRIES = 65535 // mining时的最大尝试次数
 
 func init() {
 	consensus.Register("pow", NewPoWConsensus)
 }
 
-// pow占用block中consensusStorage json串的格式
+// 目前未定义pb结构
+// PoWStorage pow占用block中consensusStorage json串的格式
 type PoWStorage struct {
 	targetBits int32
 }
 
+// PoWConsensus pow具体结构
 type PoWConsensus struct {
 	// Pluggable Consensus传递的上下文, PoW并不使用P2p interface
 	ctx        context.ConsensusCtx
@@ -41,7 +43,7 @@ type PoWConsensus struct {
 	sigc       chan bool
 }
 
-// pow需要解析的创始块解析格式
+// PoWConfig pow需要解析的创始块解析格式
 type PoWConfig struct {
 	DefaultTarget   int32 `json:"defaultTarget"`
 	AdjustHeightGap int32 `json:"adjustHeightGap"`
@@ -49,42 +51,47 @@ type PoWConfig struct {
 	MaxTarget       int32 `json:"maxTarget"`
 }
 
+// PoWStatus 实现了ConsensusStatus接口
 type PoWStatus struct {
 	beginHeight int64
 	mutex       sync.RWMutex
 	newHeight   int64
+	index       int
 }
 
+// MinerInfo 针对GetCurrentValidatorsInfo json串解析
 type MinerInfo struct {
 	// P2p的address?
 }
 
+// GetVersion 返回pow所在共识version
 func (s *PoWStatus) GetVersion() int64 {
 	return 0
 }
 
+// GetConsensusBeginInfo 返回该实例初始高度
 func (s *PoWStatus) GetConsensusBeginInfo() int64 {
 	return s.beginHeight
 }
 
-// 获取共识item所在consensus slice中的index
-func (s *PoWStatus) GetStepConsensusIndex() int64 {
-	return 0 // TODO:上层传过来?
+// GetStepConsensusIndex 获取共识item所在consensus slice中的index
+func (s *PoWStatus) GetStepConsensusIndex() int {
+	return s.index
 }
 
-// 获取共识类型
+// GetConsensusName 获取共识类型
 func (s *PoWStatus) GetConsensusName() string {
 	return "pow"
 }
 
-// 获取当前状态机term
+// GetCurrentTerm 获取当前状态机term
 func (s *PoWStatus) GetCurrentTerm() int64 {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 	return s.newHeight
 }
 
-// 获取当前矿工信息
+// GetCurrentValidatorsInfo 获取当前矿工信息
 func (s *PoWStatus) GetCurrentValidatorsInfo() []byte {
 	m := MinerInfo{}
 	info, err := json.Marshal(m)
@@ -94,6 +101,7 @@ func (s *PoWStatus) GetCurrentValidatorsInfo() []byte {
 	return info
 }
 
+// ParseConsensusStorage PoW parse专有存储的逻辑，即targetBits
 func (pow *PoWConsensus) ParseConsensusStorage(block context.BlockInterface) (interface{}, error) {
 	store := PoWStorage{}
 	err := json.Unmarshal(block.GetConsensusStorage(), &store)
@@ -104,10 +112,12 @@ func (pow *PoWConsensus) ParseConsensusStorage(block context.BlockInterface) (in
 	return store, nil
 }
 
+// CalculateBlock 挖矿过程
 func (pow *PoWConsensus) CalculateBlock(block context.BlockInterface) error {
 	return pow.mining(block)
 }
 
+// NewPoWConsensus 初始化实例
 func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig) base.ConsensusImplInterface {
 	// 解析config中需要的字段
 	if cCtx.BCtx.XLog == nil {
@@ -132,24 +142,26 @@ func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig) ba
 		cCtx.BCtx.XLog.Error("PoW::NewPoWConsensus::pow struct unmarshal error", "error", err)
 		return nil
 	}
-	// TODO: newHeight实际上是有值的
+	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
 	pow := &PoWConsensus{
 		ctx:    cCtx,
 		config: config,
 		status: &PoWStatus{
 			beginHeight: cCfg.BeginHeight,
-			newHeight:   int64(0),
+			newHeight:   cCfg.BeginHeight - 1,
+			index:       cCfg.Index,
 		},
 		sigc: make(chan bool, 1),
 	}
 	return pow
 }
 
-// PoW单一节点都为矿工
+// CompeteMaster PoW单一节点都为矿工，故返回为true
 func (pow *PoWConsensus) CompeteMaster(height int64) (bool, bool, error) {
 	return true, true, nil
 }
 
+// CheckMinerMatch 验证区块，包括merkel根和hash
 func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block context.BlockInterface) (bool, error) {
 	// TODO: 报错统一打出矿工地址
 	// 检查区块是否有targetBits字段
@@ -242,6 +254,7 @@ func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, erro
 	return false, nil, nil
 }
 
+// ProcessConfirmBlock 此处更新最新的block高度
 func (pow *PoWConsensus) ProcessConfirmBlock(block context.BlockInterface) error {
 	pow.status.mutex.Lock()
 	defer pow.status.mutex.Unlock()
@@ -251,24 +264,27 @@ func (pow *PoWConsensus) ProcessConfirmBlock(block context.BlockInterface) error
 	return nil
 }
 
+// GetConsensusStatus 获取pow实例状态
 func (pow *PoWConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	// TODO:精简接口，这块不需要返回一个err
 	return pow.status, nil
 }
 
-// 立即停止当前挖矿
+// Stop 立即停止当前挖矿
 func (pow *PoWConsensus) Stop() error {
 	// 发送停止信号
 	pow.sigc <- true
 	return nil
 }
 
-// 重启实例
+// Start 重启实例
 func (pow *PoWConsensus) Start() error {
 	return nil
 }
 
-// reference of bitcoin's pow: https://github.com/bitcoin/bitcoin/blob/master/src/pow.cpp#L49
+/* refreshDifficulty 计算difficulty in bitcoin
+ * reference of bitcoin's pow: https://github.com/bitcoin/bitcoin/blob/master/src/pow.cpp#L49
+ */
 func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (int32, error) {
 	// 未到调整高度0 + Gap，直接返回default
 	if nextHeight <= int64(pow.config.AdjustHeightGap) {
@@ -327,7 +343,7 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (in
 	return newTargetBits, nil
 }
 
-// IsProofed check workload proof
+//IsProofed check workload proof
 func IsProofed(blockID []byte, targetBits int32) bool {
 	given := big.NewInt(0).SetBytes(blockID)
 	target := big.NewInt(1)
@@ -338,7 +354,7 @@ func IsProofed(blockID []byte, targetBits int32) bool {
 	return false
 }
 
-// mining为带副作用的函数，将直接对block进行操作，更改其原始值
+// mining 为带副作用的函数，将直接对block进行操作，更改其原始值
 func (pow *PoWConsensus) mining(block context.BlockInterface) error {
 	gussNonce := int32(0)
 	tries := MAX_TRIES

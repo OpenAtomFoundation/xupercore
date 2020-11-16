@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
-	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 )
 
 var (
 	blockSetItemErr = errors.New("item invalid")
 )
 
-type TimerFunc func(contractCtx cctx.FakeKContext, height int64) error
+type TimerFunc func(contractCtx kernel.KContext, height int64) error
 
 func ContractRegister(f TimerFunc) TimerFunc {
 	return f
