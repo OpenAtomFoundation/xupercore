@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
-	envconf "github.com/xuperchain/xupercore/kernel/engines/config"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	xnet "github.com/xuperchain/xupercore/kernel/engines/xuperos/net"
@@ -27,7 +27,7 @@ type XuperOSEngine struct {
 	// p2p网络事件处理
 	netEvent *xnet.NetEvent
 	// 依赖代理组件
-	relyAgent def.RelyAgent
+	relyAgent def.EngineRelyAgent
 	// 管理异步任务退出状态
 	exitWG sync.WaitGroup
 }
@@ -56,7 +56,7 @@ func EngineConvert(engine engines.BCEngine) (def.Engine, error) {
 }
 
 // 初始化执行引擎环境上下文
-func (t *XuperOSEngine) Init(ecfg *envconf.EnvConf) error {
+func (t *XuperOSEngine) Init(ecfg *xconf.EnvConf) error {
 	// 初始化引擎运行上下文
 	engCtx, err := t.createEngCtx(ecfg)
 	if err != nil {
@@ -65,7 +65,7 @@ func (t *XuperOSEngine) Init(ecfg *envconf.EnvConf) error {
 	t.engCtx = engCtx
 	t.log = t.engCtx.XLog
 	// 默认设置为正式实现，单元测试提供Set方法替换为mock实现
-	t.relyAgent = NewRelyAgent(t)
+	t.relyAgent = NewEngineRelyAgent(t)
 	t.log.Trace("init engine context succ")
 
 	// 加载区块链，初始化链上下文
@@ -89,7 +89,7 @@ func (t *XuperOSEngine) Init(ecfg *envconf.EnvConf) error {
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *XuperOSEngine) SetRelyAgent(agent def.RelyAgent) error {
+func (t *XuperOSEngine) SetRelyAgent(agent def.EngineRelyAgent) error {
 	if agent == nil {
 		return fmt.Errorf("param error")
 	}
@@ -105,21 +105,21 @@ func (t *XuperOSEngine) Start() {
 		chainHD := v.(def.Chain)
 		t.log.Trace("start chain " + k.(string))
 
+		t.exitWG.Add(1)
 		go func() {
-			t.exitWG.Add(1)
 			defer t.exitWG.Done()
 
 			// 启动链
 			chainHD.Start()
-			t.log.Trace("chain " + k.(string) + "exit")
+			t.log.Trace("chain " + k.(string) + "start")
 		}()
 
 		return true
 	})
 
 	// 启动P2P网络事件消费
+	t.exitWG.Add(1)
 	go func() {
-		t.exitWG.Add(1)
 		defer t.exitWG.Done()
 		t.netEvent.Start()
 	}()
@@ -131,21 +131,50 @@ func (t *XuperOSEngine) Start() {
 // 关闭执行引擎，需要幂等
 func (t *XuperOSEngine) Stop() {
 	// 关闭P2P网络
+	t.netEvent.Stop()
 
-	// 关闭定时任务
+	// 关闭网络事件处理循环
 
 	// 关闭矿工
+	t.chains.Range(func(k, v interface{}) bool {
+		chainHD := v.(def.Chain)
+		t.log.Trace("stop chain " + k.(string))
+
+		t.exitWG.Add(1)
+		go func() {
+			defer t.exitWG.Done()
+
+			// 关闭链
+			chainHD.Stop()
+			t.log.Trace("chain " + k.(string) + "exit")
+		}()
+
+		return true
+	})
+
+	t.exitWG.Wait()
 }
 
-func (t *XuperOSEngine) Get(string) def.Chain {
+func (t *XuperOSEngine) Get(name string) def.Chain {
+	if chain, ok := t.chains.Load(name); ok {
+		return chain.(def.Chain)
+	}
+
 	return nil
 }
 
-func (t *XuperOSEngine) Set(string, def.Chain) {
+func (t *XuperOSEngine) Set(name string, chain def.Chain) {
+	t.chains.Store(name, chain)
+	return
 }
 
 func (t *XuperOSEngine) GetChains() []string {
-	return nil
+	chains := make([]string, 0)
+	t.chains.Range(func(k, v interface{}) bool {
+		chains = append(chains, k.(string))
+		return true
+	})
+	return chains
 }
 
 // 获取执行引擎环境
@@ -154,17 +183,45 @@ func (t *XuperOSEngine) GetEngineCtx() *def.EngineCtx {
 }
 
 func (t *XuperOSEngine) CreateChain(name string, data []byte) (def.Chain, error) {
-	return nil, fmt.Errorf("the interface is not implemented")
+	if _, ok := t.chains.Load(name); ok {
+		t.log.Warn("chains[" + name + "] is exist")
+		return nil, fmt.Errorf("blockchain is exist already")
+	}
+
+	chain := new(XuperOSChain)
+	// TODO: create a new block chain from xuper.json
+
+	t.chains.Store(name, chain)
+	return chain, nil
 }
 
 // 注册并启动链
 func (t *XuperOSEngine) RegisterChain(name string) error {
-	return fmt.Errorf("the interface is not implemented")
+	chain, ok := t.chains.Load(name)
+	if !ok {
+		return fmt.Errorf("blockchain is not exist")
+	}
+
+	// 启动链
+	go chain.(def.Chain).Start()
+	t.log.Trace("chain " + name + "start")
+
+	return nil
 }
 
 // 关闭并卸载链
 func (t *XuperOSEngine) UnloadChain(name string) error {
-	return fmt.Errorf("the interface is not implemented")
+	v, ok := t.chains.Load(name)
+	if !ok {
+		return fmt.Errorf("blockchain is not exist")
+	}
+	//从engine的map里面删了，就不会收到新的请求了
+	t.chains.Delete(name)
+
+	//然后停止这个链
+	v.(def.Chain).Stop()
+
+	return nil
 }
 
 // 从本地存储加载链
@@ -205,7 +262,7 @@ func (t *XuperOSEngine) loadChains() error {
 	return nil
 }
 
-func (t *XuperOSEngine) createEngCtx(envCfg *envconf.EnvConf) (*def.EngineCtx, error) {
+func (t *XuperOSEngine) createEngCtx(envCfg *xconf.EnvConf) (*def.EngineCtx, error) {
 	if envCfg == nil {
 		return nil, fmt.Errorf("create engine ctx failed because env config is nil")
 	}
@@ -216,7 +273,7 @@ func (t *XuperOSEngine) createEngCtx(envCfg *envconf.EnvConf) (*def.EngineCtx, e
 		return nil, fmt.Errorf("create engine ctx failed because engine config load err.err:%v", err)
 	}
 
-	// 实例化网络
+	// 实例化&启动p2p网络
 	netHD, err := t.relyAgent.CreateNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)

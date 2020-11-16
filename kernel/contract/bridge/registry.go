@@ -10,6 +10,7 @@ type ContractType string
 const (
 	TypeWasm   ContractType = "wasm"
 	TypeNative ContractType = "native"
+	TypeEvm    ContractType = "evm"
 )
 
 var defaultRegistry = newRegistry()

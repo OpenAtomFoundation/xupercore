@@ -19,15 +19,16 @@ type Response struct {
 
 // ContextConfig define the config of context
 type ContextConfig struct {
-	// XMCache     *xmodel.XMCache
-	// TODO
-	XMCache     interface{}
+	State XMState
+
 	Initiator   string
 	AuthRequire []string
-	// NewAccountResourceAmount the amount of creating a contract account
-	NewAccountResourceAmount int64
-	ContractName             string
-	ResourceLimits           Limits
+
+	Module       string
+	ContractName string
+
+	ResourceLimits Limits
+
 	// Whether contract can be initialized
 	CanInitialize bool
 

@@ -2,6 +2,7 @@ package bridge
 
 import (
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/pb"
 )
 
 type VMConfig interface {
@@ -24,8 +25,7 @@ type NewInstanceCreatorFunc func(config *InstanceCreatorConfig) (InstanceCreator
 
 // ContractCodeProvider provides source code and desc of contract
 type ContractCodeProvider interface {
-	// TODO
-	// GetContractCodeDesc(name string) (*pb.WasmCodeDesc, error)
+	GetContractCodeDesc(name string) (*pb.WasmCodeDesc, error)
 	GetContractCode(name string) ([]byte, error)
 }
 
