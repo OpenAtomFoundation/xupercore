@@ -2,14 +2,16 @@ package p2pv1
 
 import (
 	"errors"
-	"github.com/golang/protobuf/proto"
-	prom "github.com/prometheus/client_golang/prometheus"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/golang/protobuf/proto"
+	prom "github.com/prometheus/client_golang/prometheus"
+
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
 
 // SendMessage send message to peers using given filter strategy

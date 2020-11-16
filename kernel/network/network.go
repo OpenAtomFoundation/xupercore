@@ -75,12 +75,17 @@ type NetworkImpl struct {
 	p2pServ p2p.Server
 }
 
-func CreateNetwork(ctx nctx.DomainCtx, servName string) (Network, error) {
+func CreateNetwork(ctx nctx.DomainCtx) (Network, error) {
 	// check param
 	if ctx == nil || !ctx.IsValid() {
 		return nil, fmt.Errorf("new network failed because context set error")
 	}
 
+	if ctx.GetP2PConf() == nil {
+		return nil, fmt.Errorf("new network failed because config is nil")
+	}
+	
+	servName := ctx.GetP2PConf().Module
 	// get p2p service
 	p2pServ := createP2PServ(servName)
 	if p2pServ == nil {

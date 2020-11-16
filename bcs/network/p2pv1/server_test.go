@@ -1,13 +1,14 @@
 package p2pv1
 
 import (
+	"path/filepath"
+	"testing"
+	"time"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/utils"
-	"path/filepath"
-	"testing"
-	"time"
 )
 
 var (

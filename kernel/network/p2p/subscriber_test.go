@@ -2,9 +2,10 @@ package p2p
 
 import (
 	"errors"
+	"testing"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"testing"
 )
 
 type mockStream struct{}

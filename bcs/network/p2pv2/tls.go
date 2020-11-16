@@ -5,12 +5,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/sec"
 	"io/ioutil"
 	"net"
 	"path/filepath"
+
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/sec"
 )
 
 // ID is the protocol ID (used when negotiating with multistream)

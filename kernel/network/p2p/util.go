@@ -6,16 +6,18 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	iaddr "github.com/ipfs/go-ipfs-addr"
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/xuperchain/xuperchain/core/common/config"
-	"google.golang.org/grpc/credentials"
 	"io/ioutil"
 	math_rand "math/rand"
 	"os"
 	"path/filepath"
 	"time"
+
+	iaddr "github.com/ipfs/go-ipfs-addr"
+	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"google.golang.org/grpc/credentials"
+
+	"github.com/xuperchain/xupercore/kernel/network/config"
 )
 
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {

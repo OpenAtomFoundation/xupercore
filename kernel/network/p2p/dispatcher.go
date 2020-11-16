@@ -3,11 +3,13 @@ package p2p
 import (
 	"errors"
 	"fmt"
-	"github.com/patrickmn/go-cache"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"sync"
 	"time"
+
+	"github.com/patrickmn/go-cache"
+
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
 
 var (

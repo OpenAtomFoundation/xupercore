@@ -1,8 +1,9 @@
 package p2p
 
 import (
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"testing"
+
+	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
 
 func TestMessage(t *testing.T) {

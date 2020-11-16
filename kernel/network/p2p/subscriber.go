@@ -3,11 +3,13 @@ package p2p
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	prom "github.com/prometheus/client_golang/prometheus"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"time"
 )
 
 var (

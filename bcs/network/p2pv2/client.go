@@ -2,14 +2,16 @@ package p2pv2
 
 import (
 	"errors"
+	"sync"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	prom "github.com/prometheus/client_golang/prometheus"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"sync"
-	"time"
 )
 
 var (

@@ -1,10 +1,11 @@
 package p2pv2
 
 import (
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-kbucket"
 	"math/rand"
 	"time"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-kbucket"
 )
 
 // PeerFilter the interface for filter peers

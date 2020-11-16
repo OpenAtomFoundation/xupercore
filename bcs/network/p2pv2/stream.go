@@ -4,19 +4,21 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
+	"sync"
+	"time"
+
 	ggio "github.com/gogo/protobuf/io"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
+
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-	"io"
-	"sync"
-	"time"
 )
 
 // define common errors

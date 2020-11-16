@@ -2,16 +2,18 @@ package p2pv1
 
 import (
 	"errors"
+	"io"
+	"strconv"
+	"sync"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
+
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
-	"io"
-	"strconv"
-	"sync"
 )
 
 type Conn struct {

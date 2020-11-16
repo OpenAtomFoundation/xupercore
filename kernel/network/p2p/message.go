@@ -2,11 +2,13 @@ package p2p
 
 import (
 	"errors"
+	"hash/crc32"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
+
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/utils"
-	"hash/crc32"
 )
 
 var (

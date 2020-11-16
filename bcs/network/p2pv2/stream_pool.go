@@ -2,9 +2,11 @@ package p2pv2
 
 import (
 	"errors"
+
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/xuperchain/xuperchain/core/common"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/lib/logs"
 )

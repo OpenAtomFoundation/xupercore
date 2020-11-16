@@ -1,9 +1,10 @@
 package p2p
 
 import (
+	"testing"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"testing"
 )
 
 type dispatcherCase struct {

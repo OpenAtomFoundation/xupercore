@@ -4,6 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	ipfsaddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
 	circuit "github.com/libp2p/go-libp2p-circuit"
@@ -12,18 +19,13 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/multiformats/go-multiaddr"
+
 	net "github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"io/ioutil"
-	"math/rand"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 )
 
 const (

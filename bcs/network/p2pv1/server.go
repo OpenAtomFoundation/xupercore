@@ -3,7 +3,16 @@ package p2pv1
 import (
 	"context"
 	"errors"
+	"net"
+	"strconv"
+	"strings"
+	"time"
+
 	prom "github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/reflection"
+
 	"github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
@@ -11,13 +20,6 @@ import (
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/reflection"
-	"net"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
