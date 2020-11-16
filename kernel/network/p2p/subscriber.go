@@ -1,23 +1,26 @@
 package p2p
 
 import (
+	"context"
 	"errors"
-	"github.com/gogo/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 	prom "github.com/prometheus/client_golang/prometheus"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	"time"
 )
 
 var (
-	ErrHandlerError		= errors.New("handler error")
-	ErrResponseNil 		= errors.New("handler response is nil")
-	ErrStreamSendError 	= errors.New("send response error")
+	ErrHandlerError    = errors.New("handler error")
+	ErrResponseNil     = errors.New("handler response is nil")
+	ErrStreamSendError = errors.New("send response error")
+	ErrChannelBlock    = errors.New("channel block")
 )
 
 // Subscriber is the interface for p2p message subscriber
 type Subscriber interface {
 	GetMessageType() pb.XuperMessage_MessageType
-	GetFrom() string
+	Match(*pb.XuperMessage) bool
 	HandleMessage(nctx.OperateCtx, *pb.XuperMessage, Stream) error
 }
 
@@ -68,10 +71,10 @@ func NewSubscriber(ctx nctx.DomainCtx, typ pb.XuperMessage_MessageType, v interf
 }
 
 type subscriber struct {
-	ctx 	nctx.DomainCtx
+	ctx nctx.DomainCtx
 
-	typ 	pb.XuperMessage_MessageType // 订阅消息类型
-	from 	string // 消息来源
+	typ     pb.XuperMessage_MessageType // 订阅消息类型
+	from    string                      // 消息来源
 	channel chan *pb.XuperMessage
 	handler Handler
 }
@@ -81,17 +84,18 @@ var _ Subscriber = &subscriber{}
 func (s *subscriber) GetMessageType() pb.XuperMessage_MessageType {
 	return s.typ
 }
-func (s *subscriber) GetFrom() string {
-	return s.from
+
+func (s *subscriber) Match(msg *pb.XuperMessage) bool {
+	if s.from != "" && s.from != msg.GetHeader().GetFrom() {
+		s.ctx.GetLog().Trace("subscriber: subscriber from not match",
+			"log_id", msg.GetHeader().GetLogid(), "from", s.from, "resp.from", msg.GetHeader().GetFrom(), "type", msg.GetHeader().GetType())
+		return false
+	}
+
+	return true
 }
 
 func (s *subscriber) HandleMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, stream Stream) error {
-	if s.from != "" && s.from != msg.GetHeader().GetFrom() {
-		ctx.GetLog().Trace("subscriber: subscriber from not match", 
-			"log_id", msg.GetHeader().GetLogid(), "from", s.from, "resp.from", msg.GetHeader().GetFrom(), "type", msg.GetHeader().GetType())
-		return nil
-	}
-
 	if s.handler != nil {
 		resp, err := s.handler.Handler(ctx, msg)
 		if err != nil {
@@ -104,6 +108,7 @@ func (s *subscriber) HandleMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, st
 			return ErrResponseNil
 		}
 
+		resp.Header.Logid = msg.Header.Logid
 		if err := stream.Send(resp); err != nil {
 			ctx.GetLog().Error("subscriber: send response error", "log_id", msg.GetHeader().GetLogid(), "err", err)
 			return ErrStreamSendError
@@ -120,7 +125,13 @@ func (s *subscriber) HandleMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, st
 	}
 
 	if s.channel != nil {
+		timeout, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+
 		select {
+		case <-timeout.Done():
+			ctx.GetLog().Error("subscriber: discard message due to channel block,", "log_id", msg.GetHeader().GetLogid(), "err", timeout.Err())
+			return ErrChannelBlock
 		case s.channel <- msg:
 		default:
 		}

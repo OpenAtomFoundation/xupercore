@@ -14,7 +14,7 @@ import (
 type NewP2PServFunc func() p2p.Server
 
 var (
-	servMu  sync.RWMutex
+	servMu   sync.RWMutex
 	services = make(map[string]NewP2PServFunc)
 )
 
@@ -71,7 +71,7 @@ type Network interface {
 // 如果有领域内公共逻辑，可以在这层扩展，对上层暴露高级接口
 // 暂时没有特殊的逻辑，先简单透传，预留方便后续扩展
 type NetworkImpl struct {
-	ctx    nctx.DomainCtx
+	ctx     nctx.DomainCtx
 	p2pServ p2p.Server
 }
 

@@ -11,12 +11,12 @@ import (
 )
 
 var (
-	ErrSubscriber      	= errors.New("subscribe error")
-	ErrRegistered		= errors.New("subscriber already registered")
-	ErrMessageEmpty		= errors.New("message empty")
-	ErrMessageHandled   = errors.New("message handled")
-	ErrStreamNil		= errors.New("stream is nil")
-	ErrNotRegister		= errors.New("message not register")
+	ErrSubscriber     = errors.New("subscribe error")
+	ErrRegistered     = errors.New("subscriber already registered")
+	ErrMessageEmpty   = errors.New("message empty")
+	ErrMessageHandled = errors.New("message handled")
+	ErrStreamNil      = errors.New("stream is nil")
+	ErrNotRegister    = errors.New("message not register")
 )
 
 // Dispatcher
@@ -30,17 +30,21 @@ type Dispatcher interface {
 
 // dispatcher implement interface Dispatcher
 type dispatcher struct {
-	mu 		sync.RWMutex
-	mc 		map[pb.XuperMessage_MessageType]map[Subscriber]struct{}
-	handled	*cache.Cache
+	mu      sync.RWMutex
+	mc      map[pb.XuperMessage_MessageType]map[Subscriber]struct{}
+	handled *cache.Cache
+
+	// control goroutinue concurrent
+	ctrl chan struct{}
 }
 
 var _ Dispatcher = &dispatcher{}
 
 func NewDispatcher() Dispatcher {
 	d := &dispatcher{
-		mc: 	 make(map[pb.XuperMessage_MessageType]map[Subscriber]struct{}),
+		mc:      make(map[pb.XuperMessage_MessageType]map[Subscriber]struct{}),
 		handled: cache.New(time.Duration(3)*time.Second, 1*time.Second),
+		ctrl:    make(chan struct{}, 2048), // TODO: 根据压测数据调整并发度
 	}
 
 	return d
@@ -109,10 +113,23 @@ func (d *dispatcher) Dispatch(ctx nctx.OperateCtx, msg *pb.XuperMessage, stream 
 
 	var wg sync.WaitGroup
 	for sub, _ := range d.mc[msg.GetHeader().GetType()] {
+		if !sub.Match(msg) {
+			continue
+		}
+
+		d.ctrl <- struct{}{}
 		wg.Add(1)
 		go func(sub Subscriber) {
 			defer wg.Done()
-			sub.HandleMessage(ctx, msg, stream)
+
+			err := sub.HandleMessage(ctx, msg, stream)
+			if err != nil {
+				ctx.GetLog().Trace("dispatch handle message error",
+					"log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(),
+					"resp.from", msg.GetHeader().GetFrom(), "error", err)
+			}
+
+			<-d.ctrl
 		}(sub)
 	}
 	wg.Wait()
@@ -120,7 +137,6 @@ func (d *dispatcher) Dispatch(ctx nctx.OperateCtx, msg *pb.XuperMessage, stream 
 	d.MaskHandled(msg)
 	return nil
 }
-
 
 func MessageKey(msg *pb.XuperMessage) string {
 	if msg == nil || msg.GetHeader() == nil {
