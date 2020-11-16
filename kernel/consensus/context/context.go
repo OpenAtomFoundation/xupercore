@@ -12,14 +12,25 @@ const (
 	ChainedBFT                           // 使用了chained-bft组件
 )
 
+// 对区块结构的限制
 type BlockInterface interface {
 	GetProposer() string
 	GetHeight() int64
 	GetBlockid() []byte
-	GetConsensusStorage() []byte // 不能再叫GetJustify了
+	// ATTENTION: 该存储在block中统一仍叫Justify字段,为了兼容保持名称不变
+	GetConsensusStorage() []byte
 	GetTimestamp() int64
+	// 特定共识需要向raw block更新专有字段, eg. PoW挖矿时需更新nonce
+	SetItem(string, interface{}) error
+	// 使用PoW时需要调用该方法进行散列存在性证明
+	MakeBlockId() []byte
+	// 获取上一区块hash
+	GetPreHash() []byte
+	GetPubkey() []byte
+	GetSign() []byte
 }
 
+// ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
 type MetaInterface interface {
 	GetTrunkHeight() int64
 	GetTipBlockid() []byte
@@ -31,18 +42,26 @@ type ConsensusConfig struct {
 	ConsensusName string `json:"name"`
 	// 获取本次共识专属属性
 	Config string `json:"config"`
-	// 获取本次共识的起始Blockid，即起始高度的上一区块blockid
-	BeginBlockid []byte `json:"-"`
+	// 获取本次共识的起始高度
+	BeginHeight int64 `json:"-"`
 }
 
 // 使用到的ledger接口
 type LedgerCtxInConsensus interface {
-	GetMeta() MetaInterface
-	QueryBlock([]byte) BlockInterface
-	QueryBlockByHeight(int64) BlockInterface
-	Truncate() error
-	GetConsensusConf() []byte
-	GetGenesisBlock() BlockInterface
+	GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
+	QueryBlock([]byte) (BlockInterface, error)
+	QueryBlockByHeight(int64) (BlockInterface, error)
+	QueryBlockHeader([]byte) (BlockInterface, error)
+	GetTipSnapShot() FakeXMReader    // 获取当前最新快照
+	GetGenesisConsensusConf() []byte // 获取账本创始块共识配置
+	// GetSnapShotWithBlock([]byte) FakeXMReader // 原来utxoVM快照
+	VerifyMerkle(BlockInterface) error // 用于验证merkel跟是否合法
+}
+
+// TODO: 后续在此处更新ledger的XMReader接口定义, or合约中定义
+type FakeXMReader interface {
+	Get(bucket string, key []byte) ([]byte, error)
+	Select(bucket string, startKey []byte, endKey []byte) error
 }
 
 type P2pCtxInConsensus interface {
@@ -55,6 +74,9 @@ type P2pCtxInConsensus interface {
 
 type CryptoClientInConsensus interface {
 	// TODO: 接上密码库的func
+	GetEcdsaPublicKeyFromJSON([]byte) ([]byte, error)
+	VerifyAddressUsingPublicKey(string, []byte) (bool, uint8)
+	VerifyECDSA([]byte, []byte, []byte) (bool, error)
 	// GetEcdsaPrivateKeyFromJSON([]byte) ([]byte, error)
 	// MakeVoteMsgSign() error
 	// MakePhaseMsgSign() error
@@ -64,13 +86,15 @@ type CryptoClientInConsensus interface {
 
 // 共识领域级上下文
 type ConsensusCtx struct {
-	BcName       string
+	BcName string
+	// 共识定义的账本接口
 	Ledger       LedgerCtxInConsensus
 	BCtx         xcontext.BaseCtx
 	P2p          P2pCtxInConsensus
 	CryptoClient CryptoClientInConsensus
 }
 
+// 创建共识上下文，外界调用
 func CreateConsensusCtx(bcName string, ledger LedgerCtxInConsensus, p2p P2pCtxInConsensus,
 	cryptoClient CryptoClientInConsensus, bCtx xcontext.BaseCtx) ConsensusCtx {
 	return ConsensusCtx{
@@ -85,5 +109,13 @@ func CreateConsensusCtx(bcName string, ledger LedgerCtxInConsensus, p2p P2pCtxIn
 // kernel.KContext的fake定义
 // TODO: 接上合约的func
 type FakeKContext interface {
-	Arg() []byte
+	Arg() map[string][]byte
+	PutObject(bucket string, key []byte, value []byte) error
+	GetObject(bucket string, key []byte) ([]byte, error)
+}
+
+type FakeKernMethod func(ctx FakeKContext, height int64) error
+
+type FakeRegistry interface {
+	RegisterKernMethod(contract, method string, handler FakeKernMethod)
 }

@@ -1,31 +1,23 @@
 package mock
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/contract"
+)
+
+var (
+	blockSetItemErr = errors.New("item invalid")
 )
 
 type TimerFunc func(contractCtx cctx.FakeKContext, height int64) error
 
 func ContractRegister(f TimerFunc) TimerFunc {
 	return f
-}
-
-type FakeKContextImpl struct {
-	desc []byte
-}
-
-func (kctx *FakeKContextImpl) Arg() []byte {
-	return kctx.desc
-}
-
-func NewFakeKContextImpl(desc []byte) *FakeKContextImpl {
-	return &FakeKContextImpl{
-		desc: desc,
-	}
 }
 
 type FakeP2p struct{}
@@ -44,6 +36,7 @@ type FakeBlock struct {
 	blockid          []byte
 	consensusStorage []byte
 	timestamp        int64
+	nonce            int32
 }
 
 func NewBlock(height int) *FakeBlock {
@@ -56,6 +49,21 @@ func NewBlock(height int) *FakeBlock {
 	}
 }
 
+func (b *FakeBlock) MakeBlockId() []byte {
+	return b.blockid
+}
+
+func (b *FakeBlock) SetItem(param string, value interface{}) error {
+	switch param {
+	case "nonce":
+		if s, ok := value.(int32); ok {
+			b.nonce = s
+			return nil
+		}
+	}
+	return blockSetItemErr
+}
+
 func (b *FakeBlock) GetProposer() string {
 	return b.proposer
 }
@@ -64,8 +72,19 @@ func (b *FakeBlock) GetHeight() int64 {
 	return b.height
 }
 
+func (b *FakeBlock) GetPreHash() []byte {
+	return nil
+}
+
 func (b *FakeBlock) GetBlockid() []byte {
 	return b.blockid
+}
+
+func (b *FakeBlock) GetPubkey() []byte {
+	return nil
+}
+func (b *FakeBlock) GetSign() []byte {
+	return nil
 }
 
 func (b *FakeBlock) GetConsensusStorage() []byte {
@@ -91,11 +110,33 @@ func GetGenesisConsensusConf() []byte {
 	return []byte("{\"name\":\"fake\",\"config\":\"\"}")
 }
 
+type FakeReader struct {
+	storage map[string]map[string][]byte
+}
+
+func (r *FakeReader) Get(bucket string, key []byte) ([]byte, error) {
+	return r.storage[bucket][string(key)], nil
+}
+
+func (r *FakeReader) Select(bucket string, startKey []byte, endKey []byte) error {
+	return nil
+}
+
+func CreateXModelCache() *FakeReader {
+	consensus := map[string][]byte{}
+	cache := map[string]map[string][]byte{}
+	cache["consensus"] = consensus
+	return &FakeReader{
+		storage: cache,
+	}
+}
+
 type FakeLedger struct {
 	ledgerSlice   []*FakeBlock
 	ledgerMap     map[string]*FakeBlock
 	meta          *FakeMeta
 	consensusConf []byte
+	fakeCache     *FakeReader
 }
 
 func NewFakeLedger() *FakeLedger {
@@ -104,11 +145,24 @@ func NewFakeLedger() *FakeLedger {
 		ledgerMap:     map[string]*FakeBlock{},
 		meta:          nil,
 		consensusConf: GetGenesisConsensusConf(),
+		fakeCache:     CreateXModelCache(),
 	}
 	for i := 0; i < 3; i++ {
 		l.put(NewBlock(i))
 	}
 	return l
+}
+
+func (l *FakeLedger) GetTipSnapShot() context.FakeXMReader {
+	return l.fakeCache
+}
+
+func (l *FakeLedger) VerifyMerkle(context.BlockInterface) error {
+	return nil
+}
+
+func (l *FakeLedger) GetGenesisConsensusConf() []byte {
+	return l.consensusConf
 }
 
 func (l *FakeLedger) put(block *FakeBlock) error {
@@ -128,26 +182,87 @@ func (l *FakeLedger) GetMeta() context.MetaInterface {
 	return l.meta
 }
 
-func (l *FakeLedger) QueryBlock(blockId []byte) context.BlockInterface {
+func (l *FakeLedger) QueryBlock(blockId []byte) (context.BlockInterface, error) {
 	id := fmt.Sprintf("%x", blockId)
-	return l.ledgerMap[id]
+	return l.ledgerMap[id], nil
 }
 
-func (l *FakeLedger) QueryBlockByHeight(height int64) context.BlockInterface {
-	return l.ledgerSlice[height]
+func (l *FakeLedger) QueryBlockHeader(blockId []byte) (context.BlockInterface, error) {
+	id := fmt.Sprintf("%x", blockId)
+	return l.ledgerMap[id], nil
 }
 
-func (l *FakeLedger) Truncate() error {
-	return nil
+func (l *FakeLedger) QueryBlockByHeight(height int64) (context.BlockInterface, error) {
+	return l.ledgerSlice[height], nil
 }
 
 func (l *FakeLedger) GetConsensusConf() []byte {
 	return l.consensusConf
 }
 
-func (l *FakeLedger) GetGenesisBlock() context.BlockInterface {
-	if len(l.ledgerSlice) == 0 {
-		return nil
+type FakeContext struct {
+	cache map[string][]byte
+}
+
+func (c *FakeContext) Invoke(method string, args map[string][]byte) (*contract.Response, error) {
+	v, ok := c.cache[method]
+	if !ok {
+		return nil, nil
 	}
-	return l.ledgerSlice[0]
+	return &contract.Response{
+		Body: v,
+	}, nil
+}
+
+func (c *FakeContext) Release() error {
+	return nil
+}
+
+func (c *FakeContext) ResourceUsed() contract.Limits {
+	return contract.Limits{}
+}
+
+type ContextConfig struct {
+	XMCache      interface{}
+	ContractName string
+}
+
+type FakeManager struct {
+	storage map[string]map[string][]byte
+}
+
+func NewFakeManager() FakeManager {
+	s := map[string]map[string][]byte{}
+	cache := map[string][]byte{}
+	s["updateConsensus"] = cache
+	s["readConsensus"] = cache
+	return FakeManager{
+		storage: s,
+	}
+}
+
+func (m *FakeManager) NewContext(cfg *contract.ContextConfig) (FakeContext, error) {
+	v, ok := m.storage[cfg.ContractName]
+	if !ok {
+		return FakeContext{
+			cache: map[string][]byte{},
+		}, nil
+	}
+	return FakeContext{
+		cache: v,
+	}, nil
+}
+
+type FakeKContextImpl struct {
+	desc []byte
+}
+
+func (kctx *FakeKContextImpl) Arg() []byte {
+	return kctx.desc
+}
+
+func NewFakeKContextImpl(desc []byte) *FakeKContextImpl {
+	return &FakeKContextImpl{
+		desc: desc,
+	}
 }
