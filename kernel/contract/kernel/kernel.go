@@ -14,13 +14,3 @@ type KContext interface {
 	AddResourceUsed(delta contract.Limits)
 	ResourceLimit() contract.Limits
 }
-
-// Iterator iterates over key/value pairs in key order
-type Iterator interface {
-	Key() []byte
-	Value() []byte
-	Next() bool
-	Error() error
-	// Iterator 必须在使用完毕后关闭
-	Close()
-}

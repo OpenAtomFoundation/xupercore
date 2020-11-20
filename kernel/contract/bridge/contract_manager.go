@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/xuperchain/crypto/core/hash"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/pb"
-	"github.com/xuperchain/xupercore/lib/crypto/hash"
 )
 
 type contractManager struct {
