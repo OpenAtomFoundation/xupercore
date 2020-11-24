@@ -31,6 +31,7 @@ const (
 	 * 		<beginHeight, height>
 	 */
 	contractBucket = "consensus"
+	consensusKey   = "PluggableConfig"
 )
 
 var (
@@ -147,7 +148,7 @@ func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error)
 }
 
 func (pc *PluggableConsensus) readConsensus(ctx kernel.KContext) (*contract.Response, error) {
-	pluggableConfig, err := ctx.GetObject(contractBucket, []byte("PluggableConfig"))
+	pluggableConfig, err := ctx.Get(contractBucket, []byte(consensusKey))
 	if err != nil {
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::readConsensus::get object failed", "error", err)
 		return nil, ContractCallErr
@@ -208,7 +209,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx kernel.KContext, heigh
 		return BuildConsensusError
 	}
 	// 更新合约存储
-	pluggableConfig, err := contractCtx.GetObject(contractBucket, []byte("PluggableConfig"))
+	pluggableConfig, err := contractCtx.Get(contractBucket, []byte(consensusKey))
 	if err != nil {
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::get object failed", "error", err)
 		return BuildConsensusError
@@ -231,7 +232,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx kernel.KContext, heigh
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::marshal error", "error", err)
 		return BuildConsensusError
 	}
-	if err = contractCtx.PutObject(contractBucket, []byte("PluggableConfig"), newBytes); err != nil {
+	if err = contractCtx.Put(contractBucket, []byte(consensusKey), newBytes); err != nil {
 		pc.ctx.BCtx.XLog.Warn("Pluggable Consensus::updateConsensus::refresh contract storage error", "error", err)
 		return BuildConsensusError
 	}
@@ -272,12 +273,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx, kContractHandler context.Fake
 	kernel.RegisterKernMethod(contractBucket, contractReadMethod, pc.readConsensus)
 
 	xMReader := cCtx.Ledger.GetTipSnapShot()
-	contractConfig := &contract.ContextConfig{
-		XMCache:      FakeCreateXMCache(xMReader),
-		ContractName: contractBucket,
-	}
-	contractCtx, err := kContractManager.NewContext(contractConfig)
-	res, err := contractCtx.Invoke(contractReadMethod, nil)
+	res, err := xMReader.Get(contractBucket, []byte(consensusKey))
 	if res == nil {
 		// 若合约存储不存在，则直接从账本里拿到创始块配置，并且声称从未初始化过的共识实例Genesis共识实例
 		consensusBuf := cCtx.Ledger.GetGenesisConsensusConf()
@@ -300,7 +296,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx, kContractHandler context.Fake
 	}
 	// 原合约存储存在，即该链重启，重新恢复pluggable consensus
 	c := map[int]context.ConsensusConfig{}
-	err = json.Unmarshal(res.Body, &c)
+	err = json.Unmarshal(res, &c)
 	if err != nil {
 		// 历史consensus存储有误，装载无效，此时直接panic
 		pc.ctx.BCtx.XLog.Error("Pluggable Consensus::history consensus storage invalid, pls check function.")

@@ -11,7 +11,7 @@ require (
 	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
-	github.com/hashicorp/golang-lru v0.5.3
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/ipfs/go-ipfs-addr v0.0.1
 	github.com/libp2p/go-libp2p v0.11.0
 	github.com/libp2p/go-libp2p-circuit v0.3.1
@@ -28,13 +28,12 @@ require (
 	github.com/robertkrimen/otto v0.0.0-20191219234010-c382bd3c16ff // indirect
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/testify v1.5.1 // indirect
 	github.com/syndtr/goleveldb v1.0.0
 	github.com/xuperchain/crypto v0.0.0-20201028025054-4d560674bcd6
 	github.com/xuperchain/log15 v0.0.0-20190620081506-bc88a9198230
 	github.com/xuperchain/wagon v0.6.1-0.20200313164333-db544e251599 // indirect
 	github.com/xuperchain/xuperchain v0.0.0-20200203053733-ba46d3bc58b5
-	golang.org/x/crypto v0.0.0-20200423211502-4bdfaf469ed5
+	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2 // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
 	google.golang.org/grpc v1.27.0

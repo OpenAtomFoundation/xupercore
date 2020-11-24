@@ -65,7 +65,6 @@ type LedgerCtxInConsensus interface {
 // TODO: 后续在此处更新ledger的XMReader接口定义, or合约中定义
 type FakeXMReader interface {
 	Get(bucket string, key []byte) ([]byte, error)
-	Select(bucket string, startKey []byte, endKey []byte) error
 }
 
 // P2pCtxInConsensus 依赖p2p接口
