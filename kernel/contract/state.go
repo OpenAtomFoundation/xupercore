@@ -27,11 +27,15 @@ type XModel interface {
 	XMWriter
 }
 
-type XModelSandbox interface {
-	XModel
-	RWSet()
+type XMStateReader interface {
+	XMReader
 }
 
 type XMState interface {
 	XModel
+}
+
+type XMStateSandbox interface {
+	XMState
+	RWSet()
 }
