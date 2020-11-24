@@ -10,10 +10,15 @@ var (
 	managers     = make(map[string]NewManagerFunc)
 )
 
-type NewManagerFunc func(core ChainCore) (Manager, error)
+type NewManagerFunc func(cfg *ManagerConfig) (Manager, error)
 
 type Manager interface {
 	NewContext(*ContextConfig) (Context, error)
+	NewStateSandbox(r XMStateReader) (XMStateSandbox, error)
+}
+
+type ManagerConfig struct {
+	Core ChainCore
 }
 
 // ChainCore is the interface of chain service
@@ -26,7 +31,8 @@ type ChainCore interface {
 	// VerifyContractOwnerPermission verify contract ownership permisson
 	VerifyContractOwnerPermission(contractName string, authRequire []string) error
 
-	// KernRegistry() kernel.Registry
+	// KernRegistry is the type of kernel.Registry
+	KernRegistry() interface{}
 
 	// QueryTransaction query confirmed tx
 	// QueryTransaction(txid []byte) (*pb.Transaction, error)
@@ -46,10 +52,10 @@ func Register(name string, f NewManagerFunc) {
 	managers[name] = f
 }
 
-func CreateManager(name string, core ChainCore) (Manager, error) {
+func CreateManager(name string, cfg *ManagerConfig) (Manager, error) {
 	mgfunc, ok := managers[name]
 	if !ok {
 		return nil, fmt.Errorf("contract manager of type %s not exists", name)
 	}
-	return mgfunc(core)
+	return mgfunc(cfg)
 }
