@@ -51,7 +51,7 @@ type ConsensusConfig struct {
 
 // LedgerCtxInConsensus 使用到的ledger接口
 type LedgerCtxInConsensus interface {
-	GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
+	// GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
 	QueryBlock([]byte) (BlockInterface, error)
 	QueryBlockByHeight(int64) (BlockInterface, error)
 	QueryBlockHeader([]byte) (BlockInterface, error)
