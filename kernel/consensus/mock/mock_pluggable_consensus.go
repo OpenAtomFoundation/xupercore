@@ -139,12 +139,12 @@ type FakeLedger struct {
 	fakeCache     *FakeReader
 }
 
-func NewFakeLedger() *FakeLedger {
+func NewFakeLedger(conf []byte) *FakeLedger {
 	l := &FakeLedger{
 		ledgerSlice:   []*FakeBlock{},
 		ledgerMap:     map[string]*FakeBlock{},
 		meta:          nil,
-		consensusConf: GetGenesisConsensusConf(),
+		consensusConf: conf,
 		fakeCache:     CreateXModelCache(),
 	}
 	for i := 0; i < 3; i++ {
