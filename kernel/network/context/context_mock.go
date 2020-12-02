@@ -2,7 +2,6 @@ package context
 
 import (
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"log"
 	"path/filepath"
@@ -33,22 +32,6 @@ func MockDomainCtx(paths ...string) DomainCtx {
 	if err != nil {
 		log.Printf("CreateDomainCtx error: %v", err)
 		return new(DomainCtxImpl)
-	}
-
-	return ctx
-}
-
-func MockOperateCtx() OperateCtx {
-	xlog, err := MockLog()
-	if err != nil {
-		log.Printf("mock log error: %v", err)
-		return new(OperateCtxImpl)
-	}
-
-	ctx, err := CreateOperateCtx(xlog, timer.NewXTimer())
-	if err != nil {
-		log.Printf("CreateOperateCtx error: %v", err)
-		return new(OperateCtxImpl)
 	}
 
 	return ctx

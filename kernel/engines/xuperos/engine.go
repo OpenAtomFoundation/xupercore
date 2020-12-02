@@ -15,9 +15,14 @@ import (
 	"github.com/xuperchain/xupercore/lib/timer"
 )
 
+// 向工厂注册自己的创建方法
+func init() {
+	engines.Register(def.BCEngineName, NewEngine)
+}
+
 // xuperos执行引擎，为公链场景订制区块链引擎
 // 采用多链架构，支持多链，考虑到面向公链场景，暂时不支持群组
-type XuperOSEngine struct {
+type Engine struct {
 	// 引擎运行环境上下文
 	engCtx *def.EngineCtx
 	// 日志
@@ -32,20 +37,17 @@ type XuperOSEngine struct {
 	exitWG sync.WaitGroup
 }
 
-func NewXuperOSEngine() engines.BCEngine {
-	return &XuperOSEngine{}
-}
+var _ def.Engine = &Engine{}
 
-// 向工厂注册自己的创建方法
-func init() {
-	engines.Register(def.BCEngineName, NewXuperOSEngine)
+func NewEngine() engines.BCEngine {
+	return &Engine{}
 }
 
 // 转换引擎句柄类型
 // 对外提供类型转义方法，以接口形式对外暴露
 func EngineConvert(engine engines.BCEngine) (def.Engine, error) {
 	if engine == nil {
-		return nil, fmt.Errorf("transfer engine type failed because param is nil")
+		return nil, fmt.Errorf("transfer engine type failed due to param is nil")
 	}
 
 	if v, ok := engine.(def.Engine); ok {
@@ -56,42 +58,43 @@ func EngineConvert(engine engines.BCEngine) (def.Engine, error) {
 }
 
 // 初始化执行引擎环境上下文
-func (t *XuperOSEngine) Init(ecfg *xconf.EnvConf) error {
+func (t *Engine) Init(envCfg *xconf.EnvConf) error {
+	// 默认设置为正式实现，单元测试提供Set方法替换为mock实现
+	t.relyAgent = NewEngineRelyAgent(t)
+
 	// 初始化引擎运行上下文
-	engCtx, err := t.createEngCtx(ecfg)
+	engCtx, err := t.createEngCtx(envCfg)
 	if err != nil {
-		return fmt.Errorf("init engine failed because create engine ctx failed.err:%v", err)
+		return fmt.Errorf("create engine ctx failed: %v", err)
 	}
 	t.engCtx = engCtx
 	t.log = t.engCtx.XLog
-	// 默认设置为正式实现，单元测试提供Set方法替换为mock实现
-	t.relyAgent = NewEngineRelyAgent(t)
-	t.log.Trace("init engine context succ")
+	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文
 	t.chains = new(sync.Map)
 	err = t.loadChains()
 	if err != nil {
-		return fmt.Errorf("init engine failed because load chain failed.err:%v", err)
+		return fmt.Errorf("load chain failed: %v", err)
 	}
-	t.log.Trace("init load chain succ")
+	t.log.Trace("load all chain succeeded")
 
 	// 初始化P2P网络事件
 	netEvent, err := xnet.NewNetEvent(t)
 	if err != nil {
-		return fmt.Errorf("init engine failed because new net event failed.err:%v", err)
+		return fmt.Errorf("new net event failed: %v", err)
 	}
 	t.netEvent = netEvent
-	t.log.Trace("init register subscriber network event succ")
+	t.log.Trace("init register subscriber network event succeeded")
 
-	t.log.Trace("init engine succ")
+	t.log.Trace("init engine succeeded")
 	return nil
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *XuperOSEngine) SetRelyAgent(agent def.EngineRelyAgent) error {
+func (t *Engine) SetRelyAgent(agent def.EngineRelyAgent) error {
 	if agent == nil {
-		return fmt.Errorf("param error")
+		return ErrParamError
 	}
 
 	t.relyAgent = agent
@@ -99,7 +102,17 @@ func (t *XuperOSEngine) SetRelyAgent(agent def.EngineRelyAgent) error {
 }
 
 // 启动执行引擎，阻塞等待
-func (t *XuperOSEngine) Start() {
+func (t *Engine) Start() {
+	// 启动P2P网络
+	t.engCtx.Net.Start()
+
+	// 启动P2P网络事件消费
+	t.exitWG.Add(1)
+	go func() {
+		defer t.exitWG.Done()
+		t.netEvent.Start()
+	}()
+
 	// 遍历启动每条链
 	t.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(def.Chain)
@@ -111,30 +124,18 @@ func (t *XuperOSEngine) Start() {
 
 			// 启动链
 			chainHD.Start()
-			t.log.Trace("chain " + k.(string) + "start")
+			t.log.Trace("chain " + k.(string) + "started")
 		}()
 
 		return true
 	})
-
-	// 启动P2P网络事件消费
-	t.exitWG.Add(1)
-	go func() {
-		defer t.exitWG.Done()
-		t.netEvent.Start()
-	}()
 
 	// 阻塞等待，直到所有异步任务成功退出
 	t.exitWG.Wait()
 }
 
 // 关闭执行引擎，需要幂等
-func (t *XuperOSEngine) Stop() {
-	// 关闭P2P网络
-	t.netEvent.Stop()
-
-	// 关闭网络事件处理循环
-
+func (t *Engine) Stop() {
 	// 关闭矿工
 	t.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(def.Chain)
@@ -146,16 +147,22 @@ func (t *XuperOSEngine) Stop() {
 
 			// 关闭链
 			chainHD.Stop()
-			t.log.Trace("chain " + k.(string) + "exit")
+			t.log.Trace("chain " + k.(string) + "closed")
 		}()
 
 		return true
 	})
 
+	// 关闭网络事件处理循环
+	t.netEvent.Stop()
+
+	// 关闭P2P网络
+	t.engCtx.Net.Stop()
+
 	t.exitWG.Wait()
 }
 
-func (t *XuperOSEngine) Get(name string) def.Chain {
+func (t *Engine) Get(name string) def.Chain {
 	if chain, ok := t.chains.Load(name); ok {
 		return chain.(def.Chain)
 	}
@@ -163,12 +170,12 @@ func (t *XuperOSEngine) Get(name string) def.Chain {
 	return nil
 }
 
-func (t *XuperOSEngine) Set(name string, chain def.Chain) {
+func (t *Engine) Set(name string, chain def.Chain) {
 	t.chains.Store(name, chain)
 	return
 }
 
-func (t *XuperOSEngine) GetChains() []string {
+func (t *Engine) GetChains() []string {
 	chains := make([]string, 0)
 	t.chains.Range(func(k, v interface{}) bool {
 		chains = append(chains, k.(string))
@@ -178,28 +185,33 @@ func (t *XuperOSEngine) GetChains() []string {
 }
 
 // 获取执行引擎环境
-func (t *XuperOSEngine) GetEngineCtx() *def.EngineCtx {
+func (t *Engine) Context() *def.EngineCtx {
 	return t.engCtx
 }
 
-func (t *XuperOSEngine) CreateChain(name string, data []byte) (def.Chain, error) {
+func (t *Engine) CreateChain(name string, data []byte) error {
 	if _, ok := t.chains.Load(name); ok {
 		t.log.Warn("chains[" + name + "] is exist")
-		return nil, fmt.Errorf("blockchain is exist already")
+		return ErrBlockChainExist
 	}
 
-	chain := new(XuperOSChain)
-	// TODO: create a new block chain from xuper.json
+	t.log.Debug("create block chain by contract", "name", name)
+	// TODO: 1.仅xuper可以创建平行链
+	//if k.bcName != "xuper" {
+	//	t.log.Warn("only xuper chain can create side-chain", "bcName", k.bcName)
+	//	return ErrPermissionDenied
+	//}
 
-	t.chains.Store(name, chain)
-	return chain, nil
+	dataPath := t.engCtx.EnvCfg.GenDirAbsPath(t.engCtx.EnvCfg.DataDir)
+	fullPath := filepath.Join(dataPath, name)
+	return CreateBlockChain(fullPath, name, data)
 }
 
 // 注册并启动链
-func (t *XuperOSEngine) RegisterChain(name string) error {
+func (t *Engine) RegisterChain(name string) error {
 	chain, ok := t.chains.Load(name)
 	if !ok {
-		return fmt.Errorf("blockchain is not exist")
+		return ErrBlockChainNotExist
 	}
 
 	// 启动链
@@ -210,10 +222,10 @@ func (t *XuperOSEngine) RegisterChain(name string) error {
 }
 
 // 关闭并卸载链
-func (t *XuperOSEngine) UnloadChain(name string) error {
+func (t *Engine) UnloadChain(name string) error {
 	v, ok := t.chains.Load(name)
 	if !ok {
-		return fmt.Errorf("blockchain is not exist")
+		return ErrBlockChainNotExist
 	}
 	//从engine的map里面删了，就不会收到新的请求了
 	t.chains.Delete(name)
@@ -225,66 +237,88 @@ func (t *XuperOSEngine) UnloadChain(name string) error {
 }
 
 // 从本地存储加载链
-func (t *XuperOSEngine) loadChains() error {
-	ecfg := t.engCtx.EnvCfg
-	dataDir := ecfg.GenDirAbsPath(ecfg.DataDir)
+func (t *Engine) loadChains() error {
+	envCfg := t.engCtx.EnvCfg
+	dataDir := envCfg.GenDirAbsPath(envCfg.DataDir)
 
 	t.log.Trace("start load chain from data dir", "dir", dataDir)
 
 	dir, err := ioutil.ReadDir(dataDir)
 	if err != nil {
-		t.log.Error("load chains failed because read data dir failed", "err", err, "data_dir", dataDir)
-		return fmt.Errorf("load chains failed")
+		t.log.Error("read data dir failed", "error", err, "dir", dataDir)
+		return ErrReadDataDirError
 	}
 	chainCnt := 0
 	for _, fInfo := range dir {
 		if !fInfo.IsDir() {
-			// 忽略非目录
-			continue
+			continue // 忽略非目录
 		}
+
 		chainDir := filepath.Join(dataDir, fInfo.Name())
 		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
 
 		// 实例化每条链
-		chain, err := LoadChain(filepath.Join(dataDir, fInfo.Name()))
+		chainCtx := &def.ChainCtx{
+			EngineCtx: *t.engCtx,
+			BCName:    fInfo.Name(),
+			DataDir:   chainDir,
+		}
+		chain, err := LoadChain(chainCtx)
 		if err != nil {
-			t.log.Error("load chain from data dir failed.", "err", err, "dir", chainDir)
-			return fmt.Errorf("load chain failed")
+			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
+			return ErrLoadChainError
 		}
 
 		// 记录链实例
 		t.chains.Store(fInfo.Name(), chain)
-		t.log.Trace("load chain succ", "chain", fInfo.Name(), "dir", chainDir)
+		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
 		chainCnt++
 	}
 
-	t.log.Trace("load chain form data dir succ", "chain_cnt", chainCnt)
+	rootChain := t.Context().EngCfg.RootChain
+	if _, ok := t.chains.Load(rootChain); !ok {
+		t.log.Error("root chain not exist, please create it first", "rootChain", rootChain, "error", err)
+		return ErrRootChainNotExist
+	}
+
+	t.log.Trace("load chain form data dir succeeded", "chain_cnt", chainCnt)
 	return nil
 }
 
-func (t *XuperOSEngine) createEngCtx(envCfg *xconf.EnvConf) (*def.EngineCtx, error) {
+func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*def.EngineCtx, error) {
 	if envCfg == nil {
-		return nil, fmt.Errorf("create engine ctx failed because env config is nil")
+		return nil, ErrParamError
+	}
+
+	// 引擎日志
+	log, err := logs.NewLogger("", def.BCEngineName)
+	if err != nil {
+		return nil, fmt.Errorf("new logger error: %v", err)
 	}
 
 	// 加载引擎配置
 	engCfg, err := engconf.LoadEngineConf(envCfg.GenConfFilePath(envCfg.EngineConf))
 	if err != nil {
-		return nil, fmt.Errorf("create engine ctx failed because engine config load err.err:%v", err)
+		return nil, fmt.Errorf("load engine config error: %v", err)
 	}
 
-	// 实例化&启动p2p网络
-	netHD, err := t.relyAgent.CreateNetwork()
-	if err != nil {
-		return nil, fmt.Errorf("create engine ctx failed because create network failed.err:%v", err)
+	// 所有路径配置全部使用绝对路径
+	engCfg.Miner.KeyPath = envCfg.GenDirAbsPath(engCfg.Miner.KeyPath)
+	for i, path := range engCfg.DataPathOthers {
+		engCfg.DataPathOthers[i] = envCfg.GenDirAbsPath(path)
 	}
 
 	engCtx := &def.EngineCtx{}
-	engCtx.XLog, _ = logs.NewLogger("", def.BCEngineName)
+	engCtx.XLog = log
 	engCtx.Timer = timer.NewXTimer()
 	engCtx.EnvCfg = envCfg
 	engCtx.EngCfg = engCfg
-	engCtx.Net = netHD
+
+	// 实例化&启动p2p网络
+	engCtx.Net, err = t.relyAgent.CreateNetwork()
+	if err != nil {
+		return nil, fmt.Errorf("create network failed: %v", err)
+	}
 
 	return engCtx, nil
 }

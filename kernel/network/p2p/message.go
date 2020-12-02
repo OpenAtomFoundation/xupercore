@@ -167,16 +167,21 @@ func VerifyMessageType(request *pb.XuperMessage, response *pb.XuperMessage, peer
 	return true
 }
 
+// 消息类型映射
+// 避免每次添加新消息都要修改，制定映射关系：request = n(偶数) => response = n+1(奇数)
+var requestToResponse = map[pb.XuperMessage_MessageType]pb.XuperMessage_MessageType{
+	pb.XuperMessage_GET_BLOCK:                pb.XuperMessage_GET_BLOCK_RES,
+	pb.XuperMessage_GET_BLOCKCHAINSTATUS:     pb.XuperMessage_GET_BLOCKCHAINSTATUS_RES,
+	pb.XuperMessage_CONFIRM_BLOCKCHAINSTATUS: pb.XuperMessage_CONFIRM_BLOCKCHAINSTATUS_RES,
+	pb.XuperMessage_GET_RPC_PORT:             pb.XuperMessage_GET_RPC_PORT_RES,
+	pb.XuperMessage_GET_AUTHENTICATION:       pb.XuperMessage_GET_AUTHENTICATION_RES,
+}
+
 // GetRespMessageType get the message type
 func GetRespMessageType(msgType pb.XuperMessage_MessageType) pb.XuperMessage_MessageType {
-	switch msgType {
-	case pb.XuperMessage_GET_BLOCK:
-		return pb.XuperMessage_GET_BLOCK_RES
-	case pb.XuperMessage_GET_BLOCKCHAINSTATUS:
-		return pb.XuperMessage_GET_BLOCKCHAINSTATUS_RES
-	case pb.XuperMessage_CONFIRM_BLOCKCHAINSTATUS:
-		return pb.XuperMessage_CONFIRM_BLOCKCHAINSTATUS_RES
-	default:
-		return pb.XuperMessage_MSG_TYPE_NONE
+	if resp, ok := requestToResponse[msgType]; ok {
+		return resp
 	}
+
+	return msgType + 1
 }

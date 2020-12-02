@@ -1,6 +1,7 @@
 package p2pv2
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -16,7 +17,7 @@ var (
 
 type handler struct{}
 
-func (h *handler) Handler(ctx nctx.OperateCtx, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (h *handler) Handler(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	typ := p2p.GetRespMessageType(msg.Header.Type)
 	resp := p2p.NewMessage(typ, msg, p2p.WithLogId(msg.Header.Logid))
 	return resp, nil
@@ -74,12 +75,12 @@ func startNode3(t *testing.T) {
 
 	node.Start()
 	msg := p2p.NewMessage(pb.XuperMessage_POSTTX, nil)
-	if err := node.SendMessage(nctx.MockOperateCtx(), msg); err != nil {
+	if err := node.SendMessage(ctx, msg); err != nil {
 		t.Errorf("sendMessage error: %v", err)
 	}
 
 	msg = p2p.NewMessage(pb.XuperMessage_GET_BLOCK, nil)
-	if responses, err := node.SendMessageWithResponse(nctx.MockOperateCtx(), msg); err != nil {
+	if responses, err := node.SendMessageWithResponse(ctx, msg); err != nil {
 		t.Errorf("sendMessage error: %v", err)
 	} else {
 		for i, resp := range responses {

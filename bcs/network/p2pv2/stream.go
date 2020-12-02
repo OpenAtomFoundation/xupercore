@@ -18,7 +18,6 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 )
 
 // define common errors
@@ -160,8 +159,7 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 	}
 
 	s.log.Trace("HandlerNewMessage", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
-	ctx, _ := nctx.CreateOperateCtx(s.ctx.GetLog(), timer.NewXTimer())
-	if err := s.srv.dispatcher.Dispatch(ctx, msg, s); err != nil {
+	if err := s.srv.dispatcher.Dispatch(s.ctx, msg, s); err != nil {
 		s.log.Warn("Dispatcher", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
 		return nil // not return err
 	}
@@ -170,7 +168,7 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 }
 
 // SendMessage will send a message to a peer
-func (s *Stream) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage) error {
+func (s *Stream) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 	s.log.Trace("Stream SendMessage", "log_id", msg.GetHeader().GetLogid(), "msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
 	err := s.Send(msg)
 	if err != nil {
@@ -184,14 +182,14 @@ func (s *Stream) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage) error {
 }
 
 // SendMessageWithResponse will send a message to a peer and wait for response
-func (s *Stream) SendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (s *Stream) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	respType := p2p.GetRespMessageType(msg.GetHeader().GetType())
 	if respType == pb.XuperMessage_MSG_TYPE_NONE {
 		return nil, ErrNoneMessageType
 	}
 
 	observerCh := make(chan *pb.XuperMessage, 100)
-	sub := p2p.NewSubscriber(s.ctx, respType, observerCh, p2p.WithFrom(s.id.Pretty()))
+	sub := p2p.NewSubscriber(s.ctx, respType, observerCh, p2p.WithFilterFrom(s.id.Pretty()))
 	err := s.srv.dispatcher.Register(sub)
 	if err != nil {
 		s.log.Error("sendMessageWithResponse register error", "error", err)
@@ -222,7 +220,7 @@ func (s *Stream) SendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.XuperMessa
 	// 等待返回
 	select {
 	case resp := <-respCh:
-		ctx.GetLog().Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid())
+		s.log.Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid())
 		return resp, nil
 	case err := <-errCh:
 		return nil, err

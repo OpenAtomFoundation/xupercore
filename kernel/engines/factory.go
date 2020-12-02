@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	econf "github.com/xuperchain/xupercore/kernel/engines/config"
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
@@ -14,7 +14,7 @@ import (
 // 各引擎提供类型转换函数，由上层引擎使用者调用引擎提供的类型转换函数转换后使用
 type BCEngine interface {
 	// 初始化引擎
-	Init(*econf.EnvConf) error
+	Init(*xconf.EnvConf) error
 	// 启动引擎
 	Start()
 	// 退出引擎，需要幂等
@@ -66,7 +66,7 @@ func newBCEngine(name string) BCEngine {
 
 // 采用工厂模式，对上层统一区块链执行引擎创建操作，方便框架开发
 // 区块链执行引擎注册通过init实现，由应用方选择具体要使用的引擎
-func CreateBCEngine(egName string, envCfg *econf.EnvConf) (BCEngine, error) {
+func CreateBCEngine(egName string, envCfg *xconf.EnvConf) (BCEngine, error) {
 	// 检查参数
 	if egName == "" || envCfg == nil {
 		return nil, fmt.Errorf("create bc engine failed because some param unset")
@@ -78,13 +78,13 @@ func CreateBCEngine(egName string, envCfg *econf.EnvConf) (BCEngine, error) {
 	// 创建区块链执行引擎
 	engine := newBCEngine(egName)
 	if engine == nil {
-		return nil, fmt.Errorf("create bc engine failed because engine not exist.name:%s", egName)
+		return nil, fmt.Errorf("create bc engine failed because engine not exist. name:%s", egName)
 	}
 
 	// 初始化区块链执行引擎
 	err := engine.Init(envCfg)
 	if err != nil {
-		return nil, fmt.Errorf("create bc engine failed because init engine error.err:%v", err)
+		return nil, fmt.Errorf("init engine error: %v", err)
 	}
 
 	return engine, nil

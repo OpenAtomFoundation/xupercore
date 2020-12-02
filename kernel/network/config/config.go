@@ -32,6 +32,8 @@ const (
 type Config struct {
 	// Module is the name of p2p module plugin
 	Module string `yaml:"module,omitempty"`
+	// Address multiaddr string, /ip4/127.0.0.1/tcp/8080
+	Address string `yaml:"module,omitempty"`
 	// port the p2p network listened
 	Port int32 `yaml:"port,omitempty"`
 	// keyPath is the node private key path, xuper will gen a random one if is nil

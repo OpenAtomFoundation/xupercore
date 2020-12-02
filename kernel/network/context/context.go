@@ -4,11 +4,9 @@ package context
 import (
 	"context"
 	"fmt"
-
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 )
 
 // 考虑到有些对象是有状态的，需要单例实现
@@ -33,8 +31,8 @@ type DomainCtxImpl struct {
 }
 
 // 必须设置的在参数直接指定，可选的通过对应的Set方法设置
-func CreateDomainCtx(xlog logs.Logger, confPath string) (DomainCtx, error) {
-	if xlog == nil || confPath == "" {
+func CreateDomainCtx(confPath string) (DomainCtx, error) {
+	if confPath == "" {
 		return nil, fmt.Errorf("create domain context failed because some param are missing")
 	}
 
@@ -44,8 +42,13 @@ func CreateDomainCtx(xlog logs.Logger, confPath string) (DomainCtx, error) {
 		return nil, fmt.Errorf("create object context failed because config load fail.err:%v", err)
 	}
 
+	log, err := logs.NewLogger("", "network")
+	if err != nil {
+		return nil, fmt.Errorf("create engine ctx failed because new logger error. err:%v", err)
+	}
+
 	ctx := new(DomainCtxImpl)
-	ctx.XLog = xlog
+	ctx.XLog = log
 	ctx.P2PConf = cfg
 	// 可选参数设置默认值
 	ctx.MetricSwitch = false
@@ -76,48 +79,3 @@ func (t *DomainCtxImpl) IsValid() bool {
 
 	return true
 }
-
-// 操作级上下文，不是所有的方法都需要独立上下文，按需选用
-type OperateCtx interface {
-	context.Context
-
-	GetLog() logs.Logger
-	GetTimer() *timer.XTimer
-	IsValid() bool
-}
-
-type OperateCtxImpl struct {
-	xcontext.BaseCtx
-	// 便于记录各阶段处理耗时
-	Timer *timer.XTimer
-}
-
-func CreateOperateCtx(xlog logs.Logger, tmr *timer.XTimer) (OperateCtx, error) {
-	if xlog == nil || tmr == nil {
-		return nil, fmt.Errorf("create operate context failed because some param are missing")
-	}
-
-	ctx := new(OperateCtxImpl)
-	ctx.XLog = xlog
-	ctx.Timer = tmr
-
-	return ctx, nil
-}
-
-func (t *OperateCtxImpl) GetLog() logs.Logger {
-	return t.XLog
-}
-
-func (t *OperateCtxImpl) GetTimer() *timer.XTimer {
-	return t.Timer
-}
-
-func (t *OperateCtxImpl) IsValid() bool {
-	if t.XLog == nil || t.Timer == nil {
-		return false
-	}
-
-	return true
-}
-
-// 其他特殊需要上下文定义

@@ -1,6 +1,7 @@
 package network
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"sync"
@@ -58,14 +59,18 @@ func createP2PServ(name string) p2p.Server {
 
 // network对外提供的接口
 type Network interface {
-	SendMessage(nctx.OperateCtx, *pb.XuperMessage, ...p2p.OptionFunc) error
-	SendMessageWithResponse(nctx.OperateCtx, *pb.XuperMessage, ...p2p.OptionFunc) ([]*pb.XuperMessage, error)
+	Start()
+	Stop()
 
-	//NewSubscriber(context.Context, pb.XuperMessage_MessageType, ...SubscriberOption) Subscriber
+	SendMessage(context.Context, *pb.XuperMessage, ...p2p.OptionFunc) error
+	SendMessageWithResponse(context.Context, *pb.XuperMessage, ...p2p.OptionFunc) ([]*pb.XuperMessage, error)
+
+	NewSubscriber(pb.XuperMessage_MessageType, interface{}, ...p2p.SubscriberOption) p2p.Subscriber
 	Register(p2p.Subscriber) error
 	UnRegister(p2p.Subscriber) error
 
-	P2PState(nctx.OperateCtx) p2p.State
+	Context() nctx.DomainCtx
+	P2PState() *p2p.State
 }
 
 // 如果有领域内公共逻辑，可以在这层扩展，对上层暴露高级接口
@@ -84,8 +89,9 @@ func CreateNetwork(ctx nctx.DomainCtx) (Network, error) {
 	if ctx.GetP2PConf() == nil {
 		return nil, fmt.Errorf("new network failed because config is nil")
 	}
-	
+
 	servName := ctx.GetP2PConf().Module
+
 	// get p2p service
 	p2pServ := createP2PServ(servName)
 	if p2pServ == nil {
@@ -96,13 +102,23 @@ func CreateNetwork(ctx nctx.DomainCtx) (Network, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new network failed because init p2p service error.err:%v", err)
 	}
-	// start p2p server
-	p2pServ.Start()
 
 	return &NetworkImpl{ctx, p2pServ}, nil
 }
 
-func (t *NetworkImpl) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, opts ...p2p.OptionFunc) error {
+func (t *NetworkImpl) Start() {
+	t.p2pServ.Start()
+}
+
+func (t *NetworkImpl) Stop() {
+	t.p2pServ.Stop()
+}
+
+func (t *NetworkImpl) Context() nctx.DomainCtx {
+	return t.p2pServ.Context()
+}
+
+func (t *NetworkImpl) SendMessage(ctx context.Context, msg *pb.XuperMessage, opts ...p2p.OptionFunc) error {
 	if !t.isInit() || ctx == nil || msg == nil {
 		return fmt.Errorf("network not init or param set error")
 	}
@@ -110,12 +126,20 @@ func (t *NetworkImpl) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, opt
 	return t.p2pServ.SendMessage(ctx, msg, opts...)
 }
 
-func (t *NetworkImpl) SendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.XuperMessage, opts ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
+func (t *NetworkImpl) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage, opts ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
 	if !t.isInit() || ctx == nil || msg == nil {
 		return nil, fmt.Errorf("network not init or param set error")
 	}
 
 	return t.p2pServ.SendMessageWithResponse(ctx, msg, opts...)
+}
+
+func (t *NetworkImpl) NewSubscriber(typ pb.XuperMessage_MessageType, v interface{}, opts ...p2p.SubscriberOption) p2p.Subscriber {
+	if !t.isInit() || v == nil {
+		return nil
+	}
+
+	return t.p2pServ.NewSubscriber(typ, v, opts...)
 }
 
 func (t *NetworkImpl) Register(sub p2p.Subscriber) error {
@@ -134,8 +158,8 @@ func (t *NetworkImpl) UnRegister(sub p2p.Subscriber) error {
 	return t.p2pServ.UnRegister(sub)
 }
 
-func (t *NetworkImpl) P2PState(nctx.OperateCtx) p2p.State {
-	return p2p.State{}
+func (t *NetworkImpl) P2PState() *p2p.State {
+	return t.p2pServ.P2PState()
 }
 
 func (t *NetworkImpl) isInit() bool {

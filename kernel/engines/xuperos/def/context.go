@@ -4,9 +4,7 @@ package def
 import (
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/contract"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
-	"github.com/xuperchain/xupercore/kernel/network"
 )
 
 // 引擎运行上下文环境
@@ -18,27 +16,34 @@ type EngineCtx struct {
 	// 引擎配置
 	EngCfg *engconf.EngineConf
 	// 网络组件句柄
-	Net network.Network
+	Net XNetwork
 }
 
 // 链级别上下文，维护链级别上下文，每条平行链各有一个
 type ChainCtx struct {
-	// 基础上下文
-	xctx.BaseCtx
+	// 引擎上下文
+	EngineCtx
+
 	// 链名
 	BCName string
-	// 网络
-	Net network.Network
+	// 存储路径
+	DataDir string
+	// 状态
+	Status int
+
 	// 账本
 	Ledger XLedger
+	// 状态机
+	State XState
+	// 合约
+	Contract XContract
 	// 共识
 	Consensus XConsensus
-	// 合约
-	Contract contract.Manager
-	// 权限
-	Acl XAcl
 	// 加密
 	Crypto XCrypto
+	// 权限
+	Acl XAcl
+
 	// 结点账户信息
-	AddrInfo *NodeAddrInfo
+	Address *Address
 }

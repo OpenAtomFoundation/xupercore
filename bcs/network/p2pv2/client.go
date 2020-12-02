@@ -1,6 +1,7 @@
 package p2pv2
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	prom "github.com/prometheus/client_golang/prometheus"
 
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
@@ -19,7 +19,7 @@ var (
 )
 
 // SendMessage send message to peers using given filter strategy
-func (p *P2PServerV2) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, optFunc ...p2p.OptionFunc) error {
+func (p *P2PServerV2) SendMessage(ctx context.Context, msg *pb.XuperMessage, optFunc ...p2p.OptionFunc) error {
 	if p.ctx.GetMetricSwitch() {
 		tm := time.Now()
 		defer func() {
@@ -57,7 +57,7 @@ func (p *P2PServerV2) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, opt
 	return p.sendMessage(ctx, msg, peerIDs)
 }
 
-func (p *P2PServerV2) sendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, peerIDs []peer.ID) error {
+func (p *P2PServerV2) sendMessage(ctx context.Context, msg *pb.XuperMessage, peerIDs []peer.ID) error {
 	var wg sync.WaitGroup
 	for _, peerID := range peerIDs {
 		wg.Add(1)
@@ -85,7 +85,7 @@ func (p *P2PServerV2) sendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, pee
 
 // SendMessageWithResponse send message to peers using given filter strategy, expect response from peers
 // 客户端再使用该方法请求带返回的消息时，最好带上log_id, 否则会导致收消息时收到不匹配的消息而影响后续的处理
-func (p *P2PServerV2) SendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.XuperMessage, optFunc ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
+func (p *P2PServerV2) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage, optFunc ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
 	if p.ctx.GetMetricSwitch() {
 		tm := time.Now()
 		defer func() {
@@ -124,7 +124,7 @@ func (p *P2PServerV2) SendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.Xuper
 	return p.sendMessageWithResponse(ctx, msg, peerIDs, opt)
 }
 
-func (p *P2PServerV2) sendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.XuperMessage, peerIDs []peer.ID, opt *p2p.Option) ([]*pb.XuperMessage, error) {
+func (p *P2PServerV2) sendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage, peerIDs []peer.ID, opt *p2p.Option) ([]*pb.XuperMessage, error) {
 	respCh := make(chan *pb.XuperMessage, len(peerIDs))
 	var wg sync.WaitGroup
 	for _, peerID := range peerIDs {
