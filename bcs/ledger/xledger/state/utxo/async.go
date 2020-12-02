@@ -66,26 +66,6 @@ func (uv *UtxoVM) StartAsyncBlockMode() {
 	go uv.asyncVerify(ctx)
 }
 
-func (uv *UtxoVM) verifyTxWorker(itxlist []*InboundTx) error {
-	if len(itxlist) == 0 {
-		return nil
-	}
-	uv.xlog.Debug("async tx list size", "size", len(itxlist))
-	//校验tx合法性
-	for _, itx := range itxlist {
-		// 去重判断
-		tx := itx.tx
-		ok, xerr := uv.ImmediateVerifyTx(tx, false)
-		if !ok {
-			uv.xlog.Warn("invalid transaction found", "txid", global.F(tx.Txid), "err", xerr)
-			uv.asyncResult.Send(tx.Txid, xerr)
-		} else {
-			uv.verifiedTxChan <- tx
-		}
-	}
-	return nil
-}
-
 // checkConflictTxs 检测一个batch内部的utxo引用冲突的txList
 func (uv *UtxoVM) checkConflictTxs(txList []*pb.Transaction) map[string]bool {
 	conflictUtxos := map[string]bool{}
@@ -204,30 +184,6 @@ func (uv *UtxoVM) asyncWriter(ctx context.Context) {
 			go uv.flushTxList(txList)
 			txList = []*pb.Transaction{}
 		case <-ctx.Done():
-			uv.asyncWriterWG.Done()
-			return
-		}
-	}
-}
-
-// asyncVerifiy 异步并行校验tx，在AsyncMode=true时开启
-func (uv *UtxoVM) asyncVerify(ctx context.Context) {
-	tick := time.Tick(time.Millisecond * AsyncMaxWaitMS)
-	itxlist := []*InboundTx{}
-	uv.asyncWriterWG.Add(1)
-	for {
-		select {
-		case itx := <-uv.inboundTxChan:
-			itxlist = append(itxlist, itx)
-			if len(itxlist) > AsyncMaxWaitSize {
-				go uv.verifyTxWorker(itxlist)
-				itxlist = []*InboundTx{}
-			}
-		case <-tick:
-			go uv.verifyTxWorker(itxlist)
-			itxlist = []*InboundTx{}
-		case <-ctx.Done():
-			//uv.RollBackUnconfirmedTx()
 			uv.asyncWriterWG.Done()
 			return
 		}

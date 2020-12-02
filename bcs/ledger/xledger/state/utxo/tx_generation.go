@@ -42,7 +42,7 @@ func (uv *UtxoVM) GenerateTx(txReq *pb.TxData) (*pb.Transaction, error) {
 	utxoTx.Coinbase = false
 	txInputs, _, utxoTotal, selectErr := uv.SelectUtxos(txReq.FromAddr, txReq.FromPubkey, totalNeed, true, false)
 	if selectErr != nil {
-		uv.xlog.Warn("select utxos error", "err", selectErr)
+		uv.log.Warn("select utxos error", "err", selectErr)
 		return nil, selectErr
 	}
 	utxoTx.TxInputs = txInputs
@@ -69,14 +69,14 @@ func (uv *UtxoVM) GenerateTx(txReq *pb.TxData) (*pb.Transaction, error) {
 	// check if size limit exceeded
 	txSize, err := common.GetTxSerializedSize(utxoTx)
 	if nil != err {
-		uv.xlog.Warn("failed to GetTxSerializedSize", "err", err)
+		uv.log.Warn("failed to GetTxSerializedSize", "err", err)
 		return nil, err
 	}
 	maxBlockSize := uv.GetMaxBlockSize()
 	if txSize > maxBlockSize {
-		uv.xlog.Warn("tx size limit exceeded", "txSize", txSize)
+		uv.log.Warn("tx size limit exceeded", "txSize", txSize)
 		return nil, ErrTxSizeLimitExceeded
 	}
-	uv.xlog.Trace("make txid done", "txid", fmt.Sprintf("%x", utxoTx.Txid))
+	uv.log.Trace("make txid done", "txid", fmt.Sprintf("%x", utxoTx.Txid))
 	return utxoTx, nil
 }

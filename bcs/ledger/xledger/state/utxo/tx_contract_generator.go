@@ -20,7 +20,7 @@ func (uv *UtxoVM) isSmartContract(desc []byte) (*contract.TxDesc, bool) {
 	if bytes.HasPrefix(desc, []byte("{")) {
 		descObj, err := contract.Parse(string(desc))
 		if err != nil {
-			uv.xlog.Warn("parse contract failed", "desc", fmt.Sprintf("%s", desc))
+			uv.log.Warn("parse contract failed", "desc", fmt.Sprintf("%s", desc))
 			return nil, false
 		}
 		if descObj.Module == "" || descObj.Method == "" {
@@ -72,7 +72,7 @@ func (uv *UtxoVM) TxOfRunningContractGenerate(txlist []*pb.Transaction, pendingB
 		//执行rollback
 		err := uv.RollbackContract(b.Blockid, tx)
 		if err != nil {
-			uv.xlog.Error("rollback when addFailed", "error", err)
+			uv.log.Error("rollback when addFailed", "error", err)
 		}
 		newtxs = append(newtxs, tx)
 		b.FailedTxs[global.F(tx.Txid)] = txErr.Error()
@@ -92,7 +92,7 @@ func (uv *UtxoVM) TxOfRunningContractGenerate(txlist []*pb.Transaction, pendingB
 			// 判断合约是否有效
 			if _, ok := allowedModules[txDesc.Module]; !ok {
 				//如果是没有注册的合约，直接当做一般的交易
-				uv.xlog.Warn("module is not registered", "module", txDesc.Module)
+				uv.log.Warn("module is not registered", "module", txDesc.Module)
 				addSucc(tx)
 				continue
 			}
@@ -112,7 +112,7 @@ func (uv *UtxoVM) TxOfRunningContractGenerate(txlist []*pb.Transaction, pendingB
 					if contractNo <= 1 && err.Error() == common.ErrContractExecutionTimeout.Error() {
 						addFailed(tx, pendingBlock, err)
 					}
-					uv.xlog.Error("runContractWithTimeout", "error", err, "txid", fmt.Sprintf("%x", tx.Txid))
+					uv.log.Error("runContractWithTimeout", "error", err, "txid", fmt.Sprintf("%x", tx.Txid))
 					//返回超时，让上层捕获处理
 					return newtxs, batch, common.ErrContractExecutionTimeout
 				}

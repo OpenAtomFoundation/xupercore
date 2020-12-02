@@ -30,20 +30,20 @@ func (uv *UtxoVM) verifyReservedWhitelist(tx *pb.Transaction) bool {
 	// verify reservedContracts len
 	reservedContracts := uv.GetReservedContracts()
 	if len(reservedContracts) == 0 {
-		uv.xlog.Info("verifyReservedWhitelist false reservedReqs is empty")
+		uv.log.Info("verifyReservedWhitelist false reservedReqs is empty")
 		return false
 	}
 
 	// get white list account
 	accountName := uv.ledger.GetGenesisBlock().GetConfig().GetReservedWhitelistAccount()
-	uv.xlog.Trace("verifyReservedWhitelist", "accountName", accountName)
+	uv.log.Trace("verifyReservedWhitelist", "accountName", accountName)
 	if accountName == "" {
-		uv.xlog.Info("verifyReservedWhitelist false, the chain does not have reserved whitelist", "accountName", accountName)
+		uv.log.Info("verifyReservedWhitelist false, the chain does not have reserved whitelist", "accountName", accountName)
 		return false
 	}
 	acl, isConfirmed, err := uv.aclMgr.GetAccountACLWithConfirmed(accountName)
 	if err != nil || acl == nil || !isConfirmed {
-		uv.xlog.Info("verifyReservedWhitelist false, get reserved whitelist acl failed",
+		uv.log.Info("verifyReservedWhitelist false, get reserved whitelist acl failed",
 			"err", err, "acl", acl, "isConfirmed", isConfirmed)
 		return false
 	}
@@ -53,19 +53,19 @@ func (uv *UtxoVM) verifyReservedWhitelist(tx *pb.Transaction) bool {
 		tx.GetContractRequests() != nil ||
 		tx.GetTxInputsExt() != nil ||
 		tx.GetTxOutputsExt() != nil {
-		uv.xlog.Info("verifyReservedWhitelist false the storage info should be nil")
+		uv.log.Info("verifyReservedWhitelist false the storage info should be nil")
 		return false
 	}
 
 	// verify utxo input
 	if len(tx.GetTxInputs()) == 0 && len(tx.GetTxOutputs()) == 0 {
-		uv.xlog.Info("verifyReservedWhitelist true the utxo list is nil")
+		uv.log.Info("verifyReservedWhitelist true the utxo list is nil")
 		return true
 	}
 	fromAddr := string(tx.GetTxInputs()[0].GetFromAddr())
 	for _, v := range tx.GetTxInputs() {
 		if string(v.GetFromAddr()) != fromAddr {
-			uv.xlog.Info("verifyReservedWhitelist false fromAddr should no more than one")
+			uv.log.Info("verifyReservedWhitelist false fromAddr should no more than one")
 			return false
 		}
 	}
@@ -78,7 +78,7 @@ func (uv *UtxoVM) verifyReservedWhitelist(tx *pb.Transaction) bool {
 		}
 		toAddrs[string(v.GetToAddr())] = true
 		if len(toAddrs) > 2 {
-			uv.xlog.Info("verifyReservedWhitelist false toAddrs should no more than two")
+			uv.log.Info("verifyReservedWhitelist false toAddrs should no more than two")
 			return false
 		}
 	}
@@ -89,7 +89,7 @@ func (uv *UtxoVM) verifyReservedWhitelist(tx *pb.Transaction) bool {
 			continue
 		}
 		if _, ok := acl.GetAksWeight()[k]; !ok {
-			uv.xlog.Info("verifyReservedWhitelist false the toAddr should in whitelist acl")
+			uv.log.Info("verifyReservedWhitelist false the toAddr should in whitelist acl")
 			return false
 		}
 	}
@@ -121,7 +121,7 @@ func (uv *UtxoVM) getReservedContractRequests(req []*pb.InvokeRequest, isPreExec
 		return nil, nil
 	}
 	reservedContractstpl := MetaReservedContracts
-	uv.xlog.Info("MetaReservedContracts", "reservedContracts", reservedContractstpl)
+	uv.log.Info("MetaReservedContracts", "reservedContracts", reservedContractstpl)
 
 	// if all reservedContracts have not been updated, return nil, nil
 	ra := &reservedArgs{}
@@ -130,7 +130,7 @@ func (uv *UtxoVM) getReservedContractRequests(req []*pb.InvokeRequest, isPreExec
 	} else {
 		// req should contrain reservedContracts, so the len of req should no less than reservedContracts
 		if len(req) < len(reservedContractstpl) {
-			uv.xlog.Warn("req should contain reservedContracts")
+			uv.log.Warn("req should contain reservedContracts")
 			return nil, ErrGetReservedContracts
 		} else if len(req) > len(reservedContractstpl) {
 			ra = genArgs(req[len(reservedContractstpl):])

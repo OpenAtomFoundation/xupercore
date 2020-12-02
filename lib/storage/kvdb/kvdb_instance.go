@@ -46,11 +46,11 @@ func Register(name string, f NewStorageFunc) {
 	services[name] = f
 }
 
-func CreateKVInstance(KVEngineType string, kvParam *KVParameter) (Database, error) {
+func CreateKVInstance(kvParam *KVParameter) (Database, error) {
 	servsMu.RLock()
 	defer servsMu.RUnlock()
 
-	if f, ok := services[KVEngineType]; ok {
+	if f, ok := services[kvParam.KVEngineType]; ok {
 		instance, err := f(kvParam)
 		if err != nil {
 			return nil, errors.New("get kvInstance fail")

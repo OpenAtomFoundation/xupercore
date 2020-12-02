@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"sync"
 
-	log "github.com/xuperchain/log15"
-	"github.com/xuperchain/xuperchain/core/common"
-	"github.com/xuperchain/xuperchain/core/kv/kvdb"
-	"github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
-	xmodel_pb "github.com/xuperchain/xuperchain/core/xmodel/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	"github.com/xuperchain/xupercore/lib/cache"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/pb"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
 const (
@@ -28,7 +28,7 @@ type XModel struct {
 	unconfirmTable  kvdb.Database
 	extUtxoTable    kvdb.Database
 	extUtxoDelTable kvdb.Database
-	logger          log.Logger
+	logger          logs.Logger
 	batchCache      *sync.Map
 	lastBatch       kvdb.Batch
 	// extUtxoCache caches per bucket key-values using version as key
@@ -36,7 +36,7 @@ type XModel struct {
 }
 
 // NewXuperModel new an instance of XModel
-func NewXuperModel(ledger *ledger.Ledger, stateDB kvdb.Database, logger log.Logger) (*XModel, error) {
+func NewXuperModel(ledger *ledger.Ledger, stateDB kvdb.Database, logger logs.Logger) (*XModel, error) {
 	return &XModel{
 		ledger:          ledger,
 		stateDB:         stateDB,

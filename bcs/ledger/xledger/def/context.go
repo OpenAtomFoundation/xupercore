@@ -15,4 +15,8 @@ type LedgerCtx struct {
 	EnvCfg *xconf.EnvConf
 	// 账本配置
 	LedgerCfg *lconf.XLedgerConf
+	// 链名
+	BCName string
+	// 加密算法
+	CryptoType string
 }

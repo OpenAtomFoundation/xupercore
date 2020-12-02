@@ -1,5 +1,4 @@
-// Package vat is Verifiable Autogen Tx package
-package vat
+package tx
 
 import (
 	"github.com/xuperchain/xuperchain/core/pb"

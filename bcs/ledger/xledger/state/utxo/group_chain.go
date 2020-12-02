@@ -29,7 +29,7 @@ func (uv *UtxoVM) getPeerIDsInList(bcname string) map[string]bool {
 	contractName := groupChainContract.ContractName
 	methodName := groupChainContract.MethodName + "Node"
 
-	uv.xlog.Trace("check IP list of group", "moduleName:", moduleName, "contractName:", contractName, "methodName:", methodName, "bcname", bcname)
+	uv.log.Trace("check IP list of group", "moduleName:", moduleName, "contractName:", contractName, "methodName:", methodName, "bcname", bcname)
 
 	if moduleName == "" && contractName == "" && methodName == "" {
 		return peerIDMap

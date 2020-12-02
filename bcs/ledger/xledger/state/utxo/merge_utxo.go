@@ -13,7 +13,7 @@ import (
 )
 
 func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error) {
-	uv.xlog.Trace("start to merge utxos", "address", fromAddr)
+	uv.log.Trace("start to merge utxos", "address", fromAddr)
 
 	// Total amount selected
 	amount := big.NewInt(0)
@@ -36,12 +36,12 @@ func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock
 		// 反序列化utxoItem
 		uErr := utxoItem.Loads(it.Value())
 		if uErr != nil {
-			uv.xlog.Warn("load utxo failed, skipped", "key", key)
+			uv.log.Warn("load utxo failed, skipped", "key", key)
 			continue
 		}
 		// check if the utxo item has been frozen
 		if utxoItem.FrozenHeight > uv.ledger.GetMeta().GetTrunkHeight() || utxoItem.FrozenHeight == -1 {
-			uv.xlog.Debug("utxo still frozen, skipped", "key", key)
+			uv.log.Debug("utxo still frozen, skipped", "key", key)
 			continue
 		}
 		// lock utxo to be selected
@@ -49,12 +49,12 @@ func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock
 			if uv.tryLockKey(key) {
 				willLockKeys = append(willLockKeys, key)
 			} else {
-				uv.xlog.Debug("can not lock the utxo key, conflict", "key", key)
+				uv.log.Debug("can not lock the utxo key, conflict", "key", key)
 				continue
 			}
 		} else if uv.isLocked(key) {
 			// If the utxo has been locked
-			uv.xlog.Debug("utxo locked, skipped", "key", key)
+			uv.log.Debug("utxo locked, skipped", "key", key)
 			continue
 		}
 
