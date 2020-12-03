@@ -16,15 +16,15 @@ func (uv *UtxoVM) TxOfRunningContractVerify(batch kvdb.Batch, block *pb.Internal
 			//进入v2才开始处理失败的情况
 			minerErr := block.FailedTxs[global.F(tx.Txid)]
 			if err != nil {
-				uv.xlog.Warn("run contract failed, when handleContractForNonMiner", "err", err)
+				uv.log.Warn("run contract failed, when handleContractForNonMiner", "err", err)
 				if minerErr != "" { //验证节点和矿工都认为合约有错误
-					uv.xlog.Warn("contranct also failed on minner, ignore it")
+					uv.log.Warn("contranct also failed on minner, ignore it")
 				} else {
 					return idx, err
 				}
 			} else {
 				if minerErr != "" {
-					uv.xlog.Warn("local success, but miner mark it failed", "err", err)
+					uv.log.Warn("local success, but miner mark it failed", "err", err)
 				}
 			}
 		}

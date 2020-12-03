@@ -1,2 +1,4 @@
 # 存储引擎
-kvStorage: leveldb
+kvEngineType: leveldb
+storePath: ./data/blockchain
+storageType: single

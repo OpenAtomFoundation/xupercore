@@ -13,13 +13,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	log "github.com/xuperchain/log15"
-	"github.com/xuperchain/xuperchain/core/common"
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	crypto_base "github.com/xuperchain/xuperchain/core/crypto/client/base"
-	"github.com/xuperchain/xuperchain/core/global"
-	"github.com/xuperchain/xuperchain/core/kv/kvdb"
-	"github.com/xuperchain/xuperchain/core/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
+	"github.com/xuperchain/xupercore/lib/cache"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/pb"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
 var (
@@ -73,13 +73,13 @@ type Ledger struct {
 	confirmedTable   kvdb.Database // 已确认的订单表
 	blocksTable      kvdb.Database // 区块表
 	mutex            *sync.RWMutex
-	xlog             log.Logger       //日志库
+	xlog             logs.Logger       //日志库
 	meta             *pb.LedgerMeta   //账本关键的元数据{genesis, tip, height}
 	GenesisBlock     *GenesisBlock    //创始块
 	pendingTable     kvdb.Database    //保存临时的block区块
 	heightTable      kvdb.Database    //保存高度到Blockid的映射
-	blockCache       *common.LRUCache // block cache, 加速QueryBlock
-	blkHeaderCache   *common.LRUCache // block header cache, 加速fetchBlock
+	blockCache       *cache.LRUCache // block cache, 加速QueryBlock
+	blkHeaderCache   *cache.LRUCache // block header cache, 加速fetchBlock
 	cryptoClient     crypto_base.CryptoClient
 	enablePowMinning bool
 	powMutex         *sync.Mutex
@@ -96,42 +96,39 @@ type ConfirmStatus struct {
 }
 
 // NewLedger create an empty ledger, if it already exists, open it directly
-func NewLedger(storePath string, xlog log.Logger, otherPaths []string, kvEngineType string, cryptoType string) (*Ledger, error) {
-	return newLedger(storePath, xlog, otherPaths, kvEngineType, cryptoType, true)
+func NewLedger(lctx *def.LedgerCtx, xlog logs.Logger) (*Ledger, error) {
+	return newLedger(lctx, xlog, true)
 }
 
 // OpenLedger open ledger which already exists
-func OpenLedger(storePath string, xlog log.Logger, otherPaths []string, kvEngineType string, cryptoType string) (*Ledger, error) {
-	return newLedger(storePath, xlog, otherPaths, kvEngineType, cryptoType, false)
+func OpenLedger(lctx *def.LedgerCtx, xlog logs.Logger) (*Ledger, error) {
+	return newLedger(lctx, xlog, false)
 }
 
-func newLedger(storePath string, xlog log.Logger, otherPaths []string, kvEngineType string, cryptoType string, createIfMissing bool) (*Ledger, error) {
+func newLedger(lctx *def.LedgerCtx, log logs.Logger, createIfMissing bool) (*Ledger, error) {
 	ledger := &Ledger{}
 	ledger.mutex = &sync.RWMutex{}
 	ledger.powMutex = &sync.Mutex{}
-	if xlog == nil { //如果外面没传进来log对象的话
-		xlog = log.New("module", "ledger")
-		xlog.SetHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
-	}
 
 	// new kvdb instance
 	kvParam := &kvdb.KVParameter{
-		DBPath:                filepath.Join(storePath, "ledger"),
-		KVEngineType:          kvEngineType,
+		DBPath:                filepath.Join(lctx.LedgerCfg.StorePath, "ledger"),
+		KVEngineType:          lctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          MemCacheSize,
 		FileHandlersCacheSize: FileHandlersCacheSize,
-		OtherPaths:            otherPaths,
+		OtherPaths:            lctx.LedgerCfg.KVEngineType,
+		StorageType:           lctx.LedgerCfg.StorageType,
 	}
-	baseDB, err := kvdb.NewKVDBInstance(kvParam)
+	baseDB, err := kvdb.CreateKVInstance(kvParam)
 	if err != nil {
-		xlog.Warn("fail to open leveldb", "dbPath", storePath+"/ledger", "err", err)
+		log.Warn("fail to open leveldb", "dbPath", lctx.LedgerCfg.StorePath+"/ledger", "err", err)
 		return nil, err
 	}
 
 	// create crypto client
-	cryptoClient, cryptoErr := crypto_client.CreateCryptoClient(cryptoType)
+	cryptoClient, cryptoErr := crypto_client.CreateCryptoClient(lctx.CryptoType)
 	if cryptoErr != nil {
-		xlog.Warn("fail to create crypto client", "err", cryptoErr)
+		log.Warn("fail to create crypto client", "err", cryptoErr)
 		return nil, cryptoErr
 	}
 
@@ -141,10 +138,10 @@ func newLedger(storePath string, xlog log.Logger, otherPaths []string, kvEngineT
 	ledger.blocksTable = kvdb.NewTable(baseDB, pb.BlocksTablePrefix)
 	ledger.pendingTable = kvdb.NewTable(baseDB, pb.PendingBlocksTablePrefix)
 	ledger.heightTable = kvdb.NewTable(baseDB, pb.BlockHeightPrefix)
-	ledger.xlog = xlog
+	ledger.xlog = log
 	ledger.meta = &pb.LedgerMeta{}
-	ledger.blockCache = common.NewLRUCache(BlockCacheSize)
-	ledger.blkHeaderCache = common.NewLRUCache(BlockCacheSize)
+	ledger.blockCache = cache.NewLRUCache(BlockCacheSize)
+	ledger.blkHeaderCache = cache.NewLRUCache(BlockCacheSize)
 	ledger.cryptoClient = cryptoClient
 	ledger.enablePowMinning = true
 	ledger.confirmBatch = baseDB.NewBatch()
@@ -153,18 +150,18 @@ func newLedger(storePath string, xlog log.Logger, otherPaths []string, kvEngineT
 	if metaErr != nil && common.NormalizedKVError(metaErr) == common.ErrKVNotFound && createIfMissing { //说明是新创建的账本
 		metaBuf, pbErr := proto.Marshal(ledger.meta)
 		if pbErr != nil {
-			xlog.Warn("marshal meta fail", "pb_err", pbErr)
+			log.Warn("marshal meta fail", "pb_err", pbErr)
 			return nil, pbErr
 		}
 		writeErr := ledger.metaTable.Put([]byte(""), metaBuf)
 		if writeErr != nil {
-			xlog.Warn("write meta_table fail", "write_err", writeErr)
+			log.Warn("write meta_table fail", "write_err", writeErr)
 			return nil, writeErr
 		}
 		emptyLedger = true
 	} else {
 		if metaErr != nil {
-			xlog.Warn("unexpected kv error", "meta_err", metaErr)
+			log.Warn("unexpected kv error", "meta_err", metaErr)
 			return nil, metaErr
 		}
 		pbErr := proto.Unmarshal(metaBuf, ledger.meta)
@@ -172,12 +169,12 @@ func newLedger(storePath string, xlog log.Logger, otherPaths []string, kvEngineT
 			return nil, pbErr
 		}
 	}
-	xlog.Info("ledger meta", "genesis_block", fmt.Sprintf("%x", ledger.meta.RootBlockid), "tip_block",
+	log.Info("ledger meta", "genesis_block", fmt.Sprintf("%x", ledger.meta.RootBlockid), "tip_block",
 		fmt.Sprintf("%x", ledger.meta.TipBlockid), "trunk_height", ledger.meta.TrunkHeight)
 	if !emptyLedger {
 		gErr := ledger.loadGenesisBlock()
 		if gErr != nil {
-			xlog.Warn("failed to load genesis block", "g_err", gErr)
+			log.Warn("failed to load genesis block", "g_err", gErr)
 			return nil, gErr
 		}
 	}

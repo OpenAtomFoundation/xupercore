@@ -56,7 +56,7 @@ func (uv *UtxoVM) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, er
 		return false, MaxTxSizePerBlockErr
 	}
 	if proto.Size(tx) > MaxTxSizePerBlock {
-		uv.xlog.Warn("tx too large, should not be greater than half of max blocksize", "size", proto.Size(tx))
+		uv.log.Warn("tx too large, should not be greater than half of max blocksize", "size", proto.Size(tx))
 		return false, ErrTxTooLarge
 	}
 
@@ -65,25 +65,25 @@ func (uv *UtxoVM) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, er
 		// verify txid
 		txid, err := txhash.MakeTransactionID(tx)
 		if err != nil {
-			uv.xlog.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
 			return false, err
 		}
 		if bytes.Compare(tx.Txid, txid) != 0 {
-			uv.xlog.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
+			uv.log.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
 			return false, fmt.Errorf("Txid verify failed")
 		}
 
 		// get digestHash
 		digestHash, err := txhash.MakeTxDigestHash(tx)
 		if err != nil {
-			uv.xlog.Warn("ImmediateVerifyTx: call MakeTxDigestHash failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: call MakeTxDigestHash failed", "error", err)
 			return false, err
 		}
 
 		// verify signatures
 		ok, verifiedID, err := uv.verifySignatures(tx, digestHash)
 		if !ok {
-			uv.xlog.Warn("ImmediateVerifyTx: verifySignatures failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: verifySignatures failed", "error", err)
 			return ok, ErrInvalidSignature
 		}
 
@@ -93,34 +93,34 @@ func (uv *UtxoVM) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, er
 		// veify tx UTXO input permission (Account ACL)
 		ok, err = uv.verifyUTXOPermission(tx, verifiedID)
 		if !ok {
-			uv.xlog.Warn("ImmediateVerifyTx: verifyUTXOPermission failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: verifyUTXOPermission failed", "error", err)
 			return ok, ErrACLNotEnough
 		}
 
 		// verify contract requests' permission using ACL
 		ok, err = uv.verifyContractPermission(tx, authUsers)
 		if !ok {
-			uv.xlog.Warn("ImmediateVerifyTx: verifyContractPermission failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: verifyContractPermission failed", "error", err)
 			return ok, ErrACLNotEnough
 		}
 
 		// verify amount of transfer within contract
 		ok, err = uv.verifyContractTxAmount(tx)
 		if !ok {
-			uv.xlog.Warn("ImmediateVerifyTx: verifyContractTxAmount failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: verifyContractTxAmount failed", "error", err)
 			return ok, ErrContractTxAmout
 		}
 
 		// verify the permission of RWSet using ACL
 		ok, err = uv.verifyRWSetPermission(tx, verifiedID)
 		if !ok {
-			uv.xlog.Warn("ImmediateVerifyTx: verifyRWSetPermission failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: verifyRWSetPermission failed", "error", err)
 			return ok, ErrACLNotEnough
 		}
 		// verify RWSet(run contracts and compare RWSet)
 		ok, err = uv.verifyTxRWSets(tx)
 		if err != nil {
-			uv.xlog.Warn("ImmediateVerifyTx: verifyTxRWSets failed", "error", err)
+			uv.log.Warn("ImmediateVerifyTx: verifyTxRWSets failed", "error", err)
 			// reset error message
 			if strings.HasPrefix(err.Error(), "Gas not enough") {
 				err = ErrGasNotEnough
@@ -157,7 +157,7 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 		// check initiator address signature
 		ok, err := pm.IdentifyAK(tx.Initiator, tx.InitiatorSigns[0], digestHash)
 		if err != nil || !ok {
-			uv.xlog.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
+			uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 			return false, nil, err
 		}
 		verifiedAddr[tx.Initiator] = true
@@ -167,17 +167,17 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 		for _, sign := range tx.InitiatorSigns {
 			ak, err := uv.cryptoClient.GetEcdsaPublicKeyFromJSON([]byte(sign.PublicKey))
 			if err != nil {
-				uv.xlog.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
+				uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
 			}
 			addr, err := uv.cryptoClient.GetAddressFromPublicKey(ak)
 			if err != nil {
-				uv.xlog.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
+				uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
 			}
 			ok, err := pm.IdentifyAK(addr, sign, digestHash)
 			if !ok {
-				uv.xlog.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
+				uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return ok, nil, err
 			}
 			verifiedAddr[addr] = true
@@ -185,12 +185,12 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 		}
 		ok, err := pm.IdentifyAccount(tx.Initiator, initiatorAddr, uv.aclMgr)
 		if !ok {
-			uv.xlog.Warn("verifySignatures initiator permission check failed",
+			uv.log.Warn("verifySignatures initiator permission check failed",
 				"account", tx.Initiator, "error", err)
 			return false, nil, err
 		}
 	} else {
-		uv.xlog.Warn("verifySignatures failed, invalid address", "address", tx.Initiator)
+		uv.log.Warn("verifySignatures failed, invalid address", "address", tx.Initiator)
 		return false, nil, ErrInvalidSignature
 	}
 
@@ -204,7 +204,7 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 		}
 		ok, err := pm.IdentifyAK(addr, signInfo, digestHash)
 		if err != nil || !ok {
-			uv.xlog.Warn("verifySignatures failed", "address", addr, "error", err)
+			uv.log.Warn("verifySignatures failed", "address", addr, "error", err)
 			return false, nil, err
 		}
 		verifiedAddr[addr] = true
@@ -243,13 +243,13 @@ func (uv *UtxoVM) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, 
 	for idx, addr := range addrList {
 		ok, _ := uv.cryptoClient.VerifyAddressUsingPublicKey(addr, pubkeys[idx])
 		if !ok {
-			uv.xlog.Warn("XuperSign: address and public key not match", "addr", addr, "pubkey", pubkeys[idx])
+			uv.log.Warn("XuperSign: address and public key not match", "addr", addr, "pubkey", pubkeys[idx])
 			return false, nil, errors.New("XuperSign: address and public key not match")
 		}
 	}
 	ok, err := uv.cryptoClient.XuperVerify(pubkeys, tx.GetXuperSign().GetSignature(), digestHash)
 	if err != nil || !ok {
-		uv.xlog.Warn("XuperSign: signature verify failed", "error", err)
+		uv.log.Warn("XuperSign: signature verify failed", "error", err)
 		return false, nil, errors.New("XuperSign: address and public key not match")
 	}
 	return ok, uniqueAddrs, nil
@@ -263,7 +263,7 @@ func (uv *UtxoVM) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string
 	// verify tx input
 	conUtxoInputs, err := xmodel.ParseContractUtxoInputs(tx)
 	if err != nil {
-		uv.xlog.Warn("verifyUTXOPermission error, parseContractUtxo ")
+		uv.log.Warn("verifyUTXOPermission error, parseContractUtxo ")
 		return false, ErrParseContractUtxos
 	}
 	conUtxoInputsMap := map[string]bool{}
@@ -297,19 +297,19 @@ func (uv *UtxoVM) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string
 			acl, err := uv.queryAccountACL(name)
 			if err != nil || acl == nil {
 				// valid account should have ACL info, so this account might not exsit
-				uv.xlog.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
+				uv.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
 				return false, ErrInvalidAccount
 			}
 			if ok, err := pm.IdentifyAccount(string(name), tx.AuthRequire, uv.aclMgr); !ok {
-				uv.xlog.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
+				uv.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
 				return false, ErrACLNotEnough
 			}
 		} else if akType == 0 {
 			// Identify address failed, if address not in verifiedID then it must have no signature
-			uv.xlog.Warn("verifyUTXOPermission error, address has no signature", "address", name)
+			uv.log.Warn("verifyUTXOPermission error, address has no signature", "address", name)
 			return false, ErrInvalidSignature
 		} else {
-			uv.xlog.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
+			uv.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
 			return false, ErrInvalidAccount
 		}
 		verifiedID[name] = true
@@ -363,7 +363,7 @@ func (uv *UtxoVM) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[strin
 			}
 			ok, err := pm.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
 			if !ok {
-				uv.xlog.Warn("verifyRWSetPermission check account bucket failed",
+				uv.log.Warn("verifyRWSetPermission check account bucket failed",
 					"account", accountName, "AuthRequire ", tx.AuthRequire, "error", err)
 				return ok, err
 			}
@@ -378,7 +378,7 @@ func (uv *UtxoVM) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[strin
 			contractName := string(key[:idx])
 			ok, contractErr := uv.verifyContractOwnerPermission(contractName, tx, verifiedID)
 			if !ok {
-				uv.xlog.Warn("verifyRWSetPermission check contract bucket failed",
+				uv.log.Warn("verifyRWSetPermission check contract bucket failed",
 					"contract", contractName, "AuthRequire ", tx.AuthRequire, "error", contractErr)
 				return ok, contractErr
 			}
@@ -395,7 +395,7 @@ func (uv *UtxoVM) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[strin
 			}
 			ok, accountErr := pm.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
 			if !ok {
-				uv.xlog.Warn("verifyRWSetPermission check contract2account bucket failed",
+				uv.log.Warn("verifyRWSetPermission check contract2account bucket failed",
 					"account", accountName, "AuthRequire ", tx.AuthRequire, "error", accountErr)
 				return ok, accountErr
 			}
@@ -420,7 +420,7 @@ func (uv *UtxoVM) verifyContractPermission(tx *pb.Transaction, allUsers []string
 
 		ok, err := pm.CheckContractMethodPerm(allUsers, contractName, methodName, uv.aclMgr)
 		if err != nil || !ok {
-			uv.xlog.Warn("verify contract method ACL failed ", "contract", contractName, "method",
+			uv.log.Warn("verify contract method ACL failed ", "contract", contractName, "method",
 				methodName, "error", err)
 			return ok, ErrACLNotEnough
 		}
@@ -467,25 +467,25 @@ func (uv *UtxoVM) verifyContractTxAmount(tx *pb.Transaction) (bool, error) {
 // verifyTxRWSets verify tx read sets and write sets
 func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	if uv.verifyReservedWhitelist(tx) {
-		uv.xlog.Info("verifyReservedWhitelist true", "txid", fmt.Sprintf("%x", tx.GetTxid()))
+		uv.log.Info("verifyReservedWhitelist true", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 		return true, nil
 	}
 
 	req := tx.GetContractRequests()
 	reservedRequests, err := uv.getReservedContractRequests(tx.GetContractRequests(), false)
 	if err != nil {
-		uv.xlog.Error("getReservedContractRequests error", "error", err.Error())
+		uv.log.Error("getReservedContractRequests error", "error", err.Error())
 		return false, err
 	}
 
 	if !uv.verifyReservedContractRequests(reservedRequests, req) {
-		uv.xlog.Error("verifyReservedContractRequests error", "reservedRequests", reservedRequests, "req", req)
+		uv.log.Error("verifyReservedContractRequests error", "reservedRequests", reservedRequests, "req", req)
 		return false, fmt.Errorf("verify reservedContracts error")
 	}
 
 	if req == nil {
 		if tx.GetTxInputsExt() != nil || tx.GetTxOutputsExt() != nil {
-			uv.xlog.Error("verifyTxRWSets error", "error", ErrInvalidTxExt.Error())
+			uv.log.Error("verifyTxRWSets error", "error", ErrInvalidTxExt.Error())
 			return false, ErrInvalidTxExt
 		}
 		return true, nil
@@ -516,7 +516,7 @@ func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	uv.xlog.Trace("get gas limit from tx", "gasLimit", gasLimit, "txid", hex.EncodeToString(tx.Txid))
+	uv.log.Trace("get gas limit from tx", "gasLimit", gasLimit, "txid", hex.EncodeToString(tx.Txid))
 
 	// get gas rate to utxo
 	gasPrice := uv.GetGasPrice()
@@ -533,7 +533,7 @@ func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 			gasLimit -= limits.TotalGas(gasPrice)
 		}
 		if gasLimit < 0 {
-			uv.xlog.Error("virifyTxRWSets error:out of gas", "contractName", tmpReq.GetContractName(),
+			uv.log.Error("virifyTxRWSets error:out of gas", "contractName", tmpReq.GetContractName(),
 				"txid", hex.EncodeToString(tx.Txid))
 			return false, errors.New("out of gas")
 		}
@@ -548,7 +548,7 @@ func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		ctx, err := vm.NewContext(contextConfig)
 		if err != nil {
 			// FIXME zq @icexin: need to return contract not found
-			uv.xlog.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
+			uv.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
 			if i < len(reservedRequests) && (err.Error() == "leveldb: not found" || strings.HasSuffix(err.Error(), "not found")) {
 				continue
 			}
@@ -558,13 +558,13 @@ func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		ctxResponse, ctxErr := ctx.Invoke(tmpReq.MethodName, tmpReq.Args)
 		if ctxErr != nil {
 			ctx.Release()
-			uv.xlog.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", tmpReq.GetContractName())
+			uv.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", tmpReq.GetContractName())
 			return false, ctxErr
 		}
 		// 判断合约调用的返回码
 		if ctxResponse.Status >= 400 && i < len(reservedRequests) {
 			ctx.Release()
-			uv.xlog.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", tmpReq.GetContractName())
+			uv.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", tmpReq.GetContractName())
 			return false, errors.New(ctxResponse.Message)
 		}
 
@@ -580,7 +580,7 @@ func (uv *UtxoVM) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	uv.xlog.Trace("verifyTxRWSets", "env.output", env.GetOutputs(), "writeSet", writeSet)
+	uv.log.Trace("verifyTxRWSets", "env.output", env.GetOutputs(), "writeSet", writeSet)
 	ok := xmodel.Equal(env.GetOutputs(), writeSet)
 	if !ok {
 		return false, fmt.Errorf("write set not equal")
@@ -624,12 +624,12 @@ func (uv *UtxoVM) verifyMarkedTx(tx *pb.Transaction) error {
 	tx.ModifyBlock = &pb.ModifyBlock{}
 	digestHash, err := txhash.MakeTxDigestHash(tx)
 	if err != nil {
-		uv.xlog.Warn("verifyMarkedTx call MakeTxDigestHash failed", "error", err)
+		uv.log.Warn("verifyMarkedTx call MakeTxDigestHash failed", "error", err)
 		return err
 	}
 	ok, err := xcc.VerifyECDSA(ecdsaKey, bytesign, digestHash)
 	if err != nil || !ok {
-		uv.xlog.Warn("verifyMarkedTx validateUpdateBlockChainData verifySignatures failed")
+		uv.log.Warn("verifyMarkedTx validateUpdateBlockChainData verifySignatures failed")
 		return err
 	}
 	return nil
