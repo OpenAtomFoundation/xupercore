@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
@@ -15,11 +16,11 @@ type Server interface {
 	Register(Subscriber) error
 	UnRegister(Subscriber) error
 
-	SendMessage(nctx.OperateCtx, *pb.XuperMessage, ...OptionFunc) error
-	SendMessageWithResponse(nctx.OperateCtx, *pb.XuperMessage, ...OptionFunc) ([]*pb.XuperMessage, error)
+	SendMessage(context.Context, *pb.XuperMessage, ...OptionFunc) error
+	SendMessageWithResponse(context.Context, *pb.XuperMessage, ...OptionFunc) ([]*pb.XuperMessage, error)
 
-	//P2PState(nctx.OperateCtx) State
-	GetMultiAddr() string
+	Context() nctx.DomainCtx
+	P2PState() *State
 }
 
 type State struct {

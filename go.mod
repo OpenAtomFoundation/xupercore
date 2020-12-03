@@ -7,9 +7,10 @@ require (
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d // indirect
 	github.com/ddliu/motto v0.3.1 // indirect
 	github.com/dgraph-io/badger/v2 v2.0.0-rc.2
+	github.com/ethereum/go-ethereum v1.9.24
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.4.2
-	github.com/golang/snappy v0.0.1
+	github.com/golang/snappy v0.0.2-0.20200707131729-196ae77b8a26
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/ipfs/go-ipfs-addr v0.0.1
@@ -25,7 +26,6 @@ require (
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/prometheus/client_golang v1.1.0
-	github.com/robertkrimen/otto v0.0.0-20191219234010-c382bd3c16ff // indirect
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/viper v1.4.0
 	github.com/syndtr/goleveldb v1.0.0

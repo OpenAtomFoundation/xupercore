@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -18,20 +19,20 @@ func (s *mockStreamError) Send(msg *pb.XuperMessage) error { return errors.New("
 
 type mockHandler struct{}
 
-func (h *mockHandler) Handler(ctx nctx.OperateCtx, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (h *mockHandler) Handler(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	msg.Header.Type = GetRespMessageType(msg.Header.Type)
 	return msg, nil
 }
 
 type mockHandlerError struct{}
 
-func (h *mockHandlerError) Handler(ctx nctx.OperateCtx, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (h *mockHandlerError) Handler(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	return nil, errors.New("mock handler error")
 }
 
 type mockHandlerNil struct{}
 
-func (h *mockHandlerNil) Handler(ctx nctx.OperateCtx, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (h *mockHandlerNil) Handler(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	return nil, nil
 }
 
@@ -82,13 +83,13 @@ func TestSubscriber(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		sub := NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, c.v, WithFrom("from"))
+		sub := NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, c.v, WithFilterFrom("from"))
 		if sub == nil {
 			t.Logf("case[%d]: sub is nil", i)
 			continue
 		}
 
-		if err := sub.HandleMessage(nctx.MockOperateCtx(), c.msg, c.stream); err != c.err {
+		if err := sub.HandleMessage(context.Background(), c.msg, c.stream); err != c.err {
 			t.Error(err)
 		}
 	}

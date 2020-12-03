@@ -1,6 +1,7 @@
 package p2pv1
 
 import (
+	"context"
 	"errors"
 	"io"
 	"strconv"
@@ -72,7 +73,7 @@ func (c *Conn) newConn() error {
 	conn, err := grpc.Dial(c.id, options...)
 	if err != nil {
 		c.log.Error("newGrpcConn error", "error", err, "id", c.id)
-		return errors.New("New grpcs conn error")
+		return errors.New("new grpc conn error")
 	}
 
 	c.conn = conn
@@ -80,27 +81,27 @@ func (c *Conn) newConn() error {
 }
 
 // SendMessage send message to a peer
-func (c *Conn) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage) error {
+func (c *Conn) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 	client, err := c.newClient()
 	if err != nil {
-		ctx.GetLog().Error("SendMessage new client error", "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessage new client error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
 		return err
 	}
 
 	stream, err := client.SendP2PMessage(ctx)
 	if err != nil {
-		ctx.GetLog().Error("SendMessage new stream error", "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessage new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
 		return err
 	}
 	defer stream.CloseSend()
 
-	ctx.GetLog().Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
+	c.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
 		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "id", c.id)
 
 	msg.Header.From = strconv.Itoa(int(c.config.Port))
 	err = stream.Send(msg)
 	if err != nil {
-		ctx.GetLog().Error("SendMessage Send error", "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessage Send error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
 		return err
 	}
 	if err == io.EOF {
@@ -111,37 +112,37 @@ func (c *Conn) SendMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage) error {
 }
 
 // SendMessageWithResponse send message to a peer with responce
-func (c *Conn) SendMessageWithResponse(ctx nctx.OperateCtx, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (c *Conn) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	client, err := c.newClient()
 	if err != nil {
-		ctx.GetLog().Error("SendMessageWithResponse new client error", "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessageWithResponse new client error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
 		return nil, err
 	}
 
 	stream, err := client.SendP2PMessage(ctx)
 	if err != nil {
-		ctx.GetLog().Error("SendMessageWithResponse new stream error", "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessageWithResponse new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
 		return nil, err
 	}
 	defer stream.CloseSend()
 
-	ctx.GetLog().Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
+	c.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
 		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "id", c.id)
 
 	msg.Header.From = strconv.Itoa(int(c.config.Port))
 	err = stream.Send(msg)
 	if err != nil {
-		ctx.GetLog().Error("SendMessageWithResponse error", "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessageWithResponse error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
 		return nil, err
 	}
 
 	resp, err := stream.Recv()
 	if err != nil {
-		ctx.GetLog().Error("SendMessageWithResponse Recv error", "error", err.Error())
+		c.log.Error("SendMessageWithResponse Recv error", "log_id", resp.GetHeader().GetLogid(), "error", err.Error())
 		return nil, err
 	}
 
-	ctx.GetLog().Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid(), c.id)
+	c.log.Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid(), c.id)
 	return resp, nil
 }
 
@@ -180,4 +181,16 @@ func (p *ConnPool) Get(addr string) (*Conn, error) {
 
 	p.pool.LoadOrStore(addr, conn)
 	return conn, nil
+}
+
+func (p *ConnPool) GetAll() map[string]string {
+	remotePeer := make(map[string]string, 32)
+	p.pool.Range(func(key, value interface{}) bool {
+		addr := key.(string)
+		conn := value.(*Conn)
+		remotePeer[conn.PeerID()] = addr
+		return true
+	})
+
+	return remotePeer
 }

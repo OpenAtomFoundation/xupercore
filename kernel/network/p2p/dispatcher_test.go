@@ -76,7 +76,8 @@ func TestDispatcher(t *testing.T) {
 		},
 	}
 
-	dispatcher := NewDispatcher()
+	ctx := nctx.MockDomainCtx()
+	dispatcher := NewDispatcher(ctx)
 	for i, c := range cases {
 		err := dispatcher.Register(c.sub)
 		if c.regErr != nil {
@@ -92,7 +93,7 @@ func TestDispatcher(t *testing.T) {
 			continue
 		}
 
-		err = dispatcher.Dispatch(nctx.MockOperateCtx(), c.msg, c.stream)
+		err = dispatcher.Dispatch(ctx, c.msg, c.stream)
 		if c.handleErr != err {
 			t.Errorf("case[%d]: dispatch error: %v", i, err)
 			continue

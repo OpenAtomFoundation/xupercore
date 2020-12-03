@@ -35,9 +35,9 @@ func RegisterKernMethod() {
 }
 
 func CreateChain(ctx kernel.KContext) (*contract.Response, error) {
-
+	return nil, nil
 }
 
 func UnloadChain(ctx kernel.KContext) (*contract.Response, error) {
-
+	return nil, nil
 }

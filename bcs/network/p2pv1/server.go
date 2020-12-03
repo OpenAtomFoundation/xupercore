@@ -19,7 +19,6 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 )
 
 const (
@@ -64,7 +63,7 @@ func (p *P2PServerV1) Init(ctx nctx.DomainCtx) error {
 	p.log = ctx.GetLog()
 	p.config = ctx.GetP2PConf()
 	p.pool = pool
-	p.dispatcher = p2p.NewDispatcher()
+	p.dispatcher = p2p.NewDispatcher(ctx)
 
 	p.connectBootNodes()
 	p.connectStaticNodes()
@@ -140,8 +139,7 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		msg.Header.From = ip + ":" + msg.Header.From
 	}
 
-	ctx, _ := nctx.CreateOperateCtx(p.ctx.GetLog(), timer.NewXTimer())
-	if err = p.dispatcher.Dispatch(ctx, msg, stream); err != nil {
+	if err = p.dispatcher.Dispatch(p.ctx, msg, stream); err != nil {
 		p.log.Warn("dispatch error", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "error", err)
 		return err
 	}
@@ -160,8 +158,19 @@ func (p *P2PServerV1) UnRegister(sub p2p.Subscriber) error {
 	return p.dispatcher.UnRegister(sub)
 }
 
-func (p *P2PServerV1) GetMultiAddr() string {
-	return ""
+func (p *P2PServerV1) Context() nctx.DomainCtx {
+	return p.ctx
+}
+
+func (p *P2PServerV1) P2PState() *p2p.State {
+	remotePeer := p.pool.GetAll()
+	state := &p2p.State{
+		PeerId:     p.config.Address,
+		PeerAddr:   p.config.Address,
+		RemotePeer: remotePeer,
+	}
+
+	return state
 }
 
 // connectBootNodes connect to boot node
@@ -175,8 +184,7 @@ func (p *P2PServerV1) connectBootNodes() error {
 		p2p.WithAddresses(p.bootNodes),
 	}
 
-	ctx, _ := nctx.CreateOperateCtx(p.ctx.GetLog(), timer.NewXTimer())
-	go p.SendMessage(ctx, msg, opts...)
+	go p.SendMessage(p.ctx, msg, opts...)
 	return nil
 }
 

@@ -79,7 +79,6 @@ func (sp *StreamPool) NewStream(netStream network.Stream) (*Stream, error) {
 		return nil, ErrNewStream
 	}
 
-	sp.srv.kdht.RoutingTable().TryAddPeer(stream.PeerID(), true)
 	return stream, nil
 }
 

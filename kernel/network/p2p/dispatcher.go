@@ -1,14 +1,16 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"sync"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
 
@@ -27,26 +29,31 @@ type Dispatcher interface {
 	UnRegister(sub Subscriber) error
 
 	// Dispatch dispatch message to registered subscriber
-	Dispatch(nctx.OperateCtx, *pb.XuperMessage, Stream) error
+	Dispatch(context.Context, *pb.XuperMessage, Stream) error
 }
 
 // dispatcher implement interface Dispatcher
 type dispatcher struct {
+	ctx nctx.DomainCtx
+	log logs.Logger
+
 	mu      sync.RWMutex
 	mc      map[pb.XuperMessage_MessageType]map[Subscriber]struct{}
 	handled *cache.Cache
 
-	// control goroutinue concurrent
-	ctrl chan struct{}
+	// control goroutinue number
+	parallel chan struct{}
 }
 
 var _ Dispatcher = &dispatcher{}
 
-func NewDispatcher() Dispatcher {
+func NewDispatcher(ctx nctx.DomainCtx) Dispatcher {
 	d := &dispatcher{
-		mc:      make(map[pb.XuperMessage_MessageType]map[Subscriber]struct{}),
-		handled: cache.New(time.Duration(3)*time.Second, 1*time.Second),
-		ctrl:    make(chan struct{}, 2048), // TODO: 根据压测数据调整并发度
+		ctx:      ctx,
+		log:      ctx.GetLog(),
+		mc:       make(map[pb.XuperMessage_MessageType]map[Subscriber]struct{}),
+		handled:  cache.New(time.Duration(3)*time.Second, 1*time.Second),
+		parallel: make(chan struct{}, 1024), // TODO: 根据压测数据调整并发度
 	}
 
 	return d
@@ -90,7 +97,7 @@ func (d *dispatcher) UnRegister(sub Subscriber) error {
 	return nil
 }
 
-func (d *dispatcher) Dispatch(ctx nctx.OperateCtx, msg *pb.XuperMessage, stream Stream) error {
+func (d *dispatcher) Dispatch(ctx context.Context, msg *pb.XuperMessage, stream Stream) error {
 	if msg == nil || msg.GetHeader() == nil || msg.GetData() == nil {
 		return ErrMessageEmpty
 	}
@@ -119,19 +126,19 @@ func (d *dispatcher) Dispatch(ctx nctx.OperateCtx, msg *pb.XuperMessage, stream 
 			continue
 		}
 
-		d.ctrl <- struct{}{}
+		d.parallel <- struct{}{}
 		wg.Add(1)
 		go func(sub Subscriber) {
 			defer wg.Done()
 
 			err := sub.HandleMessage(ctx, msg, stream)
 			if err != nil {
-				ctx.GetLog().Trace("dispatch handle message error",
+				d.log.Trace("dispatch handle message error",
 					"log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(),
 					"resp.from", msg.GetHeader().GetFrom(), "error", err)
 			}
 
-			<-d.ctrl
+			<-d.parallel
 		}(sub)
 	}
 	wg.Wait()

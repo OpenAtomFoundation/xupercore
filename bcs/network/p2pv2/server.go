@@ -108,13 +108,14 @@ func (p *P2PServerV2) Init(ctx nctx.DomainCtx) error {
 	p.id = ho.ID()
 	p.host = ho
 
-	p.log.Trace("Host", "address", p.GetMultiAddr(), "config", *cfg)
+	p.log.Trace("Host", "address", p.getMultiAddr(p.host.ID(), p.host.Addrs()), "config", *cfg)
 
 	p.isStorePeers = cfg.IsStorePeers
 	p.p2pDataPath = cfg.P2PDataPath
-	p.dispatcher = p2p.NewDispatcher()
+	p.dispatcher = p2p.NewDispatcher(ctx)
 
-	if p.kdht, err = dht.New(ctx, ho); err != nil {
+	dhtOpts := []dht.Option{dht.Mode(dht.ModeServer), dht.RoutingTableRefreshPeriod(10 * time.Second)}
+	if p.kdht, err = dht.New(ctx, ho, dhtOpts...); err != nil {
 		return ErrCreateKadDht
 	}
 
@@ -270,12 +271,30 @@ func (p *P2PServerV2) UnRegister(sub p2p.Subscriber) error {
 	return p.dispatcher.UnRegister(sub)
 }
 
-// GetNetURL return net url of the xuper node
-// url = /ip4/127.0.0.1/tcp/<port>/p2p/<peer.Id>
-func (p *P2PServerV2) GetMultiAddr() string {
+func (p *P2PServerV2) Context() nctx.DomainCtx {
+	return p.ctx
+}
+
+func (p *P2PServerV2) P2PState() *p2p.State {
+	peers := p.kdht.RoutingTable().ListPeers()
+	remotePeer := make(map[string]string, len(peers))
+	for _, peerID := range peers {
+		addrs := p.host.Peerstore().Addrs(peerID)
+		remotePeer[peerID.Pretty()] = p.getMultiAddr(peerID, addrs)
+	}
+
+	state := &p2p.State{
+		PeerId:     p.host.ID().Pretty(),
+		PeerAddr:   p.getMultiAddr(p.host.ID(), p.host.Addrs()),
+		RemotePeer: remotePeer,
+	}
+	return state
+}
+
+func (p *P2PServerV2) getMultiAddr(peerID peer.ID, addrs []multiaddr.Multiaddr) string {
 	peerInfo := &peer.AddrInfo{
-		ID:    p.host.ID(),
-		Addrs: p.host.Addrs(),
+		ID:    peerID,
+		Addrs: addrs,
 	}
 
 	multiAddrs, err := peer.AddrInfoToP2pAddrs(peerInfo)
@@ -332,14 +351,8 @@ func (p *P2PServerV2) connectPeer(addrInfos []peer.AddrInfo) int {
 				continue
 			}
 
-			ok, err := p.kdht.RoutingTable().TryAddPeer(addrInfo.ID, true)
-			if err != nil {
-				p.log.Error("p2p: add peer to routing table error", "remotePeerID", addrInfo.ID, "error", err)
-				continue
-			}
-
 			success++
-			p.log.Info("p2p: connection established", "addrInfo", addrInfo, "RoutingTable", ok)
+			p.log.Info("p2p: connection established", "addrInfo", addrInfo)
 		}
 
 		if success > 0 {

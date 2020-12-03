@@ -11,7 +11,6 @@ type table struct {
 
 //todo 支持batch
 type Batch interface {
-
 }
 
 // NewTable 基于前缀编码方式实现多表

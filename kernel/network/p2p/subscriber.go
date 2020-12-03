@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"errors"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -23,7 +24,7 @@ var (
 type Subscriber interface {
 	GetMessageType() pb.XuperMessage_MessageType
 	Match(*pb.XuperMessage) bool
-	HandleMessage(nctx.OperateCtx, *pb.XuperMessage, Stream) error
+	HandleMessage(context.Context, *pb.XuperMessage, Stream) error
 }
 
 // Stream send p2p response message
@@ -31,22 +32,29 @@ type Stream interface {
 	Send(*pb.XuperMessage) error
 }
 
-type HandleFunc func(nctx.OperateCtx, *pb.XuperMessage) (*pb.XuperMessage, error)
+type HandleFunc func(context.Context, *pb.XuperMessage) (*pb.XuperMessage, error)
 type Handler interface {
-	Handler(nctx.OperateCtx, *pb.XuperMessage) (*pb.XuperMessage, error)
+	Handler(context.Context, *pb.XuperMessage) (*pb.XuperMessage, error)
 }
 
 type SubscriberOption func(*subscriber)
 
-func WithFrom(from string) SubscriberOption {
+func WithFilterFrom(from string) SubscriberOption {
 	return func(s *subscriber) {
 		s.from = from
+	}
+}
+
+func WithFilterBCName(bcName string) SubscriberOption {
+	return func(s *subscriber) {
+		s.bcName = bcName
 	}
 }
 
 func NewSubscriber(ctx nctx.DomainCtx, typ pb.XuperMessage_MessageType, v interface{}, opts ...SubscriberOption) Subscriber {
 	s := &subscriber{
 		ctx: ctx,
+		log: ctx.GetLog(),
 		typ: typ,
 	}
 
@@ -74,9 +82,14 @@ func NewSubscriber(ctx nctx.DomainCtx, typ pb.XuperMessage_MessageType, v interf
 
 type subscriber struct {
 	ctx nctx.DomainCtx
+	log logs.Logger
 
-	typ     pb.XuperMessage_MessageType // 订阅消息类型
-	from    string                      // 消息来源
+	typ pb.XuperMessage_MessageType // 订阅消息类型
+
+	// filter
+	bcName string // 接收指定链的消息
+	from   string // 接收指定节点的消息
+
 	channel chan *pb.XuperMessage
 	handler Handler
 }
@@ -89,30 +102,36 @@ func (s *subscriber) GetMessageType() pb.XuperMessage_MessageType {
 
 func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 	if s.from != "" && s.from != msg.GetHeader().GetFrom() {
-		s.ctx.GetLog().Trace("subscriber: subscriber from not match",
-			"log_id", msg.GetHeader().GetLogid(), "from", s.from, "resp.from", msg.GetHeader().GetFrom(), "type", msg.GetHeader().GetType())
+		s.log.Trace("subscriber: subscriber from not match",
+			"log_id", msg.GetHeader().GetLogid(), "from", s.from, "req.from", msg.GetHeader().GetFrom(), "type", msg.GetHeader().GetType())
+		return false
+	}
+
+	if s.bcName != "" && s.bcName != msg.GetHeader().GetBcname() {
+		s.log.Trace("subscriber: subscriber bcName not match",
+			"log_id", msg.GetHeader().GetLogid(), "bcName", s.bcName, "req.from", msg.GetHeader().GetBcname(), "type", msg.GetHeader().GetType())
 		return false
 	}
 
 	return true
 }
 
-func (s *subscriber) HandleMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, stream Stream) error {
+func (s *subscriber) HandleMessage(ctx context.Context, msg *pb.XuperMessage, stream Stream) error {
 	if s.handler != nil {
 		resp, err := s.handler.Handler(ctx, msg)
 		if err != nil {
-			ctx.GetLog().Error("subscriber: call user handler error", "log_id", msg.GetHeader().GetLogid(), "err", err)
+			s.log.Error("subscriber: call user handler error", "log_id", msg.GetHeader().GetLogid(), "err", err)
 			return ErrHandlerError
 		}
 
 		if resp == nil {
-			ctx.GetLog().Error("subscriber: handler response is nil", "log_id", msg.GetHeader().GetLogid())
+			s.log.Error("subscriber: handler response is nil", "log_id", msg.GetHeader().GetLogid())
 			return ErrResponseNil
 		}
 
 		resp.Header.Logid = msg.Header.Logid
 		if err := stream.Send(resp); err != nil {
-			ctx.GetLog().Error("subscriber: send response error", "log_id", msg.GetHeader().GetLogid(), "err", err)
+			s.log.Error("subscriber: send response error", "log_id", msg.GetHeader().GetLogid(), "err", err)
 			return ErrStreamSendError
 		}
 
@@ -132,7 +151,7 @@ func (s *subscriber) HandleMessage(ctx nctx.OperateCtx, msg *pb.XuperMessage, st
 
 		select {
 		case <-timeout.Done():
-			ctx.GetLog().Error("subscriber: discard message due to channel block,", "log_id", msg.GetHeader().GetLogid(), "err", timeout.Err())
+			s.log.Error("subscriber: discard message due to channel block,", "log_id", msg.GetHeader().GetLogid(), "err", timeout.Err())
 			return ErrChannelBlock
 		case s.channel <- msg:
 		default:

@@ -15,6 +15,6 @@ func MockRelyAgent(engine def.Engine) *RelyAgentMock {
 	return &RelyAgentMock{engine}
 }
 
-func (t *RelyAgentMock) CreateNetwork() (XNetwork, error) {
+func (t *RelyAgentMock) CreateNetwork() (def.XNetwork, error) {
 	return nil, fmt.Errorf("the interface is not implemented")
 }
