@@ -51,7 +51,7 @@ type ConsensusConfig struct {
 
 // LedgerCtxInConsensus 使用到的ledger接口
 type LedgerCtxInConsensus interface {
-	GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
+	// GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
 	QueryBlock([]byte) (BlockInterface, error)
 	QueryBlockByHeight(int64) (BlockInterface, error)
 	QueryBlockHeader([]byte) (BlockInterface, error)
@@ -65,7 +65,6 @@ type LedgerCtxInConsensus interface {
 // TODO: 后续在此处更新ledger的XMReader接口定义, or合约中定义
 type FakeXMReader interface {
 	Get(bucket string, key []byte) ([]byte, error)
-	Select(bucket string, startKey []byte, endKey []byte) error
 }
 
 // P2pCtxInConsensus 依赖p2p接口
