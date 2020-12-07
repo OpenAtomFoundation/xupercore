@@ -1,17 +1,17 @@
 package p2p
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/lib/logs"
 	"sync"
 	"time"
 
-	"github.com/patrickmn/go-cache"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/lib/logs"
+	pb "github.com/xuperchain/xupercore/protos"
 
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	"github.com/patrickmn/go-cache"
 )
 
 var (
@@ -29,12 +29,12 @@ type Dispatcher interface {
 	UnRegister(sub Subscriber) error
 
 	// Dispatch dispatch message to registered subscriber
-	Dispatch(context.Context, *pb.XuperMessage, Stream) error
+	Dispatch(xctx.XContext, *pb.XuperMessage, Stream) error
 }
 
 // dispatcher implement interface Dispatcher
 type dispatcher struct {
-	ctx nctx.DomainCtx
+	ctx *nctx.NetCtx
 	log logs.Logger
 
 	mu      sync.RWMutex
@@ -47,13 +47,14 @@ type dispatcher struct {
 
 var _ Dispatcher = &dispatcher{}
 
-func NewDispatcher(ctx nctx.DomainCtx) Dispatcher {
+func NewDispatcher(ctx *nctx.NetCtx) Dispatcher {
 	d := &dispatcher{
-		ctx:      ctx,
-		log:      ctx.GetLog(),
-		mc:       make(map[pb.XuperMessage_MessageType]map[Subscriber]struct{}),
-		handled:  cache.New(time.Duration(3)*time.Second, 1*time.Second),
-		parallel: make(chan struct{}, 1024), // TODO: 根据压测数据调整并发度
+		ctx:     ctx,
+		log:     ctx.XLog,
+		mc:      make(map[pb.XuperMessage_MessageType]map[Subscriber]struct{}),
+		handled: cache.New(time.Duration(3)*time.Second, 1*time.Second),
+		// TODO: 根据压测数据调整并发度，修改为配置
+		parallel: make(chan struct{}, 1024),
 	}
 
 	return d
@@ -97,7 +98,7 @@ func (d *dispatcher) UnRegister(sub Subscriber) error {
 	return nil
 }
 
-func (d *dispatcher) Dispatch(ctx context.Context, msg *pb.XuperMessage, stream Stream) error {
+func (d *dispatcher) Dispatch(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
 	if msg == nil || msg.GetHeader() == nil || msg.GetData() == nil {
 		return ErrMessageEmpty
 	}

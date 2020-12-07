@@ -28,6 +28,8 @@ type EnvConf struct {
 	ServConf string `yaml:"servConf,omitempty"`
 	// network config file name
 	NetConf string `yaml:"netConf,omitempty"`
+	// metric switch
+	MetricSwitch bool `yaml:"metricSwitch,omitempty"`
 }
 
 func LoadEnvConf(cfgFile string) (*EnvConf, error) {
@@ -43,20 +45,25 @@ func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 func GetDefEnvConf() *EnvConf {
 	return &EnvConf{
 		// 默认设置为当前执行目录
-		RootPath:   utils.GetCurExecDir(),
-		ConfDir:    "conf",
-		DataDir:    "data",
-		LogDir:     "logs",
-		TlsDir:     "tls",
-		EngineConf: "engine.yaml",
-		LogConf:    "log.yaml",
-		ServConf:   "server.yaml",
-		NetConf:    "network.yaml",
+		RootPath:     utils.GetCurExecDir(),
+		ConfDir:      "conf",
+		DataDir:      "data",
+		LogDir:       "logs",
+		TlsDir:       "tls",
+		EngineConf:   "engine.yaml",
+		LogConf:      "log.yaml",
+		ServConf:     "server.yaml",
+		NetConf:      "network.yaml",
+		MetricSwitch: false,
 	}
 }
 
 func (t *EnvConf) GenDirAbsPath(dir string) string {
 	return filepath.Join(t.RootPath, dir)
+}
+
+func (t *EnvConf) GenDataAbsPath(dir string) string {
+	return filepath.Join(t.GenDirAbsPath(t.DataDir), dir)
 }
 
 func (t *EnvConf) GenConfFilePath(fName string) string {

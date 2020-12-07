@@ -3,14 +3,15 @@ package p2p
 import (
 	"context"
 	"errors"
-	"github.com/xuperchain/xupercore/lib/logs"
 	"time"
+
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/lib/logs"
+	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
 	prom "github.com/prometheus/client_golang/prometheus"
-
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 )
 
 var (
@@ -24,7 +25,7 @@ var (
 type Subscriber interface {
 	GetMessageType() pb.XuperMessage_MessageType
 	Match(*pb.XuperMessage) bool
-	HandleMessage(context.Context, *pb.XuperMessage, Stream) error
+	HandleMessage(xctx.XContext, *pb.XuperMessage, Stream) error
 }
 
 // Stream send p2p response message
@@ -32,7 +33,7 @@ type Stream interface {
 	Send(*pb.XuperMessage) error
 }
 
-type HandleFunc func(context.Context, *pb.XuperMessage) (*pb.XuperMessage, error)
+type HandleFunc func(xctx.XContext, *pb.XuperMessage) (*pb.XuperMessage, error)
 type Handler interface {
 	Handler(context.Context, *pb.XuperMessage) (*pb.XuperMessage, error)
 }
@@ -51,10 +52,12 @@ func WithFilterBCName(bcName string) SubscriberOption {
 	}
 }
 
-func NewSubscriber(ctx nctx.DomainCtx, typ pb.XuperMessage_MessageType, v interface{}, opts ...SubscriberOption) Subscriber {
+func NewSubscriber(ctx *nctx.NetCtx, typ pb.XuperMessage_MessageType,
+	v interface{}, opts ...SubscriberOption) Subscriber {
+
 	s := &subscriber{
 		ctx: ctx,
-		log: ctx.GetLog(),
+		log: ctx.XLog,
 		typ: typ,
 	}
 
@@ -81,7 +84,7 @@ func NewSubscriber(ctx nctx.DomainCtx, typ pb.XuperMessage_MessageType, v interf
 }
 
 type subscriber struct {
-	ctx nctx.DomainCtx
+	ctx *nctx.NetCtx
 	log logs.Logger
 
 	typ pb.XuperMessage_MessageType // 订阅消息类型
@@ -116,7 +119,7 @@ func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 	return true
 }
 
-func (s *subscriber) HandleMessage(ctx context.Context, msg *pb.XuperMessage, stream Stream) error {
+func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
 	if s.handler != nil {
 		resp, err := s.handler.Handler(ctx, msg)
 		if err != nil {
@@ -135,7 +138,7 @@ func (s *subscriber) HandleMessage(ctx context.Context, msg *pb.XuperMessage, st
 			return ErrStreamSendError
 		}
 
-		if s.ctx.GetMetricSwitch() {
+		if s.ctx.EnvCfg.MetricSwitch {
 			labels := prom.Labels{
 				"bcname": resp.GetHeader().GetBcname(),
 				"type":   resp.GetHeader().GetType().String(),
@@ -151,7 +154,8 @@ func (s *subscriber) HandleMessage(ctx context.Context, msg *pb.XuperMessage, st
 
 		select {
 		case <-timeout.Done():
-			s.log.Error("subscriber: discard message due to channel block,", "log_id", msg.GetHeader().GetLogid(), "err", timeout.Err())
+			s.log.Error("subscriber: discard message due to channel block.",
+				"log_id", msg.GetHeader().GetLogid(), "err", timeout.Err())
 			return ErrChannelBlock
 		case s.channel <- msg:
 		default:

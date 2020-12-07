@@ -4,16 +4,14 @@ import (
 	"fmt"
 
 	"github.com/spf13/viper"
-
-	utils "github.com/xuperchain/xupercore/kernel/common/xutils"
 )
 
 // default settings
 const (
-	DefaultNetPort           = 47101          // p2p port
-	DefaultNetKeyPath        = "data/netkeys" // node private key path
-	DefaultNetIsNat          = true           // use NAT
-	DefaultNetIsTls          = false          // use tls secure transport
+	DefaultNetPort           = 47101     // p2p port
+	DefaultNetKeyPath        = "netkeys" // node private key path
+	DefaultNetIsNat          = true      // use NAT
+	DefaultNetIsTls          = false     // use tls secure transport
 	DefaultNetIsHidden       = false
 	DefaultNetIsIpv6         = false
 	DefaultMaxStreamLimits   = 1024
@@ -22,18 +20,18 @@ const (
 	DefaultStreamIPLimitSize = 10
 	DefaultMaxBroadcastPeers = 20
 	DefaultIsStorePeers      = false
-	DefaultP2PDataPath       = "data/p2p"
+	DefaultP2PDataPath       = "p2p"
 	DefaultP2PModuleName     = "p2pv2"
 	DefaultServiceName       = "localhost"
 	DefaultIsBroadCast       = true
 )
 
 // Config is the config of p2p server. Attention, config of dht are not expose
-type Config struct {
+type NetConf struct {
 	// Module is the name of p2p module plugin
 	Module string `yaml:"module,omitempty"`
 	// Address multiaddr string, /ip4/127.0.0.1/tcp/8080
-	Address string `yaml:"module,omitempty"`
+	Address string `yaml:"Address,omitempty"`
 	// port the p2p network listened
 	Port int32 `yaml:"port,omitempty"`
 	// keyPath is the node private key path, xuper will gen a random one if is nil
@@ -71,7 +69,7 @@ type Config struct {
 	ServiceName string `yaml:"serviceName,omitempty"`
 }
 
-func LoadP2PConf(cfgFile string) (*Config, error) {
+func LoadP2PConf(cfgFile string) (*NetConf, error) {
 	cfg := GetDefP2PConf()
 	err := cfg.loadConf(cfgFile)
 	if err != nil {
@@ -81,8 +79,8 @@ func LoadP2PConf(cfgFile string) (*Config, error) {
 	return cfg, nil
 }
 
-func GetDefP2PConf() *Config {
-	return &Config{
+func GetDefP2PConf() *NetConf {
+	return &NetConf{
 		Module:          DefaultP2PModuleName,
 		Port:            DefaultNetPort,
 		KeyPath:         DefaultNetKeyPath,
@@ -104,7 +102,7 @@ func GetDefP2PConf() *Config {
 	}
 }
 
-func (t *Config) loadConf(cfgFile string) error {
+func (t *NetConf) loadConf(cfgFile string) error {
 	if cfgFile == "" {
 		return fmt.Errorf("config file set error.path:%s", cfgFile)
 	}
@@ -121,19 +119,4 @@ func (t *Config) loadConf(cfgFile string) error {
 	}
 
 	return nil
-}
-
-// For testing.
-const (
-	DefConfFile = "conf/network.yaml"
-)
-
-// For testing.
-// 为了方便单测运行，设置一个环境变量XCHAIN_UT_PATH，统一从这个目标加载配置和数据
-func GetNetConfFile() string {
-	var utPath = utils.GetXRootPath()
-	if utPath == "" {
-		panic("XCHAIN_ROOT_PATH environment variable not set")
-	}
-	return utPath + DefConfFile
 }

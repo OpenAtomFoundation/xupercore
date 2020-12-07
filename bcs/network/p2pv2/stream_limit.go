@@ -27,8 +27,8 @@ type StreamLimit struct {
 }
 
 // Init initialize the StreamLimit
-func (sl *StreamLimit) Init(ctx nctx.DomainCtx) {
-	limit := ctx.GetP2PConf().StreamIPLimitSize
+func (sl *StreamLimit) Init(ctx *nctx.NetCtx) {
+	limit := ctx.P2PConf.StreamIPLimitSize
 
 	sl.streams = &sync.Map{}
 	sl.ip2cnt = make(map[string]int64)
