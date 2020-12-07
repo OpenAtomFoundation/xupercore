@@ -3,7 +3,7 @@ package p2p
 import (
 	"testing"
 
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 func TestMessage(t *testing.T) {

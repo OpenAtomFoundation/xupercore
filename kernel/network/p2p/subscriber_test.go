@@ -5,8 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/mock"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	"github.com/xuperchain/xupercore/kernel/network/def"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 type mockStream struct{}
@@ -44,6 +49,8 @@ type subscriberCase struct {
 }
 
 func TestSubscriber(t *testing.T) {
+	mock.InitLogForTest()
+
 	msg := NewMessage(pb.XuperMessage_GET_BLOCK, &pb.XuperMessage{},
 		WithBCName("xuper"),
 		WithLogId("1234567890"),
@@ -82,14 +89,25 @@ func TestSubscriber(t *testing.T) {
 		},
 	}
 
+	ecfg, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := nctx.NewNetCtx(ecfg)
+
 	for i, c := range cases {
-		sub := NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, c.v, WithFilterFrom("from"))
+		sub := NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, c.v, WithFilterFrom("from"))
 		if sub == nil {
 			t.Logf("case[%d]: sub is nil", i)
 			continue
 		}
 
-		if err := sub.HandleMessage(context.Background(), c.msg, c.stream); err != c.err {
+		log, _ := logs.NewLogger("", def.SubModName)
+		rctx := &xctx.BaseCtx{
+			XLog:  log,
+			Timer: timer.NewXTimer(),
+		}
+		if err := sub.HandleMessage(rctx, c.msg, c.stream); err != c.err {
 			t.Error(err)
 		}
 	}

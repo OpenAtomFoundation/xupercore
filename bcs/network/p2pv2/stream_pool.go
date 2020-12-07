@@ -18,9 +18,8 @@ var (
 
 // StreamPool manage all the stream
 type StreamPool struct {
-	ctx nctx.DomainCtx
-	log logs.Logger
-
+	ctx            *nctx.NetCtx
+	log            logs.Logger
 	srv            *P2PServerV2
 	limit          *StreamLimit
 	streams        *common.LRUCache // key: peer id, value: Stream
@@ -28,8 +27,8 @@ type StreamPool struct {
 }
 
 // NewStreamPool create StreamPool instance
-func NewStreamPool(ctx nctx.DomainCtx, srv *P2PServerV2) (*StreamPool, error) {
-	cfg := ctx.GetP2PConf()
+func NewStreamPool(ctx *nctx.NetCtx, srv *P2PServerV2) (*StreamPool, error) {
+	cfg := ctx.P2PConf
 	limit := &StreamLimit{}
 	limit.Init(ctx)
 	return &StreamPool{

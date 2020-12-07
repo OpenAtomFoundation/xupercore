@@ -17,8 +17,8 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 const (
@@ -31,9 +31,9 @@ func init() {
 
 // P2PServerV1
 type P2PServerV1 struct {
-	ctx    nctx.DomainCtx
+	ctx    *nctx.NetCtx
 	log    logs.Logger
-	config *config.Config
+	config *config.NetConf
 
 	id         string
 	pool       *ConnPool
@@ -52,7 +52,7 @@ func NewP2PServerV1() p2p.Server {
 }
 
 // Init initialize p2p server using given config
-func (p *P2PServerV1) Init(ctx nctx.DomainCtx) error {
+func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
 	pool, err := NewConnPool(ctx)
 	if err != nil {
 		p.log.Error("Init P2PServerV1 NewConnPool error", "error", err)
@@ -61,7 +61,7 @@ func (p *P2PServerV1) Init(ctx nctx.DomainCtx) error {
 
 	p.ctx = ctx
 	p.log = ctx.GetLog()
-	p.config = ctx.GetP2PConf()
+	p.config = ctx.P2PConf
 	p.pool = pool
 	p.dispatcher = p2p.NewDispatcher(ctx)
 
@@ -88,7 +88,7 @@ func (p *P2PServerV1) serve() {
 	)
 
 	if p.config.IsTls {
-		creds, err := p2p.NewTLS(p.config.KeyPath, p.config.ServiceName)
+		creds, err := p2p.NewTLS(p.ctx.EnvCfg.GenDataAbsPath(p.config.KeyPath), p.config.ServiceName)
 		if err != nil {
 			panic(err)
 		}
@@ -118,7 +118,7 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		return err
 	}
 
-	if p.ctx.GetMetricSwitch() {
+	if p.ctx.EnvCfg.MetricSwitch {
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
@@ -158,7 +158,7 @@ func (p *P2PServerV1) UnRegister(sub p2p.Subscriber) error {
 	return p.dispatcher.UnRegister(sub)
 }
 
-func (p *P2PServerV1) Context() nctx.DomainCtx {
+func (p *P2PServerV1) Context() *nctx.NetCtx {
 	return p.ctx
 }
 

@@ -2,17 +2,12 @@ package p2pv2
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
+	"github.com/xuperchain/xupercore/kernel/mock"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"github.com/xuperchain/xupercore/lib/utils"
-)
-
-var (
-	nodePath = filepath.Join(utils.GetCurFileDir() + "/test")
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 type handler struct{}
@@ -24,8 +19,13 @@ func (h *handler) Handler(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperM
 }
 
 func startNode1(t *testing.T) {
+	ecfg, _ := mock.NewEnvConfForTest()
+	ecfg.NetConf = "p2pv2/node1.yaml"
+	ctx, _ := nctx.NewNetCtx(ecfg)
+	ctx.P2PConf.KeyPath = "p2pv2/node1/data/netkeys"
+	ctx.P2PConf.P2PDataPath = "p2pv2/node1/data/p2p"
+
 	node := NewP2PServerV2()
-	ctx := nctx.MockDomainCtx(filepath.Join(nodePath, "/node1/conf/network.yaml"))
 	if err := node.Init(ctx); err != nil {
 		t.Errorf("server init error: %v", err)
 	}
@@ -49,8 +49,14 @@ func startNode1(t *testing.T) {
 }
 
 func startNode2(t *testing.T) {
+	mock.InitLogForTest()
+	ecfg, _ := mock.NewEnvConfForTest()
+	ecfg.NetConf = "p2pv2/node2.yaml"
+	ctx, _ := nctx.NewNetCtx(ecfg)
+	ctx.P2PConf.KeyPath = "p2pv2/node2/data/netkeys"
+	ctx.P2PConf.P2PDataPath = "p2pv2/node2/data/p2p"
+
 	node := NewP2PServerV2()
-	ctx := nctx.MockDomainCtx(filepath.Join(nodePath, "/node2/conf/network.yaml"))
 	if err := node.Init(ctx); err != nil {
 		t.Errorf("server init error: %v", err)
 	}
@@ -66,9 +72,14 @@ func startNode2(t *testing.T) {
 }
 
 func startNode3(t *testing.T) {
+	mock.InitLogForTest()
+	ecfg, _ := mock.NewEnvConfForTest()
+	ecfg.NetConf = "p2pv2/node3.yaml"
+	ctx, _ := nctx.NewNetCtx(ecfg)
+	ctx.P2PConf.KeyPath = "p2pv2/node3/data/netkeys"
+	ctx.P2PConf.P2PDataPath = "p2pv2/node3/data/p2p"
+
 	node := NewP2PServerV2()
-	ctx := nctx.MockDomainCtx(filepath.Join(nodePath, "/node3/conf/network.yaml"))
-	ctx.SetMetricSwitch(true)
 	if err := node.Init(ctx); err != nil {
 		t.Errorf("server init error: %v", err)
 	}
@@ -90,8 +101,9 @@ func startNode3(t *testing.T) {
 }
 
 func TestP2PServerV2(t *testing.T) {
+	mock.InitLogForTest()
+
 	go startNode1(t)
-	//time.Sleep(time.Second)
 	startNode2(t)
 	startNode3(t)
 }

@@ -3,17 +3,14 @@ package config
 import (
 	"fmt"
 	"testing"
+
+	"github.com/xuperchain/xupercore/kernel/mock"
 )
 
-func TestGetDefP2PConf(t *testing.T) {
-	cfg := GetDefP2PConf()
-	fmt.Println(cfg)
-}
-
 func TestLoadP2PConf(t *testing.T) {
-	cfg, err := LoadP2PConf(GetNetConfFile())
+	cfg, err := LoadP2PConf(mock.GetNetConfPathForTest())
 	if err != nil {
-		t.Errorf("load p2p config failed.err:%v", err)
+		t.Fatal(err)
 	}
 
 	fmt.Println(cfg)
