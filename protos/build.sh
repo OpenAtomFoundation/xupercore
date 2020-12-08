@@ -4,3 +4,4 @@
 # protoc-gen-go v1.3.3
 
 protoc -I ./ ./network.proto --go_out=plugins=grpc:./
+protoc -I ./ ./permission.proto --go_out=plugins=grpc:./
