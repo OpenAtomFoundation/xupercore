@@ -6,8 +6,8 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/kernel"
-	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 type KernMethod struct {
@@ -73,7 +73,7 @@ func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error)
 	//ctx.AddResourceUsed(t.NewAccountResourceAmount)
 
 	return &contract.Response{
-		Status:  StatusOK,
+		Status:  utils.StatusOK,
 		Message: "success",
 		Body:    aclJSON,
 	}, nil
@@ -113,7 +113,7 @@ func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, err
 	//ctx.AddResourceUsed(t.NewAccountResourceAmount / 1000)
 
 	return &contract.Response{
-		Status:  StatusOK,
+		Status:  utils.StatusOK,
 		Message: "success",
 		Body:    aclJSON,
 	}, nil
@@ -148,7 +148,7 @@ func (t *KernMethod) SetMethodACL(ctx kernel.KContext) (*contract.Response, erro
 
 	//ctx.AddXFeeUsed(t.NewAccountResourceAmount / 1000)
 	return &contract.Response{
-		Status:  StatusOK,
+		Status:  utils.StatusOK,
 		Message: "success",
 		Body:    aclJSON,
 	}, nil

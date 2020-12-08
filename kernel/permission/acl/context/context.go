@@ -3,31 +3,24 @@ package context
 import (
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/contract/kernel"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
-type LedgerCtx interface {
-	//全局ctx Resource
-	GetGenesisItem(item string) interface{}
-	GetConfirmedAccountACL(accountName string) ([]byte, error)
-	GetConfirmedMethodACL(contractName, methodName string) ([]byte, error)
+type LedgerRely interface {
+	// 从创世块获取创建合约账户消耗gas
+	GetNewAccountGas() (int64, error)
+	// 获取状态机最新确认快照
+	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)
 }
 
-type FakeContract interface {
+type ContractRely interface {
 	RegisterKernMethod(contract, method string, handle kernel.KernMethod)
 }
 
-type PermissionCtx struct {
+type AclCtx struct {
+	// 基础上下文
+	xcontext.BaseCtx
 	BcName   string
-	BCtx     xcontext.BaseCtx
-	Ledger   LedgerCtx
-	Register FakeContract
-}
-
-func CreatePermissionCtx(bcName string, bCtx xcontext.BaseCtx, leger LedgerCtx, register FakeContract) PermissionCtx {
-	return PermissionCtx{
-		BcName:   bcName,
-		BCtx:     bCtx,
-		Ledger:   leger,
-		Register: register,
-	}
+	Ledger   LedgerRely
+	Register ContractRely
 }
