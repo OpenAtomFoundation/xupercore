@@ -16,12 +16,12 @@ import (
 )
 
 type Tx struct {
-	log logs.Logger
-	ldb kvdb.Database
-	unconfirmedTable kvdb.Database
+	log               logs.Logger
+	ldb               kvdb.Database
+	unconfirmedTable  kvdb.Database
 	unconfirmTxAmount int64
 	unconfirmTxInMem  *sync.Map
-	avgDelay int64
+	avgDelay          int64
 }
 
 // Transaction is the internal represents of transaction
@@ -29,10 +29,10 @@ type Transaction struct {
 	*pb.Transaction
 }
 
-func NewTx(lctx *def.LedgerCtx, stateDB kvdb.DataBase) (*Tx, error){
+func NewTx(lctx *def.LedgerCtx, stateDB kvdb.DataBase) (*Tx, error) {
 	return &Tx{
-		log: lctx.XLog,
-		ldb: stateDB,
+		log:              lctx.XLog,
+		ldb:              stateDB,
 		unconfirmedTable: kvdb.NewTable(baseDB, pb.UnconfirmedTablePrefix),
 		unconfirmTxInMem: &sync.Map{},
 	}, nil
@@ -115,7 +115,6 @@ func ParseContractTransferRequest(requests []*pb.InvokeRequest) (string, *big.In
 	}
 	return contractName, amount, nil
 }
-
 
 // QueryTx 查询一笔交易，从unconfirm表中查询
 func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
@@ -209,7 +208,6 @@ func (t *Tx) sortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[strin
 	t.unconfirmTxAmount = txMapSize
 	return txMap, txGraph, delayedTxMap, nil
 }
-
 
 //从disk还原unconfirm表到内存, 初始化的时候
 func (t *Tx) loadUnconfirmedTxFromDisk() error {

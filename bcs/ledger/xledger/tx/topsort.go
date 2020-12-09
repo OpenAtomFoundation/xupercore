@@ -1,7 +1,7 @@
 package tx
 
 import (
-	"github.com/xuperchain/xuperchain/core/pb"
+	"github.com/xuperchain/xupercore/lib/pb"
 )
 
 //交易依赖关系图

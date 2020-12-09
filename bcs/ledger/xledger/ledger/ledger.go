@@ -73,11 +73,11 @@ type Ledger struct {
 	confirmedTable   kvdb.Database // 已确认的订单表
 	blocksTable      kvdb.Database // 区块表
 	mutex            *sync.RWMutex
-	xlog             logs.Logger       //日志库
-	meta             *pb.LedgerMeta   //账本关键的元数据{genesis, tip, height}
-	GenesisBlock     *GenesisBlock    //创始块
-	pendingTable     kvdb.Database    //保存临时的block区块
-	heightTable      kvdb.Database    //保存高度到Blockid的映射
+	xlog             logs.Logger     //日志库
+	meta             *pb.LedgerMeta  //账本关键的元数据{genesis, tip, height}
+	GenesisBlock     *GenesisBlock   //创始块
+	pendingTable     kvdb.Database   //保存临时的block区块
+	heightTable      kvdb.Database   //保存高度到Blockid的映射
 	blockCache       *cache.LRUCache // block cache, 加速QueryBlock
 	blkHeaderCache   *cache.LRUCache // block header cache, 加速fetchBlock
 	cryptoClient     crypto_base.CryptoClient
@@ -466,7 +466,6 @@ func (l *Ledger) IsValidTx(idx int, tx *pb.Transaction, block *pb.InternalBlock)
 			return false
 		}
 	}
-	//TODO
 	return true
 }
 
