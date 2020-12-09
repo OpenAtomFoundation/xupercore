@@ -4,7 +4,6 @@ OUTDIR  := $(HOMEDIR)/output
 
 # init command params
 export GO111MODULE=on
-export GOFLAGS=-mod=vendor
 X_ROOT_PATH := $(HOMEDIR)
 export X_ROOT_PATH
 
@@ -12,8 +11,11 @@ export X_ROOT_PATH
 all: clean compile
 
 # make compile, go build
-compile:
-	bash $(HOMEDIR)/auto/build.sh
+compile: xuperos
+xuperos:
+	bash $(HOMEDIR)/service/xuperos/build.sh
+xuperchain:
+	bash $(HOMEDIR)/service/xuperchain/build.sh
 
 # make test, test your code
 test:

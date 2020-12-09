@@ -39,6 +39,9 @@ func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 		return nil, fmt.Errorf("load env config failed.err:%s", err)
 	}
 
+	// 修改根目录
+	// 优先级：1:X_ROOT_PATH 2:配置文件设置 3:当前bin文件上级目录
+
 	return cfg, nil
 }
 
