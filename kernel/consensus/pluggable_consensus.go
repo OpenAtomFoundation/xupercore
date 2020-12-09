@@ -255,7 +255,7 @@ func (pc *PluggableConsensus) rollbackConsensus(contractCtx kernel.KContext, hei
 	return nil
 }
 
-func FakeCreateXMCache(reader context.FakeXMReader) interface{} {
+func FakeCreateXMCache(reader cctx.XMReader) interface{} {
 	return reader
 }
 

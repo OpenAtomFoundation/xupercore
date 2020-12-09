@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
@@ -172,9 +173,11 @@ func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig) ba
 			beginHeight: cCfg.BeginHeight,
 			newHeight:   cCfg.BeginHeight - 1,
 			index:       cCfg.Index,
+			/* TODO: 之后再加
 			miner: MinerInfo{
-				Address: cCtx.P2p.GetLocalAddress(),
+				Address: cCtx.P2p.GetLocalAccount(),
 			},
+			*/
 		},
 		sigc:              make(chan bool, 1),
 		maxDifficulty:     md,
@@ -244,7 +247,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block context.Blo
 	}
 	//验证签名
 	//1 验证一下签名和公钥是不是能对上
-	k, err := pow.ctx.CryptoClient.GetEcdsaPublicKeyFromJSON(block.GetPubkey())
+	k, err := pow.ctx.CryptoClient.GetEcdsaPublicKeyFromJsonStr(global.F(block.GetPubkey()))
 	if err != nil {
 		ctx.XLog.Warn("PoW::CheckMinerMatch::get ecdsa from block error", "logid", ctx.XLog.GetLogId(), "error", err)
 		return false, nil

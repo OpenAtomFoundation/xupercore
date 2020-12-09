@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
@@ -129,11 +130,13 @@ func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
 	if t%s.config.Period != 0 {
 		return false, false, nil
 	}
-	if s.ctx.P2p.GetLocalAddress() == s.config.Miner {
+	/* TODO: 之后再加上
+	if s.ctx.P2p.GetLocalAccount() == s.config.Miner {
 		// single共识确定miner后只能通过共识升级改变miner，因此在单个single实例中miner是不可更改的
 		// 此时一个miner从始至终都是自己在挖矿，故不需要向其他节点同步区块
 		return true, false, nil
 	}
+	*/
 	return false, false, nil
 }
 
@@ -157,7 +160,8 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.Block
 	}
 	//验证签名
 	//1 验证一下签名和公钥是不是能对上
-	k, err := s.ctx.CryptoClient.GetEcdsaPublicKeyFromJSON(block.GetPubkey())
+	// TODO: 后面再改
+	k, err := s.ctx.CryptoClient.GetEcdsaPublicKeyFromJsonStr(global.F(block.GetPubkey()))
 	if err != nil {
 		ctx.XLog.Warn("Single::CheckMinerMatch::get ecdsa from block error", "logid", ctx.XLog.GetLogId(), "error", err)
 		return false, nil
