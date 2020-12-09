@@ -22,7 +22,7 @@ func ContractRegister(f TimerFunc) TimerFunc {
 
 type FakeP2p struct{}
 
-func (p *FakeP2p) GetLocalAddress() string {
+func (p *FakeP2p) GetLocalAccount() string {
 	return "local_p2p"
 }
 
@@ -153,7 +153,7 @@ func NewFakeLedger(conf []byte) *FakeLedger {
 	return l
 }
 
-func (l *FakeLedger) GetTipSnapShot() context.FakeXMReader {
+func (l *FakeLedger) GetTipSnapShot() context.XMReader {
 	return l.fakeCache
 }
 

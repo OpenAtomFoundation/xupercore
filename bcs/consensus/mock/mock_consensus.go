@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"crypto/ecdsa"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,8 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	xuperp2p "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
@@ -23,26 +26,54 @@ var (
 
 type FakeCryptoClient struct{}
 
-func (cc *FakeCryptoClient) GetEcdsaPublicKeyFromJSON([]byte) ([]byte, error) {
-	return nil, nil
-}
-
-func (cc *FakeCryptoClient) VerifyAddressUsingPublicKey(string, []byte) (bool, uint8) {
+func (cc *FakeCryptoClient) VerifyAddressUsingPublicKey(address string, pub *ecdsa.PublicKey) (bool, uint8) {
 	return true, 0
 }
 
-func (cc *FakeCryptoClient) VerifyECDSA([]byte, []byte, []byte) (bool, error) {
+func (cc *FakeCryptoClient) VerifyECDSA(k *ecdsa.PublicKey, signature, msg []byte) (bool, error) {
 	return true, nil
+}
+
+func (cc *FakeCryptoClient) GetEcdsaPublicKeyFromJsonStr(keyStr string) (*ecdsa.PublicKey, error) {
+	return nil, nil
+}
+
+func (cc *FakeCryptoClient) GetEcdsaPublicKeyFromFile(filename string) (*ecdsa.PublicKey, error) {
+	return nil, nil
+}
+
+func (cc *FakeCryptoClient) GetEcdsaPrivateKeyFromFile(filename string) (*ecdsa.PrivateKey, error) {
+	return nil, nil
+}
+
+func (cc *FakeCryptoClient) SignECDSA(k *ecdsa.PrivateKey, msg []byte) (signature []byte, err error) {
+	return nil, nil
 }
 
 type FakeP2p struct{}
 
-func (p *FakeP2p) GetLocalAddress() string {
+func (p *FakeP2p) GetLocalAccount() string {
 	return Miner
 }
 
 func (p *FakeP2p) GetCurrentPeerAddress() []string {
 	return []string{"peer_p2p"}
+}
+
+func (p *FakeP2p) NewSubscriber(xuperp2p.XuperMessage_MessageType, interface{}, ...p2p.SubscriberOption) p2p.Subscriber {
+	return nil
+}
+
+func (p *FakeP2p) SendMessage(xcontext.BaseCtx, *xuperp2p.XuperMessage, ...p2p.OptionFunc) error {
+	return nil
+}
+
+func (p *FakeP2p) Register(p2p.Subscriber) error {
+	return nil
+}
+
+func (p *FakeP2p) UnRegister(p2p.Subscriber) error {
+	return nil
 }
 
 type FakeBlock struct {
@@ -145,7 +176,7 @@ func (l *FakeLedger) PutBlock(block *FakeBlock) error {
 	return nil
 }
 
-func (l *FakeLedger) GetTipSnapShot() cctx.FakeXMReader {
+func (l *FakeLedger) GetTipSnapShot() cctx.XMReader {
 	return nil
 }
 
