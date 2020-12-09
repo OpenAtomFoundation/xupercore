@@ -2,6 +2,7 @@ package xutils
 
 import (
 	"os"
+	"path/filepath"
 
 	"github.com/xuperchain/xupercore/lib/utils"
 )
@@ -13,5 +14,10 @@ func GetXRootPath() string {
 		return rtPath
 	}
 
-	return utils.GetCurExecDir()
+	return ""
+}
+
+func GetCurRootDir() string {
+	curExecDir := utils.GetCurExecDir()
+	return filepath.Dir(curExecDir)
 }

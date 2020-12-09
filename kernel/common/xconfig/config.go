@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/xuperchain/xupercore/kernel/common/xutils"
 	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/spf13/viper"
@@ -39,8 +40,11 @@ func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 		return nil, fmt.Errorf("load env config failed.err:%s", err)
 	}
 
-	// 修改根目录
-	// 优先级：1:X_ROOT_PATH 2:配置文件设置 3:当前bin文件上级目录
+	// 修改根目录。优先级：1:X_ROOT_PATH 2:配置文件设置 3:当前bin文件上级目录
+	rt := xutils.GetXRootPath()
+	if rt != "" {
+		cfg.RootPath = rt
+	}
 
 	return cfg, nil
 }
@@ -48,7 +52,7 @@ func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 func GetDefEnvConf() *EnvConf {
 	return &EnvConf{
 		// 默认设置为当前执行目录
-		RootPath:     utils.GetCurExecDir(),
+		RootPath:     xutils.GetCurRootDir(),
 		ConfDir:      "conf",
 		DataDir:      "data",
 		LogDir:       "logs",
