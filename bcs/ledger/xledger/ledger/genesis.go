@@ -7,8 +7,8 @@ import (
 	"math/big"
 	"strconv"
 
-	"github.com/xuperchain/xuperchain/core/common"
-	"github.com/xuperchain/xuperchain/core/pb"
+	"github.com/xuperchain/xupercore/lib/cache"
+	"github.com/xuperchain/xupercore/lib/pb"
 )
 
 // awardCacheSize system award cache, in avoid of double computing
