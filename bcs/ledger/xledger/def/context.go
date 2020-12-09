@@ -5,6 +5,9 @@ import (
 	lconf "github.com/xuperchain/xupercore/bcs/ledger/xledger/config"
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 )
 
 // 引擎运行上下文环境
@@ -17,6 +20,30 @@ type LedgerCtx struct {
 	LedgerCfg *lconf.XLedgerConf
 	// 链名
 	BCName string
-	// 加密算法
-	CryptoType string
+}
+
+func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string) (*LedgerCtx, error) {
+	if envCfg == nil {
+		return nil, fmt.Errorf("create ledger context failed because env conf is nil")
+	}
+
+	// 加载配置
+	lcfg, err := lconf.LoadLedgerConf(envCfg.GenConfFilePath(envCfg.LedgerConf))
+	if err != nil {
+		return nil, fmt.Errorf("create ledger context failed because load config error.err:%v", err)
+	}
+
+	log, err := logs.NewLogger("", SubModName)
+	if err != nil {
+		return nil, fmt.Errorf("create ledger context failed because new logger error. err:%v", err)
+	}
+
+	ctx := new(LedgerCtx)
+	ctx.XLog = log
+	ctx.Timer = timer.NewXTimer()
+	ctx.EnvCfg = envCfg
+	ctx.LedgerCfg = lcfg
+	ctx.BCName = bcName
+
+	return ctx, nil
 }
