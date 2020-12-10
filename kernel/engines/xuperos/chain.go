@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -194,7 +195,7 @@ func (t *Chain) initChainCtx() error {
 
 	// 4.加载节点账户信息
 	keyPath := t.ctx.EngCtx.EnvCfg.GenDataAbsPath(t.ctx.EngCtx.EnvCfg.KeyDir)
-	addr, err := common.LoadAddrInfo(keyPath, t.ctx.Crypto)
+	addr, err := xaddress.LoadAddrInfo(keyPath, t.ctx.Crypto)
 	if err != nil {
 		t.log.Error("load node addr info error", "bcName", t.ctx.BCName, "keyPath", keyPath, "err", err)
 		return fmt.Errorf("load node addr info error")
@@ -202,11 +203,12 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Address = addr
 
 	// 5.合约
-	ctx.Contract, err = t.relyAgent.CreateContract()
+	contractObj, err := t.relyAgent.CreateContract()
 	if err != nil {
-		t.log.Error("create contract error", "bcName", ctx.BCName, "error", err)
-		return err
+		t.log.Error("create contract manager error", "bcName", ctx.BCName, "err", err)
+		return fmt.Errorf("create contract manager error")
 	}
+	t.ctx.Contract = contractObj
 
 	// 6.Acl
 	aclObj, err := t.relyAgent.CreateAcl()
