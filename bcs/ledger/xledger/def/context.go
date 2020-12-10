@@ -10,7 +10,7 @@ import (
 	"github.com/xuperchain/xupercore/lib/timer"
 )
 
-// 引擎运行上下文环境
+// 账本运行上下文环境
 type LedgerCtx struct {
 	// 基础上下文
 	xctx.BaseCtx
