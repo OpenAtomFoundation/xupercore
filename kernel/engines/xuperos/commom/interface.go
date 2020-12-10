@@ -9,12 +9,8 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/protos"
 
-	"github.com/xuperchain/xuperchain/core/vat"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/network"

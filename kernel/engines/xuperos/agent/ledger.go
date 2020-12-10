@@ -27,7 +27,12 @@ func (t *LedgerAgent) GetCryptoType() (int, error) {
 	return 0, nil
 }
 
-// 获取状态机最新确认快照
+// 获取状态机最新确认高度快照
 func (t *LedgerAgent) GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) {
 	return nil, nil
+}
+
+// 查询区块
+func (t *LedgerAgent) QueryBlock(blkId []byte) (BlockInterface, error) {
+
 }
