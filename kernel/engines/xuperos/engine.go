@@ -6,10 +6,11 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/chunhui01/xupercore/kernel/engines/xuperos/commom"
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	xnet "github.com/xuperchain/xupercore/kernel/engines/xuperos/net"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -21,7 +22,6 @@ func init() {
 }
 
 // xuperos执行引擎，为公链场景订制区块链引擎
-// 采用多链架构，支持多链，考虑到面向公链场景，暂时不支持群组
 type Engine struct {
 	// 引擎运行环境上下文
 	engCtx *def.EngineCtx
@@ -59,8 +59,8 @@ func EngineConvert(engine engines.BCEngine) (def.Engine, error) {
 
 // 初始化执行引擎环境上下文
 func (t *Engine) Init(envCfg *xconf.EnvConf) error {
-	// 默认设置为正式实现，单元测试提供Set方法替换为mock实现
-	t.relyAgent = NewEngineRelyAgent(t)
+	// 单元测试提供Set方法替换为mock实现
+	t.relyAgent = agent.NewEngineRelyAgent(t)
 
 	// 初始化引擎运行上下文
 	engCtx, err := t.createEngCtx(envCfg)
@@ -69,6 +69,7 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	}
 	t.engCtx = engCtx
 	t.log = t.engCtx.XLog
+
 	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文
@@ -239,29 +240,30 @@ func (t *Engine) UnloadChain(name string) error {
 // 从本地存储加载链
 func (t *Engine) loadChains() error {
 	envCfg := t.engCtx.EnvCfg
-	dataDir := envCfg.GenDirAbsPath(envCfg.DataDir)
+	dataDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
 
-	t.log.Trace("start load chain from data dir", "dir", dataDir)
+	t.log.Trace("start load chain from blockchain data dir.", "dir", dataDir)
 
 	dir, err := ioutil.ReadDir(dataDir)
 	if err != nil {
-		t.log.Error("read data dir failed", "error", err, "dir", dataDir)
-		return ErrReadDataDirError
+		t.log.Error("read blockchain data dir failed.", "error", err, "dir", dataDir)
+		return fmt.Errorf("load chain failed because read blockchain data dir error")
 	}
+
 	chainCnt := 0
 	for _, fInfo := range dir {
 		if !fInfo.IsDir() {
-			continue // 忽略非目录
+			// 忽略非目录
+			continue
 		}
 
 		chainDir := filepath.Join(dataDir, fInfo.Name())
-		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
+		t.log.Trace("start load chain.", "chain", fInfo.Name(), "dir", chainDir)
 
 		// 实例化每条链
-		chainCtx := &def.ChainCtx{
-			EngineCtx: *t.engCtx,
-			BCName:    fInfo.Name(),
-			DataDir:   chainDir,
+		chainCtx := &commom.ChainCtx{
+			EngCtx: t.engCtx,
+			BCName: fInfo.Name(),
 		}
 		chain, err := LoadChain(chainCtx)
 		if err != nil {
@@ -285,15 +287,15 @@ func (t *Engine) loadChains() error {
 	return nil
 }
 
-func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*def.EngineCtx, error) {
+func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*commom.EngineCtx, error) {
 	if envCfg == nil {
 		return nil, ErrParamError
 	}
 
 	// 引擎日志
-	log, err := logs.NewLogger("", def.BCEngineName)
+	log, err := logs.NewLogger("", commom.BCEngineName)
 	if err != nil {
-		return nil, fmt.Errorf("new logger error: %v", err)
+		return nil, fmt.Errorf("new logger failed.err: %v", err)
 	}
 
 	// 加载引擎配置
@@ -302,13 +304,7 @@ func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*def.EngineCtx, error) {
 		return nil, fmt.Errorf("load engine config error: %v", err)
 	}
 
-	// 所有路径配置全部使用绝对路径
-	engCfg.Miner.KeyPath = envCfg.GenDirAbsPath(engCfg.Miner.KeyPath)
-	for i, path := range engCfg.DataPathOthers {
-		engCfg.DataPathOthers[i] = envCfg.GenDirAbsPath(path)
-	}
-
-	engCtx := &def.EngineCtx{}
+	engCtx := &commom.EngineCtx{}
 	engCtx.XLog = log
 	engCtx.Timer = timer.NewXTimer()
 	engCtx.EnvCfg = envCfg

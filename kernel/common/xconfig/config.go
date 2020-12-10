@@ -21,6 +21,10 @@ type EnvConf struct {
 	LogDir string `yaml:"logDir,omitempty"`
 	// tls file directory
 	TlsDir string `yaml:"tlsDir,omitempty"`
+	// node key directory
+	KeyDir string `yaml:"keyDir,omitempty"`
+	// blockchain data directory
+	ChainDir string `yaml:"ChainDir,omitempty"`
 	// engine config file name
 	EngineConf string `yaml:"engineConf,omitempty"`
 	// log config file name
@@ -29,6 +33,8 @@ type EnvConf struct {
 	ServConf string `yaml:"servConf,omitempty"`
 	// network config file name
 	NetConf string `yaml:"netConf,omitempty"`
+	// ledger config file name
+	LedgerConf string `yaml:"ledgerConf,omitempty"`
 	// metric switch
 	MetricSwitch bool `yaml:"metricSwitch,omitempty"`
 }
@@ -57,10 +63,13 @@ func GetDefEnvConf() *EnvConf {
 		DataDir:      "data",
 		LogDir:       "logs",
 		TlsDir:       "tls",
+		KeyDir:       "keys",
+		ChainDir:     "blockchain",
 		EngineConf:   "engine.yaml",
 		LogConf:      "log.yaml",
 		ServConf:     "server.yaml",
 		NetConf:      "network.yaml",
+		LedgerConf:   "ledger.yaml",
 		MetricSwitch: false,
 	}
 }

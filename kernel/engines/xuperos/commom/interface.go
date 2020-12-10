@@ -1,13 +1,16 @@
-// 面向接口编程
 package def
 
 import (
 	"context"
 	"crypto/ecdsa"
-	"github.com/xuperchain/xuperchain/core/pb"
+
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/protos"
+
 	"github.com/xuperchain/xuperchain/core/vat"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 
 	//"github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -15,22 +18,39 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	netPB "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
 type Chain interface {
 	Context() *ChainCtx
-	SetRelyAgent(ChainRelyAgent) error
 	Start()
 	Stop()
 	ProcTx(request *pb.TxStatus) *pb.CommonReply
 	ProcBlock(request *pb.Block) error
 	PreExec(request *pb.InvokeRPCRequest) (*pb.InvokeResponse, error)
+	SetRelyAgent(ChainRelyAgent) error
 }
 
-// 定义该引擎对各组件依赖接口约束
+// 定义xuperos引擎对外暴露接口
+// 依赖接口而不是依赖具体实现
+type Engine interface {
+	Context() *EngineCtx
+	engines.BCEngine
+	Get(string) Chain
+	Set(string, Chain)
+	GetChains() []string
+	CreateChain(string, []byte) error
+	RegisterChain(string) error
+	UnloadChain(string) error
+	SetRelyAgent(EngineRelyAgent) error
+}
+
+// 定义引擎对各组件依赖接口约束
+type EngineRelyAgent interface {
+	CreateNetwork() (XNetwork, error)
+}
+
+// 定义链对各组件依赖接口约束
 type ChainRelyAgent interface {
 	CreateLedger() (XLedger, error)
 	CreateState() (XState, error)
@@ -40,39 +60,20 @@ type ChainRelyAgent interface {
 	CreateAcl() (XAcl, error)
 }
 
-// 定义xuperos引擎对外暴露接口
-// 依赖接口而不是依赖具体实现
-type Engine interface {
-	Context() *EngineCtx
-	engines.BCEngine
-	SetRelyAgent(EngineRelyAgent) error
-	Get(string) Chain
-	Set(string, Chain)
-	GetChains() []string
-	//CreateChain(string, []byte) (Chain, error)
-	CreateChain(string, []byte) error
-	RegisterChain(string) error
-	UnloadChain(string) error
-}
-
-// 定义该引擎对各组件依赖接口约束
-type EngineRelyAgent interface {
-	CreateNetwork() (XNetwork, error)
-}
-
 // 定义引擎对网络组件依赖接口约束
 type XNetwork interface {
 	Start()
 	Stop()
 
-	NewSubscriber(netPB.XuperMessage_MessageType, interface{}, ...p2p.SubscriberOption) p2p.Subscriber
+	SendMessage(xctx.XContext, *protos.XuperMessage, ...p2p.OptionFunc) error
+	SendMessageWithResponse(xctx.XContext, *protos.XuperMessage,
+		...p2p.OptionFunc) ([]*protos.XuperMessage, error)
+
+	NewSubscriber(protos.XuperMessage_MessageType, interface{}, ...p2p.SubscriberOption) p2p.Subscriber
 	Register(p2p.Subscriber) error
 	UnRegister(p2p.Subscriber) error
 
-	SendMessage(context.Context, *netPB.XuperMessage, ...p2p.OptionFunc) error
-	SendMessageWithResponse(context.Context, *netPB.XuperMessage, ...p2p.OptionFunc) ([]*netPB.XuperMessage, error)
-
-	Context() nctx.DomainCtx
+	Context() *nctx.NetCtx
 	P2PState() *p2p.State
 }
 

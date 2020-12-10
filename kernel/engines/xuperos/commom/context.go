@@ -1,5 +1,5 @@
 // 统一管理系统引擎和链运行上下文
-package def
+package commom
 
 import (
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
@@ -21,16 +21,12 @@ type EngineCtx struct {
 
 // 链级别上下文，维护链级别上下文，每条平行链各有一个
 type ChainCtx struct {
+	// 基础上下文
+	xctx.BaseCtx
 	// 引擎上下文
-	EngineCtx
-
+	EngCtx *EngineCtx
 	// 链名
 	BCName string
-	// 存储路径
-	DataDir string
-	// 状态
-	Status int
-
 	// 账本
 	Ledger XLedger
 	// 状态机
@@ -43,7 +39,6 @@ type ChainCtx struct {
 	Crypto XCrypto
 	// 权限
 	Acl XAcl
-
 	// 结点账户信息
 	Address *Address
 }
