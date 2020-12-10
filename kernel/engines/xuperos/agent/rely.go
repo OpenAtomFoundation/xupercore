@@ -129,6 +129,7 @@ func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
 // 创建共识实例
 func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, error) {
 	ctx := t.chain.Context()
+
 	consensusCtx := context.CreateConsensusCtx(ctx.BCName, ctx.Ledger, ctx.Net, ctx.Crypto, ctx.BaseCtx)
 	return consensus.NewPluggableConsensus(consensusCtx, nil, ctx.Contract)
 }
