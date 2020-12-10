@@ -7,6 +7,8 @@ import (
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 )
 
+var _ QuorumCertInterface = (*QuorumCert)(nil)
+
 var (
 	NoParentErr       = errors.New("Node doesn't have a parent node while trying to insert the local tree.")
 	InvalidHighQCNode = errors.New("Invalid node when updateHighQC")
@@ -88,8 +90,6 @@ type QCPendingTree struct {
 	GenericQC *ProposalNode
 	LockedQC  *ProposalNode
 	CommitQC  *ProposalNode
-
-	Ledger StorageInterface
 }
 
 type ProposalNode struct {
@@ -97,10 +97,6 @@ type ProposalNode struct {
 	// Parent QuorumCertInterface
 	Sons   []*ProposalNode
 	Parent *ProposalNode
-}
-
-type StorageInterface interface {
-	ConsensusCommit(key []byte) bool
 }
 
 func (t *QCPendingTree) GetHighQC() *ProposalNode {
@@ -172,7 +168,7 @@ func (t *QCPendingTree) insert(node *ProposalNode) error {
  * 同时此方法将原先的root更改为commit node，因为commit node在本BFT中已确定不会回滚
  */
 func (t *QCPendingTree) updateCommit(p QuorumCertInterface) {
-	t.Ledger.ConsensusCommit(p.GetProposalId())
+	// t.Ledger.ConsensusCommit(p.GetProposalId())
 	node := t.DFSQueryNode(p.GetProposalId())
 	parent := node.Parent
 	node.Parent = nil

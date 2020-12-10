@@ -29,8 +29,7 @@ type PacemakerInterface interface {
  * TODO:  the Pacemaker broadcasts a TimeoutMsg notification.
  */
 type DefaultPaceMaker struct {
-	bcName      string
-	startView   int64
+	StartView   int64
 	currentView int64
 	// timeout int64
 }

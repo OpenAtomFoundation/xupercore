@@ -2,14 +2,7 @@ package chained_bft
 
 import "testing"
 
-type fakeLedger struct{}
-
-func (l *fakeLedger) ConsensusCommit(key []byte) bool {
-	return true
-}
-
 func initQcTree() *QCPendingTree {
-	fakeLedger := &fakeLedger{}
 	initQC := &QuorumCert{
 		VoteInfo: &VoteInfo{
 			ProposalId:   []byte{0},
@@ -29,7 +22,6 @@ func initQcTree() *QCPendingTree {
 		// GenericQC: rootNode,
 		// LockedQC:  rootNode,
 		CommitQC: rootNode,
-		Ledger:   fakeLedger,
 	}
 }
 

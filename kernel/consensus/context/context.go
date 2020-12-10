@@ -6,8 +6,8 @@ import (
 	"crypto/ecdsa"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-
 	"github.com/xuperchain/xupercore/kernel/contract/kernel"
+
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	xuperp2p "github.com/xuperchain/xupercore/kernel/network/pb"
 )
@@ -58,18 +58,13 @@ type ConsensusConfig struct {
 // LedgerCtxInConsensus 使用到的ledger接口
 type LedgerCtxInConsensus interface {
 	// GetMeta() MetaInterface // ATTENTION:此部分仅供单测使用，任何共识实例不应该调用
-	QueryBlock([]byte) (BlockInterface, error)
 	QueryBlockByHeight(int64) (BlockInterface, error)
 	QueryBlockHeader([]byte) (BlockInterface, error)
 	GetTipSnapShot() XMReader // 获取当前最新快照， 原来utxoVM快照
 	GetSnapShotWithBlock(blockId []byte) (XMReader, error)
 	GetGenesisConsensusConf() []byte // 获取账本创始块共识配置
-	// FAKE!!!!!
 	GetTipBlock() BlockInterface
-	VerifyMerkle(BlockInterface) error // 用于验证merkel跟是否合法
-	VerifyBlock(BlockInterface, string) (bool, error)
-
-	ConsensusCommit(blockId []byte) bool // 共识向账本发送落盘消息，此后该区块将不被回滚
+	// ConsensusCommit(blockId []byte) bool // 共识向账本发送落盘消息，此后该区块将不被回滚
 }
 
 // XMReader
@@ -81,10 +76,6 @@ type XMReader interface {
 // P2pCtxInConsensus 依赖p2p接口
 // TODO: 后续将xuperp2p和p2p包合成p2p的def包
 type P2pCtxInConsensus interface {
-	// GetLocalAccount() string
-	// GetCurrentPeerAccounts() []string
-
-	// TODO: OperateCtx为错误结构，应该是BaseCtx，后面P2P更改之后改过来
 	SendMessage(context.Context, *xuperp2p.XuperMessage, ...p2p.OptionFunc) error
 	// SendMessageWithResponse(xcontext.BaseCtx, *xuperp2p.XuperMessage, ...p2p.OptionFunc) ([]*xuperp2p.XuperMessage, error)
 	NewSubscriber(xuperp2p.XuperMessage_MessageType, interface{}, ...p2p.SubscriberOption) p2p.Subscriber
@@ -113,29 +104,11 @@ type CryptoClientInConsensus interface {
 
 // ConsensusCtx 共识领域级上下文
 type ConsensusCtx struct {
-	BcName string
-	// 共识定义的账本接口
+	xcontext.BaseCtx
+	kernel.Registry
+	StartHeight  int64
+	BcName       string
 	Ledger       LedgerCtxInConsensus
-	BCtx         xcontext.BaseCtx
 	P2p          P2pCtxInConsensus
 	CryptoClient CryptoClientInConsensus
-}
-
-// CreateConsensusCtx 创建共识上下文，外界调用
-func CreateConsensusCtx(bcName string, ledger LedgerCtxInConsensus, p2p P2pCtxInConsensus,
-	cryptoClient CryptoClientInConsensus, bCtx xcontext.BaseCtx) ConsensusCtx {
-	return ConsensusCtx{
-		BcName:       bcName,
-		Ledger:       ledger,
-		BCtx:         bCtx,
-		P2p:          p2p,
-		CryptoClient: cryptoClient,
-	}
-}
-
-// 多定义一个height
-type FakeKernMethod func(ctx kernel.KContext, height int64) error
-
-type FakeRegistry interface {
-	RegisterKernMethod(contract, method string, handler FakeKernMethod)
 }

@@ -85,26 +85,26 @@ func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
 // NewSingleConsensus 初始化实例
 func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig) base.ConsensusImplInterface {
 	// 解析config中需要的字段
-	if cCtx.BCtx.XLog == nil {
+	if cCtx.XLog == nil {
 		return nil
 	}
 	// TODO:cCtx.BcName需要注册表吗？
 	if cCtx.CryptoClient == nil {
-		cCtx.BCtx.XLog.Error("Single::NewSingleConsensus::CryptoClient in context is nil")
+		cCtx.XLog.Error("Single::NewSingleConsensus::CryptoClient in context is nil")
 		return nil
 	}
 	if cCtx.Ledger == nil {
-		cCtx.BCtx.XLog.Error("Single::NewSingleConsensus::Ledger in context is nil")
+		cCtx.XLog.Error("Single::NewSingleConsensus::Ledger in context is nil")
 		return nil
 	}
 	if cCfg.ConsensusName != "single" {
-		cCtx.BCtx.XLog.Error("Single::NewSingleConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
+		cCtx.XLog.Error("Single::NewSingleConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
 		return nil
 	}
 	config := &SingleConfig{}
 	err := json.Unmarshal([]byte(cCfg.Config), config)
 	if err != nil {
-		cCtx.BCtx.XLog.Error("Single::NewSingleConsensus::pow struct unmarshal error", "error", err)
+		cCtx.XLog.Error("Single::NewSingleConsensus::single struct unmarshal error", "error", err)
 		return nil
 	}
 	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
@@ -141,6 +141,7 @@ func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
 }
 
 // CheckMinerMatch 查看block是否合法
+// ATTENTION: TODO: 上层需要先检查VerifyMerkle(block)
 func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
 	// 检查区块的区块头是否hash正确
 	if !bytes.Equal(block.MakeBlockId(), block.GetBlockid()) {
@@ -151,11 +152,6 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.Block
 	if block.GetProposer() != s.config.Miner {
 		ctx.XLog.Warn("Single::CheckMinerMatch::miner check error", "logid", ctx.XLog.GetLogId(),
 			"blockid", block.GetBlockid(), "proposer", block.GetProposer(), "local proposer", s.config.Miner)
-		return false, nil
-	}
-	// 验证merkel根是否计算正确
-	if err := s.ctx.Ledger.VerifyMerkle(block); err != nil {
-		ctx.XLog.Warn("Single::CheckMinerMatch::VerifyMerkle error", "logid", ctx.XLog.GetLogId(), "error", err)
 		return false, nil
 	}
 	//验证签名

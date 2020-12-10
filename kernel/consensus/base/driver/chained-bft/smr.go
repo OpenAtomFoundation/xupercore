@@ -12,12 +12,12 @@ import (
 
 	"github.com/xuperchain/crypto/core/hash"
 	"github.com/xuperchain/xuperchain/core/global"
-	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	xuperp2p "github.com/xuperchain/xupercore/kernel/network/pb"
+	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 var (
@@ -44,7 +44,7 @@ const (
  */
 type Smr struct {
 	bcName  string
-	bCtx    xcontext.BaseCtx
+	log     logs.Logger
 	address string // 包含一个私钥生成的地址
 	// smr定义了自己需要的P2P消息类型
 	// p2pMsgChan is the msg channel registered to network
@@ -72,11 +72,11 @@ type Smr struct {
 	newViewMsgs *sync.Map
 }
 
-func NewSmr(bcName, address string, bCtx xcontext.BaseCtx, p2p cctx.P2pCtxInConsensus, cryptoClient *cCrypto.CBFTCrypto, pacemaker PacemakerInterface,
+func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus, cryptoClient *cCrypto.CBFTCrypto, pacemaker PacemakerInterface,
 	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree) *Smr {
 	return &Smr{
 		bcName:        bcName,
-		bCtx:          bCtx,
+		log:           log,
 		address:       address,
 		p2pMsgChan:    make(chan *xuperp2p.XuperMessage, DefaultNetMsgChanSize),
 		subscribeList: list.New(),
@@ -165,7 +165,7 @@ func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) error {
 	case xuperp2p.XuperMessage_CHAINED_BFT_VOTE_MSG:
 		go s.handleReceivedVoteMsg(msg)
 	default:
-		s.bCtx.XLog.Error("smr::handleReceivedMsg receive unknow type msg", "type", msg.GetHeader().GetType())
+		s.log.Error("smr::handleReceivedMsg receive unknow type msg", "type", msg.GetHeader().GetType())
 		return nil
 	}
 	return nil
@@ -178,7 +178,7 @@ func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) error {
 func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 	// if new view number less than voted view number, return error
 	if nextView < s.pacemaker.GetCurrentView() {
-		s.bCtx.XLog.Error("smr::ProcessNewView::input param nextView err")
+		s.log.Error("smr::ProcessNewView::input param nextView err")
 		return TooLowNewView
 	}
 
@@ -195,13 +195,13 @@ func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 	}
 	newViewMsg, err := s.cryptoClient.SignProposalMsg(newViewMsg)
 	if err != nil {
-		s.bCtx.XLog.Error("smr::ProcessNewView::SignProposalMsg error", "error", err)
+		s.log.Error("smr::ProcessNewView::SignProposalMsg error", "error", err)
 		return err
 	}
 	netMsg := p2p.NewMessage(xuperp2p.XuperMessage_CHAINED_BFT_NEW_VIEW_MSG, newViewMsg, p2p.WithBCName(s.bcName))
 	// 全部预备之后，再调用该接口
 	if netMsg == nil {
-		s.bCtx.XLog.Error("smr::ProcessNewView::NewMessage error")
+		s.log.Error("smr::ProcessNewView::NewMessage error")
 		return P2PInternalErr
 	}
 	s.pacemaker.PrepareAdvance(nextView, nextLeader)
@@ -214,7 +214,7 @@ func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 func (s *Smr) handleReceivedNewView(msg *xuperp2p.XuperMessage) error {
 	newViewMsg := &chainedBftPb.ProposalMsg{}
 	if err := p2p.Unmarshal(msg, newViewMsg); err != nil {
-		s.bCtx.XLog.Error("smr::handleReceivedNewView Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
+		s.log.Error("smr::handleReceivedNewView Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return err
 	}
 	s.newViewMsgs.LoadOrStore(global.F(newViewMsg.GetProposalId()), true)
@@ -253,17 +253,17 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 	}
 	propMsg, err := s.cryptoClient.SignProposalMsg(proposal)
 	if err != nil {
-		s.bCtx.XLog.Error("smr::ProcessProposal SignProposalMsg error", "error", err)
+		s.log.Error("smr::ProcessProposal SignProposalMsg error", "error", err)
 		return err
 	}
 	netMsg := p2p.NewMessage(xuperp2p.XuperMessage_CHAINED_BFT_NEW_PROPOSAL_MSG, propMsg, p2p.WithBCName(s.bcName))
 	// 全部预备之后，再调用该接口
 	if netMsg == nil {
-		s.bCtx.XLog.Error("smr::ProcessProposal::NewMessage error")
+		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return P2PInternalErr
 	}
 	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses(validatesIpInfo))
-	s.bCtx.XLog.Info("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", global.F(proposalID))
+	s.log.Info("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", global.F(proposalID))
 	return nil
 }
 
@@ -317,19 +317,19 @@ func (s *Smr) reloadJustifyQC() (*QuorumCert, error) {
 func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	newProposalMsg := &chainedBftPb.ProposalMsg{}
 	if err := p2p.Unmarshal(msg, newProposalMsg); err != nil {
-		s.bCtx.XLog.Error("smr::handleReceivedProposal Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
+		s.log.Error("smr::handleReceivedProposal Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return
 	}
 	if _, ok := s.localProposal.LoadOrStore(global.F(newProposalMsg.GetProposalId()), true); ok {
 		return
 	}
 
-	s.bCtx.XLog.Info("smr::handleReceivedProposal::received a proposal", "logid", msg.GetHeader().GetLogid(),
+	s.log.Info("smr::handleReceivedProposal::received a proposal", "logid", msg.GetHeader().GetLogid(),
 		"newView", newProposalMsg.GetProposalView(), "newProposalId", global.F(newProposalMsg.GetProposalId()))
 	parentQCBytes := newProposalMsg.GetJustifyQC()
 	parentQC := &QuorumCert{}
 	if err := json.Unmarshal(parentQCBytes, parentQC); err != nil {
-		s.bCtx.XLog.Error("smr::handleReceivedProposal Unmarshal parentQC error", "error", err)
+		s.log.Error("smr::handleReceivedProposal Unmarshal parentQC error", "error", err)
 		return
 	}
 
@@ -372,13 +372,13 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	}
 	// 验证Proposal的Round是否和pacemaker的Round相等
 	if newProposalMsg.GetProposalView() != s.pacemaker.GetCurrentView() {
-		s.bCtx.XLog.Error("smr::handleReceivedProposal::error", "error", TooLowNewProposal)
+		s.log.Error("smr::handleReceivedProposal::error", "error", TooLowNewProposal)
 		return
 	}
 	// 验证本地election计算出来的当前round Leader是否和Proposal的Leader相等
 	leader := s.Election.GetLeader(s.pacemaker.GetCurrentView())
 	if leader == "" || leader != newProposalMsg.Sign.Address {
-		s.bCtx.XLog.Error("smr::handleReceivedProposal::leader error", "want", leader, "have", newProposalMsg.Sign.Address)
+		s.log.Error("smr::handleReceivedProposal::leader error", "want", leader, "have", newProposalMsg.Sign.Address)
 		return
 	}
 	// 根据本地saftyrules返回是否需要发送voteMsg给下一个Leader
@@ -408,10 +408,10 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	if s.qcTree.GetCommitQC() != nil {
 		newLedgerInfo.CommitStateId = s.qcTree.GetCommitQC().In.GetProposalId()
 	}
-	s.bCtx.XLog.Info("pacemaker!!!!", "round", s.pacemaker.GetCurrentView())
+	s.log.Info("pacemaker!!!!", "round", s.pacemaker.GetCurrentView())
 	nextLeader := s.Election.GetLeader(s.pacemaker.GetCurrentView() + 1)
 	if nextLeader == "" {
-		s.bCtx.XLog.Info("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
+		s.log.Info("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
 		return
 	}
 	logid := fmt.Sprintf("%x", newVoteId) + "_" + s.address
@@ -457,7 +457,7 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 	netMsg := p2p.NewMessage(xuperp2p.XuperMessage_CHAINED_BFT_VOTE_MSG, voteMsg, p2p.WithBCName(s.bcName))
 	// 全部预备之后，再调用该接口
 	if netMsg == nil {
-		s.bCtx.XLog.Error("smr::ProcessProposal::NewMessage error")
+		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return
 	}
 	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(voteTo)}))
@@ -471,17 +471,17 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	newVoteMsg := &chainedBftPb.VoteMsg{}
 	if err := p2p.Unmarshal(msg, newVoteMsg); err != nil {
-		s.bCtx.XLog.Error("smr::handleReceivedVoteMsg Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
+		s.log.Error("smr::handleReceivedVoteMsg Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return err
 	}
 	voteQC, err := s.VoteMsgToQC(newVoteMsg)
 	if err != nil {
-		s.bCtx.XLog.Error("smr::handleReceivedVoteMsg VoteMsgToQC error", "error", err)
+		s.log.Error("smr::handleReceivedVoteMsg VoteMsgToQC error", "error", err)
 		return err
 	}
 	// 检查logid、voteInfoHash是否正确
 	if err := s.saftyrules.CheckVoteMsg(voteQC, msg.GetHeader().GetLogid(), s.Election.GetValidators(voteQC.GetProposalView())); err != nil {
-		s.bCtx.XLog.Error("smr::handleReceivedVoteMsg CheckVoteMsg error", "error", err, "msg", voteQC.GetProposalId())
+		s.log.Error("smr::handleReceivedVoteMsg CheckVoteMsg error", "error", err, "msg", voteQC.GetProposalId())
 		return err
 	}
 
@@ -499,10 +499,10 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	if !s.saftyrules.CalVotesThreshold(VoteLen, len(s.Election.GetValidators(voteQC.GetProposalView()))) {
 		return nil
 	}
-	s.bCtx.XLog.Info("FULL VOTE!!!!")
+	s.log.Info("FULL VOTE!!!!")
 	// 更新本地pacemaker AdvanceRound
 	s.pacemaker.AdvanceView(voteQC)
-	s.bCtx.XLog.Info("pacemaker!!!!", "round", s.pacemaker.GetCurrentView())
+	s.log.Info("pacemaker!!!!", "round", s.pacemaker.GetCurrentView())
 	// 更新HighQC
 	s.qcTree.updateHighQC(voteQC.GetProposalId())
 	return nil
