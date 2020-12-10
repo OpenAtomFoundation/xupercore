@@ -10,7 +10,6 @@ import (
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 )
 
 const (
@@ -147,7 +146,7 @@ func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error)
 	return con.GetConsensusStatus()
 }
 
-func (pc *PluggableConsensus) readConsensus(ctx kernel.KContext) (*contract.Response, error) {
+func (pc *PluggableConsensus) readConsensus(ctx contract.KContext) (*contract.Response, error) {
 	pluggableConfig, err := ctx.Get(contractBucket, []byte(consensusKey))
 	if err != nil {
 		pc.ctx.XLog.Warn("Pluggable Consensus::readConsensus::get object failed", "error", err)
@@ -172,7 +171,7 @@ func (pc *PluggableConsensus) readConsensus(ctx kernel.KContext) (*contract.Resp
  * 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
  * 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
  */
-func (pc *PluggableConsensus) updateConsensus(contractCtx kernel.KContext) (*contract.Response, error) {
+func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*contract.Response, error) {
 	if pc.ctx.StartHeight > pc.nextHeight {
 		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::trigger height error! Use old one.", "pluggable height", pc.nextHeight, "trigger height", pc.ctx.StartHeight)
 		return nil, UpdateTriggerError
@@ -251,12 +250,8 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx kernel.KContext) (*con
  * TODO: 共识回滚，更新原有共识列表，遍历PluggableConsensus共识列表并删除目标高度以上的共识实例，并启动原共识实例
  * ????? 该方法调用时机和调用入口
  */
-func (pc *PluggableConsensus) rollbackConsensus(contractCtx kernel.KContext) error {
+func (pc *PluggableConsensus) rollbackConsensus(contractCtx contract.KContext) error {
 	return nil
-}
-
-func FakeCreateXMCache(reader cctx.XMReader) interface{} {
-	return reader
 }
 
 // NewPluggableConsensus 初次创建PluggableConsensus实例，初始化cons列表
@@ -272,7 +267,10 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 	// 向合约注册读方法
 	cCtx.RegisterKernMethod(contractBucket, contractReadMethod, pc.readConsensus)
 
-	xMReader := cCtx.Ledger.GetTipSnapShot()
+	xMReader, err := cCtx.Ledger.GetTipXMSnapshotReader()
+	if err != nil {
+		return nil, err
+	}
 	res, err := xMReader.Get(contractBucket, []byte(consensusKey))
 	if res == nil {
 		// 若合约存储不存在，则直接从账本里拿到创始块配置，并且声称从未初始化过的共识实例Genesis共识实例
