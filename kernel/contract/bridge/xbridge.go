@@ -65,7 +65,7 @@ func New(cfg *XBridgeConfig) (*XBridge, error) {
 	}
 	xbridge.contractManager = &contractManager{
 		xbridge:      xbridge,
-		codeProvider: newCodeProvider(cfg.XModel),
+		codeProvider: newCodeProviderFromXMReader(cfg.XModel),
 	}
 
 	syscallService := NewSyscallService(ctxmgr, xbridge)
