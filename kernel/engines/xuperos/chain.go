@@ -192,7 +192,7 @@ func (t *Chain) initChainCtx() error {
 	}
 	t.ctx.Crypto = crypt
 
-	// 4.价值节点账户信息
+	// 4.加载节点账户信息
 	keyPath := t.ctx.EngCtx.EnvCfg.GenDataAbsPath(t.ctx.EngCtx.EnvCfg.KeyDir)
 	addr, err := common.LoadAddrInfo(keyPath, t.ctx.Crypto)
 	if err != nil {

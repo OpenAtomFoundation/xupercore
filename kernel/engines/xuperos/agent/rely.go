@@ -57,7 +57,7 @@ func NewChainRelyAgent(chain common.Chain) *ChainRelyAgentImpl {
 // 创建账本
 func (t *ChainRelyAgentImpl) CreateLedger(isCreate bool) (common.XLedger, error) {
 	ctx := t.chain.Context()
-	legCtx, err := ldef.NewLedgerCtx(ctx.EnvCfg, ctx.BCName)
+	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
 		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
 	}
@@ -73,7 +73,7 @@ func (t *ChainRelyAgentImpl) CreateLedger(isCreate bool) (common.XLedger, error)
 // 创建状态机实例
 func (t *ChainRelyAgentImpl) CreateState(leg common.XLedger) (common.XState, error) {
 	ctx := t.chain.Context()
-	legCtx, err := ldef.NewLedgerCtx(ctx.EnvCfg, ctx.BCName)
+	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
 		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
 	}
