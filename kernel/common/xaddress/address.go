@@ -1,10 +1,12 @@
-package common
+package xaddress
 
 import (
 	"crypto/ecdsa"
 	"fmt"
 	"io/ioutil"
 	"path/filepath"
+
+	cryptoClinet "github.com/xuperchain/xupercore/lib/crypto/client/base"
 )
 
 type Address struct {
@@ -15,7 +17,7 @@ type Address struct {
 	PublicKeyStr  string
 }
 
-func LoadAddrInfo(keyDir string, crypto XCrypto) (*Address, error) {
+func LoadAddrInfo(keyDir string, crypto cryptoClinet.CryptoClient) (*Address, error) {
 	addr, err := ioutil.ReadFile(filepath.Join(keyDir, "address"))
 	if err != nil {
 		return nil, fmt.Errorf("read address error: %v", err)

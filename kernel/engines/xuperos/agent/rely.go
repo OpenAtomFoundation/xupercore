@@ -8,17 +8,16 @@ import (
 	ldef "github.com/chunhui01/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	"github.com/xuperchain/xupercore/kernel/consensus"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/network"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 	cryptoClient "github.com/xuperchain/xupercore/lib/crypto/client"
-
-	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/consensus/context"
-	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 )
 
 // 代理依赖组件实例化操作，方便mock单测和并行开发
@@ -31,7 +30,7 @@ func NewEngineRelyAgent(engine def.Engine) *EngineRelyAgentImpl {
 }
 
 // 创建并启动p2p网络
-func (t *EngineRelyAgentImpl) CreateNetwork() (common.XNetwork, error) {
+func (t *EngineRelyAgentImpl) CreateNetwork() (network.Network, error) {
 	ctx, err := nctx.NewNetCtx(t.engine.Context().EnvCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create network context failed.err:%v", err)
@@ -55,7 +54,7 @@ func NewChainRelyAgent(chain common.Chain) *ChainRelyAgentImpl {
 }
 
 // 创建账本
-func (t *ChainRelyAgentImpl) CreateLedger(isCreate bool) (common.XLedger, error) {
+func (t *ChainRelyAgentImpl) CreateLedger(isCreate bool) (*ledger.Ledger, error) {
 	ctx := t.chain.Context()
 	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
@@ -71,7 +70,7 @@ func (t *ChainRelyAgentImpl) CreateLedger(isCreate bool) (common.XLedger, error)
 }
 
 // 创建状态机实例
-func (t *ChainRelyAgentImpl) CreateState(leg common.XLedger) (common.XState, error) {
+func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger) (*state.State, error) {
 	ctx := t.chain.Context()
 	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
@@ -87,7 +86,7 @@ func (t *ChainRelyAgentImpl) CreateState(leg common.XLedger) (common.XState, err
 }
 
 // 加密
-func (t *ChainRelyAgentImpl) CreateCrypto(cryptoType string) (common.XCrypto, error) {
+func (t *ChainRelyAgentImpl) CreateCrypto(cryptoType string) (cryptoBase.CryptoClient, error) {
 	crypto, err := cryptoClient.CreateCryptoClient(cryptoType)
 	if err != nil {
 		return nil, fmt.Errorf("create crypto client failed.err:%v,type:%s", err, cryptoType)
@@ -97,9 +96,9 @@ func (t *ChainRelyAgentImpl) CreateCrypto(cryptoType string) (common.XCrypto, er
 }
 
 // Acl权限
-func (t *ChainRelyAgentImpl) CreateAcl() (common.XAcl, error) {
+func (t *ChainRelyAgentImpl) CreateAcl() (aclBase.AclManager, error) {
 	ctx := t.chain.Context()
-	legAgent := agent.NewLedgerAgent(ctx)
+	legAgent := NewLedgerAgent(ctx)
 	aclCtx, err := actx.NewAclCtx(ctx.BCName, legAgent, ctx.Contract)
 	if err != nil {
 		return nil, fmt.Errorf("create acl ctx failed.err:%v", err)
@@ -114,12 +113,21 @@ func (t *ChainRelyAgentImpl) CreateAcl() (common.XAcl, error) {
 }
 
 // 创建合约实例
-func (t *ChainRelyAgentImpl) CreateContract() (common.XContract, error) {
-	return contract.CreateManager("default", new(chainCore))
+func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
+	ctx := t.chain.Context()
+	mgCfg := &contract.ManagerConfig{
+		Core: NewChainCoreAgent(ctx),
+	}
+	contractObj, err := contract.CreateManager("default", mgCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create contract manager failed.err:%v", err)
+	}
+
+	return contractObj, nil
 }
 
 // 创建共识实例
-func (t *ChainRelyAgentImpl) CreateConsensus() (def.XConsensus, error) {
+func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, error) {
 	ctx := t.chain.Context()
 	consensusCtx := context.CreateConsensusCtx(ctx.BCName, ctx.Ledger, ctx.Net, ctx.Crypto, ctx.BaseCtx)
 	return consensus.NewPluggableConsensus(consensusCtx, nil, ctx.Contract)
