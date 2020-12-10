@@ -219,11 +219,12 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Acl = aclObj
 
 	// 7.共识
-	ctx.Consensus, err = t.relyAgent.CreateConsensus()
+	cons, err := t.relyAgent.CreateConsensus()
 	if err != nil {
-		log.Error("create consensus error", "bcName", ctx.BCName, "error", err)
+		t.log.Error("create consensus error", "bcName", ctx.BCName, "err", err)
 		return err
 	}
+	t.ctx.Consensus = cons
 
 	return nil
 }

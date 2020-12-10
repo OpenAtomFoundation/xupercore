@@ -33,3 +33,15 @@ type VersionedData struct {
 	RefTxid   []byte
 	RefOffset int32
 }
+
+// 区块基础操作
+type BlockHandle interface {
+	GetProposer() []byte
+	GetHeight() int64
+	GetBlockid() []byte
+	GetConsensusStorage() ([]byte, error)
+	GetTimestamp() int64
+	SetItem(item string, value interface{}) error
+	MakeBlockId() ([]byte, error)
+	GetPreHash() []byte
+}
