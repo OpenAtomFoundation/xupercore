@@ -18,7 +18,7 @@ type Context struct {
 
 	ResourceLimits contract.Limits
 
-	State contract.XMState
+	State contract.StateSandbox
 
 	Args map[string][]byte
 

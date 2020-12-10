@@ -6,15 +6,47 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/pb"
+	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 
 	"github.com/golang/protobuf/proto"
 )
 
-type codeProvider struct {
-	xstore contract.XMReader
+type stateReader interface {
+	Get(bucket string, key []byte) ([]byte, error)
 }
 
-func newCodeProvider(xstore contract.XMReader) ContractCodeProvider {
+type xmStateReader struct {
+	r contract.XMReader
+}
+
+func fromXMReader(r contract.XMReader) stateReader {
+	return &xmStateReader{
+		r: r,
+	}
+}
+
+func (x *xmStateReader) Get(bucket string, key []byte) ([]byte, error) {
+	value, err := x.r.Get(bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	if sandbox.IsEmptyVersionedData(value) ||
+		sandbox.IsDelFlag(value.PureData.Value) {
+		return nil, errors.New("not found")
+	}
+
+	return value.PureData.Value, nil
+}
+
+type codeProvider struct {
+	xstore stateReader
+}
+
+func newCodeProviderFromXMReader(r contract.XMReader) ContractCodeProvider {
+	return newCodeProvider(fromXMReader(r))
+}
+
+func newCodeProvider(xstore stateReader) ContractCodeProvider {
 	return &codeProvider{
 		xstore: xstore,
 	}

@@ -1,14 +1,13 @@
-package vm
+package kernel
 
 import (
 	"github.com/xuperchain/xupercore/contractsdk/go/pb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 )
 
 type kernvm struct {
-	registry kernel.Registry
+	registry contract.KernRegistry
 }
 
 func newKernvm(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
@@ -30,10 +29,10 @@ func (k *kernvm) RemoveCache(name string) {
 type kernInstance struct {
 	ctx    *bridge.Context
 	kctx   *kcontextImpl
-	method kernel.KernMethod
+	method contract.KernMethod
 }
 
-func newKernInstance(ctx *bridge.Context, method kernel.KernMethod) *kernInstance {
+func newKernInstance(ctx *bridge.Context, method contract.KernMethod) *kernInstance {
 	return &kernInstance{
 		ctx:    ctx,
 		kctx:   newKContext(ctx),

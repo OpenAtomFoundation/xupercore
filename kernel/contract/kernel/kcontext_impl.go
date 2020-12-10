@@ -1,4 +1,4 @@
-package vm
+package kernel
 
 import (
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -7,14 +7,14 @@ import (
 
 type kcontextImpl struct {
 	ctx *bridge.Context
-	contract.XMState
+	contract.StateSandbox
 	used, limit contract.Limits
 }
 
 func newKContext(ctx *bridge.Context) *kcontextImpl {
 	return &kcontextImpl{
-		ctx:     ctx,
-		XMState: ctx.State,
+		ctx:          ctx,
+		StateSandbox: ctx.State,
 	}
 }
 
