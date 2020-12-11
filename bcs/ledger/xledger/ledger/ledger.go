@@ -2,12 +2,10 @@ package ledger
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -99,15 +97,15 @@ type ConfirmStatus struct {
 
 // NewLedger create an empty ledger, if it already exists, open it directly
 func NewLedger(lctx *def.LedgerCtx) (*Ledger, error) {
-	return newLedger(lctx, xlog, true)
+	return newLedger(lctx, true)
 }
 
 // OpenLedger open ledger which already exists
 func OpenLedger(lctx *def.LedgerCtx) (*Ledger, error) {
-	return newLedger(lctx, xlog, false)
+	return newLedger(lctx, false)
 }
 
-func newLedger(lctx *def.LedgerCtx, log logs.Logger, createIfMissing bool) (*Ledger, error) {
+func newLedger(lctx *def.LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger := &Ledger{}
 	ledger.mutex = &sync.RWMutex{}
 	ledger.powMutex = &sync.Mutex{}
@@ -123,14 +121,14 @@ func newLedger(lctx *def.LedgerCtx, log logs.Logger, createIfMissing bool) (*Led
 	}
 	baseDB, err := kvdb.CreateKVInstance(kvParam)
 	if err != nil {
-		log.Warn("fail to open leveldb", "dbPath", lctx.LedgerCfg.StorePath+"/ledger", "err", err)
+		lctx.XLog.Warn("fail to open leveldb", "dbPath", lctx.LedgerCfg.StorePath+"/ledger", "err", err)
 		return nil, err
 	}
 
 	// create crypto client
 	cryptoClient, cryptoErr := crypto_client.CreateCryptoClient(lctx.CryptoType)
 	if cryptoErr != nil {
-		log.Warn("fail to create crypto client", "err", cryptoErr)
+		lctx.XLog.Warn("fail to create crypto client", "err", cryptoErr)
 		return nil, cryptoErr
 	}
 
@@ -140,7 +138,7 @@ func newLedger(lctx *def.LedgerCtx, log logs.Logger, createIfMissing bool) (*Led
 	ledger.blocksTable = kvdb.NewTable(baseDB, pb.BlocksTablePrefix)
 	ledger.pendingTable = kvdb.NewTable(baseDB, pb.PendingBlocksTablePrefix)
 	ledger.heightTable = kvdb.NewTable(baseDB, pb.BlockHeightPrefix)
-	ledger.xlog = log
+	ledger.xlog = lctx.XLog
 	ledger.meta = &pb.LedgerMeta{}
 	ledger.blockCache = cache.NewLRUCache(BlockCacheSize)
 	ledger.blkHeaderCache = cache.NewLRUCache(BlockCacheSize)
@@ -152,18 +150,18 @@ func newLedger(lctx *def.LedgerCtx, log logs.Logger, createIfMissing bool) (*Led
 	if metaErr != nil && common.NormalizedKVError(metaErr) == common.ErrKVNotFound && createIfMissing { //说明是新创建的账本
 		metaBuf, pbErr := proto.Marshal(ledger.meta)
 		if pbErr != nil {
-			log.Warn("marshal meta fail", "pb_err", pbErr)
+			lctx.XLog.Warn("marshal meta fail", "pb_err", pbErr)
 			return nil, pbErr
 		}
 		writeErr := ledger.metaTable.Put([]byte(""), metaBuf)
 		if writeErr != nil {
-			log.Warn("write meta_table fail", "write_err", writeErr)
+			lctx.XLog.Warn("write meta_table fail", "write_err", writeErr)
 			return nil, writeErr
 		}
 		emptyLedger = true
 	} else {
 		if metaErr != nil {
-			log.Warn("unexpected kv error", "meta_err", metaErr)
+			lctx.XLog.Warn("unexpected kv error", "meta_err", metaErr)
 			return nil, metaErr
 		}
 		pbErr := proto.Unmarshal(metaBuf, ledger.meta)
@@ -171,12 +169,12 @@ func newLedger(lctx *def.LedgerCtx, log logs.Logger, createIfMissing bool) (*Led
 			return nil, pbErr
 		}
 	}
-	log.Info("ledger meta", "genesis_block", fmt.Sprintf("%x", ledger.meta.RootBlockid), "tip_block",
+	lctx.XLog.Info("ledger meta", "genesis_block", fmt.Sprintf("%x", ledger.meta.RootBlockid), "tip_block",
 		fmt.Sprintf("%x", ledger.meta.TipBlockid), "trunk_height", ledger.meta.TrunkHeight)
 	if !emptyLedger {
 		gErr := ledger.loadGenesisBlock()
 		if gErr != nil {
-			log.Warn("failed to load genesis block", "g_err", gErr)
+			lctx.XLog.Warn("failed to load genesis block", "g_err", gErr)
 			return nil, gErr
 		}
 	}
@@ -254,7 +252,6 @@ func IsProofed(blockID []byte, targetBits int32) bool {
 	given := big.NewInt(0).SetBytes(blockID)
 	target := big.NewInt(1)
 	target.Lsh(target, uint(256-targetBits))
-	//l.xlog.Debug("pow guess", "target", global.F(target.Bytes()), "given", global.F(given.Bytes()))
 	if given.Cmp(target) == -1 {
 		return true
 	}

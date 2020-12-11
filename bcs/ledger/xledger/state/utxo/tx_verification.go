@@ -1,13 +1,7 @@
-/*
- * Copyright 2019 Baidu, Inc.
- * tx_verification implements the verification related functions of Transaction
- */
-
 package utxo
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -15,16 +9,15 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xuperchain/core/contract"
-	"github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/pb"
-	pm "github.com/xuperchain/xuperchain/core/permission"
-	"github.com/xuperchain/xuperchain/core/permission/acl"
-	aclu "github.com/xuperchain/xuperchain/core/permission/acl/utils"
-	"github.com/xuperchain/xuperchain/core/txn"
-	"github.com/xuperchain/xuperchain/core/utxo/txhash"
-	"github.com/xuperchain/xuperchain/core/xmodel"
-	xmodel_pb "github.com/xuperchain/xuperchain/core/xmodel/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/permission/acl"
+	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
+	"github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/pb"
 )
 
 // ImmediateVerifyTx verify tx Immediately
@@ -155,7 +148,7 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 	akType := acl.IsAccount(tx.Initiator)
 	if akType == 0 {
 		// check initiator address signature
-		ok, err := pm.IdentifyAK(tx.Initiator, tx.InitiatorSigns[0], digestHash)
+		ok, err := aclu.IdentifyAK(tx.Initiator, tx.InitiatorSigns[0], digestHash)
 		if err != nil || !ok {
 			uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 			return false, nil, err
@@ -175,7 +168,7 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 				uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
 			}
-			ok, err := pm.IdentifyAK(addr, sign, digestHash)
+			ok, err := aclu.IdentifyAK(addr, sign, digestHash)
 			if !ok {
 				uv.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return ok, nil, err
@@ -183,7 +176,7 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 			verifiedAddr[addr] = true
 			initiatorAddr = append(initiatorAddr, tx.Initiator+"/"+addr)
 		}
-		ok, err := pm.IdentifyAccount(tx.Initiator, initiatorAddr, uv.aclMgr)
+		ok, err := aclu.IdentifyAccount(tx.Initiator, initiatorAddr, uv.aclMgr)
 		if !ok {
 			uv.log.Warn("verifySignatures initiator permission check failed",
 				"account", tx.Initiator, "error", err)
@@ -202,7 +195,7 @@ func (uv *UtxoVM) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool,
 		if _, has := verifiedAddr[addr]; has {
 			continue
 		}
-		ok, err := pm.IdentifyAK(addr, signInfo, digestHash)
+		ok, err := aclu.IdentifyAK(addr, signInfo, digestHash)
 		if err != nil || !ok {
 			uv.log.Warn("verifySignatures failed", "address", addr, "error", err)
 			return false, nil, err
@@ -300,7 +293,7 @@ func (uv *UtxoVM) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string
 				uv.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
 				return false, ErrInvalidAccount
 			}
-			if ok, err := pm.IdentifyAccount(string(name), tx.AuthRequire, uv.aclMgr); !ok {
+			if ok, err := aclu.IdentifyAccount(string(name), tx.AuthRequire, uv.aclMgr); !ok {
 				uv.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
 				return false, ErrACLNotEnough
 			}
@@ -333,7 +326,7 @@ func (uv *UtxoVM) verifyContractOwnerPermission(contractName string, tx *pb.Tran
 	if verifiedID[accountName] {
 		return true, nil
 	}
-	ok, err := pm.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
+	ok, err := aclu.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
 	if err == nil && ok {
 		verifiedID[accountName] = true
 	}
@@ -361,7 +354,7 @@ func (uv *UtxoVM) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[strin
 			if verifiedID[accountName] {
 				continue
 			}
-			ok, err := pm.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
+			ok, err := aclu.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
 			if !ok {
 				uv.log.Warn("verifyRWSetPermission check account bucket failed",
 					"account", accountName, "AuthRequire ", tx.AuthRequire, "error", err)
@@ -393,7 +386,7 @@ func (uv *UtxoVM) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[strin
 			if verifiedID[accountName] {
 				continue
 			}
-			ok, accountErr := pm.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
+			ok, accountErr := aclu.IdentifyAccount(accountName, tx.AuthRequire, uv.aclMgr)
 			if !ok {
 				uv.log.Warn("verifyRWSetPermission check contract2account bucket failed",
 					"account", accountName, "AuthRequire ", tx.AuthRequire, "error", accountErr)
@@ -406,7 +399,7 @@ func (uv *UtxoVM) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[strin
 }
 
 // verifyContractValid verify the permission of contract requests using ACL
-func (uv *UtxoVM) verifyContractPermission(tx *pb.Transaction, allUsers []string) (bool, error) {
+func (tx *Tx) verifyContractPermission(tx *pb.Transaction, allUsers []string) (bool, error) {
 	req := tx.GetContractRequests()
 	if req == nil {
 		// if no contract requests, no need to verify
@@ -418,7 +411,7 @@ func (uv *UtxoVM) verifyContractPermission(tx *pb.Transaction, allUsers []string
 		contractName := tmpReq.GetContractName()
 		methodName := tmpReq.GetMethodName()
 
-		ok, err := pm.CheckContractMethodPerm(allUsers, contractName, methodName, uv.aclMgr)
+		ok, err := aclu.CheckContractMethodPerm(allUsers, contractName, methodName, uv.aclMgr)
 		if err != nil || !ok {
 			uv.log.Warn("verify contract method ACL failed ", "contract", contractName, "method",
 				methodName, "error", err)
@@ -711,7 +704,7 @@ func (uv *UtxoVM) removeDuplicateUser(initiator string, authRequire []string) []
 // VerifyContractPermission implement Contract ChainCore, used to verify contract permission while contract running
 func (uv *UtxoVM) VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error) {
 	allUsers := uv.removeDuplicateUser(initiator, authRequire)
-	return pm.CheckContractMethodPerm(allUsers, contractName, methodName, uv.aclMgr)
+	return aclu.CheckContractMethodPerm(allUsers, contractName, methodName, uv.aclMgr)
 }
 
 // VerifyContractOwnerPermission implement Contract ChainCore, used to verify contract ownership permisson
@@ -727,7 +720,7 @@ func (uv *UtxoVM) VerifyContractOwnerPermission(contractName string, authRequire
 	if accountName == "" {
 		return errors.New("contract not found")
 	}
-	ok, err := pm.IdentifyAccount(accountName, authRequire, uv.aclMgr)
+	ok, err := aclu.IdentifyAccount(accountName, authRequire, uv.aclMgr)
 	if err != nil {
 		return err
 	}

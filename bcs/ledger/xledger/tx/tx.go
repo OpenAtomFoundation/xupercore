@@ -19,8 +19,8 @@ type Tx struct {
 	log               logs.Logger
 	ldb               kvdb.Database
 	unconfirmedTable  kvdb.Database
-	unconfirmTxAmount int64
-	unconfirmTxInMem  *sync.Map
+	UnconfirmTxAmount int64
+	UnconfirmTxInMem  *sync.Map
 	avgDelay          int64
 }
 

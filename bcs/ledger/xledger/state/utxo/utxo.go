@@ -8,13 +8,10 @@ package utxo
 import (
 	"bytes"
 	"container/list"
-	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,10 +21,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
-	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -44,7 +38,6 @@ var (
 	ErrUTXONotFound        = errors.New("this utxo can not be found")
 	ErrInputOutputNotEqual = errors.New("input's amount is not equal to output's")
 	ErrTxNotFound          = errors.New("this tx can not be found in unconfirmed-table")
-	ErrPreBlockMissMatch   = errors.New("play block failed because pre-hash != latest_block")
 	ErrUnexpected          = errors.New("this is a unexpected error")
 	ErrNegativeAmount      = errors.New("amount in transaction can not be negative number")
 	ErrUTXOFrozen          = errors.New("utxo is still frozen")
@@ -88,20 +81,19 @@ const (
 
 type TxLists []*pb.Transaction
 
-// UtxoVM UTXO VM
 type UtxoVM struct {
 	meta                 *pb.UtxoMeta // utxo meta
 	metaTmp              *pb.UtxoMeta // tmp utxo meta
 	mutexMeta            *sync.Mutex  // access control for meta
 	ldb                  kvdb.Database
-	mutex                *sync.RWMutex // utxo leveldb表读写锁
-	mutexMem             *sync.Mutex   // 内存锁定状态互斥锁
+	Mutex                *sync.RWMutex // utxo leveldb表读写锁
+	MutexMem             *sync.Mutex   // 内存锁定状态互斥锁
 	spLock               *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
 	mutexBalance         *sync.Mutex   // 余额Cache锁
 	lockKeys             map[string]*UtxoLockItem
 	lockKeyList          *list.List // 按锁定的先后顺序，方便过期清理
 	lockExpireTime       int        // 临时锁定的最长时间
-	utxoCache            *UtxoCache
+	UtxoCache            *UtxoCache
 	log                  logs.Logger
 	ledger               *ledger.Ledger           // 引用的账本对象
 	latestBlockid        []byte                   // 当前vm最后一次执行到的blockid
@@ -165,7 +157,7 @@ func GenUtxoKeyWithPrefix(addr []byte, txid []byte, offset int32) string {
 }
 
 // checkInputEqualOutput 校验交易的输入输出是否相等
-func (uv *UtxoVM) checkInputEqualOutput(tx *pb.Transaction) error {
+func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 	// first check outputs
 	outputSum := big.NewInt(0)
 	for _, txOutput := range tx.TxOutputs {
@@ -247,16 +239,16 @@ func (uv *UtxoVM) checkInputEqualOutput(tx *pb.Transaction) error {
 
 // utxo是否处于临时锁定状态
 func (uv *UtxoVM) isLocked(utxoKey []byte) bool {
-	uv.mutexMem.Lock()
-	defer uv.mutexMem.Unlock()
+	uv.MutexMem.Lock()
+	defer uv.MutexMem.Unlock()
 	_, exist := uv.lockKeys[string(utxoKey)]
 	return exist
 }
 
 // 解锁utxo key
 func (uv *UtxoVM) unlockKey(utxoKey []byte) {
-	uv.mutexMem.Lock()
-	defer uv.mutexMem.Unlock()
+	uv.MutexMem.Lock()
+	defer uv.MutexMem.Unlock()
 	uv.log.Trace("    unlock utxo key", "key", string(utxoKey))
 	lockItem := uv.lockKeys[string(utxoKey)]
 	if lockItem != nil {
@@ -589,7 +581,7 @@ func (uv *UtxoVM) addBalance(addr []byte, delta *big.Int) {
 }
 
 // subBalance 减少cache中的Balance
-func (uv *UtxoVM) subBalance(addr []byte, delta *big.Int) {
+func (uv *UtxoVM) SubBalance(addr []byte, delta *big.Int) {
 	uv.mutexBalance.Lock()
 	defer uv.mutexBalance.Unlock()
 	balance, hitCache := uv.balanceCache.Get(string(addr))
@@ -602,7 +594,7 @@ func (uv *UtxoVM) subBalance(addr []byte, delta *big.Int) {
 }
 
 //获得一个账号的余额，inLock表示在调用此函数时已经对uv.mutex加过锁了
-func (uv *UtxoVM) getBalance(addr string) (*big.Int, error) {
+func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
 	cachedBalance, ok := uv.balanceCache.Get(addr)
 	if ok {
 		uv.log.Debug("hit getbalance cache", "addr", addr)
