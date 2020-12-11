@@ -1,0 +1,10 @@
+# 模块名称
+module: xchain
+# 日志文件名
+filename: xchain
+# 格式
+fmt: logfmt
+# 是否打印命令行工具端口
+console: true
+# 日志等级
+level: debug

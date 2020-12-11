@@ -22,7 +22,7 @@ func ContractRegister(f TimerFunc) TimerFunc {
 
 type FakeP2p struct{}
 
-func (p *FakeP2p) GetLocalAddress() string {
+func (p *FakeP2p) GetLocalAccount() string {
 	return "local_p2p"
 }
 
@@ -139,12 +139,12 @@ type FakeLedger struct {
 	fakeCache     *FakeReader
 }
 
-func NewFakeLedger() *FakeLedger {
+func NewFakeLedger(conf []byte) *FakeLedger {
 	l := &FakeLedger{
 		ledgerSlice:   []*FakeBlock{},
 		ledgerMap:     map[string]*FakeBlock{},
 		meta:          nil,
-		consensusConf: GetGenesisConsensusConf(),
+		consensusConf: conf,
 		fakeCache:     CreateXModelCache(),
 	}
 	for i := 0; i < 3; i++ {
@@ -153,7 +153,7 @@ func NewFakeLedger() *FakeLedger {
 	return l
 }
 
-func (l *FakeLedger) GetTipSnapShot() context.FakeXMReader {
+func (l *FakeLedger) GetTipSnapShot() context.XMReader {
 	return l.fakeCache
 }
 

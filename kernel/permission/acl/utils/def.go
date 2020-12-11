@@ -1,6 +1,11 @@
 package utils
 
 const (
+	SubModName = "acl"
+	StatusOK   = 200
+)
+
+const (
 	accountSize            = 16
 	contractNameMaxSize    = 16
 	contractNameMinSize    = 4

@@ -3,8 +3,8 @@ package rule
 import (
 	"errors"
 
-	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/ptree"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 // ThresholdValidator is Valiator for Threshold permission model

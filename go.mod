@@ -9,7 +9,6 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.4.2
 	github.com/golang/snappy v0.0.2-0.20200707131729-196ae77b8a26
-	github.com/grpc-ecosystem/go-grpc-middleware v1.2.0
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/ipfs/go-ipfs-addr v0.0.1
 	github.com/libp2p/go-libp2p v0.11.0

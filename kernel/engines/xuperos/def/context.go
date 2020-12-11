@@ -5,6 +5,15 @@ import (
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	"github.com/xuperchain/xupercore/kernel/common/xaddress"
+	"github.com/xuperchain/xupercore/kernel/consensus"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/network"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
+	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 )
 
 // 引擎运行上下文环境
@@ -16,34 +25,29 @@ type EngineCtx struct {
 	// 引擎配置
 	EngCfg *engconf.EngineConf
 	// 网络组件句柄
-	Net XNetwork
+	Net network.Network
 }
 
 // 链级别上下文，维护链级别上下文，每条平行链各有一个
 type ChainCtx struct {
+	// 基础上下文
+	xctx.BaseCtx
 	// 引擎上下文
-	EngineCtx
-
+	EngCtx *EngineCtx
 	// 链名
 	BCName string
-	// 存储路径
-	DataDir string
-	// 状态
-	Status int
-
 	// 账本
-	Ledger XLedger
+	Ledger *ledger.Ledger
 	// 状态机
-	State XState
+	State *state.XuperState
 	// 合约
-	Contract XContract
+	Contract contract.Manager
 	// 共识
-	Consensus XConsensus
+	Consensus consensus.ConsensusInterface
 	// 加密
-	Crypto XCrypto
+	Crypto cryptoBase.CryptoClient
 	// 权限
-	Acl XAcl
-
+	Acl aclBase.AclManager
 	// 结点账户信息
-	Address *Address
+	Address *xaddress.Address
 }

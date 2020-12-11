@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xuperchain/xupercore/kernel/network/config"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/logs"
+	pb "github.com/xuperchain/xupercore/protos"
+
 	ggio "github.com/gogo/protobuf/io"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
-
-	"github.com/xuperchain/xupercore/kernel/network/config"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 // define common errors
@@ -29,8 +29,8 @@ var (
 
 // Stream is the IO wrapper for underly P2P connection
 type Stream struct {
-	ctx    nctx.DomainCtx
-	config *config.Config
+	ctx    *nctx.NetCtx
+	config *config.NetConf
 	log    logs.Logger
 
 	srv      *P2PServerV2
@@ -48,15 +48,14 @@ type Stream struct {
 }
 
 // NewStream create Stream instance
-func NewStream(ctx nctx.DomainCtx, srv *P2PServerV2, netStream network.Stream) (*Stream, error) {
+func NewStream(ctx *nctx.NetCtx, srv *P2PServerV2, netStream network.Stream) (*Stream, error) {
 	w := bufio.NewWriter(netStream)
 	wc := ggio.NewDelimitedWriter(w)
-	maxMsgSize := int(ctx.GetP2PConf().MaxMessageSize) << 20
+	maxMsgSize := int(ctx.P2PConf.MaxMessageSize) << 20
 	stream := &Stream{
-		ctx:    ctx,
-		config: ctx.GetP2PConf(),
-		log:    ctx.GetLog(),
-
+		ctx:      ctx,
+		config:   ctx.P2PConf,
+		log:      ctx.GetLog(),
 		srv:      srv,
 		stream:   netStream,
 		streamMu: new(sync.Mutex),
@@ -65,8 +64,7 @@ func NewStream(ctx nctx.DomainCtx, srv *P2PServerV2, netStream network.Stream) (
 		rc:       ggio.NewDelimitedReader(netStream, maxMsgSize),
 		w:        w,
 		wc:       wc,
-
-		valid: true,
+		valid:    true,
 	}
 	stream.Start()
 	return stream, nil
@@ -158,9 +156,11 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 		return nil
 	}
 
-	s.log.Trace("HandlerNewMessage", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
+	s.log.Trace("HandlerNewMessage", "log_id", msg.GetHeader().GetLogid(),
+		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
 	if err := s.srv.dispatcher.Dispatch(s.ctx, msg, s); err != nil {
-		s.log.Warn("Dispatcher", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
+		s.log.Warn("Dispatcher", "log_id", msg.GetHeader().GetLogid(),
+			"type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
 		return nil // not return err
 	}
 
@@ -169,7 +169,8 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 
 // SendMessage will send a message to a peer
 func (s *Stream) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
-	s.log.Trace("Stream SendMessage", "log_id", msg.GetHeader().GetLogid(), "msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
+	s.log.Trace("Stream SendMessage", "log_id", msg.GetHeader().GetLogid(), "msgType",
+		msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
 	err := s.Send(msg)
 	if err != nil {
 		s.Close()
@@ -182,7 +183,9 @@ func (s *Stream) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 }
 
 // SendMessageWithResponse will send a message to a peer and wait for response
-func (s *Stream) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (s *Stream) SendMessageWithResponse(ctx context.Context,
+	msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+
 	respType := p2p.GetRespMessageType(msg.GetHeader().GetType())
 	if respType == pb.XuperMessage_MSG_TYPE_NONE {
 		return nil, ErrNoneMessageType
@@ -210,10 +213,12 @@ func (s *Stream) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessa
 	}()
 
 	// 开始写消息
-	s.log.Trace("Stream SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(), "msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
+	s.log.Trace("Stream SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(), "msgType",
+		msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
 	if err := s.Send(msg); err != nil {
 		s.Close()
-		s.log.Warn("SendMessageWithResponse Send error", "log_id", msg.GetHeader().GetLogid(), "msgType", msg.GetHeader().GetType(), "err", err)
+		s.log.Warn("SendMessageWithResponse Send error", "log_id", msg.GetHeader().GetLogid(),
+			"msgType", msg.GetHeader().GetType(), "err", err)
 		return nil, err
 	}
 
@@ -228,7 +233,9 @@ func (s *Stream) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessa
 }
 
 // waitResponse wait resp with timeout
-func (s *Stream) waitResponse(ctx context.Context, msg *pb.XuperMessage, observerCh chan *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (s *Stream) waitResponse(ctx context.Context, msg *pb.XuperMessage,
+	observerCh chan *pb.XuperMessage) (*pb.XuperMessage, error) {
+
 	timeout := s.config.Timeout
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
@@ -236,14 +243,19 @@ func (s *Stream) waitResponse(ctx context.Context, msg *pb.XuperMessage, observe
 	for {
 		select {
 		case <-ctx.Done():
-			s.log.Warn("waitResponse ctx done", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "pid", s.id.Pretty(), "error", ctx.Err())
+			s.log.Warn("waitResponse ctx done", "log_id", msg.GetHeader().GetLogid(),
+				"type", msg.GetHeader().GetType(), "pid", s.id.Pretty(), "error", ctx.Err())
 			return nil, ctx.Err()
 		case resp := <-observerCh:
 			if p2p.VerifyMessageType(msg, resp, s.id.Pretty()) {
-				s.log.Trace("waitResponse get resp done", "log_id", resp.GetHeader().GetLogid(), "type", resp.GetHeader().GetType(), "checksum", resp.GetHeader().GetDataCheckSum(), "resp.from", resp.GetHeader().GetFrom())
+				s.log.Trace("waitResponse get resp done", "log_id", resp.GetHeader().GetLogid(),
+					"type", resp.GetHeader().GetType(), "checksum", resp.GetHeader().GetDataCheckSum(),
+					"resp.from", resp.GetHeader().GetFrom())
 				return resp, nil
 			}
-			s.log.Trace("waitResponse get resp continue", "log_id", resp.GetHeader().GetLogid(), "type", resp.GetHeader().GetType(), "checksum", resp.GetHeader().GetDataCheckSum(), "resp.from", resp.GetHeader().GetFrom())
+			s.log.Trace("waitResponse get resp continue", "log_id", resp.GetHeader().GetLogid(),
+				"type", resp.GetHeader().GetType(), "checksum", resp.GetHeader().GetDataCheckSum(),
+				"resp.from", resp.GetHeader().GetFrom())
 			continue
 		}
 	}

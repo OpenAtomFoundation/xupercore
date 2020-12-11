@@ -2,32 +2,47 @@ package context
 
 import (
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 )
 
-type LedgerCtx interface {
-	//全局ctx Resource
-	GetGenesisItem(item string) interface{}
-	GetConfirmedAccountACL(accountName string) ([]byte, error)
-	GetConfirmedMethodACL(contractName, methodName string) ([]byte, error)
+const (
+	SubModName = "acl"
+)
+
+type LedgerRely interface {
+	// 从创世块获取创建合约账户消耗gas
+	GetNewAccountGas() (int64, error)
+	// 获取状态机最新确认快照
+	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)
 }
 
-type FakeContract interface {
-	RegisterKernMethod(contract, method string, handle kernel.KernMethod)
-}
-
-type PermissionCtx struct {
+type AclCtx struct {
+	// 基础上下文
+	xcontext.BaseCtx
 	BcName   string
-	BCtx     xcontext.BaseCtx
-	Ledger   LedgerCtx
-	Register FakeContract
+	Ledger   LedgerRely
+	Contract contract.Manager
 }
 
-func CreatePermissionCtx(bcName string, bCtx xcontext.BaseCtx, leger LedgerCtx, register FakeContract) PermissionCtx {
-	return PermissionCtx{
-		BcName:   bcName,
-		BCtx:     bCtx,
-		Ledger:   leger,
-		Register: register,
+func NewAclCtx(bcName string, leg LedgerRely, contract contract.Manager) (*AclCtx, error) {
+	if bcName == "" || leg == nil || contract == nil {
+		return nil, fmt.Errorf("new acl ctx failed because param error")
 	}
+
+	log, err := logs.NewLogger("", SubModName)
+	if err != nil {
+		return nil, fmt.Errorf("new acl ctx failed because new logger error. err:%v", err)
+	}
+
+	ctx := new(AclCtx)
+	ctx.XLog = log
+	ctx.Timer = timer.NewXTimer()
+	ctx.BcName = bcName
+	ctx.Ledger = leg
+	ctx.Contract = contract
+
+	return ctx, nil
 }

@@ -2,13 +2,14 @@ package p2p
 
 import (
 	"context"
+
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 // P2P is the p2p server interface
 type Server interface {
-	Init(nctx.DomainCtx) error
+	Init(*nctx.NetCtx) error
 	Start()
 	Stop()
 
@@ -19,7 +20,7 @@ type Server interface {
 	SendMessage(context.Context, *pb.XuperMessage, ...OptionFunc) error
 	SendMessageWithResponse(context.Context, *pb.XuperMessage, ...OptionFunc) ([]*pb.XuperMessage, error)
 
-	Context() nctx.DomainCtx
+	Context() *nctx.NetCtx
 	P2PState() *State
 }
 

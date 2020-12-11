@@ -11,6 +11,13 @@ import (
 	"strings"
 	"time"
 
+	knet "github.com/xuperchain/xupercore/kernel/network"
+	"github.com/xuperchain/xupercore/kernel/network/config"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/logs"
+	pb "github.com/xuperchain/xupercore/protos"
+
 	ipfsaddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
 	circuit "github.com/libp2p/go-libp2p-circuit"
@@ -19,13 +26,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/multiformats/go-multiaddr"
-
-	net "github.com/xuperchain/xupercore/kernel/network"
-	"github.com/xuperchain/xupercore/kernel/network/config"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
-	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 const (
@@ -35,7 +35,7 @@ const (
 )
 
 func init() {
-	net.Register(ServerName, NewP2PServerV2)
+	knet.Register(ServerName, NewP2PServerV2)
 }
 
 var (
@@ -61,9 +61,9 @@ var (
 
 // P2PServerV2 is the node in the network
 type P2PServerV2 struct {
-	ctx    nctx.DomainCtx
+	ctx    *nctx.NetCtx
 	log    logs.Logger
-	config *config.Config
+	config *config.NetConf
 
 	id         peer.ID
 	host       host.Host
@@ -87,13 +87,13 @@ func NewP2PServerV2() p2p.Server {
 }
 
 // Init initialize p2p server using given config
-func (p *P2PServerV2) Init(ctx nctx.DomainCtx) error {
+func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 	p.ctx = ctx
 	p.log = ctx.GetLog()
-	p.config = ctx.GetP2PConf()
+	p.config = ctx.P2PConf
 
-	cfg := ctx.GetP2PConf()
-	opts, err := genHostOption(cfg)
+	cfg := ctx.P2PConf
+	opts, err := genHostOption(ctx)
 	if err != nil {
 		p.log.Error("genHostOption error", "error", err)
 		return ErrGenerateOpts
@@ -111,7 +111,7 @@ func (p *P2PServerV2) Init(ctx nctx.DomainCtx) error {
 	p.log.Trace("Host", "address", p.getMultiAddr(p.host.ID(), p.host.Addrs()), "config", *cfg)
 
 	p.isStorePeers = cfg.IsStorePeers
-	p.p2pDataPath = cfg.P2PDataPath
+	p.p2pDataPath = ctx.EnvCfg.GenDataAbsPath(cfg.P2PDataPath)
 	p.dispatcher = p2p.NewDispatcher(ctx)
 
 	dhtOpts := []dht.Option{dht.Mode(dht.ModeServer), dht.RoutingTableRefreshPeriod(10 * time.Second)}
@@ -157,7 +157,8 @@ func (p *P2PServerV2) Init(ctx nctx.DomainCtx) error {
 	return nil
 }
 
-func genHostOption(cfg *config.Config) ([]libp2p.Option, error) {
+func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
+	cfg := ctx.P2PConf
 	muAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.Port))
 	opts := []libp2p.Option{
 		libp2p.ListenAddrs(muAddr),
@@ -174,14 +175,15 @@ func genHostOption(cfg *config.Config) ([]libp2p.Option, error) {
 	}
 
 	if cfg.IsTls {
-		priv, err := p2p.GetPemKeyPairFromPath(cfg.KeyPath)
+		priv, err := p2p.GetPemKeyPairFromPath(ctx.EnvCfg.GenDataAbsPath(cfg.KeyPath))
 		if err != nil {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.Security(ID, NewTLS(cfg.KeyPath, cfg.ServiceName)))
+		opts = append(opts, libp2p.Security(ID,
+			NewTLS(ctx.EnvCfg.GenDataAbsPath(cfg.KeyPath), cfg.ServiceName)))
 	} else {
-		priv, err := p2p.GetKeyPairFromPath(cfg.KeyPath)
+		priv, err := p2p.GetKeyPairFromPath(ctx.EnvCfg.GenDataAbsPath(cfg.KeyPath))
 		if err != nil {
 			return nil, err
 		}
@@ -192,8 +194,8 @@ func genHostOption(cfg *config.Config) ([]libp2p.Option, error) {
 	return opts, nil
 }
 
-func setStaticNodes(ctx nctx.DomainCtx, p *P2PServerV2) {
-	cfg := ctx.GetP2PConf()
+func setStaticNodes(ctx *nctx.NetCtx, p *P2PServerV2) {
+	cfg := ctx.P2PConf
 	staticNodes := map[string][]peer.ID{}
 	for bcname, peers := range cfg.StaticNodes {
 		peerIDs := make([]peer.ID, 0, len(peers))
@@ -271,7 +273,7 @@ func (p *P2PServerV2) UnRegister(sub p2p.Subscriber) error {
 	return p.dispatcher.UnRegister(sub)
 }
 
-func (p *P2PServerV2) Context() nctx.DomainCtx {
+func (p *P2PServerV2) Context() *nctx.NetCtx {
 	return p.ctx
 }
 

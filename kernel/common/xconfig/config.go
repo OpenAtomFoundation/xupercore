@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/xuperchain/xupercore/kernel/common/xutils"
 	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/spf13/viper"
@@ -20,6 +21,10 @@ type EnvConf struct {
 	LogDir string `yaml:"logDir,omitempty"`
 	// tls file directory
 	TlsDir string `yaml:"tlsDir,omitempty"`
+	// node key directory
+	KeyDir string `yaml:"keyDir,omitempty"`
+	// blockchain data directory
+	ChainDir string `yaml:"ChainDir,omitempty"`
 	// engine config file name
 	EngineConf string `yaml:"engineConf,omitempty"`
 	// log config file name
@@ -28,6 +33,10 @@ type EnvConf struct {
 	ServConf string `yaml:"servConf,omitempty"`
 	// network config file name
 	NetConf string `yaml:"netConf,omitempty"`
+	// ledger config file name
+	LedgerConf string `yaml:"ledgerConf,omitempty"`
+	// metric switch
+	MetricSwitch bool `yaml:"metricSwitch,omitempty"`
 }
 
 func LoadEnvConf(cfgFile string) (*EnvConf, error) {
@@ -37,26 +46,40 @@ func LoadEnvConf(cfgFile string) (*EnvConf, error) {
 		return nil, fmt.Errorf("load env config failed.err:%s", err)
 	}
 
+	// 修改根目录。优先级：1:X_ROOT_PATH 2:配置文件设置 3:当前bin文件上级目录
+	rt := xutils.GetXRootPath()
+	if rt != "" {
+		cfg.RootPath = rt
+	}
+
 	return cfg, nil
 }
 
 func GetDefEnvConf() *EnvConf {
 	return &EnvConf{
 		// 默认设置为当前执行目录
-		RootPath:   utils.GetCurExecDir(),
-		ConfDir:    "conf",
-		DataDir:    "data",
-		LogDir:     "logs",
-		TlsDir:     "tls",
-		EngineConf: "engine.yaml",
-		LogConf:    "log.yaml",
-		ServConf:   "server.yaml",
-		NetConf:    "network.yaml",
+		RootPath:     xutils.GetCurRootDir(),
+		ConfDir:      "conf",
+		DataDir:      "data",
+		LogDir:       "logs",
+		TlsDir:       "tls",
+		KeyDir:       "keys",
+		ChainDir:     "blockchain",
+		EngineConf:   "engine.yaml",
+		LogConf:      "log.yaml",
+		ServConf:     "server.yaml",
+		NetConf:      "network.yaml",
+		LedgerConf:   "ledger.yaml",
+		MetricSwitch: false,
 	}
 }
 
 func (t *EnvConf) GenDirAbsPath(dir string) string {
 	return filepath.Join(t.RootPath, dir)
+}
+
+func (t *EnvConf) GenDataAbsPath(dir string) string {
+	return filepath.Join(t.GenDirAbsPath(t.DataDir), dir)
 }
 
 func (t *EnvConf) GenConfFilePath(fName string) string {

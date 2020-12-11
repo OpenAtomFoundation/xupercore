@@ -13,24 +13,24 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 type Conn struct {
-	ctx    nctx.DomainCtx
+	ctx    *nctx.NetCtx
 	log    logs.Logger
-	config *config.Config
+	config *config.NetConf
 
 	id   string // addr:"IP:Port"
 	conn *grpc.ClientConn
 }
 
 // NewConn create new connection with addr
-func NewConn(ctx nctx.DomainCtx, addr string) (*Conn, error) {
+func NewConn(ctx *nctx.NetCtx, addr string) (*Conn, error) {
 	c := &Conn{
 		id:     addr,
-		config: ctx.GetP2PConf(),
+		config: ctx.P2PConf,
 		log:    ctx.GetLog(),
 	}
 
@@ -61,7 +61,7 @@ func (c *Conn) newConn() error {
 	conn := &grpc.ClientConn{}
 	options := append([]grpc.DialOption{}, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.config.MaxMessageSize)<<20)))
 	if c.config.IsTls {
-		creds, err := p2p.NewTLS(c.config.KeyPath, c.config.ServiceName)
+		creds, err := p2p.NewTLS(c.ctx.EnvCfg.GenDataAbsPath(c.config.KeyPath), c.config.ServiceName)
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (c *Conn) PeerID() string {
 	return c.id
 }
 
-func NewConnPool(ctx nctx.DomainCtx) (*ConnPool, error) {
+func NewConnPool(ctx *nctx.NetCtx) (*ConnPool, error) {
 	return &ConnPool{
 		ctx: ctx,
 	}, nil
@@ -165,7 +165,7 @@ func NewConnPool(ctx nctx.DomainCtx) (*ConnPool, error) {
 
 // ConnPool manage all the connection
 type ConnPool struct {
-	ctx  nctx.DomainCtx
+	ctx  *nctx.NetCtx
 	pool sync.Map // map[peerID]*conn
 }
 

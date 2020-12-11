@@ -15,9 +15,9 @@ import (
 
 type Meta struct {
 	log       logs.Logger
-	meta      *pb.UtxoMeta // utxo meta
-	metaTmp   *pb.UtxoMeta // tmp utxo meta
-	mutexMeta *sync.Mutex  // access control for meta
+	meta      *pb.UtxoMeta  // utxo meta
+	metaTmp   *pb.UtxoMeta  // tmp utxo meta
+	mutexMeta *sync.Mutex   // access control for meta
 	metaTable kvdb.Database // 元数据表，会持久化保存latestBlockid
 }
 
@@ -28,11 +28,11 @@ var (
 	TxSizePercent = 0.8
 )
 
-func NewMeta(lctx *def.LedgerCtx, stateDB kvdb.Database) (*Meta, nil){
+func NewMeta(lctx *def.LedgerCtx, stateDB kvdb.Database) (*Meta, nil) {
 	return &Meta{
-		log: lctx.XLog,
-		meta: &pb.UtxoMeta{},
-		metaTmp: &pb.UtxoMeta{},
+		log:       lctx.XLog,
+		meta:      &pb.UtxoMeta{},
+		metaTmp:   &pb.UtxoMeta{},
 		mutexMeta: &sync.Map{},
 		metaTable: kvdb.NewTable(stateDB, pb.MetaTablePrefix),
 	}, nil
@@ -157,6 +157,7 @@ func (t *Meta) LoadReservedContracts() ([]*pb.InvokeRequest, error) {
 	return nil, findErr
 }
 
+//when to register to kernel method
 func (t *Meta) UpdateReservedContracts(params []*pb.InvokeRequest, batch kvdb.Batch) error {
 	if params == nil {
 		return fmt.Errorf("invalid reservered contract requests")
@@ -306,7 +307,7 @@ func (t *Meta) UpdateIrreversibleBlockHeight(nextIrreversibleBlockHeight int64, 
 	return nil
 }
 
-func (t *Meta) updateNextIrreversibleBlockHeight(blockHeight int64, curIrreversibleBlockHeight int64, curIrreversibleSlideWindow int64, batch kvdb.Batch) error {
+func (t *Meta) UpdateNextIrreversibleBlockHeight(blockHeight int64, curIrreversibleBlockHeight int64, curIrreversibleSlideWindow int64, batch kvdb.Batch) error {
 	// negative number for irreversible slide window is not allowed.
 	if curIrreversibleSlideWindow < 0 {
 		return ErrProposalParamsIsNegativeNumber

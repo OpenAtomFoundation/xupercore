@@ -4,8 +4,7 @@ import (
 	"errors"
 	"github.com/xuperchain/xuperchain/core/pb"
 
-	netPB "github.com/xuperchain/xupercore/kernel/network/pb"
-
+	netPB "github.com/xuperchain/xupercore/protos"
 )
 
 var (

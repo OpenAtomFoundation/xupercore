@@ -4,8 +4,7 @@ import (
 	"strings"
 
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
-	pctx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
-	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 // ValidateStatus define the validation status of a perm node
@@ -55,14 +54,14 @@ func (pn *PermNode) FindChild(name string) *PermNode {
 }
 
 // BuildAccountPermTree build PermTree for account
-func BuildAccountPermTree(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account string, aksuri []string) (*PermNode, error) {
-	accountACL, err := aclMgr.GetAccountACL(ctx, account)
+func BuildAccountPermTree(aclMgr base.AclManager, account string, aksuri []string) (*PermNode, error) {
+	accountACL, err := aclMgr.GetAccountACL(account)
 	if err != nil {
 		return nil, err
 	}
 
 	root := NewPermNode(account, accountACL)
-	root, err = buildPermTree(root, aclMgr, aksuri, ctx, true)
+	root, err = buildPermTree(root, aclMgr, aksuri, true)
 	if err != nil {
 		return nil, err
 	}
@@ -70,14 +69,16 @@ func BuildAccountPermTree(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, ac
 }
 
 // BuildMethodPermTree build PermTree for contract method
-func BuildMethodPermTree(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, contractName string, methodName string, aksuri []string) (*PermNode, error) {
-	methodACL, err := aclMgr.GetContractMethodACL(ctx, contractName, methodName)
+func BuildMethodPermTree(aclMgr base.AclManager, contractName string,
+	methodName string, aksuri []string) (*PermNode, error) {
+
+	methodACL, err := aclMgr.GetContractMethodACL(contractName, methodName)
 	if err != nil {
 		return nil, err
 	}
 
 	root := NewPermNode(methodName, methodACL)
-	root, err = buildPermTree(root, aclMgr, aksuri, ctx, false)
+	root, err = buildPermTree(root, aclMgr, aksuri, false)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,9 @@ func BuildMethodPermTree(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, con
 }
 
 // build perm tree, not test
-func buildPermTree(root *PermNode, aclMgr base.PermissionImpl, aksuri []string, ctx pctx.PermissionCtx, rootIsAccount bool) (*PermNode, error) {
+func buildPermTree(root *PermNode, aclMgr base.AclManager,
+	aksuri []string, rootIsAccount bool) (*PermNode, error) {
+
 	akslen := len(aksuri)
 	for i := 0; i < akslen; i++ {
 		akuri := aksuri[i]
@@ -111,7 +114,7 @@ func buildPermTree(root *PermNode, aclMgr base.PermissionImpl, aksuri []string, 
 				continue
 			}
 			// not found current path in perm tree, so create new node in tree
-			accountACL, err := aclMgr.GetAccountACL(ctx, akname)
+			accountACL, err := aclMgr.GetAccountACL(akname)
 			if err != nil {
 				return nil, err
 			}

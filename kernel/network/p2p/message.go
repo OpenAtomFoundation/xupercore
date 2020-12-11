@@ -7,8 +7,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
 
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/utils"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 var (

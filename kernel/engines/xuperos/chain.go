@@ -3,21 +3,22 @@ package xuperos
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xuperchain/core/pb"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
+
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-	"time"
+
 )
 
 type Chain struct {
-	// 链级上下文
+	// 链上下文
 	ctx *def.ChainCtx
 	// log
 	log logs.Logger
-
 	// 矿工
 	miner *miner
 	// 交易处理
@@ -32,18 +33,35 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(ctx *def.ChainCtx) (*Chain, error) {
-	chain := &Chain{}
-	chain.ctx = ctx
-	chain.relyAgent = NewChainRelyAgent(chain)
-
-	// 初始化链环境上下文
-	err := chain.initChainCtx()
-	if err != nil {
-		return nil, fmt.Errorf("init chain ctx error: %v", err)
+func LoadChain(engCtx *def.EngineCtx, bcName string) (*Chain, error) {
+	if engCtx == nil || bcName == "" {
+		return nil, fmt.Errorf("load chains failed because param error", "bc_name", bcName)
 	}
 
-	chain.log = ctx.XLog
+	// 实例化链日志句柄
+	log, err := logs.NewLogger("", bcName)
+	if err != nil {
+		return nil, fmt.Errorf("new logger failed.err:%v", err)
+	}
+
+	// 实例化链实例
+	ctx := &def.ChainCtx{}
+	ctx.EngCtx = engCtx
+	ctx.BCName = bcName
+	ctx.XLog = log
+	ctx.Timer = timer.NewXTimer()
+
+	chainObj := &Chain{}
+	chainObj.ctx = ctx
+	chainObj.log = ctx.XLog
+	chainObj.relyAgent = agent.NewChainRelyAgent(chainObj)
+
+	// 初始化链环境上下文
+	err = chainObj.initChainCtx()
+	if err != nil {
+		t.log.Error("init chain ctx failed", "bc_name", bcName, "err", err)
+		return nil, fmt.Errorf("init chain ctx failed")
+	}
 
 	// 注册合约
 	RegisterKernMethod()
@@ -151,65 +169,67 @@ func (t *Chain) ProcBlock(in *pb.Block) error {
 }
 
 func (t *Chain) initChainCtx() error {
-	ctx := t.ctx
-	if ctx == nil || ctx.EnvCfg == nil || ctx.EngCfg == nil {
-		return fmt.Errorf("ctx or config is nil")
-	}
-
-	if ctx.BCName == "" || ctx.DataDir == "" {
-		return fmt.Errorf("params is nil, bcName=%s, dataDir=%s", ctx.BCName, ctx.DataDir)
-	}
-
-	log, err := logs.NewLogger("", ctx.BCName)
+	// 1.实例化账本
+	leg, err := t.relyAgent.CreateLedger(false)
 	if err != nil {
-		return fmt.Errorf("new logger error: %v", err)
+		t.log.Error("open ledger failed", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("open ledger failed")
 	}
+	t.ctx.Ledger = leg
 
-	ctx.XLog = log
-	ctx.Timer = timer.NewXTimer()
-
-	// 加密
-	ctx.Crypto, err = t.relyAgent.CreateCrypto()
+	// 2.实例化状态机
+	stat, err := t.relyAgent.CreateState(t.ctx.Ledger)
 	if err != nil {
-		log.Error("create crypto client failed", "error", err)
+		t.log.Error("open state failed", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("open state failed")
+	}
+	t.ctx.State = stat
+
+	// 3.实例化加密组件
+	ctype, err := agent.NewLedgerAgent(t.ctx).GetCryptoType()
+	if err != nil {
+		t.log.Error("query crypto type failed", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("query crypto type failed")
+	}
+	crypt, err := t.relyAgent.CreateCrypto(ctype)
+	if err != nil {
+		t.log.Error("create crypto client failed", "error", err)
+		return fmt.Errorf("create crypto client failed")
+	}
+	t.ctx.Crypto = crypt
+
+	// 4.加载节点账户信息
+	keyPath := t.ctx.EngCtx.EnvCfg.GenDataAbsPath(t.ctx.EngCtx.EnvCfg.KeyDir)
+	addr, err := xaddress.LoadAddrInfo(keyPath, t.ctx.Crypto)
+	if err != nil {
+		t.log.Error("load node addr info error", "bcName", t.ctx.BCName, "keyPath", keyPath, "err", err)
+		return fmt.Errorf("load node addr info error")
+	}
+	t.ctx.Address = addr
+
+	// 5.合约
+	contractObj, err := t.relyAgent.CreateContract()
+	if err != nil {
+		t.log.Error("create contract manager error", "bcName", ctx.BCName, "err", err)
+		return fmt.Errorf("create contract manager error")
+	}
+	t.ctx.Contract = contractObj
+
+	// 6.Acl
+	aclObj, err := t.relyAgent.CreateAcl()
+	if err != nil {
+		t.log.Error("create acl error", "bcName", ctx.BCName, "err", err)
+		return fmt.Errorf("create acl error")
+	}
+	t.ctx.Acl = aclObj
+
+	// 7.共识
+	cons, err := t.relyAgent.CreateConsensus()
+	if err != nil {
+		t.log.Error("create consensus error", "bcName", ctx.BCName, "err", err)
 		return err
 	}
-
-	// 账户信息
-	keyPath := t.ctx.EngCfg.Miner.KeyPath
-	ctx.Address, err = def.LoadAddrInfo(keyPath, ctx.Crypto)
-	if err != nil {
-		log.Error("load addr info error", "bcName", ctx.BCName, "keyPath", keyPath, "error", err)
-		return err
-	}
-
-	// 账本
-	ctx.Ledger, err = t.relyAgent.CreateLedger()
-	if err != nil {
-		log.Error("create ledger error", "bcName", ctx.BCName, "error", err)
-		return err
-	}
-
-	// 状态机
-	ctx.State, err = t.relyAgent.CreateState()
-	if err != nil {
-		log.Error("create state error", "bcName", ctx.BCName, "error", err)
-		return err
-	}
-
-	// 合约
-	ctx.Contract, err = t.relyAgent.CreateContract()
-	if err != nil {
-		log.Error("create contract error", "bcName", ctx.BCName, "error", err)
-		return err
-	}
-
-	// 共识
-	ctx.Consensus, err = t.relyAgent.CreateConsensus()
-	if err != nil {
-		log.Error("create consensus error", "bcName", ctx.BCName, "error", err)
-		return err
-	}
+	t.ctx.Consensus = cons
 
 	return nil
 }

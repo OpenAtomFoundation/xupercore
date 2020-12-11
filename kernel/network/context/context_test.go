@@ -3,36 +3,20 @@ package context
 import (
 	"testing"
 
-	"github.com/xuperchain/xupercore/kernel/network/config"
-	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/kernel/mock"
 )
 
-var log *logs.LogFitter
+func TestNewNetCtx(t *testing.T) {
+	mock.InitLog()
 
-func GetLog() (logs.Logger, error) {
-	if log != nil {
-		return log, nil
-	}
-
-	curDir := utils.GetCurFileDir() + "/../../.."
-	logs.InitLog(curDir+"/conf/log.yaml", curDir+"/logs")
-	xlog, err := logs.NewLogger("123567890", "p2p")
+	ecfg, err := mock.NewEnvConfForTest()
 	if err != nil {
-		return nil, err
+		t.Fatal(err)
 	}
 
-	xlog.SetCommField("submodule", "p2p")
-	log = xlog
-	return log, nil
-}
-
-func TestCreateDomainCtx(t *testing.T) {
-	logf, err := GetLog()
+	octx, err := NewNetCtx(ecfg)
 	if err != nil {
-		t.Errorf("new log failed.err:%v", err)
+		t.Fatal(err)
 	}
-
-	octx, _ := CreateDomainCtx(logf, config.GetNetConfFile())
-	octx.GetLog().Debug("test CreateDomainCtx", "cfg", octx.GetP2PConf())
+	octx.XLog.Debug("test NewNetCtx succ", "cfg", octx.P2PConf)
 }

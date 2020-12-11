@@ -29,9 +29,9 @@ func LoadLedgerConf(cfgFile string) (*XLedgerConf, error) {
 func GetDefLedgerConf() *XLedgerConf {
 	return &XLedgerConf{
 		KVEngineType: "leveldb",
-		StorePath: "",
-		OtherPaths: nil,
-		StorageType: "",
+		StorePath:    "",
+		OtherPaths:   nil,
+		StorageType:  "",
 	}
 }
 

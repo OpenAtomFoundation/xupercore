@@ -19,7 +19,7 @@ type Response struct {
 
 // ContextConfig define the config of context
 type ContextConfig struct {
-	State XMState
+	State StateSandbox
 
 	Initiator   string
 	AuthRequire []string

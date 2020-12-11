@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/ptree"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/rule"
 	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	pctx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
@@ -26,14 +26,14 @@ func IdentifyAK(akuri string, sign *pb.SignatureInfo, msg []byte) (bool, error) 
 	return VerifySign(ak, sign, msg)
 }
 
-func IdentifyAccount(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account string, aksuri []string) (bool, error) {
+func IdentifyAccount(aclMgr base.AclManager, account string, aksuri []string) (bool, error) {
 	// aks and signs could have zero length for permission rule Null
 	if aclMgr == nil {
 		return false, fmt.Errorf("Invalid Param, aclMgr=%v", aclMgr)
 	}
 
 	// build perm tree
-	pnode, err := ptree.BuildAccountPermTree(aclMgr, ctx, account, aksuri)
+	pnode, err := ptree.BuildAccountPermTree(aclMgr, account, aksuri)
 	if err != nil {
 		return false, err
 	}
@@ -41,14 +41,16 @@ func IdentifyAccount(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account
 	return validatePermTree(pnode, true)
 }
 
-func CheckContractMethodPerm(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, aksuri []string, contractName, methodName string) (bool, error) {
+func CheckContractMethodPerm(aclMgr base.AclManager, aksuri []string,
+	contractName, methodName string) (bool, error) {
+
 	// aks and signs could have zero length for permission rule Null
 	if aclMgr == nil {
 		return false, fmt.Errorf("Invalid Param, aclMgr=%v", aclMgr)
 	}
 
 	// build perm tree
-	pnode, err := ptree.BuildMethodPermTree(aclMgr, ctx, contractName, methodName, aksuri)
+	pnode, err := ptree.BuildMethodPermTree(aclMgr, contractName, methodName, aksuri)
 	if err != nil {
 		return false, err
 	}
@@ -126,13 +128,13 @@ func SplitAccountURI(akuri string) []string {
 }
 
 // GetAccountACL return account acl
-func GetAccountACL(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, account string) (*pb.Acl, error) {
-	return aclMgr.GetAccountACL(ctx, account)
+func GetAccountACL(aclMgr base.AclManager, account string) (*pb.Acl, error) {
+	return aclMgr.GetAccountACL(account)
 }
 
 // GetContractMethodACL return contract method acl
-func GetContractMethodACL(aclMgr base.PermissionImpl, ctx pctx.PermissionCtx, contractName string, methodName string) (*pb.Acl, error) {
-	return aclMgr.GetContractMethodACL(ctx, contractName, methodName)
+func GetContractMethodACL(aclMgr base.AclManager, contractName, methodName string) (*pb.Acl, error) {
+	return aclMgr.GetContractMethodACL(contractName, methodName)
 }
 
 func VerifySign(ak string, si *pb.SignatureInfo, data []byte) (bool, error) {

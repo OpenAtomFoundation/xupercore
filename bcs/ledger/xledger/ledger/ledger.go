@@ -68,16 +68,18 @@ const (
 
 // Ledger define data structure of Ledger
 type Ledger struct {
+	// 运行上下文
+	ctx              *def.LedgerCtx
 	baseDB           kvdb.Database // 底层是一个leveldb实例，kvdb进行了包装
 	metaTable        kvdb.Database // 记录区块链的根节点、高度、末端节点
 	confirmedTable   kvdb.Database // 已确认的订单表
 	blocksTable      kvdb.Database // 区块表
 	mutex            *sync.RWMutex
-	xlog             logs.Logger       //日志库
-	meta             *pb.LedgerMeta   //账本关键的元数据{genesis, tip, height}
-	GenesisBlock     *GenesisBlock    //创始块
-	pendingTable     kvdb.Database    //保存临时的block区块
-	heightTable      kvdb.Database    //保存高度到Blockid的映射
+	xlog             logs.Logger     //日志库
+	meta             *pb.LedgerMeta  //账本关键的元数据{genesis, tip, height}
+	GenesisBlock     *GenesisBlock   //创始块
+	pendingTable     kvdb.Database   //保存临时的block区块
+	heightTable      kvdb.Database   //保存高度到Blockid的映射
 	blockCache       *cache.LRUCache // block cache, 加速QueryBlock
 	blkHeaderCache   *cache.LRUCache // block header cache, 加速fetchBlock
 	cryptoClient     crypto_base.CryptoClient
@@ -96,12 +98,12 @@ type ConfirmStatus struct {
 }
 
 // NewLedger create an empty ledger, if it already exists, open it directly
-func NewLedger(lctx *def.LedgerCtx, xlog logs.Logger) (*Ledger, error) {
+func NewLedger(lctx *def.LedgerCtx) (*Ledger, error) {
 	return newLedger(lctx, xlog, true)
 }
 
 // OpenLedger open ledger which already exists
-func OpenLedger(lctx *def.LedgerCtx, xlog logs.Logger) (*Ledger, error) {
+func OpenLedger(lctx *def.LedgerCtx) (*Ledger, error) {
 	return newLedger(lctx, xlog, false)
 }
 
@@ -466,7 +468,6 @@ func (l *Ledger) IsValidTx(idx int, tx *pb.Transaction, block *pb.InternalBlock)
 			return false
 		}
 	}
-	//TODO
 	return true
 }
 

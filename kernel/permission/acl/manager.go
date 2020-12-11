@@ -5,65 +5,89 @@ import (
 	"errors"
 
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
-	pctx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
-	"github.com/xuperchain/xupercore/kernel/permission/acl/pb"
-)
-
-const (
-	StatusOK = 200
+	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
+	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 // Manager manages all ACL releated data, providing read/write interface for ACL table
 type Manager struct {
-	Ctx pctx.PermissionCtx
+	Ctx *actx.AclCtx
 }
 
 // NewACLManager create instance of ACLManager
-func NewACLManager(ctx pctx.PermissionCtx) (base.PermissionImpl, error) {
-	newAkResourceAmount, ok := ctx.Ledger.GetGenesisItem("NewAccountResourceAmount").(int64)
-	if !ok {
-		return nil, errors.New("get NewAccountResourceAmount fails")
+func NewACLManager(ctx *actx.AclCtx) (base.AclManager, error) {
+	if ctx == nil || ctx.Ledger == nil || ctx.Register == nil || ctx.BcName == "" {
+		return nil, fmt.Errorf("acl ctx set error")
 	}
-	t := NewKernContractMethod(ctx.BcName, newAkResourceAmount)
-	ctx.Register.RegisterKernMethod("acl", "NewAccount", t.NewAccount)
-	ctx.Register.RegisterKernMethod("acl", "SetAccountACL", t.SetAccountACL)
-	ctx.Register.RegisterKernMethod("acl", "SetMethodACL", t.SetMethodACL)
-	return &Manager{
+
+	newAccountGas, err := ctx.Ledger.GetNewAccountGas()
+	if err != nil {
+		return nil, fmt.Errorf("get create account gas failed.err:%v", err)
+	}
+
+	t := NewKernContractMethod(ctx.BcName, newAccountGas)
+	register := ctx.Contract.GetKernRegistry()
+	register.RegisterKernMethod(utils.SubModName, "NewAccount", t.NewAccount)
+	register.RegisterKernMethod(utils.SubModName, "SetAccountACL", t.SetAccountACL)
+	register.RegisterKernMethod(utils.SubModName, "SetMethodACL", t.SetMethodACL)
+
+	mg := &Manager{
 		Ctx: ctx,
-	}, nil
+	}
+
+	return mg, nil
 }
 
 // GetAccountACL get acl of an account
-func (mgr *Manager) GetAccountACL(ctx pctx.PermissionCtx, accountName string) (*pb.Acl, error) {
-	//todo 提供新的方法 从ledger查询最后一笔已确认交易
-	acl, err := ctx.Ledger.GetConfirmedAccountACL(accountName)
+func (mgr *Manager) GetAccountACL(accountName string) (*pb.Acl, error) {
+	acl, err := t.GetObjectBySnapshot(utils.GetAccountBucket(), accountName)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query account acl failed.err:%v", err)
 	}
+
 	aclBuf := &pb.Acl{}
-	json.Unmarshal(acl, aclBuf)
+	err = json.Unmarshal(acl, aclBuf)
+	if err != nil {
+		return nil, fmt.Errorf("json unmarshal acl failed.acl:%s,err:%v", string(acl), err)
+	}
 	return aclBuf, nil
 }
 
 // GetContractMethodACL get acl of contract method
-func (mgr *Manager) GetContractMethodACL(ctx pctx.PermissionCtx, contractName, methodName string) (*pb.Acl, error) {
-	acl, err := ctx.Ledger.GetConfirmedMethodACL(contractName, methodName)
+func (mgr *Manager) GetContractMethodACL(contractName, methodName string) (*pb.Acl, error) {
+	key := utils.MakeContractMethodKey(contractName, methodName)
+	acl, err := t.GetObjectBySnapshot(utils.GetContractBucket(), key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query contract method acl failed.err:%v", err)
 	}
+
 	aclBuf := &pb.Acl{}
-	json.Unmarshal(acl, aclBuf)
+	err = json.Unmarshal(acl, aclBuf)
+	if err != nil {
+		return nil, fmt.Errorf("json unmarshal acl failed.acl:%s,err:%v", string(acl), err)
+	}
 	return aclBuf, nil
 }
 
 // GetAccountAddresses get the addresses belongs to contract account
-func (mgr *Manager) GetAccountAddresses(ctx pctx.PermissionCtx, accountName string) ([]string, error) {
-	acl, err := mgr.GetAccountACL(ctx, accountName)
+func (mgr *Manager) GetAccountAddresses(accountName string) ([]string, error) {
+	acl, err := mgr.GetAccountACL(accountName)
 	if err != nil {
 		return nil, err
 	}
 
 	return mgr.getAddressesByACL(acl)
+}
+
+func (mgr *Manager) GetObjectBySnapshot(bucket string, object []byte) ([]byte, error) {
+	// 根据tip blockid 创建快照
+	reader, err := mgr.Ctx.Ledger.GetTipXMSnapshotReader()
+	if err != nil {
+		return nil, err
+	}
+
+	return reader.Get(bucket, object)
 }
 
 func (mgr *Manager) getAddressesByACL(acl *pb.Acl) ([]string, error) {

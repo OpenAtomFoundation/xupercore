@@ -2,80 +2,47 @@
 package context
 
 import (
-	"context"
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/network/config"
+
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	nconf "github.com/xuperchain/xupercore/kernel/network/config"
+	"github.com/xuperchain/xupercore/kernel/network/def"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 )
 
-// 考虑到有些对象是有状态的，需要单例实现
-// 有些上下文是领域级别的，有些是操作级别的
-// 所以对领域级别的上下文和操作级别的上下文分别定义
-
-// 领域级上下文
-type DomainCtx interface {
-	context.Context
-
-	GetLog() logs.Logger
-	GetP2PConf() *config.Config
-	GetMetricSwitch() bool
-	SetMetricSwitch(s bool)
-	IsValid() bool
+// 网络组件运行上下文环境
+type NetCtx struct {
+	// 基础上下文
+	xctx.BaseCtx
+	// 运行环境配置
+	EnvCfg *xconf.EnvConf
+	// 网络组件配置
+	P2PConf *nconf.NetConf
 }
 
-type DomainCtxImpl struct {
-	xcontext.BaseCtx
-	P2PConf      *config.Config
-	MetricSwitch bool
-}
-
-// 必须设置的在参数直接指定，可选的通过对应的Set方法设置
-func CreateDomainCtx(confPath string) (DomainCtx, error) {
-	if confPath == "" {
-		return nil, fmt.Errorf("create domain context failed because some param are missing")
+func NewNetCtx(envCfg *xconf.EnvConf) (*NetCtx, error) {
+	if envCfg == nil {
+		return nil, fmt.Errorf("create net context failed because env conf is nil")
 	}
 
 	// 加载配置
-	cfg, err := config.LoadP2PConf(confPath)
+	cfg, err := nconf.LoadP2PConf(envCfg.GenConfFilePath(envCfg.NetConf))
 	if err != nil {
-		return nil, fmt.Errorf("create object context failed because config load fail.err:%v", err)
+		return nil, fmt.Errorf("create net context failed because config load fail.err:%v", err)
 	}
 
-	log, err := logs.NewLogger("", "network")
+	log, err := logs.NewLogger("", def.SubModName)
 	if err != nil {
 		return nil, fmt.Errorf("create engine ctx failed because new logger error. err:%v", err)
 	}
 
-	ctx := new(DomainCtxImpl)
+	ctx := new(NetCtx)
 	ctx.XLog = log
+	ctx.Timer = timer.NewXTimer()
+	ctx.EnvCfg = envCfg
 	ctx.P2PConf = cfg
-	// 可选参数设置默认值
-	ctx.MetricSwitch = false
 
 	return ctx, nil
-}
-
-func (t *DomainCtxImpl) GetLog() logs.Logger {
-	return t.XLog
-}
-
-func (t *DomainCtxImpl) GetP2PConf() *config.Config {
-	return t.P2PConf
-}
-
-func (t *DomainCtxImpl) GetMetricSwitch() bool {
-	return t.MetricSwitch
-}
-
-func (t *DomainCtxImpl) SetMetricSwitch(s bool) {
-	t.MetricSwitch = s
-}
-
-func (t *DomainCtxImpl) IsValid() bool {
-	if t.XLog == nil || t.P2PConf == nil {
-		return false
-	}
-
-	return true
 }

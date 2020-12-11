@@ -13,8 +13,9 @@ var (
 type NewManagerFunc func(cfg *ManagerConfig) (Manager, error)
 
 type Manager interface {
-	NewContext(*ContextConfig) (Context, error)
-	NewStateSandbox(r XMStateReader) (XMStateSandbox, error)
+	NewContext(cfg *ContextConfig) (Context, error)
+	NewStateSandbox(cfg *SandboxConfig) (StateSandbox, error)
+	GetKernRegistry() KernRegistry
 }
 
 type ManagerConfig struct {
@@ -30,9 +31,6 @@ type ChainCore interface {
 	VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error)
 	// VerifyContractOwnerPermission verify contract ownership permisson
 	VerifyContractOwnerPermission(contractName string, authRequire []string) error
-
-	// KernRegistry is the type of kernel.Registry
-	KernRegistry() interface{}
 
 	// QueryTransaction query confirmed tx
 	// QueryTransaction(txid []byte) (*pb.Transaction, error)

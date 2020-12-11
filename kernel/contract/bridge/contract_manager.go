@@ -8,7 +8,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/crypto/core/hash"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/pb"
 )
 
@@ -18,7 +17,7 @@ type contractManager struct {
 }
 
 // DeployContract deploy contract and initialize contract
-func (c *contractManager) DeployContract(kctx kernel.KContext) (*contract.Response, contract.Limits, error) {
+func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Response, contract.Limits, error) {
 	args := kctx.Args()
 	state := kctx
 	name := args["contract_name"]
@@ -112,7 +111,7 @@ func (v *contractManager) initContract(tp ContractType, contextConfig *contract.
 }
 
 // UpgradeContract deploy contract and initialize contract
-func (c *contractManager) UpgradeContract(kctx kernel.KContext) (*contract.Response, contract.Limits, error) {
+func (c *contractManager) UpgradeContract(kctx contract.KContext) (*contract.Response, contract.Limits, error) {
 	args := kctx.Args()
 	if !c.xbridge.config.EnableUpgrade {
 		return nil, contract.Limits{}, errors.New("contract upgrade disabled")

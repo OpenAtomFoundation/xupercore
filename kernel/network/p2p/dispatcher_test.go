@@ -3,8 +3,9 @@ package p2p
 import (
 	"testing"
 
+	"github.com/xuperchain/xupercore/kernel/mock"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 type dispatcherCase struct {
@@ -16,6 +17,10 @@ type dispatcherCase struct {
 }
 
 func TestDispatcher(t *testing.T) {
+	mock.InitLogForTest()
+	ecfg, _ := mock.NewEnvConfForTest()
+	netCtx, _ := nctx.NewNetCtx(ecfg)
+
 	ch := make(chan *pb.XuperMessage, 1)
 	stream := &mockStream{}
 
@@ -33,42 +38,42 @@ func TestDispatcher(t *testing.T) {
 
 	cases := []dispatcherCase{
 		{
-			sub:       NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, nil),
+			sub:       NewSubscriber(netCtx, pb.XuperMessage_GET_BLOCK, nil),
 			msg:       msg,
 			stream:    stream,
 			regErr:    ErrSubscriber,
 			handleErr: nil,
 		},
 		{
-			sub:       NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, ch),
+			sub:       NewSubscriber(netCtx, pb.XuperMessage_GET_BLOCK, ch),
 			msg:       nil,
 			stream:    stream,
 			regErr:    nil,
 			handleErr: ErrMessageEmpty,
 		},
 		{
-			sub:       NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, ch),
+			sub:       NewSubscriber(netCtx, pb.XuperMessage_GET_BLOCK, ch),
 			msg:       msg,
 			stream:    nil,
 			regErr:    nil,
 			handleErr: ErrStreamNil,
 		},
 		{
-			sub:       NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, ch),
+			sub:       NewSubscriber(netCtx, pb.XuperMessage_GET_BLOCK, ch),
 			msg:       msgPostTx,
 			stream:    stream,
 			regErr:    nil,
 			handleErr: ErrNotRegister,
 		},
 		{
-			sub:       NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, ch),
+			sub:       NewSubscriber(netCtx, pb.XuperMessage_GET_BLOCK, ch),
 			msg:       msg,
 			stream:    stream,
 			regErr:    nil,
 			handleErr: nil,
 		},
 		{
-			sub:       NewSubscriber(nctx.MockDomainCtx(), pb.XuperMessage_GET_BLOCK, ch),
+			sub:       NewSubscriber(netCtx, pb.XuperMessage_GET_BLOCK, ch),
 			msg:       msg,
 			stream:    stream,
 			regErr:    nil,
@@ -76,7 +81,11 @@ func TestDispatcher(t *testing.T) {
 		},
 	}
 
-	ctx := nctx.MockDomainCtx()
+	ecfg, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, _ := nctx.NewNetCtx(ecfg)
 	dispatcher := NewDispatcher(ctx)
 	for i, c := range cases {
 		err := dispatcher.Register(c.sub)
