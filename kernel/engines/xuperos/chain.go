@@ -48,7 +48,6 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	ctx.BCName = bcName
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
-
 	chainObj := &Chain{}
 	chainObj.ctx = ctx
 	chainObj.log = ctx.XLog
@@ -60,11 +59,6 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 		t.log.Error("init chain ctx failed", "bc_name", bcName, "err", err)
 		return nil, fmt.Errorf("init chain ctx failed")
 	}
-
-	// 注册合约
-	RegisterKernMethod()
-
-	// TODO: 注册VAT
 
 	// 账本同步
 	chain.keeper = NewLedgerKeeper(ctx)
