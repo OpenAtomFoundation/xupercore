@@ -1,31 +1,30 @@
 package reader
 
 import (
-	"fmt"
-
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 )
 
-type ChainInfo interface {
-	ChainState()
+type Chain interface {
+	ChainState() int
+	ChainMode() string
 }
 
-type ChainInfoReader struct {
-	engine def.Engine
+type chainReader struct {
+	chain def.Chain
 }
 
-func NewChainInfoReader(engine def.Engine) (ChainInfo, error) {
-	if engine == nil {
-		return nil, fmt.Errorf("new chain info reader failed because param error")
+func NewChainReader(chain def.Chain) Chain {
+	reader := &chainReader{
+		chain: chain,
 	}
 
-	reader := &ChainInfoReader{
-		engine: engine,
-	}
-
-	return reader, nil
+	return reader
 }
 
-func (t *ChainInfoReader) ChainState() {
+func (t *chainReader) ChainState() int {
+	return t.chain.Status()
+}
 
+func (t *chainReader) ChainMode() string {
+	return t.chain.Context().EngCfg.NodeMode
 }

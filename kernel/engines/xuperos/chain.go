@@ -3,6 +3,8 @@ package xuperos
 import (
 	"bytes"
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
@@ -28,6 +30,9 @@ type Chain struct {
 	keeper *LedgerKeeper
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
+
+	// 读组件
+	reader reader.Reader
 }
 
 // 从本地存储加载链
@@ -73,6 +78,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	// 交易处理器
 	chain.processor = NewTxProcessor(ctx)
 
+	chain.reader = reader.NewReader(chain)
 	return chain, nil
 }
 
@@ -96,38 +102,45 @@ func (t *Chain) Stop() {
 	t.miner.stop()
 }
 
+func (t *Chain) Context() *def.ChainCtx {
+	return t.ctx
+}
+
+func (t *Chain) Status() int {
+	return t.ctx.Status
+}
+
+func (t *Chain) Reader() reader.Reader {
+	return t.reader
+}
+
 // 交易预执行
 func (t *Chain) PreExec(request *pb.InvokeRPCRequest) (*pb.InvokeResponse, error) {
 	return t.ctx.State.PreExec(request)
 }
 
 // 交易和区块结构由账本定义
-func (t *Chain) ProcTx(request *pb.TxStatus) *pb.CommonReply {
-	response := &pb.CommonReply{Header: request.Header}
-	response.Header.Error = pb.XChainErrorEnum_SUCCESS
+func (t *Chain) ProcTx(request *pb.TxStatus) error {
 	if t.Status() != global.Normal {
 		t.log.Error("chain status not ready", "logid", request.Header.Logid)
-		response.Header.Error = pb.XChainErrorEnum_CONNECT_REFUSE // 拒绝
-		return response
+		return def.ErrBlockChainNotReady
 	}
 
 	// 验证交易
 	txValid, err := t.processor.verifyTx(request.Tx)
 	if !txValid {
 		t.log.Error("verify tx error", "logid", request.Header.Logid, "txid", global.F(request.Tx.Txid), "error", err)
-		response.Header.Error = HandleVerifyError(err)
-		return response
+		return err
 	}
 
 	// 提交交易
 	err = t.processor.submitTx(request.Tx)
 	if err != nil {
 		t.log.Error("submit tx error", "logid", request.Header.Logid, "txid", global.F(request.Tx.Txid), "error", err)
-		response.Header.Error = HandleStateError(err)
-		return response
+		return err
 	}
 
-	return response
+	return nil
 }
 
 // 处理新区块
@@ -153,14 +166,6 @@ func (t *Chain) ProcBlock(in *pb.Block) error {
 	ctx := CreateLedgerTaskCtx(nil, []string{in.GetHeader().GetFromNode()}, hd)
 	t.keeper.PutTask(ctx, Syncing, -1)
 	return nil
-}
-
-func (t *Chain) Context() *def.ChainCtx {
-	return t.ctx
-}
-
-func (t *Chain) Status() int {
-	return t.ctx.Status
 }
 
 func (t *Chain) initChainCtx() error {
