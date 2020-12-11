@@ -29,17 +29,21 @@ func (t *LedgerAgent) GetCryptoType() (int, error) {
 	return 0, nil
 }
 
+// 从创世块获取共识配置
+func (t *LedgerAgent) GetConsensusConf() ([]byte, error) {
+	return nil, nil
+}
+
 // 查询区块
-func (t *LedgerAgent) QueryBlock(blkId []byte) (*BlockAgent, error) {
+func (t *LedgerAgent) QueryBlock(blkId []byte) (ledger.BlockHandle, error) {
 	return nil, nil
 }
 
-func (t *LedgerAgent) QueryBlockByHeight(int64) (*BlockAgent, error) {
+func (t *LedgerAgent) QueryBlockByHeight(int64) (ledger.BlockHandle, error) {
 	return nil, nil
 }
 
-func (t *LedgerAgent) GetTipBlock() *BlockAgent {
-
+func (t *LedgerAgent) GetTipBlock() ledger.BlockHandle {
 }
 
 // 获取状态机最新确认高度快照（只有Get方法，直接返回[]byte）

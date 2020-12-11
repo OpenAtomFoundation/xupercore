@@ -9,6 +9,8 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/kernel/consensus"
+	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	cdef "github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -129,7 +131,27 @@ func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
 // 创建共识实例
 func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, error) {
 	ctx := t.chain.Context()
+	legAgent := NewLedgerAgent(ctx)
+	consCtx := &cctx.ConsensusCtx{
+		BcName:   ctx.BCName,
+		Address:  ctx.Address,
+		Crypto:   ctx.Crypto,
+		Contract: ctx.Contract,
+		Ledger:   legAgent,
+		Network:  ctx.Network,
+	}
 
-	consensusCtx := context.CreateConsensusCtx(ctx.BCName, ctx.Ledger, ctx.Net, ctx.Crypto, ctx.BaseCtx)
-	return consensus.NewPluggableConsensus(consensusCtx, nil, ctx.Contract)
+	log, err := logs.NewLogger("", cdef.SubModName)
+	if err != nil {
+		return nil, fmt.Errorf("create consensus failed because new logger error.err:%v", err)
+	}
+	consCtx.XLog = log
+	consCtx.Timer = timer.NewXTimer()
+
+	cons, err := consensus.NewPluggableConsensus(consCtx)
+	if err != nil {
+		return nil, fmt.Errorf("new pluggable consensus failed.err:%v", err)
+	}
+
+	return cons, nil
 }
