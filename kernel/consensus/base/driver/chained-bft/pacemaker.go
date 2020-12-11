@@ -9,11 +9,10 @@ var (
 	TransferError = errors.New("QuorumCertInterface cannot be transfered into ProposalMsg")
 )
 
-/* PacemakerInterface is the interface of Pacemaker. It responsible for generating a new round.
- * We assume Pacemaker in all correct replicas will have synchronized leadership after GST.
- * Safty is entirely decoupled from liveness by any potential instantiation of Packmaker.
- * Different consensus have different pacemaker implement
- */
+// PacemakerInterface is the interface of Pacemaker. It responsible for generating a new round.
+// We assume Pacemaker in all correct replicas will have synchronized leadership after GST.
+// Safty is entirely decoupled from liveness by any potential instantiation of Packmaker.
+// Different consensus have different pacemaker implement
 type PacemakerInterface interface {
 	// CurrentView return current view of this node.
 	GetCurrentView() int64
@@ -23,11 +22,10 @@ type PacemakerInterface interface {
 	PrepareAdvance(viewNum int64, proposer string) error
 }
 
-/* DefaultPaceMaker 是一个PacemakerInterface的默认实现，我们与PacemakerInterface放置在一起，方便查看
- * PacemakerInterface的新实现直接直接替代DefaultPaceMaker即可
- * The Pacemaker keeps track of votes and of time.
- * TODO:  the Pacemaker broadcasts a TimeoutMsg notification.
- */
+// DefaultPaceMaker 是一个PacemakerInterface的默认实现，我们与PacemakerInterface放置在一起，方便查看
+// PacemakerInterface的新实现直接直接替代DefaultPaceMaker即可
+// The Pacemaker keeps track of votes and of time.
+// TODO:  the Pacemaker broadcasts a TimeoutMsg notification.
 type DefaultPaceMaker struct {
 	StartView   int64
 	currentView int64

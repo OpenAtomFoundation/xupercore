@@ -44,4 +44,6 @@ type BlockHandle interface {
 	SetItem(item string, value interface{}) error
 	MakeBlockId() ([]byte, error)
 	GetPreHash() []byte
+	GetPublicKey() string
+	GetSign() []byte
 }

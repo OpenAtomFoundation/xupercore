@@ -12,10 +12,10 @@ import (
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/consensus/def"
 )
 
-/* 本次single改造支持single的升级，即Miner地址可变
- */
+// 本次single改造支持single的升级，即Miner地址可变
 
 func init() {
 	consensus.Register("single", NewSingleConsensus)
@@ -35,7 +35,7 @@ type SingleConfig struct {
 }
 
 type SingleStatus struct {
-	beginHeight int64
+	startHeight int64
 	mutex       sync.RWMutex
 	newHeight   int64
 	index       int
@@ -53,7 +53,7 @@ func (s *SingleStatus) GetVersion() int64 {
 
 // GetConsensusBeginInfo 返回该实例初始高度
 func (s *SingleStatus) GetConsensusBeginInfo() int64 {
-	return s.beginHeight
+	return s.startHeight
 }
 
 // GetStepConsensusIndex 获取共识item所在consensus slice中的index
@@ -83,13 +83,13 @@ func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
 }
 
 // NewSingleConsensus 初始化实例
-func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig) base.ConsensusImplInterface {
+func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
 	// 解析config中需要的字段
 	if cCtx.XLog == nil {
 		return nil
 	}
 	// TODO:cCtx.BcName需要注册表吗？
-	if cCtx.CryptoClient == nil {
+	if cCtx.Crypto == nil || cCtx.Address == nil {
 		cCtx.XLog.Error("Single::NewSingleConsensus::CryptoClient in context is nil")
 		return nil
 	}
@@ -109,8 +109,8 @@ func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig)
 	}
 	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
 	status := &SingleStatus{
-		beginHeight: cCfg.BeginHeight,
-		newHeight:   cCfg.BeginHeight - 1,
+		startHeight: cCfg.StartHeight,
+		newHeight:   cCfg.StartHeight - 1,
 		index:       cCfg.Index,
 		config:      config,
 	}
@@ -122,21 +122,18 @@ func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg context.ConsensusConfig)
 	return single
 }
 
-/* CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
- * 该函数返回两个bool，第一个表示是否当前应当出块，第二个表示是否当前需要向其他节点同步区块
- */
+// CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
+// 该函数返回两个bool，第一个表示是否当前应当出块，第二个表示是否当前需要向其他节点同步区块
 func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
 	t := time.Now().UnixNano() / 1e6
 	if t%s.config.Period != 0 {
 		return false, false, nil
 	}
-	/* TODO: 之后再加上
-	if s.ctx.P2p.GetLocalAccount() == s.config.Miner {
+	if s.ctx.Address.Address == s.config.Miner {
 		// single共识确定miner后只能通过共识升级改变miner，因此在单个single实例中miner是不可更改的
 		// 此时一个miner从始至终都是自己在挖矿，故不需要向其他节点同步区块
 		return true, false, nil
 	}
-	*/
 	return false, false, nil
 }
 
@@ -144,36 +141,40 @@ func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
 // ATTENTION: TODO: 上层需要先检查VerifyMerkle(block)
 func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
 	// 检查区块的区块头是否hash正确
-	if !bytes.Equal(block.MakeBlockId(), block.GetBlockid()) {
+	bid, err := block.MakeBlockId()
+	if err != nil {
+		return false, err
+	}
+	if !bytes.Equal(bid, block.GetBlockid()) {
 		ctx.XLog.Warn("Single::CheckMinerMatch::equal blockid error", "logid", ctx.XLog.GetLogId())
-		return false, nil
+		return false, err
 	}
 	// 检查矿工地址是否合法
-	if block.GetProposer() != s.config.Miner {
+	if global.F(block.GetProposer()) != s.config.Miner {
 		ctx.XLog.Warn("Single::CheckMinerMatch::miner check error", "logid", ctx.XLog.GetLogId(),
 			"blockid", block.GetBlockid(), "proposer", block.GetProposer(), "local proposer", s.config.Miner)
-		return false, nil
+		return false, err
 	}
 	//验证签名
 	//1 验证一下签名和公钥是不是能对上
 	// TODO: 后面再改
-	k, err := s.ctx.CryptoClient.GetEcdsaPublicKeyFromJsonStr(global.F(block.GetPubkey()))
+	k, err := s.ctx.Crypto.GetEcdsaPublicKeyFromJsonStr(block.GetPublicKey())
 	if err != nil {
 		ctx.XLog.Warn("Single::CheckMinerMatch::get ecdsa from block error", "logid", ctx.XLog.GetLogId(), "error", err)
-		return false, nil
+		return false, err
 	}
 	//Todo 跟address比较
-	chkResult, _ := s.ctx.CryptoClient.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
+	chkResult, _ := s.ctx.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
 	if chkResult == false {
 		ctx.XLog.Warn("Single::CheckMinerMatch::address is not match publickey", "logid", ctx.XLog.GetLogId())
-		return false, nil
+		return false, err
 	}
 	//2 验证一下签名是否正确
-	valid, err := s.ctx.CryptoClient.VerifyECDSA(k, block.GetSign(), block.GetBlockid())
+	valid, err := s.ctx.Crypto.VerifyECDSA(k, block.GetSign(), block.GetBlockid())
 	if err != nil {
 		ctx.XLog.Warn("Single::CheckMinerMatch::verifyECDSA error", "logid", ctx.XLog.GetLogId(), "error", err)
 	}
-	return valid, nil
+	return valid, err
 }
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
@@ -206,9 +207,8 @@ func (s *SingleConsensus) Start() error {
 	return nil
 }
 
-/* ParseConsensusStorage 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
- * Single共识没有用到区块存储信息, 故返回空
- */
+// ParseConsensusStorage 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
+// Single共识没有用到区块存储信息, 故返回空
 func (s *SingleConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
 	return nil, nil
 }

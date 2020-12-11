@@ -28,10 +28,9 @@ type saftyRulesInterface interface {
 type DefaultSaftyRules struct {
 	// lastVoteRound 存储着本地最近一次投票的轮数
 	lastVoteRound int64
-	/* preferredRound 存储着本地PendingTree
-	 * 即有[两个子孙节点的节点]
-	 * 若本地有相同高度的节点，则自然排序后选出preferredRound
-	 */
+	// preferredRound 存储着本地PendingTree
+	// 即有[两个子孙节点的节点]
+	// 若本地有相同高度的节点，则自然排序后选出preferredRound
 	preferredRound int64
 	Crypto         *cCrypto.CBFTCrypto
 }
@@ -44,12 +43,11 @@ func (s *DefaultSaftyRules) UpdatePreferredRound(qc QuorumCertInterface) bool {
 	return true
 }
 
-/* VoteProposal 返回是否需要发送voteMsg给下一个Leader
- * DefaultSaftyRules 并没有严格比对proposalRound和parentRound的相邻自增关系
- * 但需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
- * 因此由于账本的可回滚性，因此lastVoteRound和preferredRound比对时，仅需比对新来的数据是否小于local数据-3即可
- * 此处-3代表数据已经落盘
- */
+// VoteProposal 返回是否需要发送voteMsg给下一个Leader
+// DefaultSaftyRules 并没有严格比对proposalRound和parentRound的相邻自增关系
+// 但需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
+// 因此由于账本的可回滚性，因此lastVoteRound和preferredRound比对时，仅需比对新来的数据是否小于local数据-3即可
+// 此处-3代表数据已经落盘
 func (s *DefaultSaftyRules) VoteProposal(proposalId []byte, proposalRound int64, parentQc QuorumCertInterface) bool {
 	if proposalRound < s.lastVoteRound-3 {
 		return false
@@ -69,11 +67,9 @@ func (s *DefaultSaftyRules) CheckVoteMsg(qc QuorumCertInterface, logid string, v
 		return EmptyVoteSignErr
 	}
 	// 是否是来自有效的候选人
-	/*
-		if !isInSlice(signs[0].GetAddress(), validators) {
-			return InvalidVoteAddr
-		}
-	*/
+	if !isInSlice(signs[0].GetAddress(), validators) {
+		return InvalidVoteAddr
+	}
 	// 签名和公钥是否匹配
 	if ok, err := s.Crypto.VerifyVoteMsgSign(signs[0], qc.GetProposalId()); !ok {
 		return err
@@ -104,10 +100,9 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 	return input >= 2*f+1
 }
 
-/* IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法
- * 需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
- * 因此在此proposal和parent的QC稍微宽松检查
- */
+// IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法
+// 需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
+// 因此在此proposal和parent的QC稍微宽松检查
 func (s *DefaultSaftyRules) IsQuorumCertValidate(proposal, parent QuorumCertInterface, justifyValidators []string) error {
 	if proposal.GetProposalView() < s.lastVoteRound-3 {
 		return TooLowProposalView
@@ -124,11 +119,9 @@ func (s *DefaultSaftyRules) IsQuorumCertValidate(proposal, parent QuorumCertInte
 		return NoEnoughVotes
 	}
 	for _, v := range justifySigns {
-		/*
-			if !isInSlice(v.GetAddress(), justifyValidators) {
-				return InvalidVoteAddr
-			}
-		*/
+		if !isInSlice(v.GetAddress(), justifyValidators) {
+			return InvalidVoteAddr
+		}
 		// 签名和公钥是否匹配
 		if ok, _ := s.Crypto.VerifyVoteMsgSign(v, parent.GetProposalId()); !ok {
 			return InvalidVoteSign
