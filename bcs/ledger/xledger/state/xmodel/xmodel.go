@@ -36,7 +36,7 @@ type XModel struct {
 }
 
 // NewXuperModel new an instance of XModel
-func NewXuperModel(ledger *ledger.Ledger, stateDB kvdb.Database, logger logs.Logger) (*XModel, error) {
+func NewXModel(ledger *ledger.Ledger, stateDB kvdb.Database, logger logs.Logger) (*XModel, error) {
 	return &XModel{
 		ledger:          ledger,
 		stateDB:         stateDB,

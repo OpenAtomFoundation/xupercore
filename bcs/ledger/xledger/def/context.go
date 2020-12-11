@@ -47,3 +47,19 @@ func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string) (*LedgerCtx, error) {
 
 	return ctx, nil
 }
+
+// 状态及运行上下文环境
+type StateCtx struct {
+	// 基础上下文
+	xctx.BaseCtx
+	// 运行环境配置
+	EnvCfg *xconf.EnvConf
+	// 账本配置
+	LedgerCfg *lconf.XLedgerConf
+	// 链名
+	BCName string
+}
+
+func NewStateCtx(envCfg *xconf.EnvConf) (*StateCtx, error) {
+
+}

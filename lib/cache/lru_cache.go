@@ -21,7 +21,7 @@
  * count := cache.Len()
  */
 
-package common
+package cache
 
 import (
 	"container/list"

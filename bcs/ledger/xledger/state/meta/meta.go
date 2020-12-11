@@ -15,10 +15,10 @@ import (
 
 type Meta struct {
 	log       logs.Logger
-	meta      *pb.UtxoMeta  // utxo meta
-	metaTmp   *pb.UtxoMeta  // tmp utxo meta
-	mutexMeta *sync.Mutex   // access control for meta
-	metaTable kvdb.Database // 元数据表，会持久化保存latestBlockid
+	Meta      *pb.UtxoMeta  // utxo meta
+	MetaTmp   *pb.UtxoMeta  // tmp utxo meta
+	MutexMeta *sync.Mutex   // access control for meta
+	MetaTable kvdb.Database // 元数据表，会持久化保存latestBlockid
 }
 
 var (
