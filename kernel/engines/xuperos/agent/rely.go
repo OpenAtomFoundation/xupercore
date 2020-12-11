@@ -24,7 +24,7 @@ import (
 
 // 代理依赖组件实例化操作，方便mock单测和并行开发
 type EngineRelyAgentImpl struct {
-	engine def.Engine
+	engine common.Engine
 }
 
 func NewEngineRelyAgent(engine def.Engine) *EngineRelyAgentImpl {

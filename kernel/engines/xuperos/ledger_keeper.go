@@ -7,26 +7,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	netPB "github.com/xuperchain/xupercore/kernel/network/pb"
-	"github.com/xuperchain/xupercore/lib/logs"
 	"math/rand"
-	math_rand "math/rand"
 	"sync"
 	"time"
+
+	"github.com/xuperchain/xuperchain/core/pb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xuperchain/core/common/config"
 	"github.com/xuperchain/xuperchain/core/global"
 )
 
-type Status int
+type LedgerKeeperStatus int
 
 const (
-	Syncing   Status = iota // 自动同步
-	Appending               // 主干已为最新，向主干append新区块
+	// 自动同步
+	Syncing LedgerKeeperStatus = iota
+	// 主干已为最新，向主干append新区块
+	Appending
 )
 
 var (
@@ -50,256 +54,39 @@ var (
 )
 
 const (
-	SyncBlocksTimeout = 10 * time.Second // 一次GET_BLOCKS最大超时时间
-	HeaderSyncSize    = 100              // 一次返回的最大区块头大小
-	MaxTaskMNSize     = 20
-	IdleTime          = 500 * time.Millisecond // 无同步任务时sleep时常
+	// 一次GET_BLOCKS最大超时时间
+	SyncBlocksTimeout = 10 * time.Second
+	// 一次返回的最大区块头大小
+	HeaderSyncSize = 100
+	MaxTaskMNSize  = 20
+	// 无同步任务时sleep时长
+	IdleTime = 500 * time.Millisecond
 )
 
-type TasksList struct {
-	tList *list.List  // 存放具体task
-	mutex *sync.Mutex // mutex保护tList的并发操作
-}
-
-/* NewTasksList return a link queue TasksList
- * NewTasksList 返回一个包含链表和链表所含元素组成的set的数据结构
- */
-func NewTasksList() *TasksList {
-	return &TasksList{
-		tList: list.New(),
-		mutex: &sync.Mutex{},
-	}
-}
-
-/* Len return the length of list
- * Len 返回TasksList中tList的长度
- */
-func (t *TasksList) Len() int {
-	return t.tList.Len()
-}
-
-/* PushBack push task at the end of taskslist
- * PushBack 向TasksList中的链表做PushBack操作，同时确保push的元素原链表中没有
- */
-func (t *TasksList) PushBack(ledgerTask *LedgerTask) bool {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	t.tList.PushBack(ledgerTask)
-	return true
-}
-
-/* Remove remove the target element in tList of taskslist
- * Remove 删除链表中元素，并对应删除set
- */
-func (t *TasksList) Remove(e *list.Element) {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	t.tList.Remove(e)
-}
-
-/* Front get the front element in tList of taskslist
- * Front获取链表头元素
- */
-func (t *TasksList) Front() *list.Element {
-	t.mutex.Lock()
-	defer t.mutex.Unlock()
-	if t.Len() == 0 {
-		return nil
-	}
-	return t.tList.Front()
-}
-
-/* fix 删除链表中比目标高度高的所有任务，一般在trunate操作调用
- */
-func (t *TasksList) fix(targetHeight int64) {
-	e := t.tList.Front()
-	for e != nil {
-		if e.Value.(*LedgerTask).GetHeight() <= targetHeight {
-			e = e.Next()
-			continue
-		}
-		target := e
-		e = e.Next()
-		t.Remove(target)
-	}
-}
-
-type syncTaskManager struct {
-	syncingTasks   *TasksList // 账本同步batch操作
-	appendingTasks *TasksList // 账本同步追加操作
-	syncMaxSize    int        // sync队列最大size
-	log            logs.Logger
-	taskId         int64
-}
-
-/* newSyncTaskManager 生成一个新SyncTaskManager，管理所有任务队列
- * 任务队列包含两个队列，syncingTasks用于记录多个block的同步任务，
- * appendingTasks用于记录收到广播新块，且新块直接为账本下一高度的情况，该任务直接尝试写账本
- */
-func newSyncTaskManager(log logs.Logger) *syncTaskManager {
-	return &syncTaskManager{
-		syncingTasks:   NewTasksList(),
-		appendingTasks: NewTasksList(),
-		syncMaxSize:    MaxTaskMNSize,
-		log:            log,
-	}
-}
-
-// generateTaskid generate a random id.
-func (stm *syncTaskManager) GenerateTaskid() string {
-	stm.taskId++
-	t := time.Now().UnixNano()
-	return fmt.Sprintf("%d_%d", t, stm.taskId)
-}
-
-/* put 由manager操作，直接操作所handle的各个队列
- */
-func (stm *syncTaskManager) Put(ledgerTask *LedgerTask) bool {
-	var q *TasksList
-	switch ledgerTask.GetAction() {
-	case Syncing:
-		q = stm.syncingTasks
-	case Appending:
-		q = stm.appendingTasks
-	default:
-		stm.log.Error("SyncTaskManager::task error", "type", ledgerTask.GetAction())
-		return false
-	}
-	stm.log.Trace("SyncTaskManager put task", "len", stm.syncingTasks.Len())
-	if q.Len() > stm.syncMaxSize {
-		stm.log.Trace("SyncTaskManager put task err, too much task, refuse it")
-		return false
-	}
-	q.PushBack(ledgerTask)
-	return true
-}
-
-/* get 由manager操作从所有队列中挑选一个队列拿一个任务
- */
-func (stm *syncTaskManager) Pop() *LedgerTask {
-	var queue *TasksList
-	// 在同步逻辑中，最新块广播的优先级高于其他
-	if stm.appendingTasks.Len() > 0 {
-		queue = stm.appendingTasks
-	} else {
-		queue = stm.syncingTasks
-	}
-	if queue.Len() == 0 {
-		return nil
-	}
-	element := queue.Front()
-	queue.Remove(element)
-	stm.log.Debug("SyncTaskManager::", "Len", queue.Len())
-	return element.Value.(*LedgerTask)
-}
-
-// fixTask 清洗队列中失效的任务
-func (stm *syncTaskManager) ClearTask(targetHeight int64) {
-	stm.syncingTasks.fix(targetHeight)
-	stm.appendingTasks.fix(targetHeight)
-}
-
 type LedgerKeeper struct {
-	ctx *def.ChainCtx
+	ctx *common.ChainCtx
 	log logs.Logger
 
 	peersStatusMap   *sync.Map // map[string]bool 更新同步节点的p2p列表活性
 	maxBlocksMsgSize int64     // 取最大区块大小
 	bcName           string
 	syncTaskMg       *syncTaskManager
-	nodeMode         string
 
-	// 该锁保护同一时间内只有矿工or账本keeper对象中的一个对ledger及utxovm操作
+	// 该锁保护同一时间内只有矿工or账本keeper对象中的一个对ledger及状态机操作
 	// ledgledgerKeeper同步块和xchaincore 矿工doMiner抢锁
 	coreMutex sync.RWMutex
-}
-
-type LedgerTask struct {
-	taskId string
-	action Status
-	// targetBlockId []byte
-	targetHeight int64
-	ctx          *TaskContext
-}
-
-type TaskContext struct {
-	extBlocks  []*SimpleBlock
-	preferPeer []string
-	hd         *global.XContext
-}
-
-type SimpleBlock struct {
-	internalBlock *pb.InternalBlock
-	logid         string
-}
-
-// CreateLedgerTaskCtx 创建taskctx上下文
-func CreateLedgerTaskCtx(extBlocks []*SimpleBlock, preferPeer []string, hd *global.XContext) *TaskContext {
-	return &TaskContext{
-		extBlocks:  extBlocks,
-		preferPeer: preferPeer,
-		hd:         hd,
-	}
-}
-
-/* GetAction get the action of the task，获取task的目标行为，Waiting/Syncing/Truncateing/Appending
- */
-func (lt *LedgerTask) GetAction() Status {
-	return lt.action
-}
-
-/* GetHeight get the height of the task.
- * GetHeight 获取task的targetId的对应高度，此处只是作为manager管理task使用
- * 加入height的目的是减少操作者频繁QueryBlock
- */
-func (lt *LedgerTask) GetHeight() int64 {
-	return lt.targetHeight
-}
-
-/* GetExtBlocks get extBlocks of the task.
- * GetExtBlocks 获取任务的addition存储，在AppendingTask中使用，存入要直接写入账本的block
- */
-func (lt *LedgerTask) GetExtBlocks() []*SimpleBlock {
-	if lt.ctx == nil || lt.ctx.extBlocks == nil {
-		return nil
-	}
-	return lt.ctx.extBlocks
-}
-
-/* GetPreferPeer get the callee of the task.
- * GetPreferPeer 获取向其余节点发送请求信息时指定的Peer地址
- */
-func (lt *LedgerTask) GetPreferPeer() []string {
-	if lt.ctx == nil || lt.ctx.preferPeer == nil {
-		return nil
-	}
-	return lt.ctx.preferPeer
-}
-
-func (lt *LedgerTask) setPreferPeer(addr string) {
-	lt.ctx.preferPeer = append(lt.ctx.preferPeer, addr)
-}
-
-// GetXCtx get the context of the task.
-func (lt *LedgerTask) GetXContext() *global.XContext {
-	if lt.ctx == nil || lt.ctx.hd == nil {
-		return nil
-	}
-	return lt.ctx.hd
 }
 
 /* NewLedgerKeeper create a LedgerKeeper.
  * NewLedgerKeeper 构建一个操作集合类，包含了所有对账本的写操作，外界对账本的写操作都需经过LedgerKeeper对外接口完成
  * LedgerKeeper会管理一组task队列，task为外界对其的请求封装，分为直接追加账本(Appending)、批量同步(Syncing)，Truncate单独作为同步处理
  */
-func NewLedgerKeeper(chainCtx *def.ChainCtx) *LedgerKeeper {
+func NewLedgerKeeper(chainCtx *common.ChainCtx) *LedgerKeeper {
 	lk := &LedgerKeeper{
-		ctx: chainCtx,
-		log: chainCtx.XLog,
-
+		ctx:              chainCtx,
+		log:              chainCtx.XLog,
 		bcName:           chainCtx.BCName,
 		maxBlocksMsgSize: chainCtx.Ledger.GetMaxBlockSize(),
-		nodeMode:         chainCtx.EngCfg.NodeMode,
 		peersStatusMap:   new(sync.Map),
 		syncTaskMg:       newSyncTaskManager(chainCtx.XLog),
 	}
@@ -415,7 +202,7 @@ func (lk *LedgerKeeper) handleAppendTask(lt *LedgerTask) error {
 		return ErrInvalidMsg
 	}
 	newBegin, err := lk.confirmBlocks(lt.GetXContext(), lt.GetExtBlocks(), true)
-	lk.log.Trace("appendingBlock::AppendTask try to append ledger directly", "task", lt.taskId, "newbegin", global.F(newBegin), "error", err)
+	lk.log.Trace("appendingBlock::AppendTask try to append ledger directly", "task", lt.taskId, "newbegin", utils.F(newBegin), "error", err)
 	return nil
 }
 
@@ -432,7 +219,7 @@ func (lk *LedgerKeeper) handleSyncTask(lt *LedgerTask) error {
 	nextLoop := true
 	// ATTENTION: 此处可能出现脏读，矿工后续更新了一个新区块到账本，而此次向外同步区块任务获取的区块s可能无用，但该操作可容忍
 	headerBegin := lk.ctx.State.GetLatestBlockId()
-	headerBeginStr := global.F(headerBegin)
+	headerBeginStr := utils.F(headerBegin)
 	// 同步头过程
 	lk.log.Debug("handleSyncTask::Run......", "task", lt.taskId, "headerBegin", headerBeginStr, "cost", lt.GetXContext().Timer.Print())
 	for nextLoop {
@@ -468,7 +255,7 @@ func (lk *LedgerKeeper) handleSyncTask(lt *LedgerTask) error {
 			if headerBegin == nil {
 				return nil // genesisBlock有问题，暂不解决
 			}
-			headerBeginStr = global.F(headerBegin)
+			headerBeginStr = utils.F(headerBegin)
 			// 回溯逻辑直接向全零返回的peer发送GetBlockIdsRequest
 			lt.setPreferPeer(peer[0])
 			lk.log.Info("handleSyncTask::backtrack start point", "task", lt.taskId, "headerBegin", headerBeginStr)
@@ -531,7 +318,7 @@ func (lk *LedgerKeeper) getPeerBlockIds(beginBlockId []byte, length int64, targe
 		BlockId: beginBlockId,
 	}
 	msg := p2p.NewMessage(netPB.XuperMessage_GET_BLOCKIDS, req, p2p.WithBCName(lk.bcName))
-	lk.log.Trace("getPeerBlockIds::Send GET_BLOCKIDS", "Logid", msg.GetHeader().GetLogid(), "HEADER", global.F(beginBlockId))
+	lk.log.Trace("getPeerBlockIds::Send GET_BLOCKIDS", "Logid", msg.GetHeader().GetLogid(), "HEADER", utils.F(beginBlockId))
 	res, err := lk.ctx.Net.SendMessageWithResponse(context.Background(), msg, p2p.WithAddresses([]string{targetPeerAddr}))
 	if err != nil {
 		lk.log.Warn("getPeerBlockIds::Sync Headers P2P Error: local error or target error", "Logid", msg.GetHeader().GetLogid(), "Error", err)
@@ -549,9 +336,9 @@ func (lk *LedgerKeeper) getPeerBlockIds(beginBlockId []byte, length int64, targe
 	tip := headerMsgBody.GetTipBlockId()
 	var printStr []string
 	for _, id := range blockIds {
-		printStr = append(printStr, global.F(id))
+		printStr = append(printStr, utils.F(id))
 	}
-	lk.log.Info("getPeerBlockIds::GET_BLOCKIDS RESULT", "HEADERS", printStr, "TIP", global.F(tip))
+	lk.log.Info("getPeerBlockIds::GET_BLOCKIDS RESULT", "HEADERS", printStr, "TIP", utils.F(tip))
 
 	// 空值，包含连接错误
 	if len(blockIds) == 0 && tip == nil {
@@ -621,7 +408,7 @@ func (lk *LedgerKeeper) downloadPeerBlocks(headersList [][]byte) []*SimpleBlock 
 			goto GetTrash
 		case nil:
 			for _, id := range headersList {
-				returnBlocks = append(returnBlocks, syncMap[global.F(id)])
+				returnBlocks = append(returnBlocks, syncMap[utils.F(id)])
 			}
 			return returnBlocks
 		}
@@ -629,7 +416,7 @@ func (lk *LedgerKeeper) downloadPeerBlocks(headersList [][]byte) []*SimpleBlock 
 GetTrash:
 	// 看看剩下的cache里面有什么能捡的，找出从开头为始最长的连续存储返回
 	for _, id := range headersList {
-		if v, ok := syncMap[global.F(id)]; ok {
+		if v, ok := syncMap[utils.F(id)]; ok {
 			returnBlocks = append(returnBlocks, v)
 			continue
 		}
@@ -686,7 +473,7 @@ func (lk *LedgerKeeper) peerBlockDownloadTask(ctx context.Context, peerAddr stri
 	syncBlockMutex.Lock()             // 锁cache，进行读
 	refreshTaskBlockIds := [][]byte{} // 筛除cache中已经从别的peer拿到的block，这些block无需重新传递
 	for _, blockId := range taskBlockIds {
-		if _, ok := cache[global.F(blockId)]; ok {
+		if _, ok := cache[utils.F(blockId)]; ok {
 			continue
 		}
 		refreshTaskBlockIds = append(refreshTaskBlockIds, blockId)
@@ -742,7 +529,7 @@ func (lk *LedgerKeeper) getBlocks(ctx context.Context, targetPeer string, blockI
 	blocks := blocksMsgBody.GetBlocksInfo()
 	peerSyncMap := map[string]*SimpleBlock{}
 	for _, block := range blocks {
-		blockId := global.F(block.GetBlockid())
+		blockId := utils.F(block.GetBlockid())
 		_, ok := peerSyncMap[blockId]
 		if ok { // 即peer给出了重复了的blocks
 			return nil, ErrInvalidMsg
@@ -764,7 +551,7 @@ func (lk *LedgerKeeper) getBlocks(ctx context.Context, targetPeer string, blockI
  */
 func (lk *LedgerKeeper) confirmBlocks(hd *global.XContext, blocksSlice []*SimpleBlock, endFlag bool) ([]byte, error) {
 	// 取这段新链的第一个区块，判断走账本分叉逻辑还是直接账本追加逻辑
-	lk.log.Debug("ConfirmBlocks", "genesis", global.F(lk.ctx.Ledger.GetMeta().GetRootBlockid()), "utxo", global.F(lk.ctx.State.GetLatestBlockId()),
+	lk.log.Debug("ConfirmBlocks", "genesis", utils.F(lk.ctx.Ledger.GetMeta().GetRootBlockid()), "utxo", utils.F(lk.ctx.State.GetLatestBlockId()),
 		"len(blocksSlice)", len(blocksSlice), "cost", hd.Timer.Print())
 	listLen := len(blocksSlice)
 	if listLen == 0 {
@@ -829,7 +616,7 @@ func (lk *LedgerKeeper) confirmBlocks(hd *global.XContext, blocksSlice []*Simple
 			lk.log.Debug("ConfirmBlocks::confirm error", "err", err, "cost", hd.Timer.Print())
 			return newBegin, err
 		}
-		lk.log.Debug("ConfirmBlocks::Equal The Same, confirm blocks finish", "newBegin", global.F(newBegin), "index == listLen", index == listLen, "cost", hd.Timer.Print())
+		lk.log.Debug("ConfirmBlocks::Equal The Same, confirm blocks finish", "newBegin", utils.F(newBegin), "index == listLen", index == listLen, "cost", hd.Timer.Print())
 		return newBegin, err
 	}
 	//交点不等于utxo latest block
@@ -862,7 +649,7 @@ func (lk *LedgerKeeper) confirmBlocks(hd *global.XContext, blocksSlice []*Simple
 	if index < 1 {
 		return newBegin, nil
 	}
-	lk.log.Debug("ConfirmBlocks::XXXXXXXXX The NO Same, confirm blocks finish", "newBegin", global.F(newBegin), "index == listLen", index == listLen, "cost", hd.Timer.Print())
+	lk.log.Debug("ConfirmBlocks::XXXXXXXXX The NO Same, confirm blocks finish", "newBegin", utils.F(newBegin), "index == listLen", index == listLen, "cost", hd.Timer.Print())
 	return newBegin, err
 }
 
@@ -879,7 +666,7 @@ func (lk *LedgerKeeper) checkAndConfirm(needVerify bool, simpleBlock *SimpleBloc
 	}
 	for _, tx := range block.Transactions {
 		if !lk.ctx.Ledger.IsValidTx(tx, block) {
-			lk.log.Warn("checkAndConfirm::invalid tx got from the block", "logid", simpleBlock.logid, "txid", global.F(tx.Txid), "blkid", global.F(block.GetBlockid()))
+			lk.log.Warn("checkAndConfirm::invalid tx got from the block", "logid", simpleBlock.logid, "txid", utils.F(tx.Txid), "blkid", utils.F(block.GetBlockid()))
 			return ErrInvalidMsg, false
 		}
 	}
@@ -954,7 +741,7 @@ func assignTaskRandomly(targetPeers []string, headersList [][]byte) (map[string]
 	for peer, ids := range peersTask {
 		var ps []string
 		for _, v := range ids {
-			ps = append(ps, global.F(v))
+			ps = append(ps, utils.F(v))
 		}
 		assignStr[peer] = ps
 	}
@@ -966,4 +753,223 @@ func assignTaskRandomly(targetPeers []string, headersList [][]byte) (map[string]
  */
 func changeSyncBeginPointBackwards(beginBlock *pb.InternalBlock) []byte {
 	return beginBlock.GetPreHash()
+}
+
+////////////////////////////// syncTaskManager /////////////////////////
+type syncTaskManager struct {
+	// 账本同步batch操作
+	syncingTasks *TasksList
+	// 账本同步追加操作
+	appendingTasks *TasksList
+	// sync队列最大size
+	syncMaxSize int
+	log         logs.Logger
+	// 用于生成进程内唯一task_id的自增id
+	autoIncrId int64
+	incrIdLock sync.Mutex
+}
+
+// newSyncTaskManager 生成一个新SyncTaskManager，管理所有任务队列
+// 任务队列包含两个队列，syncingTasks用于记录多个block的同步任务，
+// appendingTasks用于记录收到广播新块，且新块直接为账本下一高度的情况，该任务直接尝试写账本
+func newSyncTaskManager(log logs.Logger) *syncTaskManager {
+	return &syncTaskManager{
+		syncingTasks:   NewTasksList(),
+		appendingTasks: NewTasksList(),
+		syncMaxSize:    MaxTaskMNSize,
+		log:            log,
+	}
+}
+
+// generateTaskid generate a random id.
+func (stm *syncTaskManager) GenerateTaskid() string {
+	stm.incrIdLock.Lock()
+	orderNo := stm.autoIncrId
+	stm.autoIncrId++
+	stm.incrIdLock.Unlock()
+
+	return fmt.Sprintf("%d_%d", utils.GenPseudoUniqId(), orderNo)
+}
+
+// put 由manager操作，直接操作所handle的各个队列
+func (stm *syncTaskManager) Put(ledgerTask *LedgerTask) bool {
+	var q *TasksList
+	switch ledgerTask.GetAction() {
+	case Syncing:
+		q = stm.syncingTasks
+	case Appending:
+		q = stm.appendingTasks
+	default:
+		stm.log.Error("SyncTaskManager::task error", "type", ledgerTask.GetAction())
+		return false
+	}
+
+	stm.log.Trace("SyncTaskManager put task", "len", stm.syncingTasks.Len())
+	if q.Len() > stm.syncMaxSize {
+		stm.log.Trace("SyncTaskManager put task err, too much task, refuse it")
+		return false
+	}
+
+	return q.RPUSH(ledgerTask)
+}
+
+// get 由manager操作从所有队列中挑选一个队列拿一个任务
+func (stm *syncTaskManager) Get() *LedgerTask {
+	var q *TasksList
+	// 在同步逻辑中，最新块广播的优先级高于其他
+	if stm.appendingTasks.Len() > 0 {
+		q = stm.appendingTasks
+	} else {
+		q = stm.syncingTasks
+	}
+
+	stm.log.Debug("SyncTaskManager::", "Len", queue.Len())
+	return q.LPOP()
+}
+
+// fixTask 清洗队列中失效的任务
+func (stm *syncTaskManager) GC(targetHeight int64) {
+	stm.syncingTasks.GC(targetHeight)
+	stm.appendingTasks.GC(targetHeight)
+}
+
+//////////////////////////////TasksList/////////////////////////
+type TasksList struct {
+	// 存放具体task
+	tList *list.List
+	// mutex保护tList的并发操作
+	lock sync.RWMutex
+}
+
+// NewTasksList return a link queue TasksList
+// NewTasksList 返回一个包含链表和链表所含元素组成的set的数据结构
+func NewTasksList() *TasksList {
+	return &TasksList{
+		tList: list.New(),
+	}
+}
+
+// Len return the length of list
+// Len 返回TasksList中tList的长度
+func (t *TasksList) Len() int {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.tList.Len()
+}
+
+// PushBack push task at the end of taskslist
+// PushBack 向TasksList中的链表做PushBack操作，同时确保push的元素原链表中没有
+func (t *TasksList) RPUSH(ledgerTask *LedgerTask) bool {
+	t.Lock.Lock()
+	defer t.Lock.Unlock()
+
+	e := t.tList.PushBack(ledgerTask)
+	if e == nil {
+		return false
+	}
+	return true
+}
+
+func (t *TasksList) LPOP() *LedgerTask {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if t.Len() == 0 {
+		return nil
+	}
+
+	e := t.tList.Front()
+	t.tList.Remove(e)
+	return e.Value.(*LedgerTask)
+}
+
+// fix 删除链表中比目标高度高的所有任务，一般在trunate操作调用
+func (t *TasksList) GC(targetHeight int64) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	var tmpNode *list.Element
+	e := t.tList.Front()
+	for e != nil {
+		tmpNode = e
+		if e.Value.(*LedgerTask).GetHeight() > targetHeight {
+			t.tList.Remove(e)
+		}
+		e = tmpNode.Next()
+	}
+}
+
+/////////////////////////////LedgerTask///////////////////////////////
+type TaskContext struct {
+	extBlocks  []*SimpleBlock
+	preferPeer []string
+	hd         *global.XContext
+}
+
+type SimpleBlock struct {
+	internalBlock *pb.InternalBlock
+	logid         string
+}
+
+type LedgerTask struct {
+	taskId       string
+	action       Status
+	targetHeight int64
+	ctx          *TaskContext
+}
+
+// CreateLedgerTaskCtx 创建taskctx上下文
+func CreateLedgerTaskCtx(extBlocks []*SimpleBlock, preferPeer []string, hd *global.XContext) *TaskContext {
+	return &TaskContext{
+		extBlocks:  extBlocks,
+		preferPeer: preferPeer,
+		hd:         hd,
+	}
+}
+
+/* GetAction get the action of the task，获取task的目标行为，Waiting/Syncing/Truncateing/Appending
+ */
+func (lt *LedgerTask) GetAction() Status {
+	return lt.action
+}
+
+/* GetHeight get the height of the task.
+ * GetHeight 获取task的targetId的对应高度，此处只是作为manager管理task使用
+ * 加入height的目的是减少操作者频繁QueryBlock
+ */
+func (lt *LedgerTask) GetHeight() int64 {
+	return lt.targetHeight
+}
+
+/* GetExtBlocks get extBlocks of the task.
+ * GetExtBlocks 获取任务的addition存储，在AppendingTask中使用，存入要直接写入账本的block
+ */
+func (lt *LedgerTask) GetExtBlocks() []*SimpleBlock {
+	if lt.ctx == nil || lt.ctx.extBlocks == nil {
+		return nil
+	}
+	return lt.ctx.extBlocks
+}
+
+/* GetPreferPeer get the callee of the task.
+ * GetPreferPeer 获取向其余节点发送请求信息时指定的Peer地址
+ */
+func (lt *LedgerTask) GetPreferPeer() []string {
+	if lt.ctx == nil || lt.ctx.preferPeer == nil {
+		return nil
+	}
+	return lt.ctx.preferPeer
+}
+
+func (lt *LedgerTask) setPreferPeer(addr string) {
+	lt.ctx.preferPeer = append(lt.ctx.preferPeer, addr)
+}
+
+// GetXCtx get the context of the task.
+func (lt *LedgerTask) GetXContext() *global.XContext {
+	if lt.ctx == nil || lt.ctx.hd == nil {
+		return nil
+	}
+	return lt.ctx.hd
 }

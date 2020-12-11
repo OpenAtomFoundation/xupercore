@@ -39,8 +39,8 @@ type Chain interface {
 // 定义xuperos引擎对外暴露接口
 // 依赖接口而不是依赖具体实现
 type Engine interface {
-	Context() *EngineCtx
 	engines.BCEngine
+	Context() *EngineCtx
 	Get(string) Chain
 	Set(string, Chain)
 	GetChains() []string
