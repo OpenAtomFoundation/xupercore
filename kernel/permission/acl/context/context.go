@@ -2,9 +2,8 @@ package context
 
 import (
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
-
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 )
@@ -20,20 +19,16 @@ type LedgerRely interface {
 	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)
 }
 
-type ContractRely interface {
-	RegisterKernMethod(contract, method string, handle kernel.KernMethod)
-}
-
 type AclCtx struct {
 	// 基础上下文
 	xcontext.BaseCtx
 	BcName   string
 	Ledger   LedgerRely
-	Register ContractRely
+	Contract contract.Manager
 }
 
-func NewAclCtx(bcName string, leg LedgerRely, register ContractRely) (*AclCtx, error) {
-	if bcName == "" || leg == nil || register == nil {
+func NewAclCtx(bcName string, leg LedgerRely, contract contract.Manager) (*AclCtx, error) {
+	if bcName == "" || leg == nil || contract == nil {
 		return nil, fmt.Errorf("new acl ctx failed because param error")
 	}
 
@@ -47,7 +42,7 @@ func NewAclCtx(bcName string, leg LedgerRely, register ContractRely) (*AclCtx, e
 	ctx.Timer = timer.NewXTimer()
 	ctx.BcName = bcName
 	ctx.Ledger = leg
-	ctx.Register = register
+	ctx.Contract = contract
 
 	return ctx, nil
 }
