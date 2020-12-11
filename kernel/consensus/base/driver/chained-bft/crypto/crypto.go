@@ -10,7 +10,17 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 )
 
-type CBFTCrypto cctx.CryptoClient
+type CBFTCrypto struct {
+	Address      cctx.Address
+	CryptoClient cctx.CryptoClient
+}
+
+func NewCBFTCrypto(addr cctx.Address, c cctx.CryptoClient) *CBFTCrypto {
+	return &CBFTCrypto{
+		Address:      addr,
+		CryptoClient: c,
+	}
+}
 
 func (c *CBFTCrypto) SignProposalMsg(msg *pb.ProposalMsg) (*pb.ProposalMsg, error) {
 	msgDigest, err := MakeProposalMsgDigest(msg)

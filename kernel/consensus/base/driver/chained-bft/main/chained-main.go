@@ -7,8 +7,8 @@ import (
 	"github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -93,12 +93,21 @@ func initQcTee() *chainedBft.QCPendingTree {
 	}
 }
 
-func prepareSmr(log logs.Logger, address string, publicKey string, privateKey string, p2p p2p.Server, election chainedBft.ProposerElectionInterface) *chainedBft.Smr {
+func prepareSmr(log logs.Logger, address string, publicKey string, privateKey string, p2p cctx.P2pCtxInConsensus, election chainedBft.ProposerElectionInterface) *chainedBft.Smr {
 	cc, err := client.CreateCryptoClientFromJSONPrivateKey([]byte(privateKey))
 	if err != nil {
 		log.Error("CreateCryptoClientFromJSONPrivateKey error", "error", err)
 	}
-	cryptoClient := cCrypto.NewCBFTCrypto(address, cc, publicKey, privateKey)
+	sk, _ := cc.GetEcdsaPrivateKeyFromJsonStr(privateKey)
+	pk, _ := cc.GetEcdsaPublicKeyFromJsonStr(publicKey)
+	a := cctx.Address{
+		Address:       address,
+		PrivateKeyStr: privateKey,
+		PublicKeyStr:  publicKey,
+		PrivateKey:    sk,
+		PublicKey:     pk,
+	}
+	cryptoClient := cCrypto.NewCBFTCrypto(a, cc)
 	pacemaker := &chainedBft.DefaultPaceMaker{}
 	saftyrules := &chainedBft.DefaultSaftyRules{
 		Crypto: cryptoClient,

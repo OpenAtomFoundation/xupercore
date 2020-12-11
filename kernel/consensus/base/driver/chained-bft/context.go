@@ -15,11 +15,10 @@ var (
 	QCRepeatErr       = errors.New("QC has been included in qcTree")
 )
 
-/* 本文件定义了chained-bft下有关的数据结构和接口
- * QuorumCertInterface 规定了pacemaker和saftyrules操作的qc接口
- * QuorumCert 为一个QuorumCertInterface的实现 TODO: smr彻底接口化是否可能?
- * QCPendingTree 规定了smr内存存储的组织形式，其为一个QC树状结构
- */
+// 本文件定义了chained-bft下有关的数据结构和接口
+// QuorumCertInterface 规定了pacemaker和saftyrules操作的qc接口
+// QuorumCert 为一个QuorumCertInterface的实现 TODO: smr彻底接口化是否可能?
+// QCPendingTree 规定了smr内存存储的组织形式，其为一个QC树状结构
 
 // quorumCert 是HotStuff的基础结构，它表示了一个节点本地状态以及其余节点对该状态的确认
 type QuorumCert struct {
@@ -61,10 +60,9 @@ type VoteInfo struct {
 	ParentView int64
 }
 
-/* ledgerCommitInfo 表示的是本地账本和QC存储的状态，包含一个commitStateId和一个voteInfoHash
- * commitStateId 表示本地账本状态，TODO: = 本地账本merkel root
- * voteInfoHash 表示本地vote的vote_info的哈希，即本地QC的最新状态
- */
+// ledgerCommitInfo 表示的是本地账本和QC存储的状态，包含一个commitStateId和一个voteInfoHash
+// commitStateId 表示本地账本状态，TODO: = 本地账本merkel root
+// voteInfoHash 表示本地vote的vote_info的哈希，即本地QC的最新状态
 type LedgerCommitInfo struct {
 	CommitStateId []byte
 	VoteInfoHash  []byte
@@ -79,10 +77,9 @@ type QuorumCertInterface interface {
 	GetSignsInfo() []*chainedBftPb.QuorumCertSign
 }
 
-/* PendingTree 是一个内存内的QC状态存储树，仅存放目前未commit(即可能触发账本回滚)的区块信息
- * 当PendingTree中的某个节点有[严格连续的]三代子孙后，将出发针对该节点的账本Commit操作
- * 本数据结构替代原有Chained-BFT的三层QC存储，即proposalQC,generateQC和lockedQC
- */
+// PendingTree 是一个内存内的QC状态存储树，仅存放目前未commit(即可能触发账本回滚)的区块信息
+// 当PendingTree中的某个节点有[严格连续的]三代子孙后，将出发针对该节点的账本Commit操作
+// 本数据结构替代原有Chained-BFT的三层QC存储，即proposalQC,generateQC和lockedQC
 type QCPendingTree struct {
 	Genesis   *ProposalNode // Tree中第一个Node
 	Root      *ProposalNode
@@ -164,9 +161,8 @@ func (t *QCPendingTree) insert(node *ProposalNode) error {
 	return nil
 }
 
-/* updateCommit 此方法向存储接口发送一个ProcessCommit，通知存储落盘，此时的block将不再被回滚
- * 同时此方法将原先的root更改为commit node，因为commit node在本BFT中已确定不会回滚
- */
+// updateCommit 此方法向存储接口发送一个ProcessCommit，通知存储落盘，此时的block将不再被回滚
+// 同时此方法将原先的root更改为commit node，因为commit node在本BFT中已确定不会回滚
 func (t *QCPendingTree) updateCommit(p QuorumCertInterface) {
 	// t.Ledger.ConsensusCommit(p.GetProposalId())
 	node := t.DFSQueryNode(p.GetProposalId())
@@ -179,8 +175,7 @@ func (t *QCPendingTree) updateCommit(p QuorumCertInterface) {
 	// TODO: commitQC/lockedQC/genericQC/highQC是否有指向原root及以上的Node
 }
 
-/* DFSQueryNode实现的比较简单，从root节点开始寻找，后续有更优方法可优化
- */
+// DFSQueryNode实现的比较简单，从root节点开始寻找，后续有更优方法可优化
 func (t *QCPendingTree) DFSQueryNode(id []byte) *ProposalNode {
 	return DFSQuery(t.Root, id)
 }
