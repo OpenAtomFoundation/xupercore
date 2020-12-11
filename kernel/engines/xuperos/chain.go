@@ -30,7 +30,6 @@ type Chain struct {
 	keeper *LedgerKeeper
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
-
 	// 读组件
 	reader reader.Reader
 }
@@ -65,14 +64,15 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 		return nil, fmt.Errorf("init chain ctx failed")
 	}
 
-	// 账本同步
-	chain.keeper = NewLedgerKeeper(ctx)
+	// 账本区块同步
+	chainObj.ledgerKeeper = NewLedgerKeeper(ctx)
 	// 实例化矿工
-	chain.miner = NewMiner(ctx, chain.keeper)
+	chainObj.miner = NewMiner(ctx, chain.keeper)
 	// 交易处理器
-	chain.processor = NewTxProcessor(ctx)
+	chainObj.processor = NewTxProcessor(ctx)
+	// 读操作组件
+	chainObj.reader = reader.NewReader(ctx)
 
-	chain.reader = reader.NewReader(chain)
 	return chain, nil
 }
 
