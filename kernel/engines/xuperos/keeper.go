@@ -391,7 +391,7 @@ func (lk *LedgerKeeper) getTask() (*LedgerTask, bool) {
  */
 func (lk *LedgerKeeper) updatePeerStatusMap() {
 	state := lk.ctx.Net.P2PState()
-	for peerID, _ := range state.RemotePeer {
+	for peerID, _ := range state.Remote {
 		if _, ok := lk.peersStatusMap.Load(peerID); ok {
 			continue
 		}

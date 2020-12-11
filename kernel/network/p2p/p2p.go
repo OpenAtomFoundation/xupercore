@@ -24,7 +24,12 @@ type Server interface {
 }
 
 type State struct {
-	PeerId     string
-	PeerAddr   string
-	RemotePeer map[string]string
+	Local 	*PeerInfo
+	Remote 	[]*PeerInfo
+}
+
+type PeerInfo struct {
+	Id 		string
+	Addr 	string
+	Account	string
 }

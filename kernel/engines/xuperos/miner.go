@@ -59,7 +59,7 @@ func (t *miner) start() {
 	}
 
 	// 2 FAST_SYNC模式下需要回滚掉本地所有的未确认交易
-	if t.ctx.EngCfg.NodeMode == config.NodeModeFastSync {
+	if t.ctx.EngCfg.NodeMode == def.NodeModeFastSync {
 		if _, _, err := t.ctx.State.RollBackUnconfirmedTx(); err != nil {
 			t.log.Warn("state RollBackUnconfirmedTx error", "error", err, "mode", "FastSync")
 		}
@@ -323,7 +323,7 @@ func (t *miner) broadcastBlock(freshBlock *pb.InternalBlock) {
 	block := &pb.Block{
 		Header: &pb.Header{
 			Logid:    t.logID,
-			FromNode: state.PeerId,
+			FromNode: state.Local.Id, // TODO: 与p2p from字段重复
 		},
 		Bcname:  t.ctx.BCName,
 		Blockid: freshBlock.Blockid,

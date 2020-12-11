@@ -6,6 +6,7 @@ import (
 	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xuperchain/core/pb"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"time"
@@ -25,6 +26,9 @@ type Chain struct {
 	keeper *LedgerKeeper
 	// 依赖代理组件
 	relyAgent def.ChainRelyAgent
+
+	// 读组件
+	reader reader.Reader
 }
 
 // 从本地存储加载链
@@ -53,6 +57,7 @@ func LoadChain(ctx *def.ChainCtx) (*Chain, error) {
 	// 交易处理器
 	chain.processor = NewTxProcessor(ctx)
 
+	chain.reader = reader.NewReader(chain)
 	return chain, nil
 }
 
@@ -66,7 +71,22 @@ func (t *Chain) SetRelyAgent(agent def.ChainRelyAgent) error {
 	return nil
 }
 
+func (t *Chain) Context() *def.ChainCtx {
+	return t.ctx
+}
+
+func (t *Chain) Status() int {
+	return t.ctx.Status
+}
+
+func (t *Chain) Reader() reader.Reader {
+	return t.reader
+}
+
 func (t *Chain) Start() {
+	// 周期repost本地未上链的交易
+	go t.processor.repostOfflineTx()
+
 	// 启动矿工
 	t.miner.start()
 }
@@ -82,32 +102,27 @@ func (t *Chain) PreExec(request *pb.InvokeRPCRequest) (*pb.InvokeResponse, error
 }
 
 // 交易和区块结构由账本定义
-func (t *Chain) ProcTx(request *pb.TxStatus) *pb.CommonReply {
-	response := &pb.CommonReply{Header: request.Header}
-	response.Header.Error = pb.XChainErrorEnum_SUCCESS
+func (t *Chain) ProcTx(request *pb.TxStatus) error {
 	if t.Status() != global.Normal {
 		t.log.Error("chain status not ready", "logid", request.Header.Logid)
-		response.Header.Error = pb.XChainErrorEnum_CONNECT_REFUSE // 拒绝
-		return response
+		return def.ErrBlockChainNotReady
 	}
 
 	// 验证交易
 	txValid, err := t.processor.verifyTx(request.Tx)
 	if !txValid {
 		t.log.Error("verify tx error", "logid", request.Header.Logid, "txid", global.F(request.Tx.Txid), "error", err)
-		response.Header.Error = HandleVerifyError(err)
-		return response
+		return err
 	}
 
 	// 提交交易
 	err = t.processor.submitTx(request.Tx)
 	if err != nil {
 		t.log.Error("submit tx error", "logid", request.Header.Logid, "txid", global.F(request.Tx.Txid), "error", err)
-		response.Header.Error = HandleStateError(err)
-		return response
+		return err
 	}
 
-	return response
+	return nil
 }
 
 // 处理新区块
@@ -133,14 +148,6 @@ func (t *Chain) ProcBlock(in *pb.Block) error {
 	ctx := CreateLedgerTaskCtx(nil, []string{in.GetHeader().GetFromNode()}, hd)
 	t.keeper.PutTask(ctx, Syncing, -1)
 	return nil
-}
-
-func (t *Chain) Context() *def.ChainCtx {
-	return t.ctx
-}
-
-func (t *Chain) Status() int {
-	return t.ctx.Status
 }
 
 func (t *Chain) initChainCtx() error {

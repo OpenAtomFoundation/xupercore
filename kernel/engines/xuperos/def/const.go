@@ -10,6 +10,8 @@ const (
 	RootChain = "xuper"
 	// 区块链配置
 	BlockChainConfig = "xuper.json"
+	// 节点模式
+	NodeModeFastSync = "FastSync"
 )
 
 // 矿工状态

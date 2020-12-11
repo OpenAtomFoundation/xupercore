@@ -7,7 +7,9 @@ import (
 	"github.com/xuperchain/xuperchain/core/pb"
 	"github.com/xuperchain/xuperchain/core/vat"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"math/big"
 
 	//"github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -21,11 +23,15 @@ import (
 )
 
 type Chain interface {
-	Context() *ChainCtx
-	SetRelyAgent(ChainRelyAgent) error
 	Start()
 	Stop()
-	ProcTx(request *pb.TxStatus) *pb.CommonReply
+
+	Context() *ChainCtx
+	Status() int
+	Reader() reader.Reader
+	SetRelyAgent(ChainRelyAgent) error
+
+	ProcTx(request *pb.TxStatus) error
 	ProcBlock(request *pb.Block) error
 	PreExec(request *pb.InvokeRPCRequest) (*pb.InvokeResponse, error)
 }
@@ -43,8 +49,8 @@ type ChainRelyAgent interface {
 // 定义xuperos引擎对外暴露接口
 // 依赖接口而不是依赖具体实现
 type Engine interface {
-	Context() *EngineCtx
 	engines.BCEngine
+	Context() *EngineCtx
 	SetRelyAgent(EngineRelyAgent) error
 	Get(string) Chain
 	Set(string, Chain)
@@ -108,6 +114,7 @@ type XLedger interface {
 	IsValidTx(tx *pb.Transaction, block *pb.InternalBlock) bool
 
 	GetMaxBlockSize() int64
+	GetNoFee() bool
 
 	//// GetPendingBlock get block from pending table
 	//GetPendingBlock(blockID []byte) (*pb.Block, error)
@@ -122,10 +129,14 @@ type XLedger interface {
 	//RemoveBlocks()
 
 	// for reader
+	// tx
+	QueryTransaction(txId []byte) (*pb.Transaction, error)
+	// block
 	QueryBlock(blockId []byte) (*pb.InternalBlock, error)
 	QueryBlockHeader(blockId []byte) (*pb.InternalBlock, error)
-	QueryBlockByHeight()
-	//QueryTransaction()
+	QueryBlockByHeight(height int64) (*pb.InternalBlock, error)
+	// branch
+	GetBranchInfo(blockId []byte, blockHeight int64) ([]string, error)
 }
 
 type XState interface {
@@ -137,6 +148,8 @@ type XState interface {
 	GetVATList(height int64, maxCount int, timestamp int64) ([]*pb.Transaction, error)
 	GetUnconfirmedTx(bool) ([]*pb.Transaction, error)
 	PreExec(req *pb.InvokeRPCRequest) (*pb.InvokeResponse, error)
+	// HasTx 查询一笔交易是否在unconfirm表
+	HasTx(txId []byte) (*pb.Transaction, bool)
 
 	// MakeUtxoVM 构建一个UtxoVM对象，定制版
 	MakeUtxoVM()
@@ -147,8 +160,7 @@ type XState interface {
 	GenerateAwardTx(address []byte, awardAmount string, desc []byte) (*pb.Transaction, error)
 	// GenerateTx 根据一个原始订单, 得到UTXO格式的交易, 相当于预执行, 会在内存中锁定一段时间UTXO, 但是不修改kv存储
 	//GenerateTx(txReq *pb.TxData) (*pb.Transaction, error)
-	// HasTx 查询一笔交易是否在unconfirm表
-	HasTx(txid []byte) (bool, error)
+
 	// IsAsync return current async state
 	IsAsync() bool
 	// IsAsyncBlock return current async state
@@ -183,6 +195,25 @@ type XState interface {
 	Walk(blockid []byte, ledgerPrune bool) error
 
 	// for reader
+
+	// tx
+	QueryTransaction(txId []byte) (*pb.Transaction, error)
+	// meta
+	GetMeta() *pb.UtxoMeta
+	// account
+	QueryAccountContainAK(address string) ([]string, error)
+	QueryAccountACLWithConfirmed(accountName string) (*pb.Acl, bool, error)
+	QueryContractMethodACLWithConfirmed(contractName string, methodName string) (*pb.Acl, bool, error)
+	QueryContractStatData() (*pb.ContractStatData, error)
+	QueryUtxoRecord(accountName string, displayCount int64) (*pb.UtxoRecordDetail, error)
+	QueryTxFromForbiddenWithConfirmed(txId []byte) (bool, bool, error)
+	GetAccountContracts(account string) ([]string, error)
+	GetContractStatus(contractName string) (*pb.ContractStatus, error)
+	// balance
+	GetBalance(address string) (*big.Int, error)
+	GetFrozenBalance(address string) (*big.Int, error)
+	GetBalanceDetail(address string) ([]*pb.TokenFrozenDetail, error)
+
 	//GetAccountContracts()
 	//GetBalance()
 	//GetBalanceDetail()
@@ -200,7 +231,6 @@ type XState interface {
 	//QueryAccountContainAK()
 	//QueryContractMethodACLWithConfirmed()
 	//QueryContractStatData()
-	//QueryTx()
 	//QueryTxFromForbiddenWithConfirmed()
 	//QueryUtxoRecord()
 	//

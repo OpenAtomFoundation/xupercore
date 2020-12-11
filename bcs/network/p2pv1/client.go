@@ -167,10 +167,8 @@ func (p *P2PServerV1) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 	}
 
 	bcname := msg.GetHeader().GetBcname()
-	filters := opt.Filters
-	peerIDs := make([]string, 0)
-	peerFilters := make([]PeerFilter, 0)
-	for _, f := range filters {
+	peerFilters := make([]PeerFilter, 0, len(opt.Filters))
+	for _, f := range opt.Filters {
 		var filter PeerFilter
 		switch f {
 		default:
@@ -180,6 +178,7 @@ func (p *P2PServerV1) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 	}
 
 	go p.connectPeerByAddr(opt.Addresses)
+	peerIDs := opt.PeerIDs
 	peerIDs = append(peerIDs, opt.Addresses...)
 	return NewMultiStrategy(peerFilters, peerIDs)
 }

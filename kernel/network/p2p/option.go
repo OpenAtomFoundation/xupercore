@@ -2,8 +2,14 @@ package p2p
 
 type Option struct {
 	Filters   []FilterStrategy
+
+	// 地址路由
 	Addresses []string
+	// PeerID路由
 	PeerIDs   []string
+	// 账户路由
+	Accounts  []string
+
 	WhiteList map[string]bool
 
 	Percent float32 // percent wait for return
@@ -30,6 +36,13 @@ func WithFilter(filters []FilterStrategy) OptionFunc {
 func WithPercent(percentage float32) OptionFunc {
 	return func(o *Option) {
 		o.Percent = percentage
+	}
+}
+
+// WithAccount send msg to account's node
+func WithAccount(accounts []string) OptionFunc {
+	return func(o *Option) {
+		o.Accounts = accounts
 	}
 }
 
