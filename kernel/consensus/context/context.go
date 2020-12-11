@@ -52,10 +52,10 @@ type ConsensusConfig struct {
 // LedgerCtxInConsensus 使用到的ledger接口
 type LedgerCtxInConsensus interface {
 	QueryBlockByHeight(int64) (BlockInterface, error)
-	QueryBlockHeader([]byte) (BlockInterface, error)
-	GetSnapShotWithBlock(blockId []byte) (ledger.XMSnapshotReader, error)
-	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) // 获取当前最新快照， 原来utxoVM快照
-	GetGenesisConsensusConf() []byte                          // 获取账本创始块共识配置
+	QueryBlock([]byte) (BlockInterface, error)
+	CreateSnapshot(blockId []byte) (ledger.XMSnapshotReader, error)
+	GetTipSnapshot() (ledger.XMSnapshotReader, error) // 获取当前最新区块的快照， 原来utxoVM快照
+	GetGenesisConsensusConf() ([]byte, error)         // 获取账本创始块共识配置
 	GetTipBlock() BlockInterface
 	// ConsensusCommit(blockId []byte) bool // 共识向账本发送落盘消息，此后该区块将不被回滚
 }

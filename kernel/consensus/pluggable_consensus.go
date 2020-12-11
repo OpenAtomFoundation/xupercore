@@ -267,14 +267,17 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 	// 向合约注册读方法
 	cCtx.RegisterKernMethod(contractBucket, contractReadMethod, pc.readConsensus)
 
-	xMReader, err := cCtx.Ledger.GetTipXMSnapshotReader()
+	xMReader, err := cCtx.Ledger.GetTipSnapshot()
 	if err != nil {
 		return nil, err
 	}
 	res, err := xMReader.Get(contractBucket, []byte(consensusKey))
 	if res == nil {
 		// 若合约存储不存在，则直接从账本里拿到创始块配置，并且声称从未初始化过的共识实例Genesis共识实例
-		consensusBuf := cCtx.Ledger.GetGenesisConsensusConf()
+		consensusBuf, err := cCtx.Ledger.GetGenesisConsensusConf()
+		if err != nil {
+			return nil, err
+		}
 		// 解析提取字段生成ConsensusConfig
 		cfg := cctx.ConsensusConfig{}
 		err = json.Unmarshal(consensusBuf, &cfg)

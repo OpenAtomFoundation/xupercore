@@ -16,8 +16,8 @@ import (
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	xuperp2p "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
+	xuperp2p "github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -205,7 +205,7 @@ func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 		return P2PInternalErr
 	}
 	s.pacemaker.PrepareAdvance(nextView, nextLeader)
-	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(nextLeader)}))
+	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(nextLeader)}))
 	return nil
 }
 
@@ -357,7 +357,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		leader := s.Election.GetLeader(newProposalMsg.GetProposalView())
 		// 此处如果失败，仍会执行下层逻辑，因为是多个节点通知该轮Leader，因此若发不出去仍可继续运行
 		if leader != "" && netMsg != nil && leader != s.address {
-			go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(leader)}))
+			go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(leader)}))
 		}
 	}
 
@@ -460,7 +460,7 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return
 	}
-	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(voteTo)}))
+	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(voteTo)}))
 	return
 }
 
