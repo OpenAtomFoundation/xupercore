@@ -27,9 +27,10 @@ func NewACLManager(ctx *actx.AclCtx) (base.AclManager, error) {
 	}
 
 	t := NewKernContractMethod(ctx.BcName, newAccountGas)
-	ctx.Register.RegisterKernMethod(utils.SubModName, "NewAccount", t.NewAccount)
-	ctx.Register.RegisterKernMethod(utils.SubModName, "SetAccountACL", t.SetAccountACL)
-	ctx.Register.RegisterKernMethod(utils.SubModName, "SetMethodACL", t.SetMethodACL)
+	register := ctx.Contract.GetKernRegistry()
+	register.RegisterKernMethod(utils.SubModName, "NewAccount", t.NewAccount)
+	register.RegisterKernMethod(utils.SubModName, "SetAccountACL", t.SetAccountACL)
+	register.RegisterKernMethod(utils.SubModName, "SetMethodACL", t.SetMethodACL)
 
 	mg := &Manager{
 		Ctx: ctx,
