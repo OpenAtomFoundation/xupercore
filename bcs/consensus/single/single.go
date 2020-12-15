@@ -3,87 +3,35 @@ package single
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
-	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
-	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 )
 
 // 本次single改造支持single的升级，即Miner地址可变
+var (
+	MinerAddressErr = errors.New("Block's proposer must be equal to its address.")
+)
 
 func init() {
 	consensus.Register("single", NewSingleConsensus)
 }
 
-// SingleConsensus single为单点出块的共识逻辑
-type SingleConsensus struct {
-	ctx    cctx.ConsensusCtx
-	status *SingleStatus
-	config *SingleConfig
-}
-
 type SingleConfig struct {
-	Miner   string `json:"miner"`
-	Period  int64  `json:"period"`
-	Version int64  `json:"version"`
-}
-
-type SingleStatus struct {
-	startHeight int64
-	mutex       sync.RWMutex
-	newHeight   int64
-	index       int
-	config      *SingleConfig
-}
-
-type MinerInfo struct {
 	Miner string `json:"miner"`
-}
-
-// GetVersion 返回pow所在共识version
-func (s *SingleStatus) GetVersion() int64 {
-	return s.config.Version
-}
-
-// GetConsensusBeginInfo 返回该实例初始高度
-func (s *SingleStatus) GetConsensusBeginInfo() int64 {
-	return s.startHeight
-}
-
-// GetStepConsensusIndex 获取共识item所在consensus slice中的index
-func (s *SingleStatus) GetStepConsensusIndex() int {
-	return s.index
-}
-
-// GetConsensusName 获取共识类型
-func (s *SingleStatus) GetConsensusName() string {
-	return "single"
-}
-
-// GetCurrentTerm 获取当前状态机term
-func (s *SingleStatus) GetCurrentTerm() int64 {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.newHeight
-}
-
-// GetCurrentValidatorsInfo 获取当前矿工信息
-func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
-	miner := MinerInfo{
-		Miner: s.config.Miner,
-	}
-	m, _ := json.Marshal(miner)
-	return m
+	// 单位为毫秒
+	Period  int64 `json:"period"`
+	Version int64 `json:"version"`
 }
 
 // NewSingleConsensus 初始化实例
-func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+func NewSingleConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
 	// 解析config中需要的字段
 	if cCtx.XLog == nil {
 		return nil
@@ -122,11 +70,68 @@ func NewSingleConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) bas
 	return single
 }
 
+type MinerInfo struct {
+	Miner string `json:"miner"`
+}
+
+// SingleConsensus single为单点出块的共识逻辑
+type SingleConsensus struct {
+	ctx    cctx.ConsensusCtx
+	status *SingleStatus
+	config *SingleConfig
+}
+
+type SingleStatus struct {
+	startHeight int64
+	mutex       sync.RWMutex
+	newHeight   int64
+	index       int
+	config      *SingleConfig
+}
+
+// GetVersion 返回pow所在共识version
+func (s *SingleStatus) GetVersion() int64 {
+	return s.config.Version
+}
+
+// GetConsensusBeginInfo 返回该实例初始高度
+func (s *SingleStatus) GetConsensusBeginInfo() int64 {
+	return s.startHeight
+}
+
+// GetStepConsensusIndex 获取共识item所在consensus slice中的index
+func (s *SingleStatus) GetStepConsensusIndex() int {
+	return s.index
+}
+
+// GetConsensusName 获取共识类型
+func (s *SingleStatus) GetConsensusName() string {
+	return "single"
+}
+
+// GetCurrentTerm 获取当前状态机term
+func (s *SingleStatus) GetCurrentTerm() int64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.newHeight
+}
+
+// GetCurrentValidatorsInfo 获取当前矿工信息
+func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
+	miner := MinerInfo{
+		Miner: s.config.Miner,
+	}
+	m, _ := json.Marshal(miner)
+	return m
+}
+
 // CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
 // 该函数返回两个bool，第一个表示是否当前应当出块，第二个表示是否当前需要向其他节点同步区块
 func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
 	t := time.Now().UnixNano() / 1e6
 	if t%s.config.Period != 0 {
+		sleep := s.config.Period - t%s.config.Period
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		return false, false, nil
 	}
 	if s.ctx.Address.Address == s.config.Miner {
@@ -150,29 +155,35 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.Block
 		return false, err
 	}
 	// 检查矿工地址是否合法
-	if global.F(block.GetProposer()) != s.config.Miner {
+	if string(block.GetProposer()) != s.config.Miner {
 		ctx.XLog.Warn("Single::CheckMinerMatch::miner check error", "logid", ctx.XLog.GetLogId(),
-			"blockid", block.GetBlockid(), "proposer", block.GetProposer(), "local proposer", s.config.Miner)
+			"blockid", block.GetBlockid(), "proposer", string(block.GetProposer()), "local proposer", s.config.Miner)
 		return false, err
 	}
 	//验证签名
 	//1 验证一下签名和公钥是不是能对上
-	// TODO: 后面再改
 	k, err := s.ctx.Crypto.GetEcdsaPublicKeyFromJsonStr(block.GetPublicKey())
 	if err != nil {
 		ctx.XLog.Warn("Single::CheckMinerMatch::get ecdsa from block error", "logid", ctx.XLog.GetLogId(), "error", err)
 		return false, err
 	}
-	//Todo 跟address比较
 	chkResult, _ := s.ctx.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
 	if chkResult == false {
 		ctx.XLog.Warn("Single::CheckMinerMatch::address is not match publickey", "logid", ctx.XLog.GetLogId())
 		return false, err
 	}
-	//2 验证一下签名是否正确
+	//2 验证地址
+	addr, err := s.ctx.Crypto.GetAddressFromPublicKey(k)
+	if err != nil {
+		return false, err
+	}
+	if addr != string(block.GetProposer()) {
+		return false, MinerAddressErr
+	}
+	//3 验证一下签名是否正确
 	valid, err := s.ctx.Crypto.VerifyECDSA(k, block.GetSign(), block.GetBlockid())
 	if err != nil {
-		ctx.XLog.Warn("Single::CheckMinerMatch::verifyECDSA error", "logid", ctx.XLog.GetLogId(), "error", err)
+		ctx.XLog.Warn("Single::CheckMinerMatch::verifyECDSA error", "logid", ctx.XLog.GetLogId(), "error", err, "sign", block.GetSign())
 	}
 	return valid, err
 }
@@ -202,7 +213,7 @@ func (s *SingleConsensus) Stop() error {
 	return nil
 }
 
-// 共识实例的重启逻辑, 用于共识回滚
+// 共识实例的启动逻辑
 func (s *SingleConsensus) Start() error {
 	return nil
 }

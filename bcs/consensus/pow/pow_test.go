@@ -6,8 +6,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/xuperchain/xupercore/bcs/consensus/mock"
+	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/consensus/def"
+	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 )
 
 var (
@@ -28,48 +30,56 @@ func getPoWConsensusConf() []byte {
 	return j
 }
 
-func prepare() cctx.ConsensusCtx {
-	l := mock.NewFakeLedger(getPoWConsensusConf())
-	cCtx := mock.NewConsensusCtx()
+func prepare() (*cctx.ConsensusCtx, error) {
+	l := kmock.NewFakeLedger(getPoWConsensusConf())
+	cCtx, err := bmock.NewConsensusCtx(l)
 	cCtx.Ledger = l
-	return cCtx
+	return cCtx, err
 }
 
-func getConsensusConf() cctx.ConsensusConfig {
-	return cctx.ConsensusConfig{
+func getConsensusConf() def.ConsensusConfig {
+	return def.ConsensusConfig{
 		ConsensusName: "pow",
 		Config:        string(getPoWConsensusConf()),
-		BeginHeight:   1,
+		StartHeight:   1,
 		Index:         0,
 	}
 }
 
-func getWrongConsensusConf() cctx.ConsensusConfig {
-	return cctx.ConsensusConfig{
+func getWrongConsensusConf() def.ConsensusConfig {
+	return def.ConsensusConfig{
 		ConsensusName: "pow2",
 		Config:        string(getPoWConsensusConf()),
-		BeginHeight:   1,
+		StartHeight:   1,
 		Index:         0,
 	}
 }
 
 func TestNewPoWConsensus(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error")
+		return
+	}
 	conf := getConsensusConf()
-	i := NewPoWConsensus(cCtx, conf)
+	i := NewPoWConsensus(*cCtx, conf)
 	if i == nil {
 		t.Error("NewPoWConsensus error")
 		return
 	}
-	if i := NewPoWConsensus(cCtx, getWrongConsensusConf()); i != nil {
+	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf()); i != nil {
 		t.Error("NewPoWConsensus check name error")
 	}
 }
 
 func TestGetConsensusStatus(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error")
+		return
+	}
 	conf := getConsensusConf()
-	i := NewPoWConsensus(cCtx, conf)
+	i := NewPoWConsensus(*cCtx, conf)
 	status, _ := i.GetConsensusStatus()
 	if status.GetVersion() != 0 {
 		t.Error("GetVersion error")
@@ -89,12 +99,12 @@ func TestGetConsensusStatus(t *testing.T) {
 	}
 	vb := status.GetCurrentValidatorsInfo()
 	m := MinerInfo{}
-	err := json.Unmarshal(vb, &m)
+	err = json.Unmarshal(vb, &m)
 	if err != nil {
 		t.Error("GetCurrentValidatorsInfo unmarshal error", "error", err)
 		return
 	}
-	if m.Address != mock.Miner {
+	if m.Address != bmock.Miner {
 		t.Error("GetCurrentValidatorsInfo error", "address", m.Address)
 	}
 }
@@ -106,11 +116,20 @@ func TestParseConsensusStorage(t *testing.T) {
 	b, err := json.Marshal(ps)
 	if err != nil {
 		t.Error("ParseConsensusStorage Unmarshal error", "error", err)
+		return
 	}
-	b1 := mock.NewBlock(1, b)
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", err)
+		return
+	}
+	b1, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, b)
+	if err != nil {
+		t.Error("NewBlockWithStorage error", err)
+		return
+	}
 	conf := getConsensusConf()
-	pow := NewPoWConsensus(cCtx, conf)
+	pow := NewPoWConsensus(*cCtx, conf)
 
 	i, err := pow.ParseConsensusStorage(b1)
 	if err != nil {
@@ -161,9 +180,13 @@ func TestGetCompact(t *testing.T) {
 }
 
 func TestIsProofed(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewPoWConsensus(cCtx, conf)
+	i := NewPoWConsensus(*cCtx, conf)
 	pow, ok := i.(*PoWConsensus)
 	if !ok {
 		t.Error("TestIsProofed transfer error")
@@ -179,9 +202,13 @@ func TestIsProofed(t *testing.T) {
 }
 
 func TestMining(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewPoWConsensus(cCtx, conf)
+	i := NewPoWConsensus(*cCtx, conf)
 	powC, ok := i.(*PoWConsensus)
 	if !ok {
 		t.Error("TestMining transfer error")
@@ -192,25 +219,37 @@ func TestMining(t *testing.T) {
 		TargetBits: minTarget,
 	}
 	by, _ := json.Marshal(ps)
-	B := mock.NewBlock(1, by)
-	err := powC.mining(B)
+	B, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, by)
+	if err != nil {
+		t.Error("NewBlockWithStorage error", err)
+		return
+	}
+	err = powC.mining(B)
 	if err != nil {
 		t.Error("TestMining mining error", "blockId", B.GetBlockid(), "err", err)
 	}
 }
 
 func TestRefreshDifficulty(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewPoWConsensus(cCtx, conf)
+	i := NewPoWConsensus(*cCtx, conf)
 	powC, ok := i.(*PoWConsensus)
 	if !ok {
 		t.Error("TestRefreshDifficulty transfer error")
 		return
 	}
-	genesisB := mock.NewBlock(0, nil)
-	l, ok := powC.ctx.Ledger.(*mock.FakeLedger)
-	err := l.PutBlock(genesisB)
+	genesisB, err := bmock.NewBlock(0, cCtx.Crypto, cCtx.Address)
+	if err != nil {
+		t.Error("NewBlock error", err)
+		return
+	}
+	l, ok := powC.ctx.Ledger.(*kmock.FakeLedger)
+	err = l.Put(genesisB)
 	if err != nil {
 		t.Error("TestRefreshDifficulty put genesis err", "err", err)
 		return
@@ -221,25 +260,32 @@ func TestRefreshDifficulty(t *testing.T) {
 		TargetBits: minTarget,
 	}
 	by, _ := json.Marshal(ps)
-	B1 := mock.NewBlock(1, by)
+	B1, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, by)
+	if err != nil {
+		t.Error("NewBlockWithStorage error", err)
+		return
+	}
 	err = powC.mining(B1)
 	if err != nil {
 		t.Error("TestRefreshDifficulty mining error", "blockId", B1.GetBlockid(), "err", err)
 		return
 	}
-	err = l.PutBlock(B1)
+	err = l.Put(B1)
 	if err != nil {
 		t.Error("TestRefreshDifficulty put B1 err", "err", err)
 		return
 	}
-
-	B2 := mock.NewBlock(2, by)
+	B2, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, by)
+	if err != nil {
+		t.Error("NewBlockWithStorage error", err)
+		return
+	}
 	err = powC.mining(B2)
 	if err != nil {
 		t.Error("TestRefreshDifficulty mining error", "blockId", B2.GetBlockid(), "err", err)
 		return
 	}
-	err = l.PutBlock(B2)
+	err = l.Put(B2)
 	if err != nil {
 		t.Error("TestRefreshDifficulty put B1 err", "err", err)
 		return

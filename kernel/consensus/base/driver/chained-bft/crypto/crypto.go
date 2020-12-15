@@ -11,11 +11,11 @@ import (
 )
 
 type CBFTCrypto struct {
-	Address      cctx.Address
+	Address      *cctx.Address
 	CryptoClient cctx.CryptoClient
 }
 
-func NewCBFTCrypto(addr cctx.Address, c cctx.CryptoClient) *CBFTCrypto {
+func NewCBFTCrypto(addr *cctx.Address, c cctx.CryptoClient) *CBFTCrypto {
 	return &CBFTCrypto{
 		Address:      addr,
 		CryptoClient: c,

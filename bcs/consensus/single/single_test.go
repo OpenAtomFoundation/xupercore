@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/xuperchain/xupercore/bcs/consensus/mock"
+	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/consensus/def"
+	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 )
 
 func getSingleConsensusConf() []byte {
 	c := SingleConfig{
-		Miner:   mock.Miner,
+		Miner:   bmock.Miner,
 		Period:  3000,
 		Version: 0,
 	}
@@ -18,48 +20,57 @@ func getSingleConsensusConf() []byte {
 	return j
 }
 
-func prepare() cctx.ConsensusCtx {
-	l := mock.NewFakeLedger(getSingleConsensusConf())
-	cCtx := mock.NewConsensusCtx()
+func prepare() (*cctx.ConsensusCtx, error) {
+	l := kmock.NewFakeLedger(getSingleConsensusConf())
+	cCtx, err := bmock.NewConsensusCtx(l)
 	cCtx.Ledger = l
-	return cCtx
+
+	return cCtx, err
 }
 
-func getConsensusConf() cctx.ConsensusConfig {
-	return cctx.ConsensusConfig{
+func getConsensusConf() def.ConsensusConfig {
+	return def.ConsensusConfig{
 		ConsensusName: "single",
 		Config:        string(getSingleConsensusConf()),
-		BeginHeight:   1,
+		StartHeight:   1,
 		Index:         0,
 	}
 }
 
-func getWrongConsensusConf() cctx.ConsensusConfig {
-	return cctx.ConsensusConfig{
+func getWrongConsensusConf() def.ConsensusConfig {
+	return def.ConsensusConfig{
 		ConsensusName: "single2",
 		Config:        string(getSingleConsensusConf()),
-		BeginHeight:   1,
+		StartHeight:   1,
 		Index:         0,
 	}
 }
 
 func TestNewSingleConsensus(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("TestNewSingleConsensus", "err", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewSingleConsensus(cCtx, conf)
+	i := NewSingleConsensus(*cCtx, conf)
 	if i == nil {
 		t.Error("NewSingleConsensus error")
 		return
 	}
-	if i := NewSingleConsensus(cCtx, getWrongConsensusConf()); i != nil {
+	if i := NewSingleConsensus(*cCtx, getWrongConsensusConf()); i != nil {
 		t.Error("NewSingleConsensus check name error")
 	}
 }
 
 func TestGetConsensusStatus(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("TestNewSingleConsensus", "err", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewSingleConsensus(cCtx, conf)
+	i := NewSingleConsensus(*cCtx, conf)
 	status, _ := i.GetConsensusStatus()
 	if status.GetVersion() != 0 {
 		t.Error("GetVersion error")
@@ -79,20 +90,24 @@ func TestGetConsensusStatus(t *testing.T) {
 	}
 	vb := status.GetCurrentValidatorsInfo()
 	m := MinerInfo{}
-	err := json.Unmarshal(vb, &m)
+	err = json.Unmarshal(vb, &m)
 	if err != nil {
 		t.Error("GetCurrentValidatorsInfo unmarshal error", "error", err)
 		return
 	}
-	if m.Miner != mock.Miner {
+	if m.Miner != bmock.Miner {
 		t.Error("GetCurrentValidatorsInfo error", "m", m, "vb", vb)
 	}
 }
 
 func TestCompeteMaster(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("TestNewSingleConsensus", "err", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewSingleConsensus(cCtx, conf)
+	i := NewSingleConsensus(*cCtx, conf)
 	isMiner, shouldSync, _ := i.CompeteMaster(2)
 	if isMiner && shouldSync {
 		t.Error("TestCompeteMaster error")
@@ -100,12 +115,20 @@ func TestCompeteMaster(t *testing.T) {
 }
 
 func TestCheckMinerMatch(t *testing.T) {
-	cCtx := prepare()
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("TestNewSingleConsensus", "err", err)
+		return
+	}
 	conf := getConsensusConf()
-	i := NewSingleConsensus(cCtx, conf)
-	f := mock.NewBlock(2, []byte{})
-	ok, err := i.CheckMinerMatch(cCtx.BCtx, f)
+	i := NewSingleConsensus(*cCtx, conf)
+	f, err := bmock.NewBlock(2, cCtx.Crypto, cCtx.Address)
+	if err != nil {
+		t.Error("NewBlock error", "error", err)
+		return
+	}
+	ok, err := i.CheckMinerMatch(cCtx.BaseCtx, f)
 	if !ok || err != nil {
-		t.Error("TestCheckMinerMatch error")
+		t.Error("TestCheckMinerMatch error", "error", err, cCtx.Address.PrivateKey)
 	}
 }
