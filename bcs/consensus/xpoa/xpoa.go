@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
@@ -32,10 +30,20 @@ var (
 	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
 	EmptyValidors    = errors.New("Current validators is empty.")
 	NotValidContract = errors.New("Cannot get valid res with contract.")
+	NotEnoughVotes   = errors.New("Cannot get enough votes of last view from replicas.")
+	InvalidQC        = errors.New("QC struct is invalid.")
 )
 
 func init() {
 	consensus.Register("xpoa", NewXpoaConsensus)
+}
+
+type xpoaConfig struct {
+	InitProposer []ProposerInfo `json:"init_proposer"`
+	BlockNum     int64          `json:"block_num"`
+	// 单位为毫秒
+	Period  int64 `json:"period"`
+	Version int64 `json:"version"`
 }
 
 // XpoaStorage xpoa占用block中consensusStorage json串的格式
@@ -54,6 +62,7 @@ type ValidatorsInfo struct {
 }
 
 type xpoaConsensus struct {
+	bctx          xcontext.BaseCtx
 	election      *xpoaSchedule
 	smr           *chainedBft.Smr
 	isProduce     map[int64]bool
@@ -120,13 +129,25 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		Crypto: cryptoClient,
 	}
 	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, initQCTree(cCfg.StartHeight, cCtx.Ledger))
+	go smr.Start()
+
+	// 创建status实例
+	status := &xpoaStatus{
+		version:     xconfig.Version,
+		startHeight: cCfg.StartHeight,
+		Index:       cCfg.Index,
+		election:    schedule,
+	}
+
 	// create xpoaConsensus实例
 	xpoa := &xpoaConsensus{
+		bctx:          cCtx.BaseCtx,
 		election:      schedule,
 		isProduce:     make(map[int64]bool),
 		config:        xconfig,
 		initTimestamp: time.Now().UnixNano(),
 		smr:           smr,
+		status:        status,
 	}
 	return xpoa
 }
@@ -178,18 +199,11 @@ func initQCTree(startHeight int64, ledger cctx.LedgerRely) *chainedBft.QCPending
 	}
 }
 
-type xpoaConfig struct {
-	InitProposer []ProposerInfo `json:"init_proposer"`
-	BlockNum     int64          `json:"block_num"`
-	Period       int64          `json:"period"`
-}
-
 // xpoaStatus 实现了ConsensusStatus接口
 type xpoaStatus struct {
 	version     int64 `json:"version"`
 	startHeight int64 `json:"beginHeight"`
 	Index       int   `json:"index"`
-	mutex       sync.RWMutex
 	election    *xpoaSchedule
 }
 
@@ -240,9 +254,9 @@ func (x *xpoaStatus) GetCurrentValidatorsInfo() []byte {
 }
 
 // xpoaSchedule 实现了ProposerElectionInterface接口，接口定义了validators操作
+// xpoaSchedule是xpoa的主要结构，其能通过合约调用来变更smr的候选人信息，并且向smr提供对应round的候选人信息
 type xpoaSchedule struct {
-	address   string
-	newHeight int64
+	address string
 	// 出块间隔, 单位为毫秒
 	period int64
 	// 每轮每个候选人最多出多少块
@@ -280,7 +294,7 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 func (s *xpoaSchedule) GetLeader(round int64) string {
 	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
 	if b, err := s.ledger.QueryBlockByHeight(round); err != nil {
-		return global.F(b.GetProposer())
+		return string(b.GetProposer())
 	}
 	tipHeight := s.ledger.GetTipBlock().GetHeight()
 	v := s.GetValidators(round)
@@ -385,7 +399,7 @@ func (s *xpoaSchedule) UpdateValidator() {
 // CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
 func (x *xpoaConsensus) CompeteMaster(height int64) (bool, bool, error) {
 Again:
-	t := time.Now().UnixNano()
+	t := time.Now().UnixNano() / 1e6
 	key := t / x.election.period
 	sleep := x.election.period - t%x.election.period
 	maxsleeptime := time.Millisecond * 10
@@ -396,38 +410,35 @@ Again:
 	if !ok || v == false {
 		x.isProduce[key] = true
 	} else {
-		time.Sleep(time.Duration(sleep))
+		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		// 定期清理isProduce
-		cleanProduceMap(x.isProduce)
+		cleanProduceMap(x.isProduce, x.election.period)
 		goto Again
 	}
 
-	// xpoa.lg.Info("Compete Master", "height", height)
 	// update validates
 	x.election.UpdateValidator()
 	leader := x.election.GetLeader(height)
 	if leader == x.election.address {
-		// xpoa.lg.Trace("Xpoa CompeteMaster now xterm infos", "master", true, "height", height)
+		x.bctx.XLog.Info("Xpoa::CompeteMaster", "isMiner", true, "height", height)
 		// TODO: 首次切换为矿工时SyncBlcok, Bug: 可能会导致第一次出块失败
-		needSync := x.election.ledger.GetTipBlock().GetHeight() == 0 || global.F(x.election.ledger.GetTipBlock().GetProposer()) != leader
+		needSync := x.election.ledger.GetTipBlock().GetHeight() == 0 || string(x.election.ledger.GetTipBlock().GetProposer()) != leader
 		return true, needSync, nil
 	}
-
-	// xpoa.lg.Trace("Xpoa CompeteMaster now xterm infos", "master", false, "height", height)
+	x.bctx.XLog.Info("Xpoa::CompeteMaster", "isMiner", false, "height", height)
 	return false, false, nil
 }
 
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
 func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
-	// TODO: 应由saftyrules模块负责check, xpoa需要组合一个defaultsaftyrules, 在saftyrules里调用ledger的verifyBlock
 	// 验证矿工身份
 	proposer := x.election.GetLocalLeader(block.GetTimestamp(), block.GetHeight())
-	if proposer == "" {
-		//xpoa.lg.Warn("CheckMinerMatch getProposerWithTime error", "error", err.Error())
-		return false, EmptyValidors
+	if proposer != string(block.GetProposer()) {
+		x.bctx.XLog.Warn("Xpoa::CheckMinerMatch::calculate proposer error", "want", proposer, "have", string(block.GetProposer()))
+		return false, MinerSelectErr
 	}
-	// 获取block中共识专有存储
+	// 获取block中共识专有存储, 检查justify是否符合要求
 	justifyBytes, err := block.GetConsensusStorage()
 	if err != nil {
 		return false, err
@@ -439,10 +450,12 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockIn
 	pNode := x.smr.BlockToProposalNode(block)
 	err = x.smr.GetSaftyRules().IsQuorumCertValidate(pNode.In, justify.Justify, x.election.GetValidators(block.GetHeight()))
 	if err != nil {
-		// xpoa.lg.Warn("CheckMinerMatch bft IsQuorumCertValidate failed", "logid", header.Logid, "error", err)
+		x.bctx.XLog.Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
+			"proposalQC:[id]", pNode.In.GetProposalId, "justifyQC:[height]", justify.Justify.GetProposalView(),
+			"justifyQC:[id]", justify.Justify.GetProposalId(), "error", err)
 		return false, err
 	}
-	return proposer == global.F(block.GetProposer()), nil
+	return true, nil
 }
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
@@ -454,20 +467,18 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 	}
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC
 	if !bytes.Equal(x.smr.GetHighQC().GetProposalId(), x.election.ledger.GetTipBlock().GetBlockid()) {
-		/*
-			if len(xpoa.proposerInfos) == 1 {
-				res["quorum_cert"] = nil
-				return res, true
-			}
-		*/
-		// xpoa.lg.Warn("ProcessBeforeMiner last block not confirmed, walk to previous block")
-		// targetId := x.smr.GetHighQC().GetProposalId()
-		return true, nil, nil
+		// 单个节点不存在投票验证的hotstuff流程，因此返回true
+		if len(x.election.validators) == 1 {
+			return false, nil, nil
+		}
+		x.bctx.XLog.Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "ledger", x.election.ledger.GetTipBlock().GetHeight(),
+			"HighQC", x.smr.GetHighQC().GetProposalView())
+		return true, nil, NotEnoughVotes
 	}
 	qc := x.smr.GetHighQC()
 	qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
 	if !ok {
-
+		return true, nil, InvalidQC
 	}
 	s := &XpoaStorage{
 		Justify: qcQuorumCert,
@@ -483,31 +494,19 @@ func (x *xpoaConsensus) CalculateBlock(block cctx.BlockInterface) error {
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
 func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
-	x.status.mutex.Lock()
-	defer x.status.mutex.Unlock()
-	if block.GetHeight() > x.election.newHeight {
-		x.election.newHeight = block.GetHeight()
-	}
-
 	// 查看本地是否是最新round的生产者
 	_, pos, _ := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
-	if x.election.validators[pos] == x.election.address && global.F(block.GetProposer()) == x.election.address {
-		// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
+	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
+	if x.election.validators[pos] == x.election.address && string(block.GetProposer()) == x.election.address {
 		validators := x.election.GetValidators(block.GetHeight() + 1)
-		b, err := x.election.ledger.QueryBlockByHeight(block.GetHeight() - 3)
-		if err == nil {
-			if v, err := x.election.getValidatesByBlockId(b.GetBlockid()); err == nil {
-				validators = v
-			}
-		}
 		if err := x.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), validators); err != nil {
-			// xpoa.lg.Warn("ProcessConfirmBlock: bft next proposal failed", "error", err)
+			x.bctx.XLog.Warn("smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
 			return err
 		}
-		// xpoa.lg.Info("Now Confirm finish", "ledger height", xpoa.ledger.GetMeta().TrunkHeight, "viewNum", xpoa.bftPaceMaker.CurrentView())
+		x.bctx.XLog.Info("smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
 		return nil
 	}
-	// 若当前节点不在候选人节点中，直接调用smr的
+	// 若当前节点不在候选人节点中，直接调用smr生成新的qc树
 	pNode := x.smr.BlockToProposalNode(block)
 	x.smr.UpdateQcStatus(pNode)
 	return nil
@@ -515,25 +514,44 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 
 // 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 func (x *xpoaConsensus) Stop() error {
+	x.smr.Stop()
 	return nil
 }
 
-// 共识实例的重启逻辑, 用于共识回滚
+// 共识实例的启动逻辑
 func (x *xpoaConsensus) Start() error {
+	x.smr.Start()
 	return nil
 }
 
 // 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
 func (x *xpoaConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
-	return nil, nil
+	store := XpoaStorage{}
+	b, err := block.GetConsensusStorage()
+	if err != nil {
+		return nil, err
+	}
+	err = json.Unmarshal(b, &store)
+	if err != nil {
+		x.bctx.XLog.Error("Xpoa::ParseConsensusStorage invalid consensus storage", "err", err)
+		return nil, err
+	}
+	return store, nil
 }
 
 func (x *xpoaConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	return x.status, nil
 }
 
-func cleanProduceMap(isProduce map[int64]bool) {
-
+func cleanProduceMap(isProduce map[int64]bool, period int64) {
+	// 删除已经落盘的所有key
+	t := time.Now().UnixNano()
+	key := t / period
+	for k, _ := range isProduce {
+		if k < key-3 {
+			delete(isProduce, k)
+		}
+	}
 }
 
 // AddressEqual 判断两个validators地址是否相等

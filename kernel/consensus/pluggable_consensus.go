@@ -38,8 +38,9 @@ var (
 	BeginBlockIdErr       = errors.New("Consensus begin blockid err")
 	BuildConsensusError   = errors.New("Build consensus Error")
 	UpdateTriggerError    = errors.New("Update trigger height invalid")
-	ConsensusNotRegister  = errors.New("consensus hasn't been register. Please use consensus.Register({NAME},{FUNCTION_POINTER}) to register in consensusMap")
-	ContractCallErr       = errors.New("contract call error")
+	ConsensusNotRegister  = errors.New("Consensus hasn't been register. Please use consensus.Register({NAME},{FUNCTION_POINTER}) to register in consensusMap")
+	ContractCallErr       = errors.New("Contract call error")
+	ContractMngErr        = errors.New("Contract manager is empty.")
 )
 
 // PluggableConsensus 实现了consensus_interface接口
@@ -55,6 +56,9 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 		stepConsensus: &stepConsensus{
 			cons: []ConsensusInterface{},
 		},
+	}
+	if cCtx.Contract.GetKernRegistry() == nil {
+		return nil, ContractMngErr
 	}
 	// 向合约注册升级方法
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractUpdateMethod, pc.updateConsensus)
@@ -86,6 +90,8 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 			return nil, err
 		}
 		pc.stepConsensus.put(genesisConsensus)
+		// 启动实例
+		genesisConsensus.Start()
 		return pc, nil
 	}
 	// 原合约存储存在，即该链重启，重新恢复pluggable consensus
@@ -104,6 +110,10 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 			return nil, err
 		}
 		pc.stepConsensus.put(oldConsensus)
+		// 最近一次共识实例吊起
+		if i == len(c)-1 {
+			oldConsensus.Start()
+		}
 	}
 	return pc, nil
 }
@@ -148,16 +158,17 @@ func (pc *PluggableConsensus) readConsensus(ctx contract.KContext) (*contract.Re
 // updateConsensus 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
 // 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
 func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*contract.Response, error) {
+	// 解析用户合约信息，包括待升级名称name、trigger高度height和待升级配置config
 	args := contractCtx.Args() //map[string][]byte
 	consensusNameBytes := args["name"]
 	consensusName := string(consensusNameBytes)
-	if _, dup := consensusMap[consensusName]; dup {
+	if _, dup := consensusMap[consensusName]; !dup {
 		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::consensus's type invalid when update", "name", consensusName)
 		return nil, ConsensusNotRegister
 	}
 	startHeightBytes := args["height"]
 	startHeight := binary.BigEndian.Uint32(startHeightBytes)
-	// 解析arg生成用户tx中的共识consensusConfig
+	// 解析arg生成用户tx中的共识consensusConfig, 生成新共识实例
 	consensusConfigBytes := args["config"]
 	cfg := def.ConsensusConfig{
 		ConsensusName: consensusName,
@@ -175,22 +186,26 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
 		return nil, BuildConsensusError
 	}
-	lastCon, ok := pc.getCurrentConsensusComponent().(base.ConsensusImplInterface)
-	if !ok {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::last consensus transfer error! Stop.")
-		return nil, BuildConsensusError
-	}
-	// 更新合约存储
+
+	// 更新合约存储, 注意, 此次更新需要检查是否是初次升级情况，此时需要把genesisConf也写进map中
 	pluggableConfig, err := contractCtx.Get(contractBucket, []byte(consensusKey))
-	if err != nil {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::get object failed", "error", err)
-		return nil, BuildConsensusError
-	}
 	c := map[int]def.ConsensusConfig{}
-	err = json.Unmarshal(pluggableConfig, &c)
-	if err != nil {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::unmarshal error", "error", err)
-		return nil, BuildConsensusError
+	if pluggableConfig == nil {
+		// 尚未写入过任何值，此时需要先写入genesisConfig，即初始共识配置值, 此处不存在err情况
+		consensusBuf, _ := pc.ctx.Ledger.GetConsensusConf()
+		// 解析提取字段生成ConsensusConfig
+		cfg := def.ConsensusConfig{}
+		_ = json.Unmarshal(consensusBuf, &cfg)
+		cfg.StartHeight = 0
+		cfg.Index = 0
+		c[0] = cfg
+	}
+	if pluggableConfig != nil {
+		err = json.Unmarshal(pluggableConfig, &c)
+		if err != nil {
+			pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::unmarshal error", "error", err)
+			return nil, BuildConsensusError
+		}
 	}
 	c[len(c)] = cfg
 	newBytes, err := json.Marshal(c)
@@ -202,21 +217,28 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::refresh contract storage error", "error", err)
 		return nil, BuildConsensusError
 	}
-	// 停止上一共识实例，主要包括注册的P2P msg等
+
+	// 获取当前的共识实例, 停止上一共识实例，主要包括注册的P2P msg等
+	lastCon, ok := pc.getCurrentConsensusComponent().(base.ConsensusImplInterface)
+	if !ok {
+		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::last consensus transfer error! Stop.")
+		return nil, BuildConsensusError
+	}
 	lastCon.Stop()
+
 	// 最后一步再put item到slice
 	err = pc.stepConsensus.put(transCon)
 	if err != nil {
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::put item into stepConsensus failed", "error", err)
 		return nil, BuildConsensusError
 	}
+	// 此时再将当前待升级的共识实例start起来
+	consensusItem.Start()
 	return nil, nil
 }
 
-/* rollbackConsensus
- * TODO: 共识回滚，更新原有共识列表，遍历PluggableConsensus共识列表并删除目标高度以上的共识实例，并启动原共识实例
- * ????? 该方法调用时机和调用入口
- */
+// rollbackConsensus
+// TODO: 共识回滚，更新原有共识列表，遍历PluggableConsensus共识列表并删除目标高度以上的共识实例，并启动原共识实例
 func (pc *PluggableConsensus) rollbackConsensus(contractCtx contract.KContext) error {
 	return nil
 }
@@ -319,7 +341,7 @@ var consensusMap = make(map[string]NewStepConsensus)
 type NewStepConsensus func(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface
 
 // Register 不同类型的共识需要提前完成注册
-func Register(name string, f NewStepConsensus) {
+func Register(name string, f NewStepConsensus) error {
 	if f == nil {
 		panic("Pluggable Consensus::Register::new function is nil")
 	}
@@ -327,6 +349,7 @@ func Register(name string, f NewStepConsensus) {
 		panic("Pluggable Consensus::Register::called twice for func " + name)
 	}
 	consensusMap[name] = f
+	return nil
 }
 
 // NewPluginConsensus 新建可插拔共识实例

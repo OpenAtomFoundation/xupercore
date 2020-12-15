@@ -446,7 +446,7 @@ func GetCompact(number *big.Int) (uint32, bool) {
 
 // mining 为带副作用的函数，将直接对block进行操作，更改其原始值
 func (pow *PoWConsensus) mining(block context.BlockInterface) error {
-	gussNonce := uint64(0)
+	gussNonce := int32(0)
 	tries := MAX_TRIES
 	for {
 		select {

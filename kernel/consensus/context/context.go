@@ -11,7 +11,7 @@ import (
 )
 
 type BlockInterface ledger.BlockHandle
-type Address *xaddress.Address
+type Address xaddress.Address
 type CryptoClient cryptoBase.CryptoClient
 type P2pCtxInConsensus network.Network
 
@@ -30,7 +30,7 @@ type LedgerRely interface {
 type ConsensusCtx struct {
 	xctx.BaseCtx
 	BcName   string
-	Address  *xaddress.Address
+	Address  *Address
 	Crypto   cryptoBase.CryptoClient
 	Contract contract.Manager
 	Ledger   LedgerRely

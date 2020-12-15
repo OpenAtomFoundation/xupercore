@@ -1,3 +1,6 @@
+package chained_bft
+
+/*
 package main
 
 import (
@@ -65,11 +68,13 @@ func addresses() []string {
 }
 
 func main() {
+
 	go nodeMain(nodeA)
 	go nodeMain(nodeB)
 	go nodeMain(nodeC)
 	for {
 	}
+
 }
 
 func initQcTee() *chainedBft.QCPendingTree {
@@ -107,7 +112,7 @@ func prepareSmr(log logs.Logger, address string, publicKey string, privateKey st
 		PrivateKey:    sk,
 		PublicKey:     pk,
 	}
-	cryptoClient := cCrypto.NewCBFTCrypto(a, cc)
+	cryptoClient := cCrypto.NewCBFTCrypto(&a, cc)
 	pacemaker := &chainedBft.DefaultPaceMaker{}
 	saftyrules := &chainedBft.DefaultSaftyRules{
 		Crypto: cryptoClient,
@@ -193,3 +198,4 @@ func CompeteLoop(smr *chainedBft.Smr, log logs.Logger, validators []string) {
 		}
 	}
 }
+*/
