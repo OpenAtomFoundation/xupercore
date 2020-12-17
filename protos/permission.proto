@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option go_package = "github.com/xuperchain/xupercore/protos";
+
 package protos;
 
 // 签名详情

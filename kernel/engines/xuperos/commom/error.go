@@ -1,122 +1,56 @@
-// error for pb ErrorType
-package def
+package common
 
 import (
-	"errors"
-	pb "github.com/xuperchain/xupercore/kernel/network/pb"
+	"fmt"
 )
 
+const (
+	// 处理成功类
+	ErrStatusSucc = 200
+	// 拒绝处理类错误状态
+	ErrStatusRefused = 400
+	// 内部错误类错误状态
+	ErrStatusInternalErr = 500
+)
+
+type Error struct {
+	// 用于统计和监控的错误分类（类似http的2xx、4xx、5xx）
+	Status int
+	// 用于标识具体错误的详细错误码
+	Code int
+	// 用于说明具体错误的说明信息
+	Msg string
+}
+
+func (t *Error) Error() string {
+	return fmt.Sprintf("Err:%d-%d-%s", t.Status, t.Code, t.Msg)
+}
+
+func (t *Error) More(format string, args ...interface{}) *Error {
+	msg := format
+	if len(args) > 0 {
+		msg = fmt.Sprintf(format, args...)
+	}
+
+	return &Error{t.Status, t.Code, t.Msg + "+" + msg}
+}
+
+func (t *Error) Equal(rhs *Error) bool {
+	if rhs == nil {
+		return false
+	}
+
+	return t.Code == rhs.Code
+}
+
+// define std error
 var (
-	Success = errors.New("success")
+	ErrSuccess           = &Error{ErrStatusSucc, 0, "success"}
+	ErrInternal          = &Error{ErrStatusInternalErr, 50000, "internal error"}
+	ErrForbidden         = &Error{ErrStatusRefused, 40300, "forbidden"}
+	ErrUnauthorized      = &Error{ErrStatusRefused, 40100, "unauthorized"}
+	ErrParameter         = &Error{ErrStatusRefused, 40001, "param error"}
+	ErrChainExist        = &Error{ErrStatusRefused, 40002, "chain already exists"}
+	ErrChainNotExist     = &Error{ErrStatusRefused, 40003, "chain not exist"}
+	ErrRootChainNotExist = &Error{ErrStatusRefused, 40004, "root chain not exist"}
 )
-
-// blockchain
-var (
-	ErrBlockChainExist    = errors.New("blockchain existed")
-	ErrBlockChainNotExist = errors.New("blockchain not exist")
-)
-
-// p2p message
-var (
-	ErrMessageUnmarshal = errors.New("message unmarshal error")
-	ErrMessageParam     = errors.New("message param error")
-)
-
-var errorType = map[error]pb.XuperMessage_ErrorType{
-	Success:               pb.XuperMessage_SUCCESS,
-	ErrBlockChainNotExist: pb.XuperMessage_BLOCKCHAIN_NOTEXIST,
-	ErrMessageUnmarshal:   pb.XuperMessage_UNMARSHAL_MSG_BODY_ERROR,
-}
-
-func ErrorType(err error) pb.XuperMessage_ErrorType {
-	if err == nil {
-		return pb.XuperMessage_SUCCESS
-	}
-
-	if errorType, ok := errorType[err]; ok {
-		return errorType
-	}
-
-	return pb.XuperMessage_UNKNOW_ERROR
-}
-
-var (
-	ErrParamError = errors.New("param error")
-
-	// blockchain
-	ErrBlockChainExist    = errors.New("blockchain already exists")
-	ErrBlockChainNotExist = errors.New("blockchain not exist")
-	ErrRootChainNotExist  = errors.New("root chain not exist")
-
-	ErrReadDataDirError = errors.New("read data dir error")
-	ErrLoadChainError   = errors.New("load chain error")
-
-	// ErrBlockExist used to return the error while block already exit
-	ErrBlockExist = errors.New("block already exists")
-
-	// tx
-	ErrTxDuplicate = errors.New("tx duplicate")
-	ErrTxIdNil     = errors.New("tx id nil")
-
-	// ErrServiceRefused used to return the error while service refused
-	ErrServiceRefused = errors.New("service refused")
-	// ErrConfirmBlock used to return the error while confirm block error
-	ErrConfirmBlock = errors.New("confirm block error")
-	// ErrCreateBlockChain is returned when create block chain error
-	ErrCreateBlockChain = errors.New("create block chain error")
-)
-
-func HandleVerifyError(err error) pb.XChainErrorEnum {
-	switch err {
-	case utxo.ErrGasNotEnough:
-		return pb.XChainErrorEnum_GAS_NOT_ENOUGH_ERROR
-	case utxo.ErrRWSetInvalid, utxo.ErrInvalidTxExt:
-		return pb.XChainErrorEnum_RWSET_INVALID_ERROR
-	case utxo.ErrACLNotEnough:
-		return pb.XChainErrorEnum_RWACL_INVALID_ERROR
-	case utxo.ErrVersionInvalid:
-		return pb.XChainErrorEnum_TX_VERSION_INVALID_ERROR
-	case utxo.ErrInvalidSignature:
-		return pb.XChainErrorEnum_TX_SIGN_ERROR
-	case ErrTxDuplicate:
-		return pb.XChainErrorEnum_TX_DUPLICATE_ERROR
-	default:
-		return pb.XChainErrorEnum_TX_VERIFICATION_ERROR
-	}
-}
-
-// HandleStateError used to handle error of state
-func HandleStateError(err error) pb.XChainErrorEnum {
-	switch err {
-	case utxo.ErrAlreadyInUnconfirmed:
-		return pb.XChainErrorEnum_UTXOVM_ALREADY_UNCONFIRM_ERROR
-	case utxo.ErrNoEnoughUTXO:
-		return pb.XChainErrorEnum_NOT_ENOUGH_UTXO_ERROR
-	case utxo.ErrUTXONotFound:
-		return pb.XChainErrorEnum_UTXOVM_NOT_FOUND_ERROR
-	case utxo.ErrInputOutputNotEqual:
-		return pb.XChainErrorEnum_INPUT_OUTPUT_NOT_EQUAL_ERROR
-	case utxo.ErrTxNotFound:
-		return pb.XChainErrorEnum_TX_NOT_FOUND_ERROR
-	case utxo.ErrTxSizeLimitExceeded:
-		return pb.XChainErrorEnum_TX_SLE_ERROR
-	case utxo.ErrRWSetInvalid:
-		return pb.XChainErrorEnum_RWSET_INVALID_ERROR
-	default:
-		return pb.XChainErrorEnum_UNKNOW_ERROR
-	}
-}
-
-// HandleLedgerError used to handle error of ledger
-func HandleLedgerError(err error) pb.XChainErrorEnum {
-	switch err {
-	case ledger.ErrRootBlockAlreadyExist:
-		return pb.XChainErrorEnum_ROOT_BLOCK_EXIST_ERROR
-	case ledger.ErrTxDuplicated:
-		return pb.XChainErrorEnum_TX_DUPLICATE_ERROR
-	case ledger.ErrTxNotFound:
-		return pb.XChainErrorEnum_TX_NOT_FOUND_ERROR
-	default:
-		return pb.XChainErrorEnum_UNKNOW_ERROR
-	}
-}
