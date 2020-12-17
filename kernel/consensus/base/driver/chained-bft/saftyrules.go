@@ -15,14 +15,16 @@ var (
 	TooLowProposalView = errors.New("Proposal received is lower than local lastVoteRound.")
 	EmptyParentQC      = errors.New("Parent qc is empty.")
 	NoEnoughVotes      = errors.New("Parent qc doesn't have enough votes.")
+	EmptyParentNode    = errors.New("Parent's node is empty.")
 )
 
 type saftyRulesInterface interface {
 	UpdatePreferredRound(qc QuorumCertInterface) bool
 	VoteProposal(proposalId []byte, proposalRound int64, parentQc QuorumCertInterface) bool
-	CheckVoteMsg(qc QuorumCertInterface, logid string, validators []string) error
+	CheckVote(qc QuorumCertInterface, logid string, validators []string) error
 	CalVotesThreshold(input, sum int) bool
-	IsQuorumCertValidate(proposal, parent QuorumCertInterface, justifyValidators []string) error
+	CheckProposal(proposal, parent QuorumCertInterface, justifyValidators []string) error
+	CheckPacemaker(pending, local int64) bool
 }
 
 type DefaultSaftyRules struct {
@@ -33,6 +35,7 @@ type DefaultSaftyRules struct {
 	// 若本地有相同高度的节点，则自然排序后选出preferredRound
 	preferredRound int64
 	Crypto         *cCrypto.CBFTCrypto
+	QcTree         *QCPendingTree
 }
 
 func (s *DefaultSaftyRules) UpdatePreferredRound(qc QuorumCertInterface) bool {
@@ -59,8 +62,8 @@ func (s *DefaultSaftyRules) VoteProposal(proposalId []byte, proposalRound int64,
 	return true
 }
 
-// CheckVoteMsg 检查logid、voteInfoHash是否正确
-func (s *DefaultSaftyRules) CheckVoteMsg(qc QuorumCertInterface, logid string, validators []string) error {
+// CheckVote 检查logid、voteInfoHash是否正确
+func (s *DefaultSaftyRules) CheckVote(qc QuorumCertInterface, logid string, validators []string) error {
 	// 检查签名, vote目前为单个签名，因此只需要验证第一个即可，验证的内容为签名信息是否在合法的validators里面
 	signs := qc.GetSignsInfo()
 	if len(signs) == 0 {
@@ -100,17 +103,23 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 	return input >= 2*f+1
 }
 
-// IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法
+// CheckProposalMsg 原IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法
 // 需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
 // 因此在此proposal和parent的QC稍微宽松检查
-func (s *DefaultSaftyRules) IsQuorumCertValidate(proposal, parent QuorumCertInterface, justifyValidators []string) error {
+func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, justifyValidators []string) error {
 	if proposal.GetProposalView() < s.lastVoteRound-3 {
 		return TooLowProposalView
 	}
 	// step2: verify justify's votes
+
 	// verify justify sign number
 	if parent.GetProposalId() == nil {
 		return EmptyParentQC
+	}
+
+	// 新qc至少要在本地qcTree挂上, 那么justify的节点需要在本地
+	if parentNode := s.QcTree.DFSQueryNode(parent.GetProposalId()); parentNode == nil {
+		return EmptyParentNode
 	}
 
 	// 检查justify的所有vote签名
@@ -128,6 +137,16 @@ func (s *DefaultSaftyRules) IsQuorumCertValidate(proposal, parent QuorumCertInte
 		}
 	}
 	return nil
+}
+
+// CheckPacemaker
+// 注意： 由于本smr支持不同节点产生同一round， 因此下述round比较和leader比较与原文(验证Proposal的Round是否和pacemaker的Round相等)并不同。
+// 仅需proposal round不超过范围即可
+func (s *DefaultSaftyRules) CheckPacemaker(pending int64, local int64) bool {
+	if pending <= local-3 {
+		return false
+	}
+	return true
 }
 
 func isInSlice(target string, s []string) bool {

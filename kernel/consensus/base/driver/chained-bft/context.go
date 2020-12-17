@@ -96,6 +96,10 @@ type ProposalNode struct {
 	Parent *ProposalNode
 }
 
+func (t *QCPendingTree) GetRootQC() *ProposalNode {
+	return t.Root
+}
+
 func (t *QCPendingTree) GetHighQC() *ProposalNode {
 	return t.HighQC
 }
@@ -132,7 +136,8 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	if node == nil {
 		return
 	}
-	if node.In.GetProposalView() <= t.GetHighQC().In.GetProposalView() {
+	// 若新验证过的node和原HighQC高度相同，使用新验证的node
+	if node.In.GetProposalView() < t.GetHighQC().In.GetProposalView() {
 		return
 	}
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC

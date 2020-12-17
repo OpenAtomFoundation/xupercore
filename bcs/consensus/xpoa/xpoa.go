@@ -122,13 +122,15 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	schedule.validators = validators
 	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
+	qcTree := initQCTree(cCfg.StartHeight, cCtx.Ledger)
 	pacemaker := &chainedBft.DefaultPaceMaker{
 		StartView: cCfg.StartHeight,
 	}
 	saftyrules := &chainedBft.DefaultSaftyRules{
 		Crypto: cryptoClient,
+		QcTree: qcTree,
 	}
-	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, initQCTree(cCfg.StartHeight, cCtx.Ledger))
+	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
 	go smr.Start()
 
 	// 创建status实例
@@ -448,7 +450,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockIn
 		return false, err
 	}
 	pNode := x.smr.BlockToProposalNode(block)
-	err = x.smr.GetSaftyRules().IsQuorumCertValidate(pNode.In, justify.Justify, x.election.GetValidators(block.GetHeight()))
+	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify.Justify, x.election.GetValidators(block.GetHeight()))
 	if err != nil {
 		x.bctx.XLog.Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
 			"proposalQC:[id]", pNode.In.GetProposalId, "justifyQC:[height]", justify.Justify.GetProposalView(),
@@ -465,7 +467,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 	if x.election.validators[pos] != x.election.address {
 		return false, nil, MinerSelectErr
 	}
-	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC
+	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	if !bytes.Equal(x.smr.GetHighQC().GetProposalId(), x.election.ledger.GetTipBlock().GetBlockid()) {
 		// 单个节点不存在投票验证的hotstuff流程，因此返回true
 		if len(x.election.validators) == 1 {
@@ -494,6 +496,17 @@ func (x *xpoaConsensus) CalculateBlock(block cctx.BlockInterface) error {
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
 func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
+	// confirm的第一步：不管是否为当前Leader，都需要更新本地voteQC树，保证当前block的justify votes被写入本地账本
+	// 获取block中共识专有存储, 检查justify是否符合要求
+	justifyBytes, err := block.GetConsensusStorage()
+	if err != nil {
+		return err
+	}
+	justify := &XpoaStorage{}
+	if err := json.Unmarshal(justifyBytes, justify); err != nil {
+		return err
+	}
+	x.smr.UpdateJustifyQcStatus(justify.Justify)
 	// 查看本地是否是最新round的生产者
 	_, pos, _ := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
 	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
