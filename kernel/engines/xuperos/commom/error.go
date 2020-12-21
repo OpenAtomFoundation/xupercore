@@ -45,12 +45,23 @@ func (t *Error) Equal(rhs *Error) bool {
 
 // define std error
 var (
-	ErrSuccess           = &Error{ErrStatusSucc, 0, "success"}
-	ErrInternal          = &Error{ErrStatusInternalErr, 50000, "internal error"}
-	ErrForbidden         = &Error{ErrStatusRefused, 40300, "forbidden"}
-	ErrUnauthorized      = &Error{ErrStatusRefused, 40100, "unauthorized"}
-	ErrParameter         = &Error{ErrStatusRefused, 40001, "param error"}
-	ErrChainExist        = &Error{ErrStatusRefused, 40002, "chain already exists"}
-	ErrChainNotExist     = &Error{ErrStatusRefused, 40003, "chain not exist"}
-	ErrRootChainNotExist = &Error{ErrStatusRefused, 40004, "root chain not exist"}
+	ErrSuccess            = &Error{ErrStatusSucc, 0, "success"}
+	ErrInternal           = &Error{ErrStatusInternalErr, 50000, "internal error"}
+	ErrForbidden          = &Error{ErrStatusRefused, 40300, "forbidden"}
+	ErrUnauthorized       = &Error{ErrStatusRefused, 40100, "unauthorized"}
+	ErrParameter          = &Error{ErrStatusRefused, 40001, "param error"}
+	ErrChainExist         = &Error{ErrStatusRefused, 40002, "chain already exists"}
+	ErrChainNotExist      = &Error{ErrStatusRefused, 40003, "chain not exist"}
+	ErrChainAlreadyExist  = &Error{ErrStatusRefused, 40004, "chain already exist"}
+	ErrRootChainNotExist  = &Error{ErrStatusRefused, 40005, "root chain not exist"}
+	ErrNotEngineType      = &Error{ErrStatusRefused, 40010, "transfer engine type failed"}
+	ErrTxVerifyFailed     = &Error{ErrStatusRefused, 40011, "verify tx failed"}
+	ErrNewEngineCtxFailed = &Error{ErrStatusInternalErr, 50003, "create engine context failed"}
+	ErrLoadChainFailed    = &Error{ErrStatusInternalErr, 50004, "load chain failed"}
+	ErrNewNetEventFailed  = &Error{ErrStatusInternalErr, 50005, "new net event failed"}
+	ErrNewLogFailed       = &Error{ErrStatusInternalErr, 50006, "new logger failed"}
+	ErrLoadEngConfFailed  = &Error{ErrStatusInternalErr, 50006, "load engine config failed"}
+	ErrNewNetworkFailed   = &Error{ErrStatusInternalErr, 50010, "new network failed"}
+	ErrNewChainCtxFailed  = &Error{ErrStatusInternalErr, 50011, "new chain context failed"}
+	ErrSubmitTxFailed     = &Error{ErrStatusInternalErr, 50013, "submit tx failed"}
 )

@@ -6,19 +6,28 @@ import "ledger.proto";
 package pb;
 
 // TransactionStatus is the status of transaction
+
 enum TransactionStatus {
     // Undefined status
-    UNDEFINE = 0;
+    TX_UNDEFINE = 0;
     // Transaction not exist
-    NOEXIST = 1;
+    TX_NOEXIST = 1;
     // Transaction have been confirmed
-    CONFIRM = 2;
+    TX_CONFIRM = 2;
     // Transaction is on the furcation
-    FURCATION = 3;
+    TX_FURCATION = 3;
     // Transaction have not been confirmed
-    UNCONFIRM = 4;
+    TX_UNCONFIRM = 4;
     // Transaction occurs error
-    FAILED = 5;
+    TX_FAILED = 5;
+}
+
+// BlockStatus is the status of block
+enum BlockStatus {
+    BLOCK_ERROR = 0;
+    BLOCK_TRUNK = 1;
+    BLOCK_BRANCH = 2;
+    BLOCK_NOEXIST = 3;
 }
 
 // QCState is the phase of hotstuff
@@ -239,3 +248,33 @@ message TxDataAccount {
     int64 frozen_height = 3;
 }
 
+message UtxoRecord {
+    string utxoCount = 1;
+    string utxoAmount = 2;
+    repeated UtxoKey item = 3;
+}
+
+message UtxoKey {
+    string refTxid = 1;
+    string offset = 2;
+    string amount = 3;
+}
+
+message UtxoRecordDetail {
+    UtxoRecord openUtxo = 1;
+    UtxoRecord lockedUtxo = 2;
+    UtxoRecord frozenUtxo = 3;
+}
+
+message BalanceDetailInfo {
+    string balance = 1;
+    bool isFrozen = 2;
+}
+
+// UtxoOutput query results
+message UtxoOutput {
+  // utxo list
+  repeated Utxo utxoList = 2;
+  // total selected amount
+  string totalSelected = 3;
+}
