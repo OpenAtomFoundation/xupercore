@@ -2,6 +2,7 @@ package reader
 
 import (
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
@@ -29,18 +30,20 @@ type ChainReader interface {
 }
 
 type chainReader struct {
-	ctx *common.ChainCtx
-	log logs.Logger
+	chainCtx *common.ChainCtx
+	baseCtx  xctx.XContext
+	log      logs.Logger
 }
 
-func NewChainReader(ctx *common.ChainCtx) ChainReader {
-	if ctx == nil {
+func NewChainReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) ChainReader {
+	if chainCtx == nil || baseCtx == nil {
 		return nil
 	}
 
 	reader := &chainReader{
-		ctx: ctx,
-		log: ctx.GetLog(),
+		chainCtx: chainCtx,
+		baseCtx:  baseCtx,
+		log:      baseCtx.GetLog(),
 	}
 
 	return reader

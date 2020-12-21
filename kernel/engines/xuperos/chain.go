@@ -24,8 +24,6 @@ type Chain struct {
 	log logs.Logger
 	// 矿工
 	miner *miner
-	// 交易处理
-	txProc *txProcessor
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
 }
@@ -62,8 +60,6 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 
 	// 创建矿工
 	chainObj.miner = NewMiner(ctx)
-	// 创建交易处理器
-	chainObj.txProc = NewTxProcessor(ctx)
 
 	return chain, nil
 }
@@ -112,17 +108,19 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	if tx == nil || ctx == nil || ctx.GetLog() == nil {
 		return common.ErrParameter
 	}
+
+	txProc := NewTxProcessor(t.ctx, ctx)
 	log := ctx.GetLog()
 
 	// 验证交易
-	err := t.txProc.VerifyTx(tx)
+	err := txProc.VerifyTx(tx)
 	if err != nil {
 		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
 		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
 	// 提交交易
-	err = t.txProc.SubmitTx(tx)
+	err = txProc.SubmitTx(tx)
 	if err != nil {
 		log.Error("submit tx error", "txid", utils.F(tx.GetTxid()), "err", err)
 		return common.ErrSubmitTxFailed.More("err:%v", err)

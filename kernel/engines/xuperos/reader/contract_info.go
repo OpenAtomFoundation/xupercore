@@ -1,6 +1,7 @@
 package reader
 
 import (
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/protos"
@@ -22,18 +23,20 @@ type ContractReader interface {
 }
 
 type contractReader struct {
-	ctx *common.ChainCtx
-	log logs.Logger
+	chainCtx *common.ChainCtx
+	baseCtx  xctx.XContext
+	log      logs.Logger
 }
 
-func NewContractReader(ctx *common.ChainCtx) ContractReader {
-	if ctx == nil {
+func NewContractReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) ContractReader {
+	if chainCtx == nil || baseCtx == nil {
 		return nil
 	}
 
 	reader := &contractReader{
-		ctx: ctx,
-		log: ctx.GetLog(),
+		chainCtx: chainCtx,
+		baseCtx:  baseCtx,
+		log:      baseCtx.GetLog(),
 	}
 
 	return reader
