@@ -4,35 +4,34 @@ import (
 	"context"
 	"crypto/ecdsa"
 
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	"github.com/xuperchain/xupercore/protos"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/network"
-	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
-	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
-
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines"
+	"github.com/xuperchain/xupercore/kernel/network"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
+	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type Chain interface {
 	Context() *ChainCtx
 	Start()
 	Stop()
-	ProcTx(request *pb.TxStatus) *pb.CommonReply
-	ProcBlock(request *pb.Block) error
-	PreExec(request *pb.InvokeRPCRequest) (*pb.InvokeResponse, error)
+	// 合约预执行
+	PreExec(xctx.XContext, []*protos.InvokeRequest) (*protos.InvokeResponse, error)
+	// 提交交易
+	SubmitTx(xctx.XContext, *lpb.Transaction) error
+	// 设置依赖实例化代理
 	SetRelyAgent(ChainRelyAgent) error
 }
 
@@ -42,11 +41,7 @@ type Engine interface {
 	engines.BCEngine
 	Context() *EngineCtx
 	Get(string) Chain
-	Set(string, Chain)
 	GetChains() []string
-	CreateChain(string, []byte) error
-	RegisterChain(string) error
-	UnloadChain(string) error
 	SetRelyAgent(EngineRelyAgent) error
 }
 
