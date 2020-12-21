@@ -273,8 +273,22 @@ message BalanceDetailInfo {
 
 // UtxoOutput query results
 message UtxoOutput {
-  // utxo list
-  repeated Utxo utxoList = 2;
-  // total selected amount
-  string totalSelected = 3;
+    // utxo list
+    repeated Utxo utxoList = 1;
+    // total selected amount
+    string totalSelected = 2;
 }
+
+message TxInfo {
+    // 当前状态
+    TransactionStatus status = 1;
+    // 离主干末端的距离（如果在主干上)
+    int64 distance = 2;
+    Transaction tx = 3;
+}
+
+message BlockInfo {
+    BlockStatus status = 1;
+    InternalBlock block = 2;
+}
+

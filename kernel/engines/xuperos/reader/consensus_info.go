@@ -1,6 +1,7 @@
 package reader
 
 import (
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	consBase "github.com/xuperchain/xupercore/kernel/consensus/base"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -15,23 +16,25 @@ type ConsensusReader interface {
 }
 
 type consensusReader struct {
-	ctx *common.ChainCtx
-	log logs.Logger
+	chainCtx *common.ChainCtx
+	baseCtx  xctx.XContext
+	log      logs.Logger
 }
 
-func NewConsensusReader(ctx *common.ChainCtx) ConsensusReader {
-	if ctx == nil {
+func NewConsensusReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) ConsensusReader {
+	if chainCtx == nil || baseCtx == nil {
 		return nil
 	}
 
 	reader := &consensusReader{
-		ctx: ctx,
-		log: ctx.GetLog(),
+		chainCtx: chainCtx,
+		baseCtx:  baseCtx,
+		log:      baseCtx.GetLog(),
 	}
 
 	return reader
 }
 
 func (t *consensusReader) GetConsStatus() (consBase.ConsensusStatus, error) {
-	return t.ctx.Consensus.GetConsensusStatus()
+	return t.chainCtx.Consensus.GetConsensusStatus()
 }

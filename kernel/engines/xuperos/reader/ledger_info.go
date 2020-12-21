@@ -2,43 +2,35 @@ package reader
 
 import (
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
-type TxInfo struct {
-	Status   lpb.TransactionStatus
-	Distance int64
-	Tx       *lpb.Transaction
-}
-
-type BlockInfo struct {
-	Status lpb.BlockStatus
-	Block  *lpb.InternalBlock
-}
-
 type LedgerReader interface {
 	// 查询交易信息（QueryTx）
-	QueryTx(txId []byte) (*TxInfo, error)
+	QueryTx(txId []byte) (*lpb.TxInfo, error)
 	// 查询区块ID信息（GetBlock）
-	QueryBlock(blkId []byte, needContent bool) (*BlockInfo, error)
+	QueryBlock(blkId []byte, needContent bool) (*lpb.BlockInfo, error)
 	// 通过区块高度查询区块信息（GetBlockByHeight）
-	QueryBlockByHeight(height int64, needContent bool) (*BlockInfo, error)
+	QueryBlockByHeight(height int64, needContent bool) (*lpb.BlockInfo, error)
 }
 
 type ledgerReader struct {
-	ctx *common.ChainCtx
-	log logs.Logger
+	chainCtx *common.ChainCtx
+	baseCtx  xctx.XContext
+	log      logs.Logger
 }
 
-func NewLedgerReader(ctx *common.ChainCtx) LedgerReader {
-	if ctx == nil {
+func NewLedgerReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) LedgerReader {
+	if chainCtx == nil || baseCtx == nil {
 		return nil
 	}
 
 	reader := &ledgerReader{
-		ctx: ctx,
-		log: ctx.GetLog(),
+		chainCtx: chainCtx,
+		baseCtx:  baseCtx,
+		log:      baseCtx.GetLog(),
 	}
 
 	return reader

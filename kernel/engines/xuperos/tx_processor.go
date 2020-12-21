@@ -2,28 +2,40 @@
 package xuperos
 
 import (
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // 负责交易交易处理相关逻辑封装
 type txProcessor struct {
-	ctx *def.ChainCtx
-	log logs.Logger
+	chainCtx *common.ChainCtx
+	baseCtx  xctx.XContext
+	log      logs.Logger
 }
 
-func NewTxProcessor(ctx *def.ChainCtx) *txProcessor {
+func NewTxProcessor(chainCtx *common.ChainCtx, baseCtx xctx.XContext) *txProcessor {
 	obj := &txProcessor{
-		ctx: ctx,
-		log: ctx.GetLog(),
+		chainCtx: chainCtx,
+		baseCtx:  baseCtx,
 	}
+
+	// 如果没设置baseCtx，复用链上下文中的baseCtx
+	if obj.baseCtx == nil {
+		obj.baseCtx = &xctx.BaseCtx{
+			XLog:  chainCtx.GetLog(),
+			Timer: chainCtx.GetTimer(),
+		}
+	}
+	obj.log = obj.baseCtx.GetLog()
 
 	return obj
 }
 
 // 验证交易
-func (t *txProcessor) VerifyTx(in *pb.Transaction) (bool, error) {
+func (t *txProcessor) VerifyTx(tx *lpb.Transaction) error {
 	txId := in.GetTxid()
 	if txId == nil {
 		return false, ErrTxIdNil
@@ -33,7 +45,7 @@ func (t *txProcessor) VerifyTx(in *pb.Transaction) (bool, error) {
 }
 
 // 提交交易到状态机和未确认交易池
-func (t *txProcessor) SubmitTx(tx *pb.Transaction) error {
+func (t *txProcessor) SubmitTx(tx *lpb.Transaction) error {
 	err := t.ctx.State.DoTx(in)
 	if err != nil && err != utxo.ErrAlreadyInUnconfirmed {
 		t.handled.Delete(string(in.GetTxid()))
