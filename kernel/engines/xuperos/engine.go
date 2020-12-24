@@ -128,9 +128,9 @@ func (t *Engine) Run() {
 		go func() {
 			defer wg.Done()
 
+			t.log.Trace("chain " + k.(string) + "started")
 			// 启动链
 			chainHD.Start()
-			t.log.Trace("chain " + k.(string) + "started")
 		}()
 
 		return true

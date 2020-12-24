@@ -36,19 +36,14 @@ func NewTxProcessor(chainCtx *common.ChainCtx, baseCtx xctx.XContext) *txProcess
 
 // 验证交易
 func (t *txProcessor) VerifyTx(tx *lpb.Transaction) error {
-	txId := in.GetTxid()
-	if txId == nil {
-		return false, ErrTxIdNil
-	}
-
 	return t.ctx.State.VerifyTx(in)
 }
 
 // 提交交易到状态机和未确认交易池
 func (t *txProcessor) SubmitTx(tx *lpb.Transaction) error {
 	err := t.ctx.State.DoTx(in)
-	if err != nil && err != utxo.ErrAlreadyInUnconfirmed {
-		t.handled.Delete(string(in.GetTxid()))
+	if err == utxo.ErrAlreadyInUnconfirmed {
+		return common.ErrTxAlreadyExist
 	}
 
 	return err
