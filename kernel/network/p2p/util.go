@@ -169,8 +169,8 @@ func GenerateUniqueRandList(size int, max int) []int {
 	return randList[:size]
 }
 
-// GetIDFromAddr return peer ID corresponding to peerAddr
-func GetIDFromAddr(peerAddr string) (peer.ID, error) {
+// GetPeerIDByAddress return peer ID corresponding to peerAddr
+func GetPeerIDByAddress(peerAddr string) (peer.ID, error) {
 	addr, err := iaddr.ParseString(peerAddr)
 	if err != nil {
 		return "", err

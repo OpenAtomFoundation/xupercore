@@ -21,11 +21,11 @@ type Server interface {
 	SendMessageWithResponse(context.Context, *pb.XuperMessage, ...OptionFunc) ([]*pb.XuperMessage, error)
 
 	Context() *nctx.NetCtx
-	P2PState() *State
+
+	PeerInfo() pb.PeerInfo
 }
 
 type State struct {
-	PeerId     string
-	PeerAddr   string
-	RemotePeer map[string]string
+	Local  pb.PeerInfo
+	Remote []pb.PeerInfo
 }

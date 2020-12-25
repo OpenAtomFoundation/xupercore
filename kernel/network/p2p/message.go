@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"errors"
+	"github.com/xuperchain/xupercore/kernel/network/def"
 	"hash/crc32"
 
 	"github.com/golang/protobuf/proto"
@@ -24,16 +25,12 @@ const (
 	MessageVersion3 = "3.0.0"
 )
 
-const (
-	BlockChain = "xuper"
-)
-
 // NewMessage create P2P message instance with given params
 func NewMessage(typ pb.XuperMessage_MessageType, message proto.Message, opts ...MessageOption) *pb.XuperMessage {
 	msg := &pb.XuperMessage{
 		Header: &pb.XuperMessage_MessageHeader{
 			Version:        MessageVersion3,
-			Bcname:         BlockChain,
+			Bcname:         def.BlockChain,
 			Logid:          utils.GenLogId(),
 			Type:           typ,
 			EnableCompress: false,

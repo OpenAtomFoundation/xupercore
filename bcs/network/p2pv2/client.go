@@ -3,6 +3,7 @@ package p2pv2
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 )
 
 var (
+	ErrEmptyPeer = errors.New("empty peer")
 	ErrNoResponse = errors.New("no response")
 )
 
@@ -51,6 +53,12 @@ func (p *P2PServerV2) SendMessage(ctx context.Context, msg *pb.XuperMessage,
 		}
 	} else {
 		peerIDs = peers
+	}
+
+	if len(peerIDs) <= 0 {
+		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
+		return ErrEmptyPeer
 	}
 
 	p.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
@@ -123,6 +131,12 @@ func (p *P2PServerV2) SendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 		peerIDs = peers
 	}
 
+	if len(peerIDs) <= 0 {
+		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
+		return nil, ErrEmptyPeer
+	}
+
 	p.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
 		"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
 		"checksum", msg.GetHeader().GetDataCheckSum(), "peers", peerIDs)
@@ -182,7 +196,8 @@ func (p *P2PServerV2) sendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 }
 
 func (p *P2PServerV2) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilter {
-	if len(opt.Filters) <= 0 && len(opt.Addresses) <= 0 && len(opt.PeerIDs) <= 0 {
+	if len(opt.Filters) <= 0 && len(opt.Addresses) <= 0 &&
+		len(opt.PeerIDs) <= 0 && len(opt.Accounts) <= 0{
 		opt.Filters = []p2p.FilterStrategy{p2p.DefaultStrategy}
 	}
 
@@ -209,9 +224,20 @@ func (p *P2PServerV2) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 	if len(opt.Addresses) > 0 {
 		go p.connectPeerByAddress(opt.Addresses)
 		for _, addr := range opt.Addresses {
-			peerID, err := p2p.GetIDFromAddr(addr)
+			peerID, err := p2p.GetPeerIDByAddress(addr)
 			if err != nil {
 				p.log.Warn("p2p: getFilter parse peer address failed", "paddr", addr, "error", err)
+				continue
+			}
+			peerIDs = append(peerIDs, peerID)
+		}
+	}
+
+	if len(opt.Accounts) > 0 {
+		for _, account := range opt.Accounts {
+			peerID, err := p.GetPeerIdByAccount(account)
+			if err != nil {
+				p.log.Warn("p2p: getFilter get peer id by account failed", "account", account, "error", err)
 				continue
 			}
 			peerIDs = append(peerIDs, peerID)
@@ -234,4 +260,24 @@ func (p *P2PServerV2) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 // GetStaticNodes get StaticNode a chain
 func (p *P2PServerV2) getStaticNodes(bcname string) []peer.ID {
 	return p.staticNodes[bcname]
+}
+
+func (p *P2PServerV2) GetPeerIdByAccount(account string) (peer.ID, error) {
+	if value, ok := p.accounts.Get(account); ok {
+		return value.(peer.ID), nil
+	}
+
+	key := Key(account)
+	value, err := p.kdht.GetValue(context.Background(), key)
+	if err != nil {
+		return "", fmt.Errorf("dht get peer id error: %s", err)
+	}
+
+	peerID, err := p2p.GetPeerIDByAddress(string(value))
+	if err != nil {
+		return "", fmt.Errorf("address error: %s, address=%s", err, value)
+	}
+
+	p.accounts.Set(key, peerID, 0)
+	return peerID, nil
 }
