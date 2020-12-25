@@ -1,5 +1,5 @@
 // 统一管理系统引擎和链运行上下文
-package def
+package commom
 
 import (
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"

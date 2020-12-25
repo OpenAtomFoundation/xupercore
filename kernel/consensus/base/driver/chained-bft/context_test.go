@@ -16,22 +16,19 @@ func initQcTree() *QCPendingTree {
 		In: initQC,
 	}
 	return &QCPendingTree{
-		Genesis: rootNode,
-		Root:    rootNode,
-		HighQC:  rootNode,
-		// GenericQC: rootNode,
-		// LockedQC:  rootNode,
+		Genesis:  rootNode,
+		Root:     rootNode,
+		HighQC:   rootNode,
 		CommitQC: rootNode,
 	}
 }
 
-/* TestDFSQueryNode Tree如下
- *           root
- *          |    \
- *        node1 node12
- *          |
- *        node2
- */
+// TestDFSQueryNode Tree如下
+// root
+// |    \
+// node1 node12
+// |
+// node2
 func prepareTree(t *testing.T) *QCPendingTree {
 	tree := initQcTree()
 	node := tree.DFSQueryNode([]byte{0})

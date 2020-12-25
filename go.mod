@@ -6,6 +6,7 @@ require (
 	github.com/aws/aws-sdk-go v1.32.4
 	github.com/ddliu/motto v0.3.1 // indirect
 	github.com/dgraph-io/badger/v2 v2.0.0-rc.2
+	github.com/emirpasic/gods v1.12.1-0.20201118132343-79df803e554c
 	github.com/ethereum/go-ethereum v1.9.24
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.4.2

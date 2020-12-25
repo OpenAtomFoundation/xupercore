@@ -22,7 +22,7 @@ type ConsensusImplInterface interface {
 
 	// 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 	Stop() error
-	// 共识实例的重启逻辑, 用于共识回滚
+	// 共识实例的启动逻辑
 	Start() error
 	// 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
 	ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error)

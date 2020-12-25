@@ -3,21 +3,21 @@ package chained_bft
 import (
 	"bytes"
 	"container/list"
-	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
 	"github.com/xuperchain/crypto/core/hash"
 	"github.com/xuperchain/xuperchain/core/global"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	xuperp2p "github.com/xuperchain/xupercore/kernel/network/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
+	xuperp2p "github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -35,13 +35,11 @@ const (
 	DefaultNetMsgChanSize = 1000
 )
 
-// TODO: TimeoutQC, 持久化存储问题
-
-/* smr 组装了三个模块: pacemaker、saftyrules和propose election
- * smr有自己的存储即PendingTree
- * 原本的ChainedBft(联结smr和本地账本，在preferredVote被确认后, 触发账本commit操作)
- * 被替代成smr和上层bcs账本的·组合实现，以减少不必要的代码，考虑到chained-bft暂无扩展性
- */
+// smr 组装了三个模块: pacemaker、saftyrules和propose election
+// smr有自己的存储即PendingTree
+// 原本的ChainedBft(联结smr和本地账本，在preferredVote被确认后, 触发账本commit操作)
+// 被替代成smr和上层bcs账本的·组合实现，以减少不必要的代码，考虑到chained-bft暂无扩展性
+// 注意：本smr的round并不是强自增唯一的，不同节点可能产生相同round（考虑到上层账本的块可回滚）
 type Smr struct {
 	bcName  string
 	log     logs.Logger
@@ -74,7 +72,7 @@ type Smr struct {
 
 func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus, cryptoClient *cCrypto.CBFTCrypto, pacemaker PacemakerInterface,
 	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree) *Smr {
-	return &Smr{
+	s := &Smr{
 		bcName:        bcName,
 		log:           log,
 		address:       address,
@@ -91,6 +89,14 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 		qcVoteMsgs:    &sync.Map{},
 		newViewMsgs:   &sync.Map{},
 	}
+	// smr初始值装载
+	s.localProposal.Store(global.F(qcTree.Root.In.GetProposalId()), true)
+	v := &VoteInfo{
+		ProposalView: qcTree.Root.In.GetProposalView(),
+		ProposalId:   qcTree.Root.In.GetProposalId(),
+	}
+	s.qcVoteMsgs.Store(global.F(getVoteId(v)), []*chainedBftPb.QuorumCertSign{})
+	return s
 }
 
 var (
@@ -133,6 +139,7 @@ func (s *Smr) UnRegisterToNetwork() {
 
 // Start used to start smr instance and process msg
 func (s *Smr) Start() {
+	s.RegisterToNetwork()
 	for {
 		select {
 		case msg := <-s.p2pMsgChan:
@@ -147,6 +154,27 @@ func (s *Smr) Start() {
 func (s *Smr) Stop() {
 	s.QuitCh <- true
 	s.UnRegisterToNetwork()
+}
+
+// UpdateJustifyQcStatus 用于支持可回滚的账本，生成相同高度的块
+// 为了支持生成相同round的块，需要拿到justify的full votes，因此需要在上层账本收到新块时调用，在CheckMinerMatch后
+// 注意：为了支持回滚操作，必须调用该函数
+func (s *Smr) UpdateJustifyQcStatus(justify *QuorumCert) {
+	voteId := getVoteId(justify.VoteInfo)
+	v, ok := s.qcVoteMsgs.Load(global.F(voteId))
+	var signs []*chainedBftPb.QuorumCertSign
+	if ok {
+		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
+	}
+	justifySigns := justify.SignInfos
+	signs = appendSigns(signs, justifySigns)
+	s.qcVoteMsgs.Store(global.F(voteId), signs)
+	// 根据justify check情况更新本地HighQC, 注意：由于CheckMinerMatch已经检查justify签名
+	s.qcTree.updateHighQC(justify.GetProposalId())
+}
+
+func (s *Smr) UpdateQcStatus(node *ProposalNode) error {
+	return s.qcTree.updateQcStatus(node)
 }
 
 // handleReceivedMsg used to process msg received from network
@@ -171,10 +199,9 @@ func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) error {
 	return nil
 }
 
-/* ProcessNewView是本地Chained-HotStuff实现的特殊逻辑。由上一轮的Leader和其他Replica触发
- * ProcessNewView的作用是其他节点发送一个消息去提醒下一个Proposer，提醒该节点去AdvanceViw并且发起一个新Proposal
- * ATTENTION: 本function的语义是本地节点去提醒下一个Leader, 和HotStuff论文中的NewView无关
- */
+// ProcessNewView是本地Chained-HotStuff实现的特殊逻辑。由上一轮的Leader和其他Replica触发
+// ProcessNewView的作用是其他节点发送一个消息去提醒下一个Proposer，提醒该节点去AdvanceViw并且发起一个新Proposal
+// ATTENTION: 本function的语义是本地节点去提醒下一个Leader, 和HotStuff论文中的NewView无关
 func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 	// if new view number less than voted view number, return error
 	if nextView < s.pacemaker.GetCurrentView() {
@@ -190,7 +217,7 @@ func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 		JustifyQC:    justifyBytes,
 		Sign: &chainedBftPb.QuorumCertSign{
 			Address:   s.address,
-			PublicKey: s.cryptoClient.PkJson,
+			PublicKey: s.cryptoClient.Address.PublicKeyStr,
 		},
 	}
 	newViewMsg, err := s.cryptoClient.SignProposalMsg(newViewMsg)
@@ -205,12 +232,11 @@ func (s *Smr) ProcessNewView(nextView int64, nextLeader string) error {
 		return P2PInternalErr
 	}
 	s.pacemaker.PrepareAdvance(nextView, nextLeader)
-	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(nextLeader)}))
+	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(nextLeader)}))
 	return nil
 }
 
-/* handleReceivedNewView NewView消息实际是一个“通知类”proposal消息
- */
+// handleReceivedNewView NewView消息实际是一个“通知类”proposal消息
 func (s *Smr) handleReceivedNewView(msg *xuperp2p.XuperMessage) error {
 	newViewMsg := &chainedBftPb.ProposalMsg{}
 	if err := p2p.Unmarshal(msg, newViewMsg); err != nil {
@@ -221,17 +247,19 @@ func (s *Smr) handleReceivedNewView(msg *xuperp2p.XuperMessage) error {
 	return nil
 }
 
-/* ProcessProposal 即Chained-HotStuff的NewView阶段，LibraBFT的process_proposal阶段
- * 对于一个认为自己当前是Leader的节点，它试图生成一个新的提案，即一个新的QC，并广播
- * 本节点产生一个Proposal，该proposal包含一个最新的round, 最新的proposalId，一个parentQC，并将该消息组合成一个ProposalMsg消息给所有节点
- * 全部完成后leader更新本地localProposal
- */
+// ProcessProposal 即Chained-HotStuff的NewView阶段，LibraBFT的process_proposal阶段
+// 对于一个认为自己当前是Leader的节点，它试图生成一个新的提案，即一个新的QC，并广播
+// 本节点产生一个Proposal，该proposal包含一个最新的round, 最新的proposalId，一个parentQC，并将该消息组合成一个ProposalMsg消息给所有节点
+// 全部完成后leader更新本地localProposal
 func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpInfo []string) error {
 	// ATTENTION::TODO:: 由于本次设计面向的是viewNumber可能重复的BFT，因此账本回滚后高度会相同，在此用LockedQC高度为标记
 	if s.qcTree.GetLockedQC() != nil && s.pacemaker.GetCurrentView() < s.qcTree.GetLockedQC().In.GetProposalView() {
+		s.log.Error("smr::ProcessProposal error", "error", TooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
+			s.qcTree.GetLockedQC().In.GetProposalView())
 		return TooLowNewProposal
 	}
 	if s.qcTree.GetHighQC() == nil {
+		s.log.Error("smr::ProcessProposal empty HighQC error")
 		return EmptyHighQC
 	}
 	if _, ok := s.localProposal.Load(global.F(proposalID)); ok {
@@ -239,6 +267,7 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 	}
 	parentQuorumCert, err := s.reloadJustifyQC()
 	if err != nil {
+		s.log.Error("smr::ProcessProposal reloadJustifyQC error", "err", err)
 		return err
 	}
 	parentQuorumCertBytes, err := json.Marshal(parentQuorumCert)
@@ -262,7 +291,7 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return P2PInternalErr
 	}
-	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses(validatesIpInfo))
+	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses(validatesIpInfo))
 	s.log.Info("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", global.F(proposalID))
 	return nil
 }
@@ -287,7 +316,7 @@ func (s *Smr) reloadJustifyQC() (*QuorumCert, error) {
 	}
 	// 根据qcTree生成一个parentQC
 	// 上一个view的votes
-	voteId := GetVoteId(v)
+	voteId := getVoteId(v)
 	value, ok := s.qcVoteMsgs.Load(global.F(voteId))
 	if !ok {
 		return nil, JustifyVotesEmpty
@@ -305,15 +334,14 @@ func (s *Smr) reloadJustifyQC() (*QuorumCert, error) {
 	return parentQuorumCert, nil
 }
 
-/* handleReceivedProposal 该阶段在收到一个ProposalMsg后触发，与LibraBFT的process_proposal阶段类似
- * 该阶段分两个角色，一个是认为自己是currentRound的Leader，一个是Replica
- * 1. 比较本地pacemaker是否需要AdvanceRound
- * 2. 查看ProposalMsg消息的合法性，检查qcTree是否需要更新CommitQC
- * 3. 检查本地计算Leader和该新QC的Leader是否相等
- * 4. 验证Leader和本地计算的Leader是否相等
- * 5.向本地PendingTree插入该QC，即更新QC
- * 6.发送一个vote消息给下一个Leader
- */
+// handleReceivedProposal 该阶段在收到一个ProposalMsg后触发，与LibraBFT的process_proposal阶段类似
+// 该阶段分两个角色，一个是认为自己是currentRound的Leader，一个是Replica
+// 1. 比较本地pacemaker是否需要AdvanceRound
+// 2. 查看ProposalMsg消息的合法性，检查qcTree是否需要更新CommitQC
+// 3. 检查本地计算Leader和该新QC的Leader是否相等
+// 4. 验证Leader和本地计算的Leader是否相等
+// 5.向本地PendingTree插入该QC，即更新QC
+// 6.发送一个vote消息给下一个Leader
 func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	newProposalMsg := &chainedBftPb.ProposalMsg{}
 	if err := p2p.Unmarshal(msg, newProposalMsg); err != nil {
@@ -342,26 +370,28 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	isFirstJustify := bytes.Equal(s.qcTree.Genesis.In.GetProposalId(), parentQC.GetProposalId())
 	// 若为初始状态，则无需检查justify，否则需要检查qc有效性
 	if !isFirstJustify {
-		if err := s.saftyrules.IsQuorumCertValidate(&QuorumCert{
+		if err := s.saftyrules.CheckProposal(&QuorumCert{
 			VoteInfo:  newVote,
 			SignInfos: []*chainedBftPb.QuorumCertSign{newProposalMsg.GetSign()},
 		}, parentQC, s.Election.GetValidators(parentQC.GetProposalView())); err != nil {
+			s.log.Error("smr::handleReceivedProposal::CheckProposal error", "error", err)
 			return
 		}
 	}
 	// 本地pacemaker试图更新currentView, 并返回一个是否需要将新消息通知该轮Leader, 是该轮不是下轮！主要解决P2PIP端口不能通知Loop的问题
 	sendMsg, _ := s.pacemaker.AdvanceView(parentQC)
+	s.log.Info("smr::handleReceivedProposal::pacemaker update", "view", s.pacemaker.GetCurrentView())
 	// 通知current Leader
 	if sendMsg {
 		netMsg := p2p.NewMessage(xuperp2p.XuperMessage_CHAINED_BFT_NEW_PROPOSAL_MSG, newProposalMsg, p2p.WithBCName(s.bcName))
-		leader := s.Election.GetLeader(newProposalMsg.GetProposalView())
+		leader := newProposalMsg.GetSign().GetAddress()
 		// 此处如果失败，仍会执行下层逻辑，因为是多个节点通知该轮Leader，因此若发不出去仍可继续运行
 		if leader != "" && netMsg != nil && leader != s.address {
-			go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(leader)}))
+			go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(leader)}))
 		}
 	}
 
-	// 获取parentQC对应的本地节点
+	// 获取parentQC对应的本地节点, 新qc至少要在本地qcTree挂上, 那么justify的节点需要在本地
 	parentNode := s.qcTree.DFSQueryNode(parentQC.GetProposalId())
 	// 本地safetyrules更新, 如有可以commit的QC，执行commit操作并更新本地rootQC
 	valid := s.saftyrules.UpdatePreferredRound(parentQC)
@@ -370,24 +400,23 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			s.qcTree.updateCommit(parentNode.Parent.Parent.In)
 		}
 	}
-	// 验证Proposal的Round是否和pacemaker的Round相等
-	if newProposalMsg.GetProposalView() != s.pacemaker.GetCurrentView() {
-		s.log.Error("smr::handleReceivedProposal::error", "error", TooLowNewProposal)
+	// 查看收到的view是否符合要求
+	if !s.saftyrules.CheckPacemaker(newProposalMsg.GetProposalView(), s.pacemaker.GetCurrentView()) {
+		s.log.Error("smr::handleReceivedProposal::error", "error", TooLowNewProposal, "local want", s.pacemaker.GetCurrentView(),
+			"proposal have", newProposalMsg.GetProposalView())
 		return
 	}
-	// 验证本地election计算出来的当前round Leader是否和Proposal的Leader相等
-	leader := s.Election.GetLeader(s.pacemaker.GetCurrentView())
-	if leader == "" || leader != newProposalMsg.Sign.Address {
-		s.log.Error("smr::handleReceivedProposal::leader error", "want", leader, "have", newProposalMsg.Sign.Address)
-		return
-	}
-	// 根据本地saftyrules返回是否需要发送voteMsg给下一个Leader
+
+	// 注意：删除此处的验证收到的proposal是否符合local计算，在本账本状态中后置到上层共识CheckMinerMatch
+
+	// 根据本地saftyrules返回是否 需要发送voteMsg给下一个Leader
 	if !s.saftyrules.VoteProposal(newProposalMsg.GetProposalId(), newProposalMsg.GetProposalView(), parentQC) {
+		s.log.Error("smr::handleReceivedProposal::VoteProposal fail", "view", newProposalMsg.GetProposalView(), "proposalId", newProposalMsg.GetProposalId())
 		return
 	}
 
 	// 这个newVoteId表示的是本地最新一次vote的id，生成voteInfo的hash，标识vote消息
-	newVoteId := GetVoteId(newVote)
+	newVoteId := getVoteId(newVote)
 	newLedgerInfo := &LedgerCommitInfo{
 		VoteInfoHash: newVoteId,
 	}
@@ -408,34 +437,31 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	if s.qcTree.GetCommitQC() != nil {
 		newLedgerInfo.CommitStateId = s.qcTree.GetCommitQC().In.GetProposalId()
 	}
-	s.log.Info("pacemaker!!!!", "round", s.pacemaker.GetCurrentView())
+	s.log.Info("smr::handleReceivedProposal::pacemaker changed", "round", s.pacemaker.GetCurrentView())
 	nextLeader := s.Election.GetLeader(s.pacemaker.GetCurrentView() + 1)
 	if nextLeader == "" {
 		s.log.Info("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
 		return
 	}
-	logid := fmt.Sprintf("%x", newVoteId) + "_" + s.address
-	s.voteProposal(newProposalMsg.GetProposalId(), newVote, newLedgerInfo, nextLeader, logid)
+	s.voteProposal(newProposalMsg.GetProposalId(), newVote, newLedgerInfo, nextLeader)
 }
 
-/* voteProposal 当Replica收到一个Proposal并对该Proposal检查之后，该节点会针对该QC投票
- * 节点的vote包含一个本次vote的对象的基本信息，和本地上次vote对象的基本信息，和本地账本的基本信息，和一个签名
- */
-func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo, voteTo, logid string) {
-	// 这里存在自己给自己投票的情况，给自己投票，直接操作存储，记得签名
-	if voteTo == s.address {
-		v, ok := s.qcVoteMsgs.Load(global.F(GetVoteId(vote)))
-		var signs []*chainedBftPb.QuorumCertSign
-		if ok {
-			signs, _ = v.([]*chainedBftPb.QuorumCertSign)
-		}
-		nextSign, err := s.cryptoClient.SignVoteMsg(msg)
-		if err != nil {
-			return
-		}
-		signs = append(signs, nextSign)
-		s.qcVoteMsgs.Store(global.F(GetVoteId(vote)), signs)
+// voteProposal 当Replica收到一个Proposal并对该Proposal检查之后，该节点会针对该QC投票
+// 节点的vote包含一个本次vote的对象的基本信息，和本地上次vote对象的基本信息，和本地账本的基本信息，和一个签名
+// 只要vote过，就在本地map中更新值
+func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo, voteTo string) {
+	// 这里存在自己给自己投票的情况，给自己投票和给别人投票一样，都直接操作存储，记得签名
+	v, ok := s.qcVoteMsgs.Load(global.F(getVoteId(vote)))
+	var signs []*chainedBftPb.QuorumCertSign
+	if ok {
+		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
 	}
+	nextSign, err := s.cryptoClient.SignVoteMsg(msg)
+	if err != nil {
+		return
+	}
+	signs = append(signs, nextSign)
+	s.qcVoteMsgs.Store(global.F(getVoteId(vote)), signs)
 
 	voteBytes, err := json.Marshal(vote)
 	if err != nil {
@@ -460,14 +486,13 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return
 	}
-	go s.p2p.SendMessage(context.Background(), netMsg, p2p.WithAddresses([]string{s.Election.GetMsgAddress(voteTo)}))
+	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(voteTo)}))
 	return
 }
 
-/* handleReceivedVoteMsg 当前Leader在发送一个proposal消息之后，由下一Leader等待周围replica的投票，收集vote消息
- * 当收到2f+1个vote消息之后，本地pacemaker调用AdvanceView，并更新highQC
- * 该方法针对Leader而言
- */
+// handleReceivedVoteMsg 当前Leader在发送一个proposal消息之后，由下一Leader等待周围replica的投票，收集vote消息
+// 当收到2f+1个vote消息之后，本地pacemaker调用AdvanceView，并更新highQC
+// 该方法针对Leader而言
 func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	newVoteMsg := &chainedBftPb.VoteMsg{}
 	if err := p2p.Unmarshal(msg, newVoteMsg); err != nil {
@@ -480,11 +505,11 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 		return err
 	}
 	// 检查logid、voteInfoHash是否正确
-	if err := s.saftyrules.CheckVoteMsg(voteQC, msg.GetHeader().GetLogid(), s.Election.GetValidators(voteQC.GetProposalView())); err != nil {
-		s.log.Error("smr::handleReceivedVoteMsg CheckVoteMsg error", "error", err, "msg", voteQC.GetProposalId())
+	if err := s.saftyrules.CheckVote(voteQC, msg.GetHeader().GetLogid(), s.Election.GetValidators(voteQC.GetProposalView())); err != nil {
+		s.log.Error("smr::handleReceivedVoteMsg CheckVote error", "error", err, "msg", voteQC.GetProposalId())
 		return err
 	}
-
+	s.log.Info("smr::handleReceivedVoteMsg::receive vote", "voteId", voteQC.GetProposalId(), "voteView", voteQC.GetProposalView())
 	// 存入本地voteInfo内存，查看签名数量是否超过2f+1
 	var VoteLen int
 	// 注意隐式，若!ok则证明签名数量为1，此时不可能超过2f+1
@@ -499,10 +524,10 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	if !s.saftyrules.CalVotesThreshold(VoteLen, len(s.Election.GetValidators(voteQC.GetProposalView()))) {
 		return nil
 	}
-	s.log.Info("FULL VOTE!!!!")
+
 	// 更新本地pacemaker AdvanceRound
 	s.pacemaker.AdvanceView(voteQC)
-	s.log.Info("pacemaker!!!!", "round", s.pacemaker.GetCurrentView())
+	s.log.Info("smr::handleReceivedVoteMsg::FULL VOTES!", "pacemaker view", s.pacemaker.GetCurrentView())
 	// 更新HighQC
 	s.qcTree.updateHighQC(voteQC.GetProposalId())
 	return nil
@@ -556,10 +581,6 @@ func (s *Smr) BlockToProposalNode(block cctx.BlockInterface) *ProposalNode {
 	return nil
 }
 
-func (s *Smr) UpdateQcStatus(node *ProposalNode) error {
-	return s.qcTree.updateQcStatus(node)
-}
-
 func (s *Smr) GetSaftyRules() saftyRulesInterface {
 	return s.saftyrules
 }
@@ -572,8 +593,32 @@ func (s *Smr) GetHighQC() QuorumCertInterface {
 	return s.qcTree.GetHighQC().In
 }
 
-func GetVoteId(vote *VoteInfo) []byte {
+func getVoteId(vote *VoteInfo) []byte {
 	voteBytes, _ := json.Marshal(vote)
 	// 这个newVoteId表示的是本地最新一次vote的id，生成voteInfo的hash，标识vote消息
 	return hash.DoubleSha256([]byte(voteBytes))
+}
+
+func createNewBCtx() *xctx.BaseCtx {
+	log, _ := logs.NewLogger("", "smr")
+	return &xctx.BaseCtx{
+		XLog:  log,
+		Timer: timer.NewXTimer(),
+	}
+}
+
+// appendSigns 将p中不重复的签名append进q中
+func appendSigns(q []*chainedBftPb.QuorumCertSign, p []*chainedBftPb.QuorumCertSign) []*chainedBftPb.QuorumCertSign {
+	signSet := make(map[string]bool)
+	for _, sign := range q {
+		if _, ok := signSet[sign.Address]; !ok {
+			signSet[sign.Address] = true
+		}
+	}
+	for _, sign := range p {
+		if _, ok := signSet[sign.Address]; !ok {
+			q = append(q, sign)
+		}
+	}
+	return q
 }

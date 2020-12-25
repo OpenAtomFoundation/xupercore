@@ -1,24 +1,12 @@
 package sandbox
 
 import (
-	"encoding/binary"
 	"errors"
 	"math/big"
 
-	"github.com/syndtr/goleveldb/leveldb/comparer"
-	"github.com/syndtr/goleveldb/leveldb/util"
-
-	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb/memdb"
 	"github.com/xuperchain/xuperchain/core/pb"
-	xmodel_pb "github.com/xuperchain/xuperchain/core/xmodel/pb"
 	"github.com/xuperchain/xupercore/kernel/contract"
-)
-
-const (
-	// DefaultMemDBSize 默认内存db大小
-	DefaultMemDBSize = 32
-	CrossTimeWindow
 )
 
 var (
@@ -43,15 +31,11 @@ type UtxoVM interface {
 // XMCache data structure for XModel Cache
 type XMCache struct {
 	// Key: bucket_key; Value: VersionedData
-	inputsCache *memdb.DB // bucket -> {k1:v1, k2:v2}
+	inputsCache *MemXModel // bucket -> {k1:v1, k2:v2}
 	// Key: bucket_key; Value: PureData
-	outputsCache *memdb.DB
+	outputsCache *MemXModel
 
-	rawData []*contract.VersionedData
-
-	// 是否穿透到model层
-	isPenetrate bool
-	model       contract.XMReader
+	model contract.XMReader
 
 	// utxoCache       *UtxoCache
 	// crossQueryCache *CrossQueryCache
@@ -61,10 +45,9 @@ type XMCache struct {
 // NewXModelCache new an instance of XModel Cache
 func NewXModelCache(model contract.XMReader) (*XMCache, error) {
 	return &XMCache{
-		isPenetrate:  true,
 		model:        model,
-		inputsCache:  memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-		outputsCache: memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
+		inputsCache:  NewMemXModel(),
+		outputsCache: NewMemXModel(),
 		// utxoCache:       NewUtxoCache(utxovm),
 		// crossQueryCache: NewCrossQueryCache(),
 	}, nil
@@ -88,38 +71,6 @@ func NewXModelCache(model contract.XMReader) (*XMCache, error) {
 // 	// xc.crossQueryCache = NewCrossQueryCacheWithData(crossQueries)
 // 	return xc
 // }
-
-func (xc *XMCache) getRawData(idxbuf []byte) *contract.VersionedData {
-	if idxbuf == nil {
-		return nil
-	}
-	idx := binary.LittleEndian.Uint64(idxbuf)
-	if idx >= uint64(len(xc.rawData)) {
-		return nil
-	}
-	return xc.rawData[idx]
-}
-
-func (xc *XMCache) putRawData(value *contract.VersionedData) []byte {
-	idxbuf := make([]byte, 8)
-	xc.rawData = append(xc.rawData, value)
-	idx := len(xc.rawData) - 1
-	binary.LittleEndian.PutUint64(idxbuf, uint64(idx))
-	return idxbuf
-}
-
-func (xc *XMCache) getCachedData(db *memdb.DB, key []byte) (*contract.VersionedData, error) {
-	val, err := db.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	return xc.getRawData(val), nil
-}
-
-func (xc *XMCache) putCachedData(db *memdb.DB, key []byte, value *contract.VersionedData) error {
-	idxbuf := xc.putRawData(value)
-	return db.Put(key, idxbuf)
-}
 
 // Get 读取一个key的值，返回的value就是有版本的data
 func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
@@ -149,8 +100,7 @@ func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
 
 // Level1 读取，从outputsCache中读取
 func (xc *XMCache) getFromOuputsCache(bucket string, key []byte) (*contract.VersionedData, error) {
-	buKey := makeRawKey(bucket, key)
-	data, err := xc.getCachedData(xc.outputsCache, buKey)
+	data, err := xc.outputsCache.Get(bucket, key)
 	if err != nil {
 		return nil, err
 	}
@@ -163,8 +113,7 @@ func (xc *XMCache) getFromOuputsCache(bucket string, key []byte) (*contract.Vers
 
 // Level2 读取，从inputsCache中读取, 读取不到的情况下，如果isPenetrate为true，会更深一层次从model里读取，并且会将内容填充到readSets中
 func (xc *XMCache) getAndSetFromInputsCache(bucket string, key []byte) (*contract.VersionedData, error) {
-	buKey := makeRawKey(bucket, key)
-	data, err := xc.getCachedData(xc.inputsCache, buKey)
+	data, err := xc.inputsCache.Get(bucket, key)
 	if err == nil {
 		return data, nil
 	}
@@ -173,56 +122,34 @@ func (xc *XMCache) getAndSetFromInputsCache(bucket string, key []byte) (*contrac
 	}
 
 	if err == memdb.ErrNotFound {
-		if !xc.isPenetrate {
-			return nil, err
-		}
-		err := xc.setInputCache(buKey)
+		data, err = xc.model.Get(bucket, key)
 		if err != nil {
 			return nil, err
 		}
+		xc.inputsCache.Put(bucket, key, data)
 	}
-	return xc.getCachedData(xc.inputsCache, buKey)
-}
-
-func (xc *XMCache) setInputCache(rawKey []byte) error {
-	if val, _ := xc.inputsCache.Get(rawKey); val != nil {
-		return nil
-	}
-	bucket, key, err := parseRawKey(rawKey)
-	if err != nil {
-		return err
-	}
-	val, err := xc.model.Get(bucket, key)
-	if err != nil {
-		return err
-	}
-	return xc.putCachedData(xc.inputsCache, key, val)
+	return data, nil
 }
 
 // Put put a pair of <key, value> into XModel Cache
 func (xc *XMCache) Put(bucket string, key []byte, value []byte) error {
-	buKey := makeRawKey(bucket, key)
 	_, err := xc.getFromOuputsCache(bucket, key)
 	if err != nil && err != memdb.ErrNotFound && err != ErrHasDel {
 		return err
 	}
 
-	val := &xmodel_pb.VersionedData{
-		PureData: &xmodel_pb.PureData{
+	val := &contract.VersionedData{
+		PureData: &contract.PureData{
 			Key:    key,
 			Value:  value,
 			Bucket: bucket,
 		},
 	}
-	valBuf, err := proto.Marshal(val)
-	if err != nil {
-		return err
-	}
 	if bucket != TransientBucket {
 		// put 前先强制get一下
 		xc.Get(bucket, key)
 	}
-	return xc.outputsCache.Put(buKey, valBuf)
+	return xc.outputsCache.Put(bucket, key, val)
 }
 
 // Del delete one key from outPutCache, marked its value as `DelFlag`
@@ -233,11 +160,30 @@ func (xc *XMCache) Del(bucket string, key []byte) error {
 // Select select all kv from a bucket, can set key range, left closed, right opend
 // When xc.isPenetrate equals true, three-way merge, When xc.isPenetrate equals false, two-way merge
 func (xc *XMCache) Select(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
-	return xc.NewXModelCacheIterator(bucket, startKey, endKey, comparer.DefaultComparer)
+	return xc.newXModelCacheIterator(bucket, startKey, endKey)
+}
+
+// newXModelCacheIterator new an instance of XModel Cache iterator
+func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
+	iter, _ := mc.outputsCache.Select(bucket, startKey, endKey)
+	outputIter := newStripDelIterator(iter)
+
+	iter, _ = mc.inputsCache.Select(bucket, startKey, endKey)
+	inputIter := newStripDelIterator(iter)
+
+	backendIter, err := mc.model.Select(bucket, startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
+	backendIter = newStripDelIterator(
+		newRsetIterator(backendIter, mc),
+	)
+	multiIter := newMultiIterator(outputIter, newMultiIterator(inputIter, backendIter))
+	return newContractIterator(multiIter), nil
 }
 
 // GetRWSets get read/write sets
-func (xc *XMCache) GetRWSets() ([]*xmodel_pb.VersionedData, []*xmodel_pb.PureData, error) {
+func (xc *XMCache) GetRWSets() ([]*contract.VersionedData, []*contract.PureData, error) {
 	readSets, err := xc.getReadSets()
 	if err != nil {
 		return nil, nil, err
@@ -249,50 +195,32 @@ func (xc *XMCache) GetRWSets() ([]*xmodel_pb.VersionedData, []*xmodel_pb.PureDat
 	return readSets, writeSets, nil
 }
 
-func (xc *XMCache) getReadSets() ([]*xmodel_pb.VersionedData, error) {
-	var readSets []*xmodel_pb.VersionedData
-	iter := xc.inputsCache.NewIterator(&util.Range{Start: nil, Limit: nil})
-	defer iter.Release()
+func (xc *XMCache) getReadSets() ([]*contract.VersionedData, error) {
+	var readSets []*contract.VersionedData
+	iter, err := xc.inputsCache.NewIterator(nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
-		vd := &xmodel_pb.VersionedData{}
-		err := proto.Unmarshal(val, vd)
-		if err != nil {
-			return nil, err
-		}
-		readSets = append(readSets, vd)
+		readSets = append(readSets, val)
 	}
 	return readSets, nil
 }
 
-func (xc *XMCache) getWriteSets() ([]*xmodel_pb.PureData, error) {
-	var writeSets []*xmodel_pb.PureData
-	iter := xc.outputsCache.NewIterator(&util.Range{Start: nil, Limit: nil})
-	defer iter.Release()
+func (xc *XMCache) getWriteSets() ([]*contract.PureData, error) {
+	var writeSets []*contract.PureData
+	iter, err := xc.inputsCache.NewIterator(nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
-		vd := &xmodel_pb.VersionedData{}
-		err := proto.Unmarshal(val, vd)
-		if err != nil {
-			return nil, err
-		}
-		writeSets = append(writeSets, vd.GetPureData())
+		writeSets = append(writeSets, val.PureData)
 	}
 	return writeSets, nil
-}
-
-// isDel 确认key在XModelCache中是否被删除
-func (xc *XMCache) isDel(rawKey []byte) bool {
-	val, err := xc.outputsCache.Get(rawKey)
-	if err == memdb.ErrNotFound {
-		return false
-	}
-	data := &xmodel_pb.VersionedData{}
-	err = proto.Unmarshal(val, data)
-	if err != nil {
-		return false
-	}
-	return IsDelFlag(data.GetPureData().GetValue())
 }
 
 // // Transfer transfer tokens using utxo

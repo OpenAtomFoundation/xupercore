@@ -10,6 +10,11 @@ import (
 	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 )
 
+type BlockInterface ledger.BlockHandle
+type Address xaddress.Address
+type CryptoClient cryptoBase.CryptoClient
+type P2pCtxInConsensus network.Network
+
 // LedgerCtxInConsensus使用到的ledger接口
 type LedgerRely interface {
 	GetConsensusConf() ([]byte, error)
@@ -25,7 +30,7 @@ type LedgerRely interface {
 type ConsensusCtx struct {
 	xctx.BaseCtx
 	BcName   string
-	Address  *xaddress.Address
+	Address  *Address
 	Crypto   cryptoBase.CryptoClient
 	Contract contract.Manager
 	Ledger   LedgerRely

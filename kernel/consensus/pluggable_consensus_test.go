@@ -1,15 +1,27 @@
 package consensus
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"path/filepath"
+	"testing"
+	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/consensus/mock"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
+)
+
+var (
+	_     = Register("fake", NewFakeConsensus)
+	_     = Register("another", NewAnotherConsensus)
+	Miner = "xuper5"
 )
 
 type FakeSMRStruct struct{}
@@ -64,14 +76,9 @@ type FakeConsensusImp struct {
 	status *FakeConsensusStatus
 }
 
-func init() {
-	Register("fake", NewFakeConsensus)
-	Register("Another", NewAnotherConsensus)
-}
-
-func NewFakeConsensus(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) base.ConsensusImplInterface {
+func NewFakeConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
 	status := &FakeConsensusStatus{
-		beginHeight:   cCfg.BeginHeight,
+		beginHeight:   cCfg.StartHeight,
 		consensusName: cCfg.ConsensusName,
 	}
 	return &FakeConsensusImp{
@@ -121,9 +128,9 @@ type AnotherConsensusImp struct {
 	status *FakeConsensusStatus
 }
 
-func NewAnotherConsensus(cCtx cctx.ConsensusCtx, cCfg cctx.ConsensusConfig) base.ConsensusImplInterface {
+func NewAnotherConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
 	status := &FakeConsensusStatus{
-		beginHeight:   cCfg.BeginHeight,
+		beginHeight:   cCfg.StartHeight,
 		consensusName: cCfg.ConsensusName,
 	}
 	return &AnotherConsensusImp{
@@ -168,18 +175,6 @@ func (con *AnotherConsensusImp) Start() error {
 	return nil
 }
 
-type FakeCryptoClient struct{}
-
-func (cc *FakeCryptoClient) GetEcdsaPublicKeyFromJSON([]byte) ([]byte, error) {
-	return nil, nil
-}
-func (cc *FakeCryptoClient) VerifyAddressUsingPublicKey(string, []byte) (bool, uint8) {
-	return true, 0
-}
-func (cc *FakeCryptoClient) VerifyECDSA([]byte, []byte, []byte) (bool, error) {
-	return true, nil
-}
-
 func NewFakeLogger() logs.Logger {
 	confFile := utils.GetCurFileDir()
 	confFile = filepath.Join(confFile, "config/log.yaml")
@@ -193,20 +188,23 @@ func NewFakeLogger() logs.Logger {
 
 func GetConsensusCtx(ledger *mock.FakeLedger) cctx.ConsensusCtx {
 	ctx := cctx.ConsensusCtx{
-		BcName:       "xuper",
-		Ledger:       ledger,
-		P2p:          &mock.FakeP2p{},
-		CryptoClient: &FakeCryptoClient{},
-		BCtx: xcontext.BaseCtx{
+		BcName: "xuper",
+		Ledger: ledger,
+		BaseCtx: xcontext.BaseCtx{
 			XLog: NewFakeLogger(),
+		},
+		Contract: &mock.FakeManager{
+			R: &mock.FakeRegistry{
+				M: make(map[string]contract.KernMethod),
+			},
 		},
 	}
 	return ctx
 }
 
-/*
 func TestNewPluggableConsensus(t *testing.T) {
-	l := mock.NewFakeLedger()
+	// Fake name is 'fake'in consensusConf.
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, err := NewPluggableConsensus(ctx)
 	if err != nil {
@@ -225,28 +223,41 @@ func TestNewPluggableConsensus(t *testing.T) {
 }
 
 func GetNewConsensusConf() []byte {
-	return []byte("{\"name\":\"Another\",\"config\":\"\"}")
+	return []byte("{\"name\":\"another\",\"config\":\"\"}")
+}
+
+func NewUpdateArgs() map[string][]byte {
+	a := make(map[string][]byte)
+	a["name"] = []byte("another")
+	var buf = make([]byte, 8)
+	binary.BigEndian.PutUint64(buf, uint64(3))
+	a["height"] = buf
+	a["config"] = GetNewConsensusConf()
+	return a
+}
+
+func NewUpdateM() map[string]map[string][]byte {
+	a := make(map[string]map[string][]byte)
+	return a
 }
 
 func TestUpdateConsensus(t *testing.T) {
-	l := mock.NewFakeLedger()
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
-	newHeight := l.GetMeta().GetTrunkHeight() + 1
+	newHeight := l.GetTipBlock().GetHeight() + 1
 	_, _, err := pc.CompeteMaster(newHeight)
 	if err != nil {
 		t.Error("CompeteMaster error! height = ", newHeight)
 		return
 	}
-	// 此时pc.nextHeight == 3
-	kctx := mock.NewFakeKContextImpl(GetNewConsensusConf())
 	np, ok := pc.(*PluggableConsensus)
 	if !ok {
 		t.Error("Transfer PluggableConsensus error!")
 		return
 	}
-	f := mock.ContractRegister(np.updateConsensus)
-	f(kctx, int64(3))
+	fakeCtx := mock.NewFakeKContext(NewUpdateArgs(), NewUpdateM())
+	np.updateConsensus(fakeCtx)
 	if len(np.stepConsensus.cons) != 2 {
 		t.Error("Update consensus error!")
 		return
@@ -256,18 +267,32 @@ func TestUpdateConsensus(t *testing.T) {
 		t.Error("GetConsensusStatus error", err)
 		return
 	}
-	if status.GetConsensusName() != "Another" {
+	if status.GetConsensusName() != "another" {
 		t.Error("GetConsensusName error", err)
 		return
+	}
+	by, err := fakeCtx.Get(contractBucket, []byte(consensusKey))
+	if err != nil {
+		t.Error("fakeCtx error", err)
+		return
+	}
+	c := map[int]def.ConsensusConfig{}
+	err = json.Unmarshal(by, &c)
+	if err != nil {
+		t.Error("unmarshal error", err)
+		return
+	}
+	if len(c) != 2 {
+		t.Error("update error", "len", len(c))
 	}
 }
 
 func TestCompeteMaster(t *testing.T) {
 	// ledger的高度为2
-	l := mock.NewFakeLedger()
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
-	newHeight := l.GetMeta().GetTrunkHeight() + 1
+	newHeight := l.GetTipBlock().GetHeight() + 1
 	if newHeight != 3 {
 		t.Error("Ledger Meta error, height=", newHeight)
 		return
@@ -279,7 +304,7 @@ func TestCompeteMaster(t *testing.T) {
 }
 
 func TestProcessBeforeMiner(t *testing.T) {
-	l := mock.NewFakeLedger()
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
 	_, _, err := pc.ProcessBeforeMiner(time.Now().UnixNano())
@@ -289,7 +314,7 @@ func TestProcessBeforeMiner(t *testing.T) {
 }
 
 func TestProcessConfirmBlock(t *testing.T) {
-	l := mock.NewFakeLedger()
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
 	err := pc.ProcessConfirmBlock(mock.NewBlock(3))
@@ -299,7 +324,7 @@ func TestProcessConfirmBlock(t *testing.T) {
 }
 
 func TestGetConsensusStatus(t *testing.T) {
-	l := mock.NewFakeLedger()
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
 	_, err := pc.GetConsensusStatus()
@@ -307,4 +332,3 @@ func TestGetConsensusStatus(t *testing.T) {
 		t.Error("GetConsensusStatus error")
 	}
 }
-*/

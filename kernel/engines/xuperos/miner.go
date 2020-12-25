@@ -44,6 +44,31 @@ func NewMiner(ctx *def.ChainCtx, keeper *LedgerKeeper) *miner {
 	return obj
 }
 
+// 处理广播区块
+func (t *miner) ProcBlock() error {
+	hd := &global.XContext{Timer: global.NewXTimer()}
+	if t.ctx.Ledger.ExistBlock(in.GetBlock().GetBlockid()) {
+		t.log.Debug("block is exist", "logid", in.Header.Logid, "cost", hd.Timer.Print())
+		return nil
+	}
+
+	if bytes.Equal(t.ctx.State.GetLatestBlockId(), in.GetBlock().GetPreHash()) {
+		t.log.Trace("appending block in SendBlock", "time", time.Now().UnixNano(), "bcName", t.ctx.BCName, "tipID", global.F(t.ctx.State.GetLatestBlockId()))
+		ctx := CreateLedgerTaskCtx([]*SimpleBlock{
+			&SimpleBlock{
+				internalBlock: in.GetBlock(),
+				logid:         in.GetHeader().GetLogid() + "_" + in.GetHeader().GetFromNode()},
+		}, nil, hd)
+		t.keeper.PutTask(ctx, Appending, -1)
+		return nil
+	}
+
+	t.log.Trace("sync blocks in SendBlock", "time", time.Now().UnixNano(), "bcName", t.ctx.BCName, "tipID", global.F(t.ctx.State.GetLatestBlockId()))
+	ctx := CreateLedgerTaskCtx(nil, []string{in.GetHeader().GetFromNode()}, hd)
+	t.keeper.PutTask(ctx, Syncing, -1)
+	return nil
+}
+
 // 启动矿工
 func (t *miner) start() {
 	// 1 强制walk到最新状态
