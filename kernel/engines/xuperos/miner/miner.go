@@ -190,6 +190,12 @@ func (t *miner) mining() error {
 	}
 	txList = append(txList, awardTx)
 	newBlock, err := t.packMinerBlock(outBlockHeight, txList, consData)
+	// 需要转化下，为了共识做一些变更（比如pow）
+	blkAgent := agent.NewBlockAgent(newBlock)
+	err = t.ctx.Consensus.CalculateBlock(blkAgent)
+
+	// 获取转化后的新区块
+	newBlock = blkAgent.GetBlock()
 
 	// 8.确认新区块到账本&状态机
 	err = t.confirmMinerBlock(newBlock)
