@@ -10,6 +10,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -32,7 +33,7 @@ type Chain struct {
 	// log
 	log logs.Logger
 	// 矿工
-	miner *miner
+	miner *miner.Miner
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
 
@@ -71,7 +72,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	}
 
 	// 创建矿工
-	chainObj.miner = NewMiner(ctx)
+	chainObj.miner = miner.NewMiner(ctx)
 	chainObj.txIdCache = cache.New(TxIdCacheExpired, TxIdCacheGCInterval)
 
 	return chain, nil
@@ -90,12 +91,12 @@ func (t *Chain) SetRelyAgent(agent common.ChainRelyAgent) error {
 // 阻塞
 func (t *Chain) Start() {
 	// 启动矿工
-	t.miner.start()
+	t.miner.Start()
 }
 
 func (t *Chain) Stop() {
 	// 停止矿工
-	t.miner.stop()
+	t.miner.Stop()
 }
 
 func (t *Chain) Context() *common.ChainCtx {
@@ -110,7 +111,6 @@ func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos
 	log := ctx.GetLog()
 
 	// 生成沙盒
-	contract.ContextConfig
 
 	// 预执行
 
@@ -131,25 +131,41 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	}
 	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
 
-	txProc := NewTxProcessor(t.ctx, ctx)
 	// 验证交易
-	err := txProc.VerifyTx(tx)
+	err := t.ctx.State.VerifyTx(tx)
 	if err != nil {
 		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
 		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
 	// 提交交易
-	err = txProc.SubmitTx(tx)
+	err = t.ctx.State.DoTx(tx)
 	if err != nil {
 		log.Error("submit tx error", "txid", utils.F(tx.GetTxid()), "err", err)
-		if !err.Equal(common.ErrTxAlreadyExist) {
+		if err == utxo.ErrAlreadyInUnconfirmed {
 			t.txIdCache.Delete(string(tx.GetTxid()))
 		}
 		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 
 	log.Info("submit tx succ", "txid", utils.F(tx.GetTxid()))
+	return nil
+}
+
+// 处理P2P网络同步到的区块
+func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
+	if block == nil || ctx == nil || ctx.GetLog() == nil || block.GetBlockid() == nil {
+		return common.ErrParameter
+	}
+	log := ctx.GetLog()
+
+	err := t.miner.ProcBlock(ctx, block)
+	if err != nil {
+		log.Warn("miner process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
+		return common.ErrProcBlockFailed.More("err:%v", err)
+	}
+
+	log.Info("miner process block succ", "blockid", utils.F(block.GetBlockid()))
 	return nil
 }
 
