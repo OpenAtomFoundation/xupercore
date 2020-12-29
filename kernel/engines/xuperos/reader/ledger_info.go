@@ -40,10 +40,12 @@ func (t *ledgerReader) QueryTx(txId []byte) (*TxInfo, error) {
 	return nil, nil
 }
 
+// 注意不需要交易内容的时候不要查询
 func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*BlockInfo, error) {
 	return nil, nil
 }
 
+// 注意不需要交易内容的时候不要查询
 func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*BlockInfo, error) {
 	return nil, nil
 }

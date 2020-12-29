@@ -56,6 +56,7 @@ var (
 	ErrRootChainNotExist  = &Error{ErrStatusRefused, 40005, "root chain not exist"}
 	ErrNotEngineType      = &Error{ErrStatusRefused, 40010, "transfer engine type failed"}
 	ErrTxVerifyFailed     = &Error{ErrStatusRefused, 40011, "verify tx failed"}
+	ErrTxAlreadyExist     = &Error{ErrStatusRefused, 40013, "tx already exist"}
 	ErrNewEngineCtxFailed = &Error{ErrStatusInternalErr, 50003, "create engine context failed"}
 	ErrLoadChainFailed    = &Error{ErrStatusInternalErr, 50004, "load chain failed"}
 	ErrNewNetEventFailed  = &Error{ErrStatusInternalErr, 50005, "new net event failed"}
@@ -64,4 +65,5 @@ var (
 	ErrNewNetworkFailed   = &Error{ErrStatusInternalErr, 50010, "new network failed"}
 	ErrNewChainCtxFailed  = &Error{ErrStatusInternalErr, 50011, "new chain context failed"}
 	ErrSubmitTxFailed     = &Error{ErrStatusInternalErr, 50013, "submit tx failed"}
+	ErrProcBlockFailed    = &Error{ErrStatusInternalErr, 50015, "process block failed"}
 )

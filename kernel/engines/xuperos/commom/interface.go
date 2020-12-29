@@ -24,13 +24,18 @@ import (
 )
 
 type Chain interface {
+	// 获取链上下文
 	Context() *ChainCtx
+	// 启动链
 	Start()
+	// 关闭链
 	Stop()
 	// 合约预执行
 	PreExec(xctx.XContext, []*protos.InvokeRequest) (*protos.InvokeResponse, error)
 	// 提交交易
 	SubmitTx(xctx.XContext, *lpb.Transaction) error
+	// 处理新区块
+	ProcBlock(xctx.XContext, *lpb.InternalBlock) error
 	// 设置依赖实例化代理
 	SetRelyAgent(ChainRelyAgent) error
 }

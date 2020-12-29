@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"math/big"
 	"path/filepath"
 	"time"
@@ -18,10 +17,13 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
-	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
-	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
+	cryptoClient "github.com/xuperchain/xupercore/lib/crypto/client"
+	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
@@ -58,22 +60,21 @@ var (
 )
 
 type State struct {
-	lctx          *def.LedgerCtx
+	// 状态机运行环境上下文
+	sctx          *def.StateCtx
 	log           logs.Logger
-	ledger        ledger.Ledger
 	utxo          utxo.UtxoVM   //utxo表
 	xmodel        xmodel.XModel //xmodel数据表和历史表
 	meta          meta.Meta     //meta表
 	tx            tx.Tx         //未确认交易表
 	ldb           kvdb.Database
 	latestBlockid []byte
-	cryptoClient  crypto_base.CryptoClient
-	aclMgr        *acl.Manager
+
 	// 最新区块高度通知装置
 	heightNotifier *BlockHeightNotifier
 }
 
-func NewState(lctx *def.LedgerCtx) (*State, error) {
+func NewState(sctx *def.StateCtx) (*State, error) {
 	if lctx == nil {
 		return nil, fmt.Errrof("create state failed because context set error")
 	}
@@ -97,7 +98,7 @@ func NewState(lctx *def.LedgerCtx) (*State, error) {
 		return nil, fmt.Errorf("create state failed because create ldb error:%s", err)
 	}
 
-	obj.cryptoClient, err = crypto_client.CreateCryptoClient(lctx.CryptoType)
+	obj.cryptoClient, err = cryptoClient.CreateCryptoClient(lctx.CryptoType)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create crypto client error:%s", err)
 	}
@@ -128,6 +129,14 @@ func NewState(lctx *def.LedgerCtx) (*State, error) {
 	}
 
 	return obj, nil
+}
+
+func (t *State) SetAclMG(aclMgr aclBase.AclManager) {
+	t.sctx.SetAclMG(aclMgr)
+}
+
+func (t *State) SetContractMG(contractMgr contract.Manager) {
+	t.sctx.SetContractMG(contractMgr)
 }
 
 // 选择足够金额的utxo
