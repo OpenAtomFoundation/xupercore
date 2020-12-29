@@ -62,6 +62,10 @@ func (t *MockP2PServ) P2PState() *p2p.State {
 	return nil
 }
 
+func (t *MockP2PServ) PeerInfo() pb.PeerInfo {
+	return pb.PeerInfo{}
+}
+
 func TestNewNetwork(t *testing.T) {
 	mock.InitLogForTest()
 

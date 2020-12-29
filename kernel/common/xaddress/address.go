@@ -17,6 +17,15 @@ type Address struct {
 	PublicKeyStr  string
 }
 
+func LoadAddress(keyDir string) (string, error) {
+	addr, err := ioutil.ReadFile(filepath.Join(keyDir, "address"))
+	if err != nil {
+		return "", fmt.Errorf("read address error: %v", err)
+	}
+
+	return string(addr), nil
+}
+
 func LoadAddrInfo(keyDir string, crypto cryptoClinet.CryptoClient) (*Address, error) {
 	addr, err := ioutil.ReadFile(filepath.Join(keyDir, "address"))
 	if err != nil {

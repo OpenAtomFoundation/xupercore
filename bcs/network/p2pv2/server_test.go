@@ -1,33 +1,28 @@
 package p2pv2
 
 import (
-	"context"
-	"testing"
-
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/mock"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/protos"
+	"testing"
 )
 
-type handler struct{}
-
-func (h *handler) Handler(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func Handler(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	typ := p2p.GetRespMessageType(msg.Header.Type)
 	resp := p2p.NewMessage(typ, msg, p2p.WithLogId(msg.Header.Logid))
 	return resp, nil
 }
 
 func startNode1(t *testing.T) {
-	ecfg, _ := mock.NewEnvConfForTest()
-	ecfg.NetConf = "p2pv2/node1.yaml"
+	ecfg, _ := mock.NewEnvConfForTest("p2pv2/node1/conf/env.yaml")
 	ctx, _ := nctx.NewNetCtx(ecfg)
-	ctx.P2PConf.KeyPath = "p2pv2/node1/data/netkeys"
-	ctx.P2PConf.P2PDataPath = "p2pv2/node1/data/p2p"
 
 	node := NewP2PServerV2()
 	if err := node.Init(ctx); err != nil {
 		t.Errorf("server init error: %v", err)
+		return
 	}
 
 	node.Start()
@@ -36,7 +31,7 @@ func startNode1(t *testing.T) {
 		t.Errorf("register subscriber error: %v", err)
 	}
 
-	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, &handler{})); err != nil {
+	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, p2p.HandleFunc(Handler))); err != nil {
 		t.Errorf("register subscriber error: %v", err)
 	}
 
@@ -49,39 +44,33 @@ func startNode1(t *testing.T) {
 }
 
 func startNode2(t *testing.T) {
-	mock.InitLogForTest()
-	ecfg, _ := mock.NewEnvConfForTest()
-	ecfg.NetConf = "p2pv2/node2.yaml"
+	ecfg, _ := mock.NewEnvConfForTest("p2pv2/node2/conf/env.yaml")
 	ctx, _ := nctx.NewNetCtx(ecfg)
-	ctx.P2PConf.KeyPath = "p2pv2/node2/data/netkeys"
-	ctx.P2PConf.P2PDataPath = "p2pv2/node2/data/p2p"
 
 	node := NewP2PServerV2()
 	if err := node.Init(ctx); err != nil {
 		t.Errorf("server init error: %v", err)
+		return
 	}
 
 	node.Start()
-	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_RPC_PORT, &handler{})); err != nil {
+	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_RPC_PORT, p2p.HandleFunc(Handler))); err != nil {
 		t.Errorf("register subscriber error: %v", err)
 	}
 
-	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, &handler{})); err != nil {
+	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, p2p.HandleFunc(Handler))); err != nil {
 		t.Errorf("register subscriber error: %v", err)
 	}
 }
 
 func startNode3(t *testing.T) {
-	mock.InitLogForTest()
-	ecfg, _ := mock.NewEnvConfForTest()
-	ecfg.NetConf = "p2pv2/node3.yaml"
+	ecfg, _ := mock.NewEnvConfForTest("p2pv2/node3/conf/env.yaml")
 	ctx, _ := nctx.NewNetCtx(ecfg)
-	ctx.P2PConf.KeyPath = "p2pv2/node3/data/netkeys"
-	ctx.P2PConf.P2PDataPath = "p2pv2/node3/data/p2p"
 
 	node := NewP2PServerV2()
 	if err := node.Init(ctx); err != nil {
 		t.Errorf("server init error: %v", err)
+		return
 	}
 
 	node.Start()

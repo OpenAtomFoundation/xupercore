@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strconv"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -35,7 +34,7 @@ func NewConn(ctx *nctx.NetCtx, addr string) (*Conn, error) {
 	}
 
 	if err := c.newConn(); err != nil {
-		ctx.GetLog().Error("NewConn error", "error", err.Error())
+		ctx.GetLog().Error("NewConn error", "error", err)
 		return nil, err
 	}
 
@@ -61,7 +60,7 @@ func (c *Conn) newConn() error {
 	conn := &grpc.ClientConn{}
 	options := append([]grpc.DialOption{}, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.config.MaxMessageSize)<<20)))
 	if c.config.IsTls {
-		creds, err := p2p.NewTLS(c.ctx.EnvCfg.GenDataAbsPath(c.config.KeyPath), c.config.ServiceName)
+		creds, err := p2p.NewTLS(c.config.KeyPath, c.config.ServiceName)
 		if err != nil {
 			return err
 		}
@@ -72,7 +71,7 @@ func (c *Conn) newConn() error {
 
 	conn, err := grpc.Dial(c.id, options...)
 	if err != nil {
-		c.log.Error("newGrpcConn error", "error", err, "id", c.id)
+		c.log.Error("newGrpcConn error", "error", err, "peerID", c.id)
 		return errors.New("new grpc conn error")
 	}
 
@@ -84,24 +83,24 @@ func (c *Conn) newConn() error {
 func (c *Conn) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 	client, err := c.newClient()
 	if err != nil {
-		c.log.Error("SendMessage new client error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessage new client error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return err
 	}
 
 	stream, err := client.SendP2PMessage(ctx)
 	if err != nil {
-		c.log.Error("SendMessage new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessage new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return err
 	}
 	defer stream.CloseSend()
 
 	c.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
-		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "id", c.id)
+		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", c.id)
 
-	msg.Header.From = strconv.Itoa(int(c.config.Port))
+	msg.Header.From = c.config.Address
 	err = stream.Send(msg)
 	if err != nil {
-		c.log.Error("SendMessage Send error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessage Send error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return err
 	}
 	if err == io.EOF {
@@ -115,24 +114,24 @@ func (c *Conn) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 func (c *Conn) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	client, err := c.newClient()
 	if err != nil {
-		c.log.Error("SendMessageWithResponse new client error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessageWithResponse new client error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return nil, err
 	}
 
 	stream, err := client.SendP2PMessage(ctx)
 	if err != nil {
-		c.log.Error("SendMessageWithResponse new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessageWithResponse new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return nil, err
 	}
 	defer stream.CloseSend()
 
 	c.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
-		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "id", c.id)
+		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", c.id)
 
-	msg.Header.From = strconv.Itoa(int(c.config.Port))
+	msg.Header.From = c.config.Address
 	err = stream.Send(msg)
 	if err != nil {
-		c.log.Error("SendMessageWithResponse error", "log_id", msg.GetHeader().GetLogid(), "error", err.Error(), "id", c.id)
+		c.log.Error("SendMessageWithResponse error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return nil, err
 	}
 
@@ -142,13 +141,13 @@ func (c *Conn) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage
 		return nil, err
 	}
 
-	c.log.Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid(), c.id)
+	c.log.Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid(), "peerID", c.id)
 	return resp, nil
 }
 
 // Close close this conn
 func (c *Conn) Close() {
-	c.log.Info("Conn Close", "id", c.id)
+	c.log.Info("Conn Close", "peerID", c.id)
 	c.conn.Close()
 }
 

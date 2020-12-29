@@ -8,10 +8,14 @@ import (
 	"github.com/xuperchain/xupercore/lib/utils"
 )
 
-func NewEnvConfForTest() (*xconf.EnvConf, error) {
-	dir := utils.GetCurFileDir()
-	econfPath := filepath.Join(dir, "conf/env.yaml")
+func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
+	path := "conf/env.yaml"
+	if len(paths) > 0 {
+		path = paths[0]
+	}
 
+	dir := utils.GetCurFileDir()
+	econfPath := filepath.Join(dir, path)
 	return xconf.LoadEnvConf(econfPath)
 }
 

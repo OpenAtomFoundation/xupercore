@@ -1,5 +1,7 @@
 package p2pv1
 
+import "github.com/xuperchain/xupercore/kernel/network/def"
+
 // PeerFilter the interface for filter peers
 type PeerFilter interface {
 	Filter() ([]string, error)
@@ -17,7 +19,7 @@ type StaticNodeStrategy struct {
 func (ss *StaticNodeStrategy) Filter() ([]string, error) {
 	var peers []string
 	if ss.broadcast {
-		peers = append(peers, ss.srv.staticNodes["xuper"]...)
+		peers = append(peers, ss.srv.staticNodes[def.BlockChain]...)
 	} else {
 		peers = append(peers, ss.srv.staticNodes[ss.bcname]...)
 	}

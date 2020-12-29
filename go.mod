@@ -19,6 +19,8 @@ require (
 	github.com/libp2p/go-libp2p-core v0.6.1
 	github.com/libp2p/go-libp2p-kad-dht v0.8.2
 	github.com/libp2p/go-libp2p-kbucket v0.4.2
+	github.com/libp2p/go-libp2p-noise v0.1.1
+	github.com/libp2p/go-libp2p-record v0.1.2
 	github.com/manifoldco/promptui v0.7.0 // indirect
 	github.com/multiformats/go-multiaddr v0.3.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible

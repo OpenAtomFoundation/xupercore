@@ -8,20 +8,18 @@ import (
 
 // default settings
 const (
-	DefaultNetPort           = 47101     // p2p port
+	DefaultModule     		 = "p2pv2"
+	DefaultPort           	 = 47101     // p2p port
+	DefaultAddress 			 = "/ip4/127.0.0.1/tcp/47101"
 	DefaultNetKeyPath        = "netkeys" // node private key path
 	DefaultNetIsNat          = true      // use NAT
 	DefaultNetIsTls          = false     // use tls secure transport
 	DefaultNetIsHidden       = false
-	DefaultNetIsIpv6         = false
 	DefaultMaxStreamLimits   = 1024
 	DefaultMaxMessageSize    = 128
 	DefaultTimeout           = 3
 	DefaultStreamIPLimitSize = 10
 	DefaultMaxBroadcastPeers = 20
-	DefaultIsStorePeers      = false
-	DefaultP2PDataPath       = "p2p"
-	DefaultP2PModuleName     = "p2pv2"
 	DefaultServiceName       = "localhost"
 	DefaultIsBroadCast       = true
 )
@@ -30,18 +28,16 @@ const (
 type NetConf struct {
 	// Module is the name of p2p module plugin
 	Module string `yaml:"module,omitempty"`
+	// Port the p2p network listened for p2pv1
+	Port int32 `yaml:"port,omitempty"`
 	// Address multiaddr string, /ip4/127.0.0.1/tcp/8080
 	Address string `yaml:"Address,omitempty"`
-	// port the p2p network listened
-	Port int32 `yaml:"port,omitempty"`
 	// keyPath is the node private key path, xuper will gen a random one if is nil
 	KeyPath string `yaml:"keyPath,omitempty"`
 	// isNat config whether the node use NAT manager
 	IsNat bool `yaml:"isNat,omitempty"`
 	// isHidden config whether the node can be found
 	IsHidden bool `yaml:"isHidden,omitempty"`
-	// IsIpv6 config whether the node use ipv6
-	IsIpv6 bool `yaml:"isIpv6,omitempty"`
 	// bootNodes config the bootNodes the node to connect
 	BootNodes []string `yaml:"bootNodes,omitempty"`
 	// staticNodes config the nodes which you trust
@@ -59,10 +55,6 @@ type NetConf struct {
 	// MaxBroadcastPeers limit the number of common peers in a broadcast,
 	// this number do not include MaxBroadcastCorePeers.
 	MaxBroadcastPeers int `yaml:"maxBroadcastPeers,omitempty"`
-	// IsStorePeers determine wherther storing the peers infos
-	IsStorePeers bool `yaml:"isStorePeers,omitempty"`
-	// P2PDataPath stores the peer info connected last time
-	P2PDataPath string `yaml:"p2PDataPath,omitempty"`
 	// isTls config the node use tls secure transparent
 	IsTls bool `yaml:"isTls,omitempty"`
 	// ServiceName
@@ -81,21 +73,19 @@ func LoadP2PConf(cfgFile string) (*NetConf, error) {
 
 func GetDefP2PConf() *NetConf {
 	return &NetConf{
-		Module:          DefaultP2PModuleName,
-		Port:            DefaultNetPort,
+		Module:          DefaultModule,
+		Port:            DefaultPort,
+		Address: 		 DefaultAddress,
 		KeyPath:         DefaultNetKeyPath,
 		IsNat:           DefaultNetIsNat,
 		IsTls:           DefaultNetIsTls,
 		IsHidden:        DefaultNetIsHidden,
-		IsIpv6:          DefaultNetIsIpv6,
 		MaxStreamLimits: DefaultMaxStreamLimits,
 		MaxMessageSize:  DefaultMaxMessageSize,
 		Timeout:         DefaultTimeout,
 		// default stream ip limit size
 		StreamIPLimitSize: DefaultStreamIPLimitSize,
 		MaxBroadcastPeers: DefaultMaxBroadcastPeers,
-		IsStorePeers:      DefaultIsStorePeers,
-		P2PDataPath:       DefaultP2PDataPath,
 		StaticNodes:       make(map[string][]string),
 		ServiceName:       DefaultServiceName,
 		IsBroadCast:       DefaultIsBroadCast,

@@ -3,7 +3,6 @@ package p2pv1
 import (
 	"context"
 	"errors"
-	"strconv"
 	"sync"
 	"time"
 
@@ -12,6 +11,11 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/protos"
+)
+
+var (
+	ErrEmptyPeer = errors.New("empty peer")
+	ErrNoResponse = errors.New("no response")
 )
 
 // SendMessage send message to peers using given filter strategy
@@ -40,8 +44,9 @@ func (p *P2PServerV1) SendMessage(ctx context.Context, msg *pb.XuperMessage, opt
 	}
 
 	if len(peerIDs) <= 0 {
-		p.log.Trace("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
+		return ErrEmptyPeer
 	}
 
 	p.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
@@ -92,7 +97,6 @@ func (p *P2PServerV1) SendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 		}()
 	}
 
-	msg.Header.From = strconv.Itoa(int(p.config.Port))
 	opt := p2p.Apply(optFunc)
 	filter := p.getFilter(msg, opt)
 	peerIDs, err := filter.Filter()
@@ -103,8 +107,9 @@ func (p *P2PServerV1) SendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 	}
 
 	if len(peerIDs) <= 0 {
-		p.log.Trace("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
+		return nil, ErrEmptyPeer
 	}
 
 	p.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
@@ -129,8 +134,6 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 
 			resp, err := conn.SendMessageWithResponse(ctx, msg)
 			if err != nil {
-				p.log.Error("p2p: SendMessageWithResponse error", "log_id", msg.GetHeader().GetLogid(),
-					"peerID", conn.id, "error", err)
 				return
 			}
 			respCh <- resp
@@ -140,7 +143,7 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 
 	if len(respCh) <= 0 {
 		p.log.Warn("p2p: no response", "log_id", msg.GetHeader().GetLogid())
-		return nil, errors.New("no response")
+		return nil, ErrNoResponse
 	}
 
 	i := 0
@@ -162,13 +165,13 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 }
 
 func (p *P2PServerV1) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilter {
-	if len(opt.Filters) <= 0 && len(opt.Addresses) <= 0 && len(opt.PeerIDs) <= 0 {
+	if len(opt.Filters) <= 0 && len(opt.Addresses) <= 0 &&
+		len(opt.PeerIDs) <= 0 && len(opt.Accounts) <= 0 {
 		opt.Filters = []p2p.FilterStrategy{p2p.DefaultStrategy}
 	}
 
 	bcname := msg.GetHeader().GetBcname()
 	filters := opt.Filters
-	peerIDs := make([]string, 0)
 	peerFilters := make([]PeerFilter, 0)
 	for _, f := range filters {
 		var filter PeerFilter
@@ -179,7 +182,29 @@ func (p *P2PServerV1) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 		peerFilters = append(peerFilters, filter)
 	}
 
-	go p.connectPeerByAddr(opt.Addresses)
-	peerIDs = append(peerIDs, opt.Addresses...)
+	peerIDs := make([]string, 0)
+	if len(opt.Addresses) > 0 {
+		peerIDs = append(peerIDs, opt.Addresses...)
+	}
+
+	if len(opt.Accounts) > 0 {
+		for _, account := range opt.Accounts {
+			peerID, err := p.GetPeerIdByAccount(account)
+			if err != nil {
+				p.log.Warn("p2p: getFilter get peer id by account failed", "account", account, "error", err)
+				continue
+			}
+			peerIDs = append(peerIDs, peerID)
+		}
+	}
+
 	return NewMultiStrategy(peerFilters, peerIDs)
+}
+
+func (p *P2PServerV1) GetPeerIdByAccount(account string) (string, error) {
+	if value, ok := p.accounts.Get(account); ok {
+		return value.(string), nil
+	}
+
+	return "", ErrAccountNotExist
 }

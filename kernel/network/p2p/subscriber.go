@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"errors"
+	"reflect"
 	"time"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -34,9 +35,6 @@ type Stream interface {
 }
 
 type HandleFunc func(xctx.XContext, *pb.XuperMessage) (*pb.XuperMessage, error)
-type Handler interface {
-	Handler(context.Context, *pb.XuperMessage) (*pb.XuperMessage, error)
-}
 
 type SubscriberOption func(*subscriber)
 
@@ -62,12 +60,12 @@ func NewSubscriber(ctx *nctx.NetCtx, typ pb.XuperMessage_MessageType,
 	}
 
 	switch obj := v.(type) {
-	case Handler:
+	case HandleFunc:
 		s.handler = obj
 	case chan *pb.XuperMessage:
 		s.channel = obj
 	default:
-		ctx.GetLog().Error("not handler or channel", "msgType", typ)
+		ctx.GetLog().Error("not handler or channel", "msgType", typ, "obj", reflect.TypeOf(obj))
 		return nil
 	}
 
@@ -94,7 +92,7 @@ type subscriber struct {
 	from   string // 接收指定节点的消息
 
 	channel chan *pb.XuperMessage
-	handler Handler
+	handler HandleFunc
 }
 
 var _ Subscriber = &subscriber{}
@@ -121,7 +119,7 @@ func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 
 func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
 	if s.handler != nil {
-		resp, err := s.handler.Handler(ctx, msg)
+		resp, err := s.handler(ctx, msg)
 		if err != nil {
 			s.log.Error("subscriber: call user handler error", "log_id", msg.GetHeader().GetLogid(), "err", err)
 			return ErrHandlerError

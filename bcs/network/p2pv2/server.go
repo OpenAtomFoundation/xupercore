@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"github.com/libp2p/go-libp2p-core/protocol"
+	noise "github.com/libp2p/go-libp2p-noise"
+	record "github.com/libp2p/go-libp2p-record"
+	"github.com/patrickmn/go-cache"
+	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	"math/rand"
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	knet "github.com/xuperchain/xupercore/kernel/network"
@@ -29,9 +30,12 @@ import (
 )
 
 const (
-	ServerName          = "p2pv2"
-	protocolID          = "/xuper/2.0.0" // protocol version
-	persistAddrFileName = "address"
+	ServerName  = "p2pv2"
+
+	namespace 	= "xuper"
+	retry       = 5
+
+	expiredTime = time.Minute
 )
 
 func init() {
@@ -39,6 +43,12 @@ func init() {
 }
 
 var (
+	// protocol prefix
+	prefix = fmt.Sprintf("/%s", namespace)
+
+	// protocol version
+	protocolID = fmt.Sprintf("%s/2.0.0", prefix)
+
 	// MaxBroadCastPeers define the maximum number of common peers to broadcast messages
 	MaxBroadCastPeers = 20
 )
@@ -51,12 +61,8 @@ var (
 	ErrCreateStreamPool = errors.New("create stream pool error")
 	ErrCreateBootStrap  = errors.New("create bootstrap error pool error")
 	ErrConnectBootStrap = errors.New("error to connect to all bootstrap")
-	ErrConnectCorePeers = errors.New("error to connect to all core peers")
-	ErrInvalidParams    = errors.New("invalid params")
-
-	ErrValidateConfig   = errors.New("config not valid")
-	ErrCreateNode       = errors.New("create node error")
-	ErrCreateHandlerMap = errors.New("create handlerMap error")
+	ErrLoadAccount 		= errors.New("load account error")
+	ErrStoreAccount 	= errors.New("dht store account error")
 )
 
 // P2PServerV2 is the node in the network
@@ -74,9 +80,12 @@ type P2PServerV2 struct {
 	cancel context.CancelFunc
 
 	staticNodes map[string][]peer.ID
-	// isStorePeers determine whether open isStorePeers
-	isStorePeers bool
-	p2pDataPath  string
+
+	// local host account
+	account  string
+	// accounts store remote peer account: key:account => v:peer.ID
+	// accounts as cache, store in dht
+	accounts *cache.Cache
 }
 
 var _ p2p.Server = &P2PServerV2{}
@@ -92,6 +101,7 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 	p.log = ctx.GetLog()
 	p.config = ctx.P2PConf
 
+	// host
 	cfg := ctx.P2PConf
 	opts, err := genHostOption(ctx)
 	if err != nil {
@@ -107,20 +117,19 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 
 	p.id = ho.ID()
 	p.host = ho
-
 	p.log.Trace("Host", "address", p.getMultiAddr(p.host.ID(), p.host.Addrs()), "config", *cfg)
 
-	p.isStorePeers = cfg.IsStorePeers
-	p.p2pDataPath = ctx.EnvCfg.GenDataAbsPath(cfg.P2PDataPath)
-	p.dispatcher = p2p.NewDispatcher(ctx)
-
-	dhtOpts := []dht.Option{dht.Mode(dht.ModeServer), dht.RoutingTableRefreshPeriod(10 * time.Second)}
+	// dht
+	dhtOpts := []dht.Option{
+		dht.Mode(dht.ModeServer),
+		dht.RoutingTableRefreshPeriod(10 * time.Second),
+		dht.ProtocolPrefix(protocol.ID(prefix)),
+		dht.NamespacedValidator(namespace, &record.NamespacedValidator{
+			namespace: blankValidator{},
+		}),
+	}
 	if p.kdht, err = dht.New(ctx, ho, dhtOpts...); err != nil {
 		return ErrCreateKadDht
-	}
-
-	if p.streamPool, err = NewStreamPool(ctx, p); err != nil {
-		return ErrCreateStreamPool
 	}
 
 	if !cfg.IsHidden {
@@ -129,26 +138,23 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 		}
 	}
 
-	var multiAddrs []string
-	if p.isStorePeers {
-		multiAddrs, err = p.getPeersFromDisk()
-		if err != nil {
-			p.log.Warn("getPeersFromDisk error", "err", err)
-		}
-	}
-	if len(cfg.BootNodes) > 0 {
-		multiAddrs = append(multiAddrs, cfg.BootNodes...)
-	}
-	for _, ps := range cfg.StaticNodes {
-		multiAddrs = append(multiAddrs, ps...)
+	keyPath := ctx.EnvCfg.GenDataAbsPath(ctx.EnvCfg.KeyDir)
+	p.account, err = xaddress.LoadAddress(keyPath)
+	if err != nil {
+		return ErrLoadAccount
 	}
 
-	success := p.connectPeerByAddress(multiAddrs)
-	if success == 0 && len(cfg.BootNodes) != 0 {
-		return ErrConnectBootStrap
+	p.accounts = cache.New(expiredTime, expiredTime)
+
+	// dispatcher
+	p.dispatcher = p2p.NewDispatcher(ctx)
+
+	p.streamPool, err = NewStreamPool(ctx, p)
+	if err != nil {
+		return ErrCreateStreamPool
 	}
 
-	// setup static nodes
+	// set static nodes
 	setStaticNodes(ctx, p)
 
 	// set broadcast peers limitation
@@ -159,15 +165,14 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 
 func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
 	cfg := ctx.P2PConf
-	muAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", cfg.Port))
+	muAddr, err := multiaddr.NewMultiaddr(cfg.Address)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := []libp2p.Option{
 		libp2p.ListenAddrs(muAddr),
 		libp2p.EnableRelay(circuit.OptHop),
-	}
-
-	if cfg.IsIpv6 {
-		muAddr, _ = multiaddr.NewMultiaddr(fmt.Sprintf("/ip6/::/tcp/%d", cfg.Port))
-		opts = append(opts, libp2p.ListenAddrs(muAddr))
 	}
 
 	if cfg.IsNat {
@@ -175,20 +180,20 @@ func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
 	}
 
 	if cfg.IsTls {
-		priv, err := p2p.GetPemKeyPairFromPath(ctx.EnvCfg.GenDataAbsPath(cfg.KeyPath))
+		priv, err := p2p.GetPemKeyPairFromPath(cfg.KeyPath)
 		if err != nil {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.Security(ID,
-			NewTLS(ctx.EnvCfg.GenDataAbsPath(cfg.KeyPath), cfg.ServiceName)))
+		opts = append(opts, libp2p.Security(ID, NewTLS(cfg.KeyPath, cfg.ServiceName)))
 	} else {
-		priv, err := p2p.GetKeyPairFromPath(ctx.EnvCfg.GenDataAbsPath(cfg.KeyPath))
+		priv, err := p2p.GetKeyPairFromPath(cfg.KeyPath)
 		if err != nil {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.DefaultSecurity)
+		//opts = append(opts, libp2p.DefaultSecurity)
+		opts = append(opts, libp2p.Security(noise.ID, noise.New))
 	}
 
 	return opts, nil
@@ -200,7 +205,7 @@ func setStaticNodes(ctx *nctx.NetCtx, p *P2PServerV2) {
 	for bcname, peers := range cfg.StaticNodes {
 		peerIDs := make([]peer.ID, 0, len(peers))
 		for _, peerAddr := range peers {
-			id, err := p2p.GetIDFromAddr(peerAddr)
+			id, err := p2p.GetPeerIDByAddress(peerAddr)
 			if err != nil {
 				p.log.Warn("static node addr error", "peerAddr", peerAddr)
 				continue
@@ -214,13 +219,25 @@ func setStaticNodes(ctx *nctx.NetCtx, p *P2PServerV2) {
 
 // Start start the node
 func (p *P2PServerV2) Start() {
-	p.log.Trace("StartP2PServer")
-	p.host.SetStreamHandler(protocolID, p.streamHandler)
-
+	p.log.Trace("StartP2PServer", "address", p.host.Addrs())
+	p.host.SetStreamHandler(protocol.ID(protocolID), p.streamHandler)
 	ctx, cancel := context.WithCancel(p.ctx)
 	p.cancel = cancel
 
-	t := time.NewTicker(time.Second * 30)
+	if err := p.connect(); err != nil {
+		p.log.Error("connect all peer error")
+		panic("connect all peer error")
+	}
+
+	key := Key(p.account)
+	value := p.getMultiAddr(p.host.ID(), p.host.Addrs())
+	err := p.kdht.PutValue(context.Background(), key, []byte(value))
+	if err != nil {
+		p.log.Error("dht put value error", "error", err)
+		panic(ErrStoreAccount)
+	}
+
+	t := time.NewTicker(time.Second * 3)
 	go func() {
 		defer t.Stop()
 		for {
@@ -228,16 +245,27 @@ func (p *P2PServerV2) Start() {
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				p.log.Trace("RoutingTable", "size", p.kdht.RoutingTable().Size())
+				p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
 				p.kdht.RoutingTable().Print()
-				if p.isStorePeers {
-					if err := p.persistPeersToDisk(); err != nil {
-						p.log.Warn("persistPeersToDisk failed", "error", err)
-					}
-				}
 			}
 		}
 	}()
+}
+
+func (p *P2PServerV2) connect() error {
+	var multiAddrs []string
+	if len(p.config.BootNodes) > 0 {
+		multiAddrs = append(multiAddrs, p.config.BootNodes...)
+	}
+	for _, ps := range p.config.StaticNodes {
+		multiAddrs = append(multiAddrs, ps...)
+	}
+	success := p.connectPeerByAddress(multiAddrs)
+	if success == 0 && len(p.config.BootNodes) != 0 {
+		return ErrConnectBootStrap
+	}
+
+	return nil
 }
 
 func (p *P2PServerV2) streamHandler(netStream network.Stream) {
@@ -277,20 +305,12 @@ func (p *P2PServerV2) Context() *nctx.NetCtx {
 	return p.ctx
 }
 
-func (p *P2PServerV2) P2PState() *p2p.State {
-	peers := p.kdht.RoutingTable().ListPeers()
-	remotePeer := make(map[string]string, len(peers))
-	for _, peerID := range peers {
-		addrs := p.host.Peerstore().Addrs(peerID)
-		remotePeer[peerID.Pretty()] = p.getMultiAddr(peerID, addrs)
+func (p *P2PServerV2) PeerInfo() pb.PeerInfo {
+	return pb.PeerInfo{
+		Id: p.host.ID().Pretty(),
+		Address: p.getMultiAddr(p.host.ID(), p.host.Addrs()),
+		Account: p.account,
 	}
-
-	state := &p2p.State{
-		PeerId:     p.host.ID().Pretty(),
-		PeerAddr:   p.getMultiAddr(p.host.ID(), p.host.Addrs()),
-		RemotePeer: remotePeer,
-	}
-	return state
 }
 
 func (p *P2PServerV2) getMultiAddr(peerID peer.ID, addrs []multiaddr.Multiaddr) string {
@@ -344,7 +364,7 @@ func (p *P2PServerV2) connectPeer(addrInfos []peer.AddrInfo) int {
 		return 0
 	}
 
-	retry := 5
+	retry := retry
 	success := 0
 	for retry > 0 {
 		for _, addrInfo := range addrInfos {
@@ -367,30 +387,4 @@ func (p *P2PServerV2) connectPeer(addrInfos []peer.AddrInfo) int {
 	}
 
 	return success
-}
-
-// persistPeersToDisk persist peers connecting to each other to disk
-func (p *P2PServerV2) persistPeersToDisk() error {
-	if err := os.MkdirAll(p.p2pDataPath, 0777); err != nil {
-		return err
-	}
-
-	multiAddrs := p.streamPool.limit.GetStreams()
-	if len(multiAddrs) > 0 {
-		data := strings.Join(multiAddrs, "\n")
-		return ioutil.WriteFile(filepath.Join(p.p2pDataPath, persistAddrFileName), []byte(data), 0700)
-	}
-
-	return nil
-}
-
-// getPeersFromDisk get peers from disk
-func (p *P2PServerV2) getPeersFromDisk() ([]string, error) {
-	data, err := ioutil.ReadFile(filepath.Join(p.p2pDataPath, persistAddrFileName))
-	if err != nil {
-		return nil, err
-	}
-
-	multiAddrs := strings.Split(string(data), "\n")
-	return multiAddrs, nil
 }

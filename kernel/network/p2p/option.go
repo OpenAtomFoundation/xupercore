@@ -4,6 +4,8 @@ type Option struct {
 	Filters   []FilterStrategy
 	Addresses []string
 	PeerIDs   []string
+	Accounts  []string
+
 	WhiteList map[string]bool
 
 	Percent float32 // percent wait for return
@@ -27,16 +29,16 @@ func WithFilter(filters []FilterStrategy) OptionFunc {
 }
 
 // WithPercent add percentage to message Option
-func WithPercent(percentage float32) OptionFunc {
+func WithPercent(percent float32) OptionFunc {
 	return func(o *Option) {
-		o.Percent = percentage
+		o.Percent = percent
 	}
 }
 
 // WithAddresses add target peer addresses to message Option
-func WithAddresses(peerAddrs []string) OptionFunc {
+func WithAddresses(addresses []string) OptionFunc {
 	return func(o *Option) {
-		o.Addresses = peerAddrs
+		o.Addresses = addresses
 	}
 }
 
@@ -44,6 +46,12 @@ func WithAddresses(peerAddrs []string) OptionFunc {
 func WithPeerIDs(peerIDs []string) OptionFunc {
 	return func(o *Option) {
 		o.PeerIDs = peerIDs
+	}
+}
+
+func WithAccounts(accounts []string) OptionFunc {
+	return func(o *Option) {
+		o.Accounts = accounts
 	}
 }
 

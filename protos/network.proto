@@ -55,6 +55,9 @@ message XuperMessage {
          */
         GET_BLOCKS = 22;
         GET_BLOCKS_RES = 23;
+
+        GET_PEER_INFO = 24;
+        GET_PEER_INFO_RES = 25;
     }
 
     enum ErrorType {
@@ -95,6 +98,12 @@ message XuperMessage {
 
     MessageHeader Header = 1;
     MessageData Data = 2;
+}
+
+message PeerInfo {
+    string id = 1;
+    string address = 2;
+    string account = 3;
 }
 
 service p2pService {
