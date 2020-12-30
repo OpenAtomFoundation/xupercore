@@ -2,10 +2,10 @@ package agent
 
 import (
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 
-	ldef "github.com/chunhui01/xupercore/bcs/ledger/xledger/def"
+	ldef "github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/kernel/consensus"
@@ -27,7 +27,7 @@ type EngineRelyAgentImpl struct {
 	engine common.Engine
 }
 
-func NewEngineRelyAgent(engine def.Engine) *EngineRelyAgentImpl {
+func NewEngineRelyAgent(engine common.Engine) *EngineRelyAgentImpl {
 	return &EngineRelyAgentImpl{engine}
 }
 
@@ -72,11 +72,10 @@ func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 }
 
 // 创建状态机实例
-func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger,
-	crypt cryptoBase.CryptoClient) (*state.State, error) {
+func (t *ChainRelyAgentImpl) CreateState() (*state.State, error) {
 	// 创建状态机上下文
 	ctx := t.chain.Context()
-	stateCtx, err := ldef.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, leg, crypt)
+	stateCtx, err := ldef.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, ctx.Ledger, ctx.Crypto)
 	if err != nil {
 		return nil, fmt.Errorf("new state ctx failed.err:%v", err)
 	}
@@ -140,7 +139,7 @@ func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, er
 		Crypto:   ctx.Crypto,
 		Contract: ctx.Contract,
 		Ledger:   legAgent,
-		Network:  ctx.Network,
+		Network:  ctx.EngCtx.Net,
 	}
 
 	log, err := logs.NewLogger("", cdef.SubModName)

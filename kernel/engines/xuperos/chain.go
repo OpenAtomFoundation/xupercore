@@ -1,22 +1,22 @@
 package xuperos
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/patrickmn/go-cache"
 )
 
 const (
@@ -33,7 +33,7 @@ type Chain struct {
 	// log
 	log logs.Logger
 	// 矿工
-	miner *miner.Miner
+	miner common.Miner
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
 
@@ -42,21 +42,21 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
-	if engCtx == nil || bcName == "" {
-		return nil, commom.ErrParameter
+func LoadChain(chainCtx *common.ChainCtx) (*Chain, error) {
+	if chainCtx == nil || chainCtx.BCName == "" {
+		return nil, common.ErrParameter
 	}
 
 	// 实例化链日志句柄
-	log, err := logs.NewLogger("", bcName)
+	log, err := logs.NewLogger("", chainCtx.BCName)
 	if err != nil {
-		return nil, commom.ErrNewLogFailed
+		return nil, common.ErrNewLogFailed
 	}
 
 	// 实例化链实例
 	ctx := &common.ChainCtx{}
-	ctx.EngCtx = engCtx
-	ctx.BCName = bcName
+	ctx.EngCtx = chainCtx.EngCtx
+	ctx.BCName = chainCtx.BCName
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
 	chainObj := &Chain{}
@@ -67,7 +67,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	// 初始化链运行环境上下文
 	err = chainObj.initChainCtx()
 	if err != nil {
-		t.log.Error("init chain ctx failed", "bcName", bcName, "err", err)
+		log.Error("init chain ctx failed", "bcName", chainCtx.BCName, "err", err)
 		return nil, common.ErrNewChainCtxFailed.More("err:%v", err)
 	}
 
@@ -75,7 +75,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	chainObj.miner = miner.NewMiner(ctx)
 	chainObj.txIdCache = cache.New(TxIdCacheExpired, TxIdCacheGCInterval)
 
-	return chain, nil
+	return chainObj, nil
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
@@ -105,8 +105,8 @@ func (t *Chain) Context() *common.ChainCtx {
 
 // 交易预执行
 func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos.InvokeResponse, error) {
-	if ctx == "" || ctx.GetLog() == nil || len(req) < 1 {
-		return common.ErrParameter
+	if ctx == nil || ctx.GetLog() == nil || len(req) < 1 {
+		return nil, common.ErrParameter
 	}
 	log := ctx.GetLog()
 
@@ -119,36 +119,36 @@ func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos
 
 // 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)
 func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
-	if tx == nil || ctx == nil || ctx.GetLog() == nil || tx.GetTxid() == "" {
+	if tx == nil || ctx == nil || ctx.GetLog() == nil || len(tx.GetTxid()) <= 0 {
 		return common.ErrParameter
 	}
 	log := ctx.GetLog()
 
 	// 防止重复提交交易
 	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
-		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
+		log.Warn("tx already exist,ignore", "txid", utils.Hex(tx.GetTxid()))
 		return common.ErrTxAlreadyExist
 	}
 	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
 
 	// 验证交易
-	err := t.ctx.State.VerifyTx(tx)
+	_, err := t.ctx.State.VerifyTx(tx)
 	if err != nil {
-		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
+		log.Error("verify tx error", "txid", utils.Hex(tx.GetTxid()), "err", err)
 		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
 	// 提交交易
 	err = t.ctx.State.DoTx(tx)
 	if err != nil {
-		log.Error("submit tx error", "txid", utils.F(tx.GetTxid()), "err", err)
-		if err == utxo.ErrAlreadyInUnconfirmed {
+		log.Error("submit tx error", "txid", utils.Hex(tx.GetTxid()), "err", err)
+		if err == state.ErrAlreadyInUnconfirmed {
 			t.txIdCache.Delete(string(tx.GetTxid()))
 		}
 		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 
-	log.Info("submit tx succ", "txid", utils.F(tx.GetTxid()))
+	log.Info("submit tx succ", "txid", utils.Hex(tx.GetTxid()))
 	return nil
 }
 
@@ -161,11 +161,11 @@ func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 
 	err := t.miner.ProcBlock(ctx, block)
 	if err != nil {
-		log.Warn("miner process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
+		log.Warn("miner process block failed", "blockid", utils.Hex(block.GetBlockid()), "err", err)
 		return common.ErrProcBlockFailed.More("err:%v", err)
 	}
 
-	log.Info("miner process block succ", "blockid", utils.F(block.GetBlockid()))
+	log.Info("miner process block succ", "blockid", utils.Hex(block.GetBlockid()))
 	return nil
 }
 
@@ -181,12 +181,12 @@ func (t *Chain) initChainCtx() error {
 
 	// 2.实例化加密组件
 	// 从账本查询加密算法类型
-	ctype, err := agent.NewLedgerAgent(t.ctx).GetCryptoType()
+	cryptoType, err := agent.NewLedgerAgent(t.ctx).GetCryptoType()
 	if err != nil {
 		t.log.Error("query crypto type failed", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("query crypto type failed")
 	}
-	crypt, err := t.relyAgent.CreateCrypto(ctype)
+	crypt, err := t.relyAgent.CreateCrypto(cryptoType)
 	if err != nil {
 		t.log.Error("create crypto client failed", "error", err)
 		return fmt.Errorf("create crypto client failed")
@@ -194,7 +194,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Crypto = crypt
 
 	// 3.实例化状态机
-	stat, err := t.relyAgent.CreateState(t.ctx.Ledger, t.ctx.Crypto)
+	stat, err := t.relyAgent.CreateState()
 	if err != nil {
 		t.log.Error("open state failed", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("open state failed")
@@ -213,7 +213,7 @@ func (t *Chain) initChainCtx() error {
 	// 5.合约
 	contractObj, err := t.relyAgent.CreateContract()
 	if err != nil {
-		t.log.Error("create contract manager error", "bcName", ctx.BCName, "err", err)
+		t.log.Error("create contract manager error", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("create contract manager error")
 	}
 	t.ctx.Contract = contractObj
@@ -223,7 +223,7 @@ func (t *Chain) initChainCtx() error {
 	// 6.Acl
 	aclObj, err := t.relyAgent.CreateAcl()
 	if err != nil {
-		t.log.Error("create acl error", "bcName", ctx.BCName, "err", err)
+		t.log.Error("create acl error", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("create acl error")
 	}
 	t.ctx.Acl = aclObj
@@ -233,7 +233,7 @@ func (t *Chain) initChainCtx() error {
 	// 7.共识
 	cons, err := t.relyAgent.CreateConsensus()
 	if err != nil {
-		t.log.Error("create consensus error", "bcName", ctx.BCName, "err", err)
+		t.log.Error("create consensus error", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("create consensus error")
 	}
 	t.ctx.Consensus = cons

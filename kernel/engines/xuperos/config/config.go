@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"time"
 
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -32,7 +33,7 @@ func LoadEngineConf(cfgFile string) (*EngineConf, error) {
 
 func GetDefEngineConf() *EngineConf {
 	return &EngineConf{
-		RootChain:            "xuper",
+		RootChain:            common.RootBlockChain,
 		BlockBroadcastMode:   0,
 		TxIdCacheExpiredTime: 180 * time.Second,
 		TxIdCacheGCInterval:  300 * time.Second,

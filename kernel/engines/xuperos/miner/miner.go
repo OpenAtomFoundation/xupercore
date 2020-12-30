@@ -1,36 +1,37 @@
-package xuperos
+package miner
 
 import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xuperchain/core/common"
-	"github.com/xuperchain/xuperchain/core/common/config"
-	"github.com/xuperchain/xuperchain/core/global"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // 负责生产和同步区块
-type Miner struct {
-	ctx *def.ChainCtx
+type miner struct {
+	ctx *common.ChainCtx
 	log logs.Logger
 	// 矿工锁，用来确保矿工出块和同步操作串行进行
 	minerMutex sync.Mutex
 	// 记录同步中任务目标区块高度
-	inSyncHeight int
+	inSyncHeight int64
 	// 标记是否退出运行
 	isExit bool
 }
 
-func NewMiner(ctx *def.ChainCtx) *Miner {
+func NewMiner(ctx *common.ChainCtx) *miner {
 	obj := &miner{
 		ctx: ctx,
 		log: ctx.GetLog(),
@@ -64,8 +65,8 @@ func (t *miner) ProcBlock(bctx xctx.XContext, block *lpb.InternalBlock) error {
 
 	for id, tx := range block.Transactions {
 		if !t.ctx.Ledger.IsValidTx(id, tx, block) {
-			log.Warn("invalid tx got from the block", "txid", utils.F(tx.Txid),
-				"blockId", utils.F(block.Blockid))
+			log.Warn("invalid tx got from the block", "txid", utils.Hex(tx.Txid),
+				"blockId", utils.Hex(block.Blockid))
 			return fmt.Errorf("invalid tx got from the block")
 		}
 	}
@@ -78,15 +79,15 @@ func (t *miner) ProcBlock(bctx xctx.XContext, block *lpb.InternalBlock) error {
 // 同一时间，矿工状态是唯一的。0:休眠中 1:同步区块中 2:打包区块中
 func (t *miner) Start() {
 	// 启动矿工循环
-	err := nil
+	var err error
 	isMiner := false
 	isSync := false
 	ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
 	ledgerTipHeight := t.ctx.Ledger.GetMeta().TrunkHeight
 	stateTipId := t.ctx.State.GetLatestBlockid()
-	for !t.isExit() {
+	for !t.IsExit() {
 		t.log.Trace("miner running", "ledgerTipHeight", ledgerTipHeight, "ledgerTipId",
-			utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId), "err", err)
+			utils.Hex(ledgerTipId), "stateTipId", utils.Hex(stateTipId), "err", err)
 
 		// 1.状态机walk，确保状态机和账本一致
 		if !bytes.Equal(ledgerTipId, stateTipId) {
@@ -105,12 +106,12 @@ func (t *miner) Start() {
 			err = t.mining()
 		}
 		// 5.如果出错，休眠3s后重试
-		if !t.isExit() && err != nil {
+		if !t.IsExit() && err != nil {
 			t.log.Warn("miner run occurred error,sleep 3s try", "err", err)
 			time.Sleep(3 * time.Second)
 		}
 		// 6.更新状态
-		if !isExit {
+		if !t.IsExit() {
 			err = nil
 			ledgerTipId = t.ctx.Ledger.GetMeta().TipBlockid
 			ledgerTipHeight = t.ctx.Ledger.GetMeta().TrunkHeight
@@ -126,7 +127,7 @@ func (t *miner) Stop() {
 	t.isExit = true
 }
 
-func (t *miner) isExit() bool {
+func (t *miner) IsExit() bool {
 	return t.isExit
 }
 
@@ -143,10 +144,10 @@ func (t *miner) mining() error {
 	ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
 	stateTipId := t.ctx.State.GetLatestBlockid()
 	if !bytes.Equal(ledgerTipId, stateTipId) {
-		err = t.ctx.State.Walk(ledgerTipId, false)
+		err := t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
-			log.Warn("mining walk failed", "ledgerTipId", utils.F(ledgerTipId),
-				"stateTipId", utils.F(stateTipId))
+			log.Warn("mining walk failed", "ledgerTipId", utils.Hex(ledgerTipId),
+				"stateTipId", utils.Hex(stateTipId))
 			return fmt.Errorf("mining walk failed")
 		}
 		stateTipId = ledgerTipId
@@ -177,7 +178,7 @@ func (t *miner) mining() error {
 	awardTx, err := t.getAwardTx(outBlockHeight)
 
 	// 7.打包新区块
-	txList := make([]*pb.Transaction, 0)
+	txList := make([]*lpb.Transaction, 0)
 	if len(timerTxList) > 0 {
 		txList = append(txList, timerTxList...)
 	}
@@ -193,7 +194,7 @@ func (t *miner) mining() error {
 	// 9.异步广播新生成的区块
 	go t.broadcastMinerBlock(newBlock)
 
-	log.Trace("complete new block generation", "blockId", utils.F(newBlock.GetBlockid()),
+	log.Trace("complete new block generation", "blockId", utils.Hex(newBlock.GetBlockid()),
 		"height", outBlockHeight, "costs", tmr.Print())
 	return nil
 }
@@ -202,7 +203,7 @@ func (t *miner) mining() error {
 // 如果不指定目标区块，则从临近节点查询获取网络状态
 func (t *miner) trySyncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) error {
 	// 1.获取到同步目标高度
-	err := nil
+	var err error
 	if targetBlock == nil {
 		// 广播查询获取网络最新区块
 		targetBlock, err = t.getWholeNetLongestBlock(log)
@@ -239,8 +240,8 @@ func (t *miner) trySyncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) er
 	if !bytes.Equal(ledgerTipId, stateTipId) {
 		err = t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
-			log.Warn("try sync block walk failed", "ledgerTipId", utils.F(ledgerTipId),
-				"stateTipId", utils.F(stateTipId))
+			log.Warn("try sync block walk failed", "ledgerTipId", utils.Hex(ledgerTipId),
+				"stateTipId", utils.Hex(stateTipId))
 			return fmt.Errorf("try sync block walk failed")
 		}
 	}
@@ -248,11 +249,11 @@ func (t *miner) trySyncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) er
 	// 5.启动同步区块到目标高度
 	err = t.syncBlock(targetBlock, log)
 	if err != nil {
-		log.Warn("try sync block failed", "err", err, "targetBlock", utils.F(targetBlock.GetBlockid()))
+		log.Warn("try sync block failed", "err", err, "targetBlock", utils.Hex(targetBlock.GetBlockid()))
 		return fmt.Errorf("try sync block failed")
 	}
 
-	log.Trace("try sync block succ", "targetBlock", utils.F(targetBlock.GetBlockid()))
+	log.Trace("try sync block succ", "targetBlock", utils.Hex(targetBlock.GetBlockid()))
 	return nil
 }
 
@@ -276,11 +277,11 @@ func (t *miner) syncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) error
 			ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
 			err := t.ctx.State.Walk(ledgerTipId, false)
 			if err != nil {
-				log.Warn("sync block walk failed", "ledgerTipId", utils.F(ledgerTipId),
-					"stateTipId", utils.F(stateTipId), "err", err)
+				log.Warn("sync block walk failed", "ledgerTipId", utils.Hex(ledgerTipId),
+					"stateTipId", utils.Hex(stateTipId), "err", err)
 				return
 			}
-			log.Trace("sync block succ", "targetBlockId", utils.F(targetBlock.GetBlockid()))
+			log.Trace("sync block succ", "targetBlockId", utils.Hex(targetBlock.GetBlockid()))
 		}
 	}()
 
@@ -353,7 +354,7 @@ func countConfirmBlockRes(res []*xuper_p2p.XuperMessage) bool {
 	agreeCnt := 0
 	disAgresCnt := 0
 	for i := 0; i < len(res); i++ {
-		bts := &pb.BCTipStatus{}
+		bts := &lpb.BCTipStatus{}
 		err := proto.Unmarshal(res[i].GetData().GetMsgInfo(), bts)
 		if err != nil {
 			continue
@@ -377,30 +378,32 @@ func countConfirmBlockRes(res []*xuper_p2p.XuperMessage) bool {
 //  3. Mixed_BroadCast_Mode是指出块节点将新块用Full_BroadCast_Mode模式广播，
 //     其他节点使用Interactive_BroadCast_Mode
 // broadcast block in Full_BroadCast_Mode since it's the original miner
-func (t *miner) broadcastBlock(freshBlock *pb.InternalBlock) {
-	state := t.ctx.Net.P2PState()
+func (t *miner) broadcastBlock(freshBlock *lpb.InternalBlock) {
+	engCtx := t.ctx.EngCtx
+
+	peerInfo := engCtx.Net.PeerInfo()
 	block := &pb.Block{
 		Header: &pb.Header{
 			Logid:    t.logID,
-			FromNode: state.PeerId,
+			FromNode: peerInfo.Id,
 		},
 		Bcname:  t.ctx.BCName,
 		Blockid: freshBlock.Blockid,
 	}
 
-	var msg *netPB.XuperMessage
+	var msg *protos.XuperMessage
 	opts := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
 		p2p.WithLogId(t.logID),
 	}
-	if t.ctx.EngCfg.BlockBroadcastMode == def.InteractiveBroadCastMode {
-		msg = p2p.NewMessage(netPB.XuperMessage_NEW_BLOCKID, block, opts...)
+	if engCtx.EngCfg.BlockBroadcastMode == common.InteractiveBroadCastMode {
+		msg = p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, block, opts...)
 	} else {
 		block.Block = freshBlock
-		msg = p2p.NewMessage(netPB.XuperMessage_SENDBLOCK, block, opts...)
+		msg = p2p.NewMessage(protos.XuperMessage_SENDBLOCK, block, opts...)
 	}
 
-	err := t.ctx.Net.SendMessage(context.Background(), msg)
+	err := engCtx.Net.SendMessage(t.ctx, msg)
 	if err != nil {
 		t.log.Error("broadcast block error", "logid", t.logID, "error", err)
 	}

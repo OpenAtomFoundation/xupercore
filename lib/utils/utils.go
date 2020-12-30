@@ -83,6 +83,6 @@ func GetHostName() string {
 }
 
 // Print byte slice data as hex string
-func F(b []byte) string {
+func Hex(b []byte) string {
 	return fmt.Sprintf("%x", b)
 }
