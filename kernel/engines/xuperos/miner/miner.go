@@ -27,6 +27,9 @@ type miner struct {
 	minerMutex sync.Mutex
 	// 记录同步中任务目标区块高度
 	inSyncHeight int64
+	inSyncTargetHeight int
+	// 记录同步中任务目标区块id
+	inSyncTargetBlockId int
 	// 标记是否退出运行
 	isExit bool
 }
@@ -56,10 +59,12 @@ func (t *miner) ProcBlock(bctx xctx.XContext, block *lpb.InternalBlock) error {
 		return fmt.Errorf("refused proc block")
 	}
 
-	inSyncHeight := t.inSyncHeight
-	if block.GetHeight() <= inSyncHeight {
+	inSyncTargetHeight := t.inSyncTargetHeight
+	inSyncTargetBlockId := t.inSyncTargetBlockId
+	if block.GetHeight() < inSyncTargetHeight || bytes.Equal(block.GetBlockid(), inSyncTargetBlockId) {
 		log.Trace("recv block height lower than in sync height,ignore", "recvHeight",
-			block.GetHeight(), "inSyncHeight", inSyncHeight)
+			block.GetHeight(), "inSyncTargetHeight", inSyncTargetHeight,
+			"inSyncTargetBlockId", utils.F(inSyncTargetHeight))
 		return nil
 	}
 
@@ -187,6 +192,12 @@ func (t *miner) mining() error {
 	}
 	txList = append(txList, awardTx)
 	newBlock, err := t.packMinerBlock(outBlockHeight, txList, consData)
+	// 需要转化下，为了共识做一些变更（比如pow）
+	blkAgent := agent.NewBlockAgent(newBlock)
+	err = t.ctx.Consensus.CalculateBlock(blkAgent)
+
+	// 获取转化后的新区块
+	newBlock = blkAgent.GetBlock()
 
 	// 8.确认新区块到账本&状态机
 	err = t.confirmMinerBlock(newBlock)
@@ -218,24 +229,27 @@ func (t *miner) trySyncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) er
 	defer func() {
 		if err != nil {
 			// 如果同步出错，更新到当前账本主干高度
-			t.inSyncHeight = t.ctx.Ledger.GetMeta().GetTrunkHeight()
+			t.inSyncTargetHeight = t.ctx.Ledger.GetMeta().GetTrunkHeight()
+			t.inSyncTargetBlockId = t.ctx.Ledger.GetMeta().GetTipBlockid()
 		}
 		// 释放矿工锁
 		t.minerMutex.Unlock()
 	}()
 
 	// 3.检查同步目标，忽略目标高度小于正在同步高度的任务
-	inSyncHeight := t.inSyncHeight
-	if targetBlock.GetHeight() <= inSyncHeight {
+	if targetBlock.GetHeight() < t.inSyncTargetHeight ||
+		bytes.Equal(targetBlock.GetBlockid(), t.inSyncTargetBlockId) {
 		log.Trace("try sync block height lower than in sync height,ignore", "targetHeight",
-			targetBlock.GetHeight(), "insyncHeight", inSyncHeight)
+			targetBlock.GetHeight(), "insyncHeight", inSyncHeight, "inSyncTargetHeight",
+			utils.F(t.inSyncTargetBlockId))
 		return nil
 	}
 	// 4.更新同步中区块高度
-	t.inSyncHeight = targetBlock.GetHeight()
+	t.inSyncTargetHeight = targetBlock.GetHeight()
+	t.inSyncTargetBlockId = targetBlock.GetBlockid()
 
 	// 4.状态机walk，确保状态机和账本一致
-	ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
+	ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 	stateTipId := t.ctx.State.GetLatestBlockid()
 	if !bytes.Equal(ledgerTipId, stateTipId) {
 		err = t.ctx.State.Walk(ledgerTipId, false)
@@ -258,12 +272,13 @@ func (t *miner) trySyncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) er
 }
 
 func (t *miner) syncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) error {
-	// 1.判断账本当前高度，忽略小于等于账本高度任务
-	if targetBlock.GetHeight() <= t.ctx.Ledger.GetMeta().GetTrunkHeight() {
+	// 1.判断账本当前高度，忽略小于账本高度或者等于tip block任务
+	if targetBlock.GetHeight() < t.ctx.Ledger.GetMeta().GetTrunkHeight() ||
+		bytes.Equal(targetBlock.GetBlockid(), t.ctx.Ledger.GetMeta().GetTipBlockid()) {
 		return nil
 	}
 
-	// 2.从临近节点拉取缺失区块(可优化为并发拉取)
+	// 2.从临近节点拉取缺失区块(可优化为并发拉取，如果上个块)
 	blkIds, err := t.downloadMissBlock(targetBlock, log)
 	if err != nil {
 		return err
@@ -271,7 +286,7 @@ func (t *miner) syncBlock(targetBlock *lpb.InternalBlock, log logs.Logger) error
 
 	// 4.如果账本发生变更，触发同步账本和状态机
 	defer func() {
-		ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
+		ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 		stateTipId := t.ctx.State.GetLatestBlockid()
 		if !bytes.Equal(ledgerTipId, stateTipId) {
 			ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
