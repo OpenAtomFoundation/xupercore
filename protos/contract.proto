@@ -2,7 +2,7 @@ syntax = "proto3";
 
 option go_package = "github.com/xuperchain/xupercore/protos";
 
-import "ledger.proto";
+import "xupercore/protos/ledger.proto";
 
 package protos;
 
