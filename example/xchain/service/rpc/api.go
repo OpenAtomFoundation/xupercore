@@ -3,7 +3,7 @@ package rpc
 import (
 	"context"
 
-	"github.com/xuperchain/xupercore/example/xchain/common/pb"
+	pb "github.com/xuperchain/xupercore/example/xchain/common/xchainpb"
 )
 
 // 示例接口

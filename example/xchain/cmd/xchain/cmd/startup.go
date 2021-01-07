@@ -14,6 +14,7 @@ import (
 	econf "github.com/xuperchain/xupercore/kernel/engines/config"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
+
 	// import要使用的内核核心组件驱动
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
 

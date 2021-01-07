@@ -8,7 +8,7 @@ import (
 
 	sconf "github.com/xuperchain/xupercore/example/xchain/common/config"
 	"github.com/xuperchain/xupercore/example/xchain/common/def"
-	"github.com/xuperchain/xupercore/example/xchain/common/pb"
+	pb "github.com/xuperchain/xupercore/example/xchain/common/xchainpb"
 
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos"

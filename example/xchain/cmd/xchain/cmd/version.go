@@ -7,13 +7,6 @@ import (
 	"github.com/xuperchain/xupercore/example/xchain/common/version"
 )
 
-// 通过编译参数设置
-var (
-	buildVersion = "0.0.0"
-	commitHash   = "default"
-	buildDate    = "default"
-)
-
 type versionCmd struct {
 	BaseCmd
 }

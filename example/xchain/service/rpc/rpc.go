@@ -7,12 +7,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/xuperchain/xupercore/example/xchain/common/pb"
-
+	sctx "github.com/xuperchain/xupercore/example/xchain/common/context"
+	pb "github.com/xuperchain/xupercore/example/xchain/common/xchainpb"
 	edef "github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
-	sctx "github.com/xuperchain/xupercore/server/context"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
