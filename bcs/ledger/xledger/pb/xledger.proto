@@ -1,5 +1,6 @@
 syntax = "proto3";
 
+import "consensus.proto";
 import "contract.proto";
 import "ledger.proto";
 
@@ -28,47 +29,6 @@ enum BlockStatus {
     BLOCK_TRUNK = 1;
     BLOCK_BRANCH = 2;
     BLOCK_NOEXIST = 3;
-}
-
-// QCState is the phase of hotstuff
-enum QCState {
-    NEW_VIEW = 0;
-    PREPARE = 1;
-    PRE_COMMIT = 2;
-    COMMIT = 3;
-    DECIDE = 4;
-}
-
-// QCSignInfos is the signs of the leader gathered from replicas of a specifically certType.
-// A slice of signs is used at present.
-// TODO @qizheng09: It will be change to Threshold-Signatures after
-// Crypto lib support Threshold-Signatures.
-message QCSignInfos {
-    // QCSignInfos
-   repeated SignInfo QCSignInfos = 1;
-}
-
-// SignInfo is the signature information of the
-message SignInfo {
-  string Address = 1;
-  string PublicKey = 2;
-  bytes  Sign = 3;
-}
-
-// QuorumCert is a data type that combines a collection of signatures from replicas.
-message QuorumCert {
-    // The id of Proposal this QC certified.
-    bytes ProposalId = 1;
-    // The msg of Proposal this QC certified.
-    bytes ProposalMsg = 2;
-    // The current type of this QC certified.
-    // the type contains `NEW_VIEW`, `PREPARE`
-    QCState Type = 3;
-    // The view number of this QC certified.
-    int64 ViewNumber = 4;
-    // SignInfos is the signs of the leader gathered from replicas
-    // of a specifically certType.
-    QCSignInfos SignInfos  = 5;
 }
 
 message HDInfo {
@@ -209,7 +169,7 @@ message InternalBlock {
     int32 targetBits = 19;
 
     // Justify used in chained-bft
-    QuorumCert Justify = 20;
+    protos.QuorumCert Justify = 20;
 
     // 下面的属性会动态变化
     // If the block is on the trunk
@@ -292,3 +252,12 @@ message BlockInfo {
     InternalBlock block = 2;
 }
 
+message Transactions {
+    repeated Transaction txs = 1;
+}
+
+message Status {
+    LedgerMeta ledger_meta = 1;
+    InternalBlock tip_block = 2;
+    UtxoMeta utxo_meto = 3;
+}

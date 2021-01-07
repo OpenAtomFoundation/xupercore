@@ -66,4 +66,6 @@ var (
 	ErrNewChainCtxFailed  = &Error{ErrStatusInternalErr, 50011, "new chain context failed"}
 	ErrSubmitTxFailed     = &Error{ErrStatusInternalErr, 50013, "submit tx failed"}
 	ErrProcBlockFailed    = &Error{ErrStatusInternalErr, 50015, "process block failed"}
+	ErrNetworkNoResponse  = &Error{ErrStatusInternalErr, 50016, "network no response"}
+	ErrTxNotEnough        = &Error{ErrStatusInternalErr, 50017, "tx not enough"}
 )

@@ -24,6 +24,10 @@ func NewBlockAgent(blk *lpb.InternalBlock) *BlockAgent {
 	}
 }
 
+func (t *BlockAgent) GetBlock() *lpb.InternalBlock {
+	return t.blk
+}
+
 func (t *BlockAgent) GetProposer() []byte {
 	return t.blk.GetProposer()
 }
@@ -80,8 +84,8 @@ func (t *BlockAgent) GetPreHash() []byte {
 	return t.blk.GetPreHash()
 }
 
-func (t *BlockAgent) GetPubkey() []byte {
-	return t.blk.GetPubkey()
+func (t *BlockAgent) GetPublicKey() string {
+	return string(t.blk.GetPubkey())
 }
 
 func (t *BlockAgent) GetSign() []byte {

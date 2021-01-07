@@ -2,6 +2,7 @@ package xuperos
 
 import (
     "errors"
+    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 
     "github.com/xuperchain/xuperchain/core/contract"
     "github.com/xuperchain/xuperchain/core/pb"
@@ -22,22 +23,19 @@ var (
     ErrTxInvalid = errors.New("validation error: tx info is invaild")
 )
 
-func validatePostTx(ts *pb.TxStatus) error {
-    if ts == nil || ts.Tx == nil || len(ts.Txid) == 0 {
+func validatePostTx(tx *lpb.Transaction) error {
+    if tx == nil || len(tx.Txid) == 0 {
         return ErrTxNil
-    }
-    if len(ts.Bcname) == 0 {
-        return ErrBlockChainNameEmpty
     }
 
     // 为了兼容pb和json序列化时，对于空byte数组的处理行为不同导致txid计算错误的问题
     // 先对输入参数统一做一次序列化，防止交易被打包入块，utxoVM校验不通过，阻塞walk
     // 可能会导致一些语言的sdk受影响，需要在计算txid时统一把空byte数组明确置null处理
-    prtBuf, err := proto.Marshal(ts.Tx)
+    prtBuf, err := proto.Marshal(tx)
     if err != nil {
         return ErrTxInvalid
     }
-    err = proto.Unmarshal(prtBuf, ts.Tx)
+    err = proto.Unmarshal(prtBuf, tx)
     if err != nil {
         return ErrTxInvalid
     }
@@ -57,13 +55,14 @@ func checkContractAuthority(contractWhiteList map[string]map[string]bool, tx *pb
     return tx.FromAddrInList(contractWhiteList[descParse.Module]), nil
 }
 
-func validateSendBlock(block *pb.Block) error {
+func validateSendBlock(block *lpb.InternalBlock) error {
+    if block == nil {
+        return ErrBlockNil
+    }
+
     if len(block.Blockid) == 0 {
         return ErrBlockIDNil
     }
 
-    if nil == block.Block {
-        return ErrBlockNil
-    }
     return nil
 }

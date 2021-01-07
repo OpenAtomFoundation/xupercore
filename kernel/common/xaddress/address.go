@@ -10,7 +10,7 @@ import (
 )
 
 type Address struct {
-	Address       string
+	Address       []byte
 	PrivateKey    *ecdsa.PrivateKey
 	PrivateKeyStr string
 	PublicKey     *ecdsa.PublicKey
@@ -51,10 +51,11 @@ func LoadAddrInfo(keyDir string, crypto cryptoClinet.CryptoClient) (*Address, er
 	}
 
 	addInfo := &Address{
-		Address:       string(addr),
+		Address:       addr,
 		PrivateKey:    privateKey,
 		PrivateKeyStr: string(priKey),
 		PublicKey:     publicKey,
+		PublicKeyStr:  string(pubKey),
 	}
 	return addInfo, nil
 }
