@@ -5,12 +5,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xuperchain/core/global"
 	"math"
 	"sort"
 
-	"github.com/xuperchain/xuperchain/core/crypto/hash"
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/lib/crypto/hash"
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 func getLeafSize(txCount int) int {
@@ -114,11 +114,11 @@ func VerifyMerkle(block *pb.InternalBlock) error {
 	if len(merkleTree) > 0 {
 		merkleRoot := merkleTree[len(merkleTree)-1]
 		if !(bytes.Equal(merkleRoot, block.MerkleRoot)) {
-			return errors.New("merkle root is wrong, block id:" + global.F(blockid) + ",block merkle root:" + global.F(block.MerkleRoot) + ", make merkle root:" + global.F(merkleRoot))
+			return errors.New("merkle root is wrong, block id:" + utils.F(blockid) + ",block merkle root:" + utils.F(block.MerkleRoot) + ", make merkle root:" + utils.F(merkleRoot))
 		}
 		return nil
 	} else {
-		return errors.New("can not make merkle tree , block id:" + global.F(blockid))
+		return errors.New("can not make merkle tree , block id:" + utils.F(blockid))
 	}
 }
 

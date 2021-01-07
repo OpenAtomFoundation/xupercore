@@ -3,7 +3,7 @@ package xmodel
 import (
 	"testing"
 
-	xmodel_pb "github.com/xuperchain/xuperchain/core/xmodel/pb"
+	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 )
 
 func TestEqual(t *testing.T) {

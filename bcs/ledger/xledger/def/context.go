@@ -2,10 +2,14 @@
 package def
 
 import (
+	"fmt"
 	lconf "github.com/xuperchain/xupercore/bcs/ledger/xledger/config"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
+	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 )
@@ -20,9 +24,11 @@ type LedgerCtx struct {
 	LedgerCfg *lconf.XLedgerConf
 	// 链名
 	BCName string
+	// crypto client
+	Crypt cryptoBase.CryptoClient
 }
 
-func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string) (*LedgerCtx, error) {
+func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string, crypt cryptoBase.CryptoClient) (*LedgerCtx, error) {
 	if envCfg == nil {
 		return nil, fmt.Errorf("create ledger context failed because env conf is nil")
 	}
@@ -44,6 +50,7 @@ func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string) (*LedgerCtx, error) {
 	ctx.EnvCfg = envCfg
 	ctx.LedgerCfg = lcfg
 	ctx.BCName = bcName
+	ctx.Crypt = crypt
 
 	return ctx, nil
 }
@@ -107,6 +114,7 @@ func (t *StateCtx) SetContractMG(contractMgr contract.Manager) {
 	t.ContractMgr = contractMgr
 }
 
+//state各个func里尽量调一下判断
 func (t *StateCtx) IsInit() bool {
 	if t.AclMgr == nil || t.ContractMgr == nil || t.Crypt == nil || t.Ledger == nil {
 		return false

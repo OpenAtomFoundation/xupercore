@@ -6,10 +6,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/xuperchain/xuperchain/core/common"
-	"github.com/xuperchain/xuperchain/core/kv/kvdb"
-	ledger_pkg "github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
+	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -33,7 +34,7 @@ func (uv *UtxoVM) LoadNewAccountResourceAmount() (int64, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(newAccountResourceAmountBuf, utxoMeta)
 		return utxoMeta.GetNewAccountResourceAmount(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		genesisNewAccountResourceAmount := uv.ledger.GetNewAccountResourceAmount()
 		if genesisNewAccountResourceAmount < 0 {
 			return genesisNewAccountResourceAmount, ErrProposalParamsIsNegativeNumber
@@ -81,7 +82,7 @@ func (uv *UtxoVM) LoadMaxBlockSize() (int64, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(maxBlockSizeBuf, utxoMeta)
 		return utxoMeta.GetMaxBlockSize(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		genesisMaxBlockSize := uv.ledger.GetMaxBlockSize()
 		if genesisMaxBlockSize <= 0 {
 			return genesisMaxBlockSize, ErrProposalParamsIsNotPositiveNumber
@@ -132,7 +133,7 @@ func (uv *UtxoVM) LoadReservedContracts() ([]*pb.InvokeRequest, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(reservedContractsBuf, utxoMeta)
 		return utxoMeta.GetReservedContracts(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		return uv.ledger.GetReservedContracts()
 	}
 	return nil, findErr
@@ -172,13 +173,13 @@ func (uv *UtxoVM) GetGroupChainContract() *pb.InvokeRequest {
 	return uv.meta.GetGroupChainContract()
 }
 
-func (uv *UtxoVM) LoadGroupChainContract() (*pb.InvokeRequest, error) {
+func (uv *UtxoVM) LoadGroupChainContract() (*protos.InvokeRequest, error) {
 	groupChainContractBuf, findErr := uv.metaTable.Get([]byte(ledger_pkg.GroupChainContractKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(groupChainContractBuf, utxoMeta)
 		return utxoMeta.GetGroupChainContract(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		requests, err := uv.ledger.GetGroupChainContract()
 		if len(requests) > 0 {
 			return requests[0], err
@@ -194,7 +195,7 @@ func (uv *UtxoVM) LoadForbiddenContract() (*pb.InvokeRequest, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(forbiddenContractBuf, utxoMeta)
 		return utxoMeta.GetForbiddenContract(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		requests, err := uv.ledger.GetForbiddenContract()
 		if len(requests) > 0 {
 			return requests[0], err
@@ -232,7 +233,7 @@ func (uv *UtxoVM) LoadIrreversibleBlockHeight() (int64, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(irreversibleBlockHeightBuf, utxoMeta)
 		return utxoMeta.GetIrreversibleBlockHeight(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		return int64(0), nil
 	}
 	return int64(0), findErr
@@ -244,7 +245,7 @@ func (uv *UtxoVM) LoadIrreversibleSlideWindow() (int64, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(irreversibleSlideWindowBuf, utxoMeta)
 		return utxoMeta.GetIrreversibleSlideWindow(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		genesisSlideWindow := uv.ledger.GetIrreversibleSlideWindow()
 		// negative number is not meaningful
 		if genesisSlideWindow < 0 {
@@ -376,7 +377,7 @@ func (uv *UtxoVM) LoadGasPrice() (*pb.GasPrice, error) {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(gasPriceBuf, utxoMeta)
 		return utxoMeta.GetGasPrice(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		nofee := uv.ledger.GetNoFee()
 		if nofee {
 			gasPrice := &pb.GasPrice{

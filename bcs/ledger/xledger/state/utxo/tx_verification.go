@@ -13,11 +13,11 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
-	"github.com/xuperchain/xupercore/lib/pb"
 )
 
 // ImmediateVerifyTx verify tx Immediately

@@ -22,13 +22,12 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/cache"
-	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/pb"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
@@ -75,7 +74,6 @@ const (
 	FeePlaceholder            = "$"
 	UTXOTotalKey              = "xtotal"
 	UTXOContractExecutionTime = 500
-	TxWaitTimeout             = 5
 	DefaultMaxConfirmedDelay  = 300
 )
 
@@ -297,33 +295,25 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param ledger 账本对象
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
-func NewUtxo(lctx *def.LedgerCtx, ledger *ledger.Ledger) (*UtxoVM, error) {
-	return MakeUtxo(lctx, ledger, lctx.XLog, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime)
+func NewUtxo(sctx *def.StateCtx) (*UtxoVM, error) {
+	return MakeUtxo(sctx, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxo(lctx *def.LedgerCtx, ledger *ledger.Ledger, xlog logs.Logger,
-	cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
+func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
 	// new kvdb instance
 	kvParam := &kvdb.KVParameter{
-		DBPath:                filepath.Join(lctx.LedgerCfg.StorePath, "utxoVM"),
-		KVEngineType:          lctx.LedgerCfg.KVEngineType,
+		DBPath:                filepath.Join(sctx.LedgerCfg.StorePath, "utxoVM"),
+		KVEngineType:          sctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          ledger.MemCacheSize,
 		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
-		OtherPaths:            lctx.LedgerCfg.OtherPaths,
-		StorageType:           lctx.LedgerCfg.StorageType,
+		OtherPaths:            sctx.LedgerCfg.OtherPaths,
+		StorageType:           sctx.LedgerCfg.StorageType,
 	}
 	baseDB, err := kvdb.CreateKVInstance(kvParam)
 	if err != nil {
-		xlog.Warn("fail to open leveldb", "dbPath", lctx.LedgerCfg.StorePath+"/utxoVM", "err", err)
+		xlog.Warn("fail to open leveldb", "dbPath", sctx.LedgerCfg.StorePath+"/utxoVM", "err", err)
 		return nil, err
-	}
-
-	// create crypto client
-	cryptoClient, cryptoErr := crypto_client.CreateCryptoClient(lctx.CryptoType)
-	if cryptoErr != nil {
-		xlog.Warn("fail to create crypto client", "err", cryptoErr)
-		return nil, cryptoErr
 	}
 
 	utxoMutex := &sync.RWMutex{}
@@ -339,8 +329,8 @@ func MakeUtxo(lctx *def.LedgerCtx, ledger *ledger.Ledger, xlog logs.Logger,
 		lockKeys:             map[string]*UtxoLockItem{},
 		lockKeyList:          list.New(),
 		lockExpireTime:       tmplockSeconds,
-		log:                  xlog,
-		ledger:               ledger,
+		log:                  sctx.XLog,
+		ledger:               sctx.Ledger,
 		utxoTable:            kvdb.NewTable(baseDB, pb.UTXOTablePrefix),
 		utxoCache:            NewUtxoCache(cachesize),
 		OfflineTxChan:        make(chan []*pb.Transaction, OfflineTxChanBuffer),
@@ -350,9 +340,9 @@ func MakeUtxo(lctx *def.LedgerCtx, ledger *ledger.Ledger, xlog logs.Logger,
 		cacheSize:            cachesize,
 		balanceViewDirty:     map[string]int{},
 		contractExectionTime: contractExectionTime,
-		cryptoClient:         cryptoClient,
+		cryptoClient:         sctx.Crypt,
 		maxConfirmedDelay:    DefaultMaxConfirmedDelay,
-		bcname:               lctx.BCName,
+		bcname:               sctx.BCName,
 		heightNotifier:       NewBlockHeightNotifier(),
 	}
 

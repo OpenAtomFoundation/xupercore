@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xuperchain/core/xmodel"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 const (

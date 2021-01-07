@@ -5,14 +5,16 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xuperchain/core/utxo/txhash"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
+
+	"github.com/golang/protobuf/proto"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 )
 
 const AliceAddress = "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"

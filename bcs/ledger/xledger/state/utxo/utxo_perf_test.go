@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	ledger_pkg "github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
+	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 )
 
 func BenchmarkPerformance(t *testing.B) {

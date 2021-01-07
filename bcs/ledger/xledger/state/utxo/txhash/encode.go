@@ -7,7 +7,7 @@ import (
 	"log"
 	"sort"
 
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 type encoder struct {

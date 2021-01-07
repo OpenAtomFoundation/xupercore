@@ -1,8 +1,9 @@
 package utxo
 
 import (
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xuperchain/core/permission/acl/utils"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // queryContractStatData query stat data about contract, such as total contract and total account
@@ -22,19 +23,19 @@ func (uv *UtxoVM) queryContractStatData(bucket string) (int64, error) {
 	return dataCount, nil
 }
 
-func (uv *UtxoVM) QueryContractStatData() (*pb.ContractStatData, error) {
+func (uv *UtxoVM) QueryContractStatData() (*protos.ContractStatData, error) {
 
 	accountCount, accountCountErr := uv.queryContractStatData(utils.GetAccountBucket())
 	if accountCountErr != nil {
-		return &pb.ContractStatData{}, accountCountErr
+		return &protos.ContractStatData{}, accountCountErr
 	}
 
 	contractCount, contractCountErr := uv.queryContractStatData(utils.GetContract2AccountBucket())
 	if contractCountErr != nil {
-		return &pb.ContractStatData{}, contractCountErr
+		return &protos.ContractStatData{}, contractCountErr
 	}
 
-	data := &pb.ContractStatData{
+	data := &protos.ContractStatData{
 		AccountCount:  accountCount,
 		ContractCount: contractCount,
 	}

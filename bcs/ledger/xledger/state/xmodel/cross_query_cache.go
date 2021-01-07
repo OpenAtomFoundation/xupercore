@@ -9,10 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xuperchain/xuperchain/core/common/log"
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/crypto/hash"
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/crypto/hash"
 )
 
 const (

@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/kv/kvdb"
-	ledger_pkg "github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
+	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
 // FakeUtxoVM define a fake UTXO for test purpose

@@ -3,7 +3,7 @@ package ledger
 import (
 	"fmt"
 
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 const round = 65535

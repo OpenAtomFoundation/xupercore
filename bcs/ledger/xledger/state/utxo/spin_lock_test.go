@@ -1,48 +1,52 @@
 package utxo
 
-import "testing"
-import "time"
-import "fmt"
-import "github.com/xuperchain/xuperchain/core/pb"
+import (
+	"fmt"
+	"testing"
+	"time"
+
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
+)
 
 func TestSpinLock(t *testing.T) {
 	sp := NewSpinLock()
 	tx1 := &pb.Transaction{
 		Txid: []byte("tx1"),
-		TxInputs: []*pb.TxInput{
-			&pb.TxInput{
+		TxInputs: []*protos.TxInput{
+			&protos.TxInput{
 				RefTxid: []byte("tx0"),
 			},
-			&pb.TxInput{
+			&protos.TxInput{
 				RefTxid:   []byte("tx3"),
 				RefOffset: 1,
 			},
 		},
-		TxOutputs: []*pb.TxOutput{
-			&pb.TxOutput{},
+		TxOutputs: []*protos.TxOutput{
+			&protos.TxOutput{},
 		},
-		TxInputsExt: []*pb.TxInputExt{
-			&pb.TxInputExt{
+		TxInputsExt: []*protos.TxInputExt{
+			&protos.TxInputExt{
 				Bucket: "bk2",
 				Key:    []byte("key2"),
 			},
 		},
-		TxOutputsExt: []*pb.TxOutputExt{
-			&pb.TxOutputExt{
+		TxOutputsExt: []*protos.TxOutputExt{
+			&protos.TxOutputExt{
 				Bucket: "bk1",
 				Key:    []byte("key1"),
 			},
 		},
 	}
 	tx2 := &pb.Transaction{
-		TxInputsExt: []*pb.TxInputExt{
-			&pb.TxInputExt{
+		TxInputsExt: []*protos.TxInputExt{
+			&protos.TxInputExt{
 				Bucket: "bk2",
 				Key:    []byte("key2"),
 			},
 		},
-		TxInputs: []*pb.TxInput{
-			&pb.TxInput{
+		TxInputs: []*protos.TxInput{
+			&protos.TxInput{
 				RefTxid: []byte("tx3"),
 			},
 		},
