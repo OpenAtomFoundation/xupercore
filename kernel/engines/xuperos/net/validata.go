@@ -2,12 +2,12 @@ package xuperos
 
 import (
     "errors"
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 
+    "github.com/golang/protobuf/proto"
     "github.com/xuperchain/xuperchain/core/contract"
     "github.com/xuperchain/xuperchain/core/pb"
 
-    "github.com/golang/protobuf/proto"
+    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 )
 
 var (

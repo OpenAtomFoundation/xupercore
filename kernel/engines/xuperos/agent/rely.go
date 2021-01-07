@@ -72,10 +72,10 @@ func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 }
 
 // 创建状态机实例
-func (t *ChainRelyAgentImpl) CreateState() (*state.State, error) {
+func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger, crypt cryptoBase.CryptoClient) (*state.State, error) {
 	// 创建状态机上下文
 	ctx := t.chain.Context()
-	stateCtx, err := ldef.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, ctx.Ledger, ctx.Crypto)
+	stateCtx, err := ldef.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, leg, crypt)
 	if err != nil {
 		return nil, fmt.Errorf("new state ctx failed.err:%v", err)
 	}
@@ -133,9 +133,9 @@ func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
 func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, error) {
 	ctx := t.chain.Context()
 	legAgent := NewLedgerAgent(ctx)
-	consCtx := &cctx.ConsensusCtx{
+	consCtx := cctx.ConsensusCtx{
 		BcName:   ctx.BCName,
-		Address:  ctx.Address,
+		Address:  (*cctx.Address)(ctx.Address),
 		Crypto:   ctx.Crypto,
 		Contract: ctx.Contract,
 		Ledger:   legAgent,

@@ -2,6 +2,7 @@ package xuperos
 
 import (
 	"fmt"
+
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -141,8 +142,8 @@ func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 		return
 	}
 
-	chain := t.engine.Get(request.Header.Bcname)
-	if chain == nil {
+	chain, err := t.engine.Get(request.Header.Bcname)
+	if err != nil {
 		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
 		return
 	}
@@ -161,7 +162,7 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 		return
 	}
 
-	chain := t.engine.Get(request.Header.Bcname)
+	chain, err := t.engine.Get(request.Header.Bcname)
 	if chain == nil {
 		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
 		return
@@ -206,7 +207,7 @@ func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 		return
 	}
 
-	chain := t.engine.Get(request.Header.Bcname)
+	chain, err := t.engine.Get(request.Header.Bcname)
 	if chain == nil {
 		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
 		return
@@ -236,8 +237,8 @@ func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 		return
 	}
 
-	chain := t.engine.Get(request.Header.Bcname)
-	if chain == nil {
+	chain, err := t.engine.Get(request.Header.Bcname)
+	if chain != nil {
 		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
 		return
 	}
@@ -276,10 +277,10 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	ledgerMeta := chain.Context().Ledger.GetMeta()
 	stateMeta := chain.Context().State.GetMeta()
 	ctx.GetLog().Info("SendBlock",
-		"genesis", utils.Hex(ledgerMeta.RootBlockid),
-		"last", utils.Hex(ledgerMeta.TipBlockid),
+		"genesis", utils.F(ledgerMeta.RootBlockid),
+		"last", utils.F(ledgerMeta.TipBlockid),
 		"height", ledgerMeta.TrunkHeight,
-		"utxo", utils.Hex(stateMeta.GetLatestBlockid()))
+		"utxo", utils.F(stateMeta.GetLatestBlockid()))
 	return nil
 }
 
@@ -304,8 +305,8 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessag
 		return response(common.ErrParameter)
 	}
 
-	chain := t.engine.Get(bcName)
-	if chain == nil {
+	chain, err := t.engine.Get(bcName)
+	if err != nil {
 		ctx.GetLog().Error("chain not exist", "bcName", bcName)
 		return response(common.ErrChainNotExist)
 	}
@@ -342,8 +343,8 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 		return response(common.ErrParameter)
 	}
 
-	chain := t.engine.Get(bcName)
-	if chain == nil {
+	chain, err := t.engine.Get(bcName)
+	if err != nil {
 		ctx.GetLog().Error("chain not exist", "bcName", bcName)
 		return response(common.ErrChainNotExist)
 	}
@@ -379,8 +380,8 @@ func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.X
 		return response(common.ErrParameter)
 	}
 
-	chain := t.engine.Get(bcName)
-	if chain == nil {
+	chain, err := t.engine.Get(bcName)
+	if err != nil {
 		ctx.GetLog().Error("chain not exist", "bcName", bcName)
 		return response(common.ErrChainNotExist)
 	}

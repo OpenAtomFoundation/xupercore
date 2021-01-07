@@ -36,7 +36,7 @@ type Chain interface {
 type Engine interface {
 	engines.BCEngine
 	Context() *EngineCtx
-	Get(string) Chain
+	Get(string) (Chain, error)
 	GetChains() []string
 	SetRelyAgent(EngineRelyAgent) error
 }
@@ -49,15 +49,9 @@ type EngineRelyAgent interface {
 // 定义链对各组件依赖接口约束
 type ChainRelyAgent interface {
 	CreateLedger() (*ledger.Ledger, error)
-	CreateState() (*state.State, error)
+	CreateState(*ledger.Ledger, cryptoBase.CryptoClient) (*state.State, error)
 	CreateContract() (contract.Manager, error)
 	CreateConsensus() (consensus.ConsensusInterface, error)
 	CreateCrypto(cryptoType string) (cryptoBase.CryptoClient, error)
 	CreateAcl() (aclBase.AclManager, error)
-}
-
-type Miner interface {
-	Start()
-	Stop()
-	ProcBlock(xctx.XContext, *lpb.InternalBlock) error
 }

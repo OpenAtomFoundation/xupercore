@@ -194,11 +194,7 @@ func (t *Engine) loadChains() error {
 		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
 
 		// 实例化每条链
-		chainCtx := &common.ChainCtx{
-			EngCtx: t.engCtx,
-			BCName: fInfo.Name(),
-		}
-		chain, err := LoadChain(chainCtx)
+		chain, err := LoadChain(t.engCtx, fInfo.Name())
 		if err != nil {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
 			return fmt.Errorf("load chain failed")

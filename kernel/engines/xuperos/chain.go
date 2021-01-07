@@ -33,7 +33,7 @@ type Chain struct {
 	// log
 	log logs.Logger
 	// 矿工
-	miner common.Miner
+	miner *miner.Miner
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
 
@@ -42,21 +42,21 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(chainCtx *common.ChainCtx) (*Chain, error) {
-	if chainCtx == nil || chainCtx.BCName == "" {
+func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
+	if engCtx == nil || bcName == "" {
 		return nil, common.ErrParameter
 	}
 
 	// 实例化链日志句柄
-	log, err := logs.NewLogger("", chainCtx.BCName)
+	log, err := logs.NewLogger("", bcName)
 	if err != nil {
 		return nil, common.ErrNewLogFailed
 	}
 
 	// 实例化链实例
 	ctx := &common.ChainCtx{}
-	ctx.EngCtx = chainCtx.EngCtx
-	ctx.BCName = chainCtx.BCName
+	ctx.EngCtx = engCtx
+	ctx.BCName = bcName
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
 	chainObj := &Chain{}
@@ -67,7 +67,7 @@ func LoadChain(chainCtx *common.ChainCtx) (*Chain, error) {
 	// 初始化链运行环境上下文
 	err = chainObj.initChainCtx()
 	if err != nil {
-		log.Error("init chain ctx failed", "bcName", chainCtx.BCName, "err", err)
+		log.Error("init chain ctx failed", "bcName", engCtx, "err", err)
 		return nil, common.ErrNewChainCtxFailed.More("err:%v", err)
 	}
 
@@ -108,7 +108,6 @@ func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos
 	if ctx == nil || ctx.GetLog() == nil || len(req) < 1 {
 		return nil, common.ErrParameter
 	}
-	log := ctx.GetLog()
 
 	// 生成沙盒
 
@@ -126,7 +125,7 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 
 	// 防止重复提交交易
 	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
-		log.Warn("tx already exist,ignore", "txid", utils.Hex(tx.GetTxid()))
+		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
 		return common.ErrTxAlreadyExist
 	}
 	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
@@ -134,21 +133,21 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	// 验证交易
 	_, err := t.ctx.State.VerifyTx(tx)
 	if err != nil {
-		log.Error("verify tx error", "txid", utils.Hex(tx.GetTxid()), "err", err)
+		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
 		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
 	// 提交交易
 	err = t.ctx.State.DoTx(tx)
 	if err != nil {
-		log.Error("submit tx error", "txid", utils.Hex(tx.GetTxid()), "err", err)
+		log.Error("submit tx error", "txid", utils.F(tx.GetTxid()), "err", err)
 		if err == state.ErrAlreadyInUnconfirmed {
 			t.txIdCache.Delete(string(tx.GetTxid()))
 		}
 		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 
-	log.Info("submit tx succ", "txid", utils.Hex(tx.GetTxid()))
+	log.Info("submit tx succ", "txid", utils.F(tx.GetTxid()))
 	return nil
 }
 
@@ -161,11 +160,11 @@ func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 
 	err := t.miner.ProcBlock(ctx, block)
 	if err != nil {
-		log.Warn("miner process block failed", "blockid", utils.Hex(block.GetBlockid()), "err", err)
+		log.Warn("miner process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
 		return common.ErrProcBlockFailed.More("err:%v", err)
 	}
 
-	log.Info("miner process block succ", "blockid", utils.Hex(block.GetBlockid()))
+	log.Info("miner process block succ", "blockid", utils.F(block.GetBlockid()))
 	return nil
 }
 
@@ -194,7 +193,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Crypto = crypt
 
 	// 3.实例化状态机
-	stat, err := t.relyAgent.CreateState()
+	stat, err := t.relyAgent.CreateState(leg, crypt)
 	if err != nil {
 		t.log.Error("open state failed", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("open state failed")

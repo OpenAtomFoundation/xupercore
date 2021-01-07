@@ -5,19 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"math/big"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/xuperchain/xuperchain/core/pb"
 
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -27,7 +27,7 @@ import (
 )
 
 // 负责生产和同步区块
-type miner struct {
+type Miner struct {
 	ctx *common.ChainCtx
 	log logs.Logger
 	// 矿工锁，用来确保矿工出块和同步操作串行进行
@@ -41,8 +41,8 @@ type miner struct {
 	isExit bool
 }
 
-func NewMiner(ctx *common.ChainCtx) *miner {
-	obj := &miner{
+func NewMiner(ctx *common.ChainCtx) *Miner {
+	obj := &Miner{
 		ctx: ctx,
 		log: ctx.GetLog(),
 	}
@@ -51,7 +51,7 @@ func NewMiner(ctx *common.ChainCtx) *miner {
 }
 
 // 处理P2P网络中接收到的区块
-func (t *miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
+func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	if ctx == nil || block == nil {
 		return fmt.Errorf("param error")
 	}
@@ -70,14 +70,14 @@ func (t *miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	if block.GetHeight() < inSyncTargetHeight || bytes.Equal(block.GetBlockid(), inSyncTargetBlockId) {
 		ctx.GetLog().Trace("ignore block because recv block height lower than in sync height", "recvHeight",
 			block.GetHeight(), "inSyncTargetHeight", inSyncTargetHeight,
-			"inSyncTargetBlockId", utils.Hex(inSyncTargetBlockId))
+			"inSyncTargetBlockId", utils.F(inSyncTargetBlockId))
 		return nil
 	}
 
 	for id, tx := range block.Transactions {
 		if !t.ctx.Ledger.IsValidTx(id, tx, block) {
-			ctx.GetLog().Warn("invalid tx got from the block", "txid", utils.Hex(tx.Txid),
-				"blockId", utils.Hex(block.Blockid))
+			ctx.GetLog().Warn("invalid tx got from the block", "txid", utils.F(tx.Txid),
+				"blockId", utils.F(block.Blockid))
 			return fmt.Errorf("invalid tx got from the block")
 		}
 	}
@@ -88,7 +88,7 @@ func (t *miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 
 // 启动矿工，周期检查矿工身份
 // 同一时间，矿工状态是唯一的。0:休眠中 1:同步区块中 2:打包区块中
-func (t *miner) Start() {
+func (t *Miner) Start() {
 	// 启动矿工循环
 	var err error
 	isMiner := false
@@ -104,7 +104,7 @@ func (t *miner) Start() {
 		}
 
 		ctx.GetLog().Trace("miner running", "ledgerTipHeight", ledgerTipHeight, "ledgerTipId",
-			utils.Hex(ledgerTipId), "stateTipId", utils.Hex(stateTipId), "err", err)
+			utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId), "err", err)
 
 		// 1.状态机walk，确保状态机和账本一致
 		if !bytes.Equal(ledgerTipId, stateTipId) {
@@ -140,16 +140,16 @@ func (t *miner) Start() {
 }
 
 // 停止矿工
-func (t *miner) Stop() {
+func (t *Miner) Stop() {
 	t.isExit = true
 }
 
-func (t *miner) IsExit() bool {
+func (t *Miner) IsExit() bool {
 	return t.isExit
 }
 
 // 挖矿生产区块
-func (t *miner) mining(ctx xctx.XContext) error {
+func (t *Miner) mining(ctx xctx.XContext) error {
 	// 1.获取矿工互斥锁，矿工行为完全串行
 	t.minerMutex.Lock()
 	defer t.minerMutex.Unlock()
@@ -160,8 +160,8 @@ func (t *miner) mining(ctx xctx.XContext) error {
 	if !bytes.Equal(ledgerTipId, stateTipId) {
 		err := t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
-			ctx.GetLog().Warn("mining walk failed", "ledgerTipId", utils.Hex(ledgerTipId),
-				"stateTipId", utils.Hex(stateTipId))
+			ctx.GetLog().Warn("mining walk failed", "ledgerTipId", utils.F(ledgerTipId),
+				"stateTipId", utils.F(stateTipId))
 			return fmt.Errorf("mining walk failed")
 		}
 		stateTipId = ledgerTipId
@@ -197,12 +197,12 @@ func (t *miner) mining(ctx xctx.XContext) error {
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
 
-	ctx.GetLog().Trace("complete new block generation", "blockId", utils.Hex(block.GetBlockid()),
+	ctx.GetLog().Trace("complete new block generation", "blockId", utils.F(block.GetBlockid()),
 		"height", height, "costs", ctx.GetTimer().Print())
 	return nil
 }
 
-func (t *miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
+func (t *Miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
 	block, err := t.ctx.Ledger.QueryBlock(ledgerTipId)
 	if err != nil {
 		ctx.GetLog().Warn("truncate failed because query tip block error", "err", err)
@@ -211,8 +211,8 @@ func (t *miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
 
 	err = t.ctx.State.Walk(block.PreHash, false)
 	if err != nil {
-		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.Hex(ledgerTipId),
-			"stateTipId", utils.Hex(block.PreHash))
+		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.F(ledgerTipId),
+			"stateTipId", utils.F(block.PreHash))
 		return err
 	}
 
@@ -226,7 +226,7 @@ func (t *miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
 	return nil
 }
 
-func (t *miner) packBlock(ctx xctx.XContext, height int64, now time.Time, consData []byte) (*lpb.InternalBlock, error) {
+func (t *Miner) packBlock(ctx xctx.XContext, height int64, now time.Time, consData []byte) (*lpb.InternalBlock, error) {
 	// 区块大小限制
 	sizeLimit, err := t.ctx.State.MaxTxSizePerBlock()
 	if err != nil {
@@ -265,7 +265,7 @@ func (t *miner) packBlock(ctx xctx.XContext, height int64, now time.Time, consDa
 	return block, nil
 }
 
-func (t *miner) convertConsData(data []byte) *protos.ConsensusInfo {
+func (t *Miner) convertConsData(data []byte) *protos.ConsensusInfo {
 	if data == nil {
 		return nil
 	}
@@ -279,11 +279,11 @@ func (t *miner) convertConsData(data []byte) *protos.ConsensusInfo {
 	return consInfo
 }
 
-func (t *miner) getTimerTx(height int64) ([]*lpb.Transaction, error) {
+func (t *Miner) getTimerTx(height int64) ([]*lpb.Transaction, error) {
 	return nil, nil
 }
 
-func (t *miner) getUnconfirmedTx(sizeLimit int) ([]*lpb.Transaction, error) {
+func (t *Miner) getUnconfirmedTx(sizeLimit int) ([]*lpb.Transaction, error) {
 	unconfirmedTxs, err := t.ctx.State.GetUnconfirmedTx(false)
 	if err != nil {
 		return nil, err
@@ -302,14 +302,14 @@ func (t *miner) getUnconfirmedTx(sizeLimit int) ([]*lpb.Transaction, error) {
 	return txList, nil
 }
 
-func (t *miner) getAwardTx(height int64) (*lpb.Transaction, error) {
+func (t *Miner) getAwardTx(height int64) (*lpb.Transaction, error) {
 	amount := t.ctx.Ledger.GenesisBlock.CalcAward(height)
 	if amount.Cmp(big.NewInt(0)) < 0 {
 		return nil, errors.New("amount in transaction can not be negative number")
 	}
 
 	txOutput := &protos.TxOutput{}
-	txOutput.ToAddr = t.ctx.Address.Address
+	txOutput.ToAddr = []byte(t.ctx.Address.Address)
 	txOutput.Amount = amount.Bytes()
 	awardTx := &lpb.Transaction{Version: state.RootTxVersion}
 	awardTx.TxOutputs = append(awardTx.TxOutputs, txOutput)
@@ -320,13 +320,13 @@ func (t *miner) getAwardTx(height int64) (*lpb.Transaction, error) {
 	return nil, nil
 }
 
-func (t *miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
+func (t *Miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	// 需要转化下，为了共识做一些变更（比如pow）
 	blkAgent := agent.NewBlockAgent(block)
 	err := t.ctx.Consensus.CalculateBlock(blkAgent)
 
 	// 获取转化后的新区块
-	block = blkAgent.GetBlock()
+	//block = blkAgent.GetBlock()
 
 	// 账本确认区块
 	confirmStatus := t.ctx.Ledger.ConfirmBlock(block, false)
@@ -335,7 +335,7 @@ func (t *miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error 
 			ctx.GetLog().Warn("the mined blocked was attached to branch, no need to play")
 			return errors.New("the mined blocked was attached to branch")
 		}
-		ctx.GetLog().Trace("ledger confirm block success", "height", block.Height, "blockId", utils.Hex(block.Blockid))
+		ctx.GetLog().Trace("ledger confirm block success", "height", block.Height, "blockId", utils.F(block.Blockid))
 	} else {
 		ctx.GetLog().Warn("ledger confirm block error",  "confirm_status", confirmStatus)
 		return errors.New("ledger confirm block error")
@@ -344,7 +344,7 @@ func (t *miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error 
 	// 状态机确认区块
 	err = t.ctx.State.PlayForMiner(block.Blockid)
 	if err != nil {
-		ctx.GetLog().Warn("state play error ", "error", err, "blockId", utils.Hex(block.Blockid))
+		ctx.GetLog().Warn("state play error ", "error", err, "blockId", utils.F(block.Blockid))
 		return err
 	}
 
@@ -360,7 +360,7 @@ func (t *miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error 
 
 // 尝试检查同步节点账本到目标区块
 // 如果不指定目标区块，则从临近节点查询获取网络状态
-func (t *miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) error {
+func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) error {
 	// 1.获取到同步目标高度
 	var err error
 	if targetBlock == nil {
@@ -389,7 +389,7 @@ func (t *miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 		bytes.Equal(targetBlock.GetBlockid(), t.inSyncTargetBlockId) {
 		ctx.GetLog().Trace("try sync block height lower than in sync height,ignore", "targetHeight",
 			targetBlock.GetHeight(), "inSyncHeight", t.inSyncHeight, "inSyncTargetHeight",
-			utils.Hex(t.inSyncTargetBlockId))
+			utils.F(t.inSyncTargetBlockId))
 		return nil
 	}
 
@@ -403,8 +403,8 @@ func (t *miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	if !bytes.Equal(ledgerTipId, stateTipId) {
 		err = t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
-			ctx.GetLog().Warn("try sync block walk failed", "error", err, "ledgerTipId", utils.Hex(ledgerTipId),
-				"stateTipId", utils.Hex(stateTipId))
+			ctx.GetLog().Warn("try sync block walk failed", "error", err, "ledgerTipId", utils.F(ledgerTipId),
+				"stateTipId", utils.F(stateTipId))
 			return fmt.Errorf("try sync block walk failed")
 		}
 	}
@@ -412,15 +412,15 @@ func (t *miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	// 5.启动同步区块到目标高度
 	err = t.syncBlock(ctx, targetBlock)
 	if err != nil {
-		ctx.GetLog().Warn("try sync block failed", "err", err, "targetBlock", utils.Hex(targetBlock.GetBlockid()))
+		ctx.GetLog().Warn("try sync block failed", "err", err, "targetBlock", utils.F(targetBlock.GetBlockid()))
 		return fmt.Errorf("try sync block failed")
 	}
 
-	ctx.GetLog().Trace("try sync block succ", "targetBlock", utils.Hex(targetBlock.GetBlockid()))
+	ctx.GetLog().Trace("try sync block succ", "targetBlock", utils.F(targetBlock.GetBlockid()))
 	return nil
 }
 
-func (t *miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, error) {
+func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, error) {
 	input := &pb.BCStatus{Bcname: t.ctx.BCName}
 	opt := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
@@ -460,7 +460,7 @@ func (s BCSByHeight) Len() int {return len(s)}
 func (s BCSByHeight) Less(i, j int) bool {return s[i].Meta.TrunkHeight > s[j].Meta.TrunkHeight}
 func (s BCSByHeight) Swap(i, j int) {s[i], s[j] = s[j], s[i]}
 
-func (t *miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) error {
+func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) error {
 	// 1.判断账本当前高度，忽略小于账本高度或者等于tip block任务
 	if targetBlock.GetHeight() < t.ctx.Ledger.GetMeta().GetTrunkHeight() ||
 		bytes.Equal(targetBlock.GetBlockid(), t.ctx.Ledger.GetMeta().GetTipBlockid()) {
@@ -481,11 +481,11 @@ func (t *miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 			ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
 			err := t.ctx.State.Walk(ledgerTipId, false)
 			if err != nil {
-				ctx.GetLog().Warn("sync block walk failed", "ledgerTipId", utils.Hex(ledgerTipId),
-					"stateTipId", utils.Hex(stateTipId), "err", err)
+				ctx.GetLog().Warn("sync block walk failed", "ledgerTipId", utils.F(ledgerTipId),
+					"stateTipId", utils.F(stateTipId), "err", err)
 				return
 			}
-			ctx.GetLog().Trace("sync block succ", "targetBlockId", utils.Hex(targetBlock.GetBlockid()))
+			ctx.GetLog().Trace("sync block succ", "targetBlockId", utils.F(targetBlock.GetBlockid()))
 		}
 	}()
 
@@ -507,7 +507,7 @@ func (t *miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 //                    | => D(beginBlock) => ... => E(targetBlock)
 //
 // 通过高度可以并发下载
-func (t *miner) downloadMissBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) (*lpb.InternalBlock, error) {
+func (t *Miner) downloadMissBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) (*lpb.InternalBlock, error) {
 	ledger := t.ctx.Ledger
 	err := ledger.SavePendingBlock(targetBlock)
 	if err != nil {
@@ -548,7 +548,7 @@ func (t *miner) downloadMissBlock(ctx xctx.XContext, targetBlock *lpb.InternalBl
 	return beginBlock, nil
 }
 
-func (t *miner) GetBlock(ctx xctx.XContext, input *pb.BlockID) (*pb.Block, error) {
+func (t *Miner) GetBlock(ctx xctx.XContext, input *pb.BlockID) (*pb.Block, error) {
 	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, input, p2p.WithBCName(t.ctx.BCName))
 	response, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
 	if err != nil {
@@ -575,7 +575,7 @@ func (t *miner) GetBlock(ctx xctx.XContext, input *pb.BlockID) (*pb.Block, error
 }
 
 // 批量追加区块到账本中
-func (t *miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.InternalBlock) error {
+func (t *Miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.InternalBlock) error {
 	block := beginBlock
 	for blockId := block.Blockid; !bytes.Equal(blockId, endBlock.Blockid); blockId = block.NextHash {
 		var err error
@@ -610,7 +610,7 @@ func (t *miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.I
 }
 
 // syncConfirm 向周围节点询问块是否可以被接受
-func (t *miner) isConfirmed(ctx xctx.XContext, bcs *pb.BCStatus) bool {
+func (t *Miner) isConfirmed(ctx xctx.XContext, bcs *pb.BCStatus) bool {
 	input := &pb.BCStatus{Bcname: t.ctx.BCName, Block: &pb.InternalBlock{Blockid: bcs.Block.Blockid}}
 	opt := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
@@ -658,7 +658,7 @@ func countConfirmBlock(messages []*protos.XuperMessage) bool {
 //  3. Mixed_BroadCast_Mode是指出块节点将新块用Full_BroadCast_Mode模式广播，
 //     其他节点使用Interactive_BroadCast_Mode
 // broadcast block in Full_BroadCast_Mode since it's the original miner
-func (t *miner) broadcastBlock(ctx xctx.XContext, block *lpb.InternalBlock) {
+func (t *Miner) broadcastBlock(ctx xctx.XContext, block *lpb.InternalBlock) {
 	engCtx := t.ctx.EngCtx
 	var msg *protos.XuperMessage
 	if engCtx.EngCfg.BlockBroadcastMode == common.InteractiveBroadCastMode {
