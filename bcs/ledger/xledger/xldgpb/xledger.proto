@@ -1,9 +1,11 @@
 syntax = "proto3";
 
-import "contract.proto";
-import "ledger.proto";
+import "xupercore/protos/contract.proto";
+import "xupercore/protos/ledger.proto";
 
-package pb;
+option go_package = "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb";
+
+package xldgpb;
 
 // TransactionStatus is the status of transaction
 
