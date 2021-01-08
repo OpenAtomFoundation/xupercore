@@ -97,6 +97,9 @@ func (s *DefaultSaftyRules) increaseLastVoteRound(round int64) {
 func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 	// 计算最大恶意节点数
 	f := (sum - 1) / 3
+	if f < 0 {
+		return false
+	}
 	if f == 0 {
 		return input == sum
 	}

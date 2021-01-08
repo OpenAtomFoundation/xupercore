@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/consensus/base"
+	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
@@ -23,7 +23,8 @@ const (
 	// ATTENTION: 此处xpoaBucket和xpoaKey必须和对应三代合约严格一致，并且该xpoa隐式限制只能包含xmodel机制的ledger才可调用
 	xpoaBucket = "xpoa"
 	xpoaKey    = "VALIDATES"
-	Keypath    = "FAKE"
+
+	maxsleeptime = time.Millisecond * 10
 )
 
 var (
@@ -38,29 +39,6 @@ func init() {
 	consensus.Register("xpoa", NewXpoaConsensus)
 }
 
-type xpoaConfig struct {
-	InitProposer []ProposerInfo `json:"init_proposer"`
-	BlockNum     int64          `json:"block_num"`
-	// 单位为毫秒
-	Period  int64 `json:"period"`
-	Version int64 `json:"version"`
-}
-
-// XpoaStorage xpoa占用block中consensusStorage json串的格式
-type XpoaStorage struct {
-	Justify *chainedBft.QuorumCert `json:"Justify,omitempty"`
-}
-
-type ProposerInfo struct {
-	Address string `json:"address"`
-	Neturl  string `json:"neturl"`
-}
-
-type ValidatorsInfo struct {
-	Validators []*ProposerInfo `json:"validators"`
-	Miner      *ProposerInfo   `json:"miner"`
-}
-
 type xpoaConsensus struct {
 	bctx          xcontext.BaseCtx
 	election      *xpoaSchedule
@@ -68,7 +46,7 @@ type xpoaConsensus struct {
 	isProduce     map[int64]bool
 	config        *xpoaConfig
 	initTimestamp int64
-	status        *xpoaStatus
+	status        *XpoaStatus
 }
 
 // NewXpoaConsensus 初始化实例
@@ -122,7 +100,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	schedule.validators = validators
 	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-	qcTree := initQCTree(cCfg.StartHeight, cCtx.Ledger)
+	qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger)
 	pacemaker := &chainedBft.DefaultPaceMaker{
 		StartView: cCfg.StartHeight,
 	}
@@ -134,9 +112,9 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	go smr.Start()
 
 	// 创建status实例
-	status := &xpoaStatus{
-		version:     xconfig.Version,
-		startHeight: cCfg.StartHeight,
+	status := &XpoaStatus{
+		Version:     xconfig.Version,
+		StartHeight: cCfg.StartHeight,
 		Index:       cCfg.Index,
 		election:    schedule,
 	}
@@ -154,257 +132,12 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	return xpoa
 }
 
-func loadValidatorsMultiInfo(res []byte, addrToNet *map[string]string) ([]string, error) {
-	if res == nil {
-		return nil, NotValidContract
-	}
-	// 读取最新的validators值
-	contractInfo := ProposerInfo{}
-	if err := json.Unmarshal(res, &contractInfo); err != nil {
-		return nil, err
-	}
-	validators := strings.Split(contractInfo.Address, ";") // validators由分号隔开
-	if len(validators) == 0 {
-		return nil, EmptyValidors
-	}
-	neturls := strings.Split(contractInfo.Neturl, ";") // neturls由分号隔开
-	if len(neturls) != len(validators) {
-		return nil, EmptyValidors
-	}
-	for i, v := range validators {
-		(*addrToNet)[v] = neturls[i]
-	}
-	return validators, nil
-}
-
-// initQCTree 创建了smr需要的QC树存储，该Tree存储了目前待commit的QC信息
-func initQCTree(startHeight int64, ledger cctx.LedgerRely) *chainedBft.QCPendingTree {
-	// 初始状态，应该是start高度的前一个区块为genesisQC
-	b, _ := ledger.QueryBlockByHeight(startHeight - 1)
-	initQC := &chainedBft.QuorumCert{
-		VoteInfo: &chainedBft.VoteInfo{
-			ProposalId:   b.GetBlockid(),
-			ProposalView: startHeight - 1,
-		},
-		LedgerCommitInfo: &chainedBft.LedgerCommitInfo{
-			CommitStateId: b.GetBlockid(),
-		},
-	}
-	rootNode := &chainedBft.ProposalNode{
-		In: initQC,
-	}
-	return &chainedBft.QCPendingTree{
-		Genesis:  rootNode,
-		Root:     rootNode,
-		HighQC:   rootNode,
-		CommitQC: rootNode,
-	}
-}
-
-// xpoaStatus 实现了ConsensusStatus接口
-type xpoaStatus struct {
-	version     int64 `json:"version"`
-	startHeight int64 `json:"beginHeight"`
-	Index       int   `json:"index"`
-	election    *xpoaSchedule
-}
-
-// 获取共识版本号
-func (x *xpoaStatus) GetVersion() int64 {
-	return x.version
-}
-
-// 共识起始高度
-func (x *xpoaStatus) GetConsensusBeginInfo() int64 {
-	return x.startHeight
-}
-
-// 获取共识item所在consensus slice中的index
-func (x *xpoaStatus) GetStepConsensusIndex() int {
-	return x.Index
-}
-
-// 获取共识类型
-func (x *xpoaStatus) GetConsensusName() string {
-	return "xpoa"
-}
-
-// 获取当前状态机term
-func (x *xpoaStatus) GetCurrentTerm() int64 {
-	term, _, _ := x.election.minerScheduling(time.Now().UnixNano(), len(x.election.validators))
-	return term
-}
-
-// 获取当前矿工信息
-func (x *xpoaStatus) GetCurrentValidatorsInfo() []byte {
-	var v []*ProposerInfo
-	for _, a := range x.election.validators {
-		v = append(v, &ProposerInfo{
-			Address: a,
-			Neturl:  x.election.addrToNet[a],
-		})
-	}
-	i := ValidatorsInfo{
-		Miner: &ProposerInfo{
-			Address: x.election.miner,
-			Neturl:  x.election.addrToNet[x.election.miner],
-		},
-		Validators: v,
-	}
-	b, _ := json.Marshal(i)
-	return b
-}
-
-// xpoaSchedule 实现了ProposerElectionInterface接口，接口定义了validators操作
-// xpoaSchedule是xpoa的主要结构，其能通过合约调用来变更smr的候选人信息，并且向smr提供对应round的候选人信息
-type xpoaSchedule struct {
-	address string
-	// 出块间隔, 单位为毫秒
-	period int64
-	// 每轮每个候选人最多出多少块
-	blockNum int64
-	// 当前validators的address
-	validators []string
-	//当前Leader
-	miner string
-	// address到neturl的映射
-	addrToNet map[string]string
-
-	ledger cctx.LedgerRely
-}
-
-// minerScheduling 按照时间调度计算目标候选人轮换数term, 目标候选人index和候选人生成block的index
-func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64, pos int64, blockPos int64) {
-	// 每一轮的时间
-	termTime := s.period * int64(length) * s.blockNum
-	// 每个矿工轮值时间
-	posTime := s.period * s.blockNum
-	term = (timestamp)/termTime + 1
-	//10640483 180000
-	resTime := timestamp - (term-1)*termTime
-	pos = resTime / posTime
-	resTime = resTime - (resTime/posTime)*posTime
-	blockPos = resTime/s.period + 1
-	return
-}
-
-// GetLeader 根据输入的round，计算应有的proposer，实现election接口
-// 该方法主要为了支撑smr扭转和矿工挖矿，在handleReceivedProposal阶段会调用该方法
-// 由于xpoa主逻辑包含回滚逻辑，因此回滚逻辑必须在ProcessProposal进行
-// ATTENTION: tipBlock是一个隐式依赖状态
-// ATTENTION: 由于GetLeader()永远在GetIntAddress()之前，故在GetLeader时更新schedule的addrToNet Map，可以保证能及时提供Addr到NetUrl的映射
-func (s *xpoaSchedule) GetLeader(round int64) string {
-	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
-	if b, err := s.ledger.QueryBlockByHeight(round); err != nil {
-		return string(b.GetProposer())
-	}
-	tipHeight := s.ledger.GetTipBlock().GetHeight()
-	v := s.GetValidators(round)
-	// 计算round对应的timestamp大致区间
-	time := time.Now().UnixNano()
-	if round > tipHeight {
-		time += s.period * 1000
-	}
-	if round < tipHeight {
-		time -= s.period * 1000
-	}
-	_, pos, _ := s.minerScheduling(time, len(v))
-	return v[pos]
-}
-
-// GetLocalLeader 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
-func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
-	// xpoa.lg.Info("ConfirmBlock Propcess update validates")
-	// ATTENTION: 获取候选人信息时，时刻注意拿取的是check目的round的前三个块，候选人变更是在3个块之后生效，即round-3
-	b, err := s.ledger.QueryBlockByHeight(round - 3)
-	if err != nil {
-		return ""
-	}
-	localValidators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if localValidators == nil && err == nil {
-		// 使用初始变量
-		return ""
-	}
-	_, pos, _ := s.minerScheduling(timestamp, len(localValidators))
-	return localValidators[pos]
-}
-
-// getValidatesByBlockId 根据当前输入blockid，用快照的方式在xmodel中寻找<=当前blockid的最新的候选人值，若无则使用xuper.json中指定的初始值
-func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
-	reader, err := s.ledger.CreateSnapshot(blockId)
-	if err != nil {
-		// xpoa.lg.Error("Xpoa updateValidates getCurrentValidates error", "CreateSnapshot err:", err)
-		return nil, err
-	}
-	res, err := reader.Get(xpoaBucket, []byte(xpoaKey))
-	if res == nil {
-		// 即合约还未被调用，未有变量更新
-		return nil, nil
-	}
-	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
-	if err != nil {
-		return nil, err
-	}
-	return validators, nil
-}
-
-// GetValidators 用于计算目标round候选人信息，同时更新schedule address到internet地址映射
-func (s *xpoaSchedule) GetValidators(round int64) []string {
-	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
-	tipBlock := s.ledger.GetTipBlock()
-	// round区间在(tipBlock()-3, tipBlock()]之间时，validators不会发生改变
-	if tipBlock.GetHeight() <= round && round > tipBlock.GetHeight()-3 {
-		return s.validators
-	}
-	b, err := s.ledger.QueryBlockByHeight(round - 3)
-	if err != nil {
-		// err包含当前高度小于3，s.validators此时是initValidators
-		return s.validators
-	}
-	validators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if err != nil {
-		return s.validators
-	}
-	return validators
-}
-
-func (s *xpoaSchedule) GetIntAddress(addr string) string {
-	return s.addrToNet[addr]
-}
-
-func (s *xpoaSchedule) GetValidatorsMsgAddr() []string {
-	var urls []string
-	for _, v := range s.validators {
-		urls = append(urls, s.addrToNet[v])
-	}
-	return urls
-}
-
-func (s *xpoaSchedule) UpdateValidator() {
-	tipBlock := s.ledger.GetTipBlock()
-	if tipBlock.GetHeight() <= 3 {
-		return
-	}
-	b, err := s.ledger.QueryBlockByHeight(tipBlock.GetHeight() - 3)
-	if err != nil {
-		return
-	}
-	validators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if err != nil {
-		return
-	}
-	if !AddressEqual(validators, s.validators) {
-		s.validators = validators
-	}
-}
-
 // CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
 func (x *xpoaConsensus) CompeteMaster(height int64) (bool, bool, error) {
 Again:
 	t := time.Now().UnixNano() / 1e6
 	key := t / x.election.period
 	sleep := x.election.period - t%x.election.period
-	maxsleeptime := time.Millisecond * 10
 	if sleep > int64(maxsleeptime) {
 		sleep = int64(maxsleeptime)
 	}
@@ -554,28 +287,4 @@ func (x *xpoaConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interf
 
 func (x *xpoaConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	return x.status, nil
-}
-
-func cleanProduceMap(isProduce map[int64]bool, period int64) {
-	// 删除已经落盘的所有key
-	t := time.Now().UnixNano()
-	key := t / period
-	for k, _ := range isProduce {
-		if k < key-3 {
-			delete(isProduce, k)
-		}
-	}
-}
-
-// AddressEqual 判断两个validators地址是否相等
-func AddressEqual(a []string, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, _ := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

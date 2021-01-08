@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/xuperchain/xuperchain/core/global"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 var (
@@ -121,16 +121,16 @@ func (s *FakeSandBox) Get(bucket string, key []byte) ([]byte, error) {
 	if _, ok := s.storage[bucket]; !ok {
 		return nil, nil
 	}
-	return s.storage[bucket][global.F(key)], nil
+	return s.storage[bucket][utils.F(key)], nil
 }
 
 func (s *FakeSandBox) SetContext(bucket string, key, value []byte) {
 	if _, ok := s.storage[bucket]; ok {
-		s.storage[bucket][global.F(key)] = value
+		s.storage[bucket][utils.F(key)] = value
 		return
 	}
 	addition := make(map[string][]byte)
-	addition[global.F(key)] = value
+	addition[utils.F(key)] = value
 	s.storage[bucket] = addition
 }
 
@@ -229,7 +229,7 @@ func (c *FakeKContext) Get(bucket string, key []byte) ([]byte, error) {
 	if _, ok := c.m[bucket]; !ok {
 		return nil, nil
 	}
-	return c.m[bucket][global.F(key)], nil
+	return c.m[bucket][utils.F(key)], nil
 }
 
 func (c *FakeKContext) Select(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
@@ -239,10 +239,10 @@ func (c *FakeKContext) Select(bucket string, startKey []byte, endKey []byte) (co
 func (c *FakeKContext) Put(bucket string, key, value []byte) error {
 	if _, ok := c.m[bucket]; !ok {
 		a := make(map[string][]byte)
-		a[global.F(key)] = value
+		a[utils.F(key)] = value
 		c.m[bucket] = a
 	}
-	c.m[bucket][global.F(key)] = value
+	c.m[bucket][utils.F(key)] = value
 	return nil
 }
 

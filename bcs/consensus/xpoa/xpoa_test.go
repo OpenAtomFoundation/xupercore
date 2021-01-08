@@ -12,4 +12,7 @@ func TestUnmarshalConfig(t *testing.T) {
 	if err != nil {
 		t.Error("Config unmarshal err", "err", err)
 	}
+	if config.Period != 3000 {
+		t.Error("Config unmarshal err", "v", config.Period)
+	}
 }

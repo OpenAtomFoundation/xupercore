@@ -13,7 +13,8 @@ import (
 )
 
 var (
-	target    uint32 = 0x1903a30c
+	target uint32 = 0x1903a30c
+	// [[0111]fffff0000000000 0*16 0*16 0*16] 仅1个0
 	minTarget uint32 = 0x207FFFFF
 	//Bitcoin值 mTarget   uint32 = 0x1d00FFFF
 	mTarget uint32 = 0x207FFFFF
