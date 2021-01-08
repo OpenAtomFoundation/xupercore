@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	ErrEmptyPeer = errors.New("empty peer")
+	ErrEmptyPeer  = errors.New("empty peer")
 	ErrNoResponse = errors.New("no response")
 )
 
@@ -197,7 +197,7 @@ func (p *P2PServerV2) sendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 
 func (p *P2PServerV2) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilter {
 	if len(opt.Filters) <= 0 && len(opt.Addresses) <= 0 &&
-		len(opt.PeerIDs) <= 0 && len(opt.Accounts) <= 0{
+		len(opt.PeerIDs) <= 0 && len(opt.Accounts) <= 0 {
 		opt.Filters = []p2p.FilterStrategy{p2p.DefaultStrategy}
 	}
 

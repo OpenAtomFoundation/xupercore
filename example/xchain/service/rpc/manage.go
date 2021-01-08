@@ -8,11 +8,11 @@ import (
 
 	sconf "github.com/xuperchain/xupercore/example/xchain/common/config"
 	"github.com/xuperchain/xupercore/example/xchain/common/def"
-	"github.com/xuperchain/xupercore/example/xchain/common/pb"
+	pb "github.com/xuperchain/xupercore/example/xchain/common/xchainpb"
 
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos"
-	edef "github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	ecom "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 
 	middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -23,7 +23,7 @@ import (
 // rpc server启停控制管理
 type RpcServMG struct {
 	scfg      *sconf.ServConf
-	engine    edef.Engine
+	engine    ecom.Engine
 	log       logs.Logger
 	rpcServ   *RpcServ
 	servHD    *grpc.Server
@@ -46,7 +46,7 @@ func NewRpcServMG(scfg *sconf.ServConf, engine engines.BCEngine) (*RpcServMG, er
 		scfg:     scfg,
 		engine:   xosEngine,
 		log:      log,
-		rpcServ:  NewRpcServ(engine.(edef.Engine), log),
+		rpcServ:  NewRpcServ(engine.(ecom.Engine), log),
 		isInit:   true,
 		exitOnce: &sync.Once{},
 	}

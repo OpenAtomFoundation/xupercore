@@ -2,8 +2,8 @@ package common
 
 import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/contract"

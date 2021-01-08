@@ -8,9 +8,9 @@ import (
 
 // default settings
 const (
-	DefaultModule     		 = "p2pv2"
-	DefaultPort           	 = 47101     // p2p port
-	DefaultAddress 			 = "/ip4/127.0.0.1/tcp/47101"
+	DefaultModule            = "p2pv2"
+	DefaultPort              = 47101 // p2p port
+	DefaultAddress           = "/ip4/127.0.0.1/tcp/47101"
 	DefaultNetKeyPath        = "netkeys" // node private key path
 	DefaultNetIsNat          = true      // use NAT
 	DefaultNetIsTls          = false     // use tls secure transport
@@ -75,7 +75,7 @@ func GetDefP2PConf() *NetConf {
 	return &NetConf{
 		Module:          DefaultModule,
 		Port:            DefaultPort,
-		Address: 		 DefaultAddress,
+		Address:         DefaultAddress,
 		KeyPath:         DefaultNetKeyPath,
 		IsNat:           DefaultNetIsNat,
 		IsTls:           DefaultNetIsTls,

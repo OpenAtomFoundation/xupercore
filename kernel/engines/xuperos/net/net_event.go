@@ -3,7 +3,7 @@ package xuperos
 import (
 	"fmt"
 
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
@@ -124,7 +124,7 @@ func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 	// 处理任务
 	log, _ := logs.NewLogger(request.Header.Logid, fmt.Sprintf("net:%s", request.GetHeader().GetType()))
 	ctx := &xctx.BaseCtx{
-		XLog: log,
+		XLog:  log,
 		Timer: timer.NewXTimer(),
 	}
 	if handle, ok := AsyncMsgList[request.GetHeader().GetType()]; ok {
@@ -185,7 +185,6 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	go t.engine.Context().Net.SendMessage(ctx, msg)
 }
 
-
 func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
 	if err := validatePostTx(tx); err != nil {
 		ctx.GetLog().Trace("PostTx validate param errror", "error", err)
@@ -243,7 +242,7 @@ func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 		return
 	}
 
-	msgOpts := []p2p.MessageOption {
+	msgOpts := []p2p.MessageOption{
 		p2p.WithBCName(request.Header.Bcname),
 		p2p.WithLogId(request.Header.Bcname),
 	}

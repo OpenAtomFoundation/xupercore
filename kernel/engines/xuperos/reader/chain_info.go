@@ -1,7 +1,7 @@
 package reader
 
 import (
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"

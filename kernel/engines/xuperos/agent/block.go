@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 type BlockAgent struct {

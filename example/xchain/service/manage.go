@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	sconf "github.com/xuperchain/xuperos/common/config"
-	"github.com/xuperchain/xuperos/common/def"
-	"github.com/xuperchain/xuperos/service/rpc"
-
+	sconf "github.com/xuperchain/xupercore/example/xchain/common/config"
+	"github.com/xuperchain/xupercore/example/xchain/common/def"
+	"github.com/xuperchain/xupercore/example/xchain/service/rpc"
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
