@@ -63,7 +63,7 @@ type PoWConfig struct {
 // PoWStatus 实现了ConsensusStatus接口
 type PoWStatus struct {
 	startHeight int64
-	mutex       sync.RWMutex
+	mutex       sync.Mutex
 	newHeight   int64
 	index       int
 	miner       MinerInfo
@@ -96,8 +96,8 @@ func (s *PoWStatus) GetConsensusName() string {
 
 // GetCurrentTerm 获取当前状态机term
 func (s *PoWStatus) GetCurrentTerm() int64 {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	return s.newHeight
 }
 
@@ -268,9 +268,9 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block context.Blo
 
 // ProcessBeforeMiner 更新下一次pow挖矿时的targetBits
 func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
-	pow.status.mutex.RLock()
+	pow.status.mutex.Lock()
 	tipHeight := pow.status.newHeight
-	pow.status.mutex.RUnlock()
+	pow.status.mutex.Unlock()
 	preBlock, err := pow.ctx.Ledger.QueryBlockByHeight(tipHeight)
 	if err != nil {
 		pow.ctx.XLog.Error("PoW::ProcessBeforeMiner::cannnot find preBlock", "logid", pow.ctx.XLog.GetLogId())
@@ -455,9 +455,9 @@ func (pow *PoWConsensus) mining(block context.BlockInterface) error {
 			return OODMineErr
 		default:
 		}
-		pow.status.mutex.RLock()
+		pow.status.mutex.Lock()
 		newHeight := pow.status.newHeight
-		pow.status.mutex.RUnlock()
+		pow.status.mutex.Unlock()
 		if newHeight >= block.GetHeight() {
 			return OODMineErr
 		}

@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xuperchain/xuperchain/core/global"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
@@ -315,7 +314,7 @@ func TestSMR(t *testing.T) {
 		ParentId:     []byte{0},
 		ParentView:   0,
 	}
-	v, ok := sB.qcVoteMsgs.Load(global.F(getVoteId(vote)))
+	v, ok := sB.qcVoteMsgs.Load(utils.F(getVoteId(vote)))
 	if !ok {
 		t.Error("B votesMsg error")
 	}

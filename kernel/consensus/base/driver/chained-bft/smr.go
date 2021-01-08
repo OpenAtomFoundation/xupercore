@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/xuperchain/crypto/core/hash"
-	"github.com/xuperchain/xuperchain/core/global"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
@@ -17,6 +16,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/lib/utils"
 	xuperp2p "github.com/xuperchain/xupercore/protos"
 )
 
@@ -90,12 +90,12 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 		newViewMsgs:   &sync.Map{},
 	}
 	// smr初始值装载
-	s.localProposal.Store(global.F(qcTree.Root.In.GetProposalId()), true)
+	s.localProposal.Store(utils.F(qcTree.Root.In.GetProposalId()), true)
 	v := &VoteInfo{
 		ProposalView: qcTree.Root.In.GetProposalView(),
 		ProposalId:   qcTree.Root.In.GetProposalId(),
 	}
-	s.qcVoteMsgs.Store(global.F(getVoteId(v)), []*chainedBftPb.QuorumCertSign{})
+	s.qcVoteMsgs.Store(utils.F(getVoteId(v)), []*chainedBftPb.QuorumCertSign{})
 	return s
 }
 
@@ -161,14 +161,14 @@ func (s *Smr) Stop() {
 // 注意：为了支持回滚操作，必须调用该函数
 func (s *Smr) UpdateJustifyQcStatus(justify *QuorumCert) {
 	voteId := getVoteId(justify.VoteInfo)
-	v, ok := s.qcVoteMsgs.Load(global.F(voteId))
+	v, ok := s.qcVoteMsgs.Load(utils.F(voteId))
 	var signs []*chainedBftPb.QuorumCertSign
 	if ok {
 		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
 	}
 	justifySigns := justify.SignInfos
 	signs = appendSigns(signs, justifySigns)
-	s.qcVoteMsgs.Store(global.F(voteId), signs)
+	s.qcVoteMsgs.Store(utils.F(voteId), signs)
 	// 根据justify check情况更新本地HighQC, 注意：由于CheckMinerMatch已经检查justify签名
 	s.qcTree.updateHighQC(justify.GetProposalId())
 }
@@ -243,7 +243,7 @@ func (s *Smr) handleReceivedNewView(msg *xuperp2p.XuperMessage) error {
 		s.log.Error("smr::handleReceivedNewView Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return err
 	}
-	s.newViewMsgs.LoadOrStore(global.F(newViewMsg.GetProposalId()), true)
+	s.newViewMsgs.LoadOrStore(utils.F(newViewMsg.GetProposalId()), true)
 	return nil
 }
 
@@ -262,7 +262,7 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 		s.log.Error("smr::ProcessProposal empty HighQC error")
 		return EmptyHighQC
 	}
-	if _, ok := s.localProposal.Load(global.F(proposalID)); ok {
+	if _, ok := s.localProposal.Load(utils.F(proposalID)); ok {
 		return SameProposalNotify
 	}
 	parentQuorumCert, err := s.reloadJustifyQC()
@@ -292,7 +292,7 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 		return P2PInternalErr
 	}
 	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses(validatesIpInfo))
-	s.log.Info("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", global.F(proposalID))
+	s.log.Info("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID))
 	return nil
 }
 
@@ -317,7 +317,7 @@ func (s *Smr) reloadJustifyQC() (*QuorumCert, error) {
 	// 根据qcTree生成一个parentQC
 	// 上一个view的votes
 	voteId := getVoteId(v)
-	value, ok := s.qcVoteMsgs.Load(global.F(voteId))
+	value, ok := s.qcVoteMsgs.Load(utils.F(voteId))
 	if !ok {
 		return nil, JustifyVotesEmpty
 	}
@@ -348,12 +348,12 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		s.log.Error("smr::handleReceivedProposal Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return
 	}
-	if _, ok := s.localProposal.LoadOrStore(global.F(newProposalMsg.GetProposalId()), true); ok {
+	if _, ok := s.localProposal.LoadOrStore(utils.F(newProposalMsg.GetProposalId()), true); ok {
 		return
 	}
 
 	s.log.Info("smr::handleReceivedProposal::received a proposal", "logid", msg.GetHeader().GetLogid(),
-		"newView", newProposalMsg.GetProposalView(), "newProposalId", global.F(newProposalMsg.GetProposalId()))
+		"newView", newProposalMsg.GetProposalView(), "newProposalId", utils.F(newProposalMsg.GetProposalId()))
 	parentQCBytes := newProposalMsg.GetJustifyQC()
 	parentQC := &QuorumCert{}
 	if err := json.Unmarshal(parentQCBytes, parentQC); err != nil {
@@ -451,7 +451,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 // 只要vote过，就在本地map中更新值
 func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo, voteTo string) {
 	// 这里存在自己给自己投票的情况，给自己投票和给别人投票一样，都直接操作存储，记得签名
-	v, ok := s.qcVoteMsgs.Load(global.F(getVoteId(vote)))
+	v, ok := s.qcVoteMsgs.Load(utils.F(getVoteId(vote)))
 	var signs []*chainedBftPb.QuorumCertSign
 	if ok {
 		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
@@ -461,7 +461,7 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 		return
 	}
 	signs = append(signs, nextSign)
-	s.qcVoteMsgs.Store(global.F(getVoteId(vote)), signs)
+	s.qcVoteMsgs.Store(utils.F(getVoteId(vote)), signs)
 
 	voteBytes, err := json.Marshal(vote)
 	if err != nil {
@@ -513,12 +513,12 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	// 存入本地voteInfo内存，查看签名数量是否超过2f+1
 	var VoteLen int
 	// 注意隐式，若!ok则证明签名数量为1，此时不可能超过2f+1
-	v, ok := s.qcVoteMsgs.LoadOrStore(global.F(voteQC.LedgerCommitInfo.VoteInfoHash), voteQC.SignInfos)
+	v, ok := s.qcVoteMsgs.LoadOrStore(utils.F(voteQC.LedgerCommitInfo.VoteInfoHash), voteQC.SignInfos)
 	if ok {
 		signs, _ := v.([]*chainedBftPb.QuorumCertSign)
 		signs = append(signs, voteQC.SignInfos[0])
 		VoteLen = len(signs)
-		s.qcVoteMsgs.Store(global.F(voteQC.LedgerCommitInfo.VoteInfoHash), signs)
+		s.qcVoteMsgs.Store(utils.F(voteQC.LedgerCommitInfo.VoteInfoHash), signs)
 	}
 	// 查看签名数量是否达到2f+1, 需要获取justify对应的validators
 	if !s.saftyrules.CalVotesThreshold(VoteLen, len(s.Election.GetValidators(voteQC.GetProposalView()))) {
