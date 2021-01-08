@@ -42,7 +42,7 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
+func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, *common.Error) {
 	if engCtx == nil || bcName == "" {
 		return nil, common.ErrParameter
 	}
@@ -79,7 +79,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *Chain) SetRelyAgent(agent common.ChainRelyAgent) error {
+func (t *Chain) SetRelyAgent(agent common.ChainRelyAgent) *common.Error {
 	if agent == nil {
 		return common.ErrParameter
 	}
@@ -104,7 +104,8 @@ func (t *Chain) Context() *common.ChainCtx {
 }
 
 // 交易预执行
-func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos.InvokeResponse, error) {
+func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest,
+	initiator string, authRequires []string) (*protos.InvokeResponse, *common.Error) {
 	if ctx == nil || ctx.GetLog() == nil || len(req) < 1 {
 		return nil, common.ErrParameter
 	}
@@ -117,7 +118,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos
 }
 
 // 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)
-func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
+func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) *common.Error {
 	if tx == nil || ctx == nil || ctx.GetLog() == nil || len(tx.GetTxid()) <= 0 {
 		return common.ErrParameter
 	}
@@ -152,7 +153,7 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 }
 
 // 处理P2P网络同步到的区块
-func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
+func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) *common.Error {
 	if block == nil || ctx == nil || ctx.GetLog() == nil || block.GetBlockid() == nil {
 		return common.ErrParameter
 	}

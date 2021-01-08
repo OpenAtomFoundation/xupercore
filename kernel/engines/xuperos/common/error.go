@@ -22,6 +22,21 @@ type Error struct {
 	Msg string
 }
 
+func CastError(err error) *Error {
+	return CastErrorDefault(err, ErrUnknow)
+}
+
+func CastErrorDefault(err error, defaultErr *Error) *Error {
+	if err == nil {
+		return nil
+	}
+	if defErr, ok := err.(*Error); ok {
+		return defErr
+	}
+
+	return defaultErr.More(err.Error())
+}
+
 func (t *Error) Error() string {
 	return fmt.Sprintf("Err:%d-%d-%s", t.Status, t.Code, t.Msg)
 }
@@ -44,9 +59,11 @@ func (t *Error) Equal(rhs *Error) bool {
 }
 
 // define std error
+// 预留xxx9xx的错误码给上层业务扩展用，这里不要使用xxx9xx的错误码
 var (
 	ErrSuccess            = &Error{ErrStatusSucc, 0, "success"}
 	ErrInternal           = &Error{ErrStatusInternalErr, 50000, "internal error"}
+	ErrUnknow             = &Error{ErrStatusInternalErr, 50001, "unknow error"}
 	ErrForbidden          = &Error{ErrStatusRefused, 40300, "forbidden"}
 	ErrUnauthorized       = &Error{ErrStatusRefused, 40100, "unauthorized"}
 	ErrParameter          = &Error{ErrStatusRefused, 40001, "param error"}

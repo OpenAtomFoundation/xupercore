@@ -67,13 +67,24 @@ func (t *RpcServ) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		reqCtx.GetLog().Trace("access request", logFields...)
 
 		// handle request
-		// 忽略err，强制响应nil，统一通过resp中的错误码标识错误
-		resp, _ := handler(ctx, req)
+		// 根据err自动设置响应错误码，err需要是定义的标准err，否则会响应为未知错误
+		stdErr := ecom.ErrSuccess
+		resp, err := handler(ctx, req)
+		if err != nil {
+			stdErr = ecom.CastError(err)
+		}
+		// 根据错误统一设置header，对外统一响应err=nil，通过Header.ErrCode判断
+		resp.Header = &pb.RespHeader{
+			LogId:   reqHeader.GetLogId(),
+			ErrCode: stdErr.Code,
+			ErrMsg:  stdErr.Msg,
+			TraceId: t.genTraceId(),
+		}
 
 		// output ending log
 		// 可以通过log库提供的SetInfoField方法附加输出到ending log
-		logFields = append(logFields, "error", respHeader.GetError(),
-			"cost_time", reqCtx.GetTimer().Print())
+		logFields = append(logFields, "status", stdErr.Status, "err_code", stdErr.Code,
+			"err_msg", stdErr.Msg, "cost_time", reqCtx.GetTimer().Print())
 		rctx.GetLog().Info("request done", logFields...)
 
 		return resp, nil
@@ -84,14 +95,6 @@ func (t *RpcServ) defReqHeader() *pb.ReqHeader {
 	return &pb.ReqHeader{
 		LogId:    utils.GenLogId(),
 		SelfName: "unknow",
-	}
-}
-
-func (t *RpcServ) defRespHeader(rHeader *pb.ReqHeader) *pb.RespHeader {
-	return &pb.RespHeader{
-		LogId:   rHeader.GetLogId(),
-		Error:   pb.XChainErrorEnum_UNKNOW_ERROR,
-		TraceId: utils.GetHostName(),
 	}
 }
 
@@ -125,4 +128,9 @@ func (t *RpcServ) getClietIP(gctx context.Context) (string, error) {
 
 	addrSlice := strings.Split(pr.Addr.String(), ":")
 	return addrSlice[0], nil
+}
+
+// 生成包含机器host和请求时间的AES加密字符串，方便问题定位
+func (t *RpcServ) genTraceId() string {
+	return "127.0.0.1"
 }
