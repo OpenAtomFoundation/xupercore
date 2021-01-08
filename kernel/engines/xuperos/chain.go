@@ -1,49 +1,56 @@
 package xuperos
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
 	"time"
 
+	"github.com/patrickmn/go-cache"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-
-	"github.com/xuperchain/xuperchain/core/global"
-	"github.com/xuperchain/xuperchain/core/pb"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
+const (
+	// 提交交易cache有效期(s)
+	TxIdCacheExpired = 120 * time.Second
+	// 提交交易cache GC 周期（s）
+	TxIdCacheGCInterval = 180 * time.Second
+)
+
+// 定义一条链的具体行为，对外暴露接口错误统一使用标准错误
 type Chain struct {
 	// 链上下文
 	ctx *common.ChainCtx
 	// log
 	log logs.Logger
 	// 矿工
-	miner *miner
-	// 交易处理
-	processor *txProcessor
-	// 账本同步
-	keeper *LedgerKeeper
+	miner *miner.Miner
 	// 依赖代理组件
 	relyAgent common.ChainRelyAgent
-	// 读组件
-	reader reader.Reader
+
+	// 提交交易cache
+	txIdCache *cache.Cache
 }
 
 // 从本地存储加载链
 func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	if engCtx == nil || bcName == "" {
-		return nil, fmt.Errorf("load chains failed because param error", "bc_name", bcName)
+		return nil, common.ErrParameter
 	}
 
 	// 实例化链日志句柄
 	log, err := logs.NewLogger("", bcName)
 	if err != nil {
-		return nil, fmt.Errorf("new logger failed.err:%v", err)
+		return nil, common.ErrNewLogFailed
 	}
 
 	// 实例化链实例
@@ -57,140 +64,141 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	chainObj.log = ctx.XLog
 	chainObj.relyAgent = agent.NewChainRelyAgent(chainObj)
 
-	// 初始化链环境上下文
+	// 初始化链运行环境上下文
 	err = chainObj.initChainCtx()
 	if err != nil {
-		t.log.Error("init chain ctx failed", "bc_name", bcName, "err", err)
-		return nil, fmt.Errorf("init chain ctx failed")
+		log.Error("init chain ctx failed", "bcName", engCtx, "err", err)
+		return nil, common.ErrNewChainCtxFailed.More("err:%v", err)
 	}
 
-	// 账本区块同步
-	chainObj.ledgerKeeper = NewLedgerKeeper(ctx)
-	// 实例化矿工
-	chainObj.miner = NewMiner(ctx, chain.keeper)
-	// 交易处理器
-	chainObj.processor = NewTxProcessor(ctx)
-	// 读操作组件
-	chainObj.reader = reader.NewReader(ctx)
+	// 创建矿工
+	chainObj.miner = miner.NewMiner(ctx)
+	chainObj.txIdCache = cache.New(TxIdCacheExpired, TxIdCacheGCInterval)
 
-	return chain, nil
+	return chainObj, nil
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *Chain) SetRelyAgent(agent def.ChainRelyAgent) error {
+func (t *Chain) SetRelyAgent(agent common.ChainRelyAgent) error {
 	if agent == nil {
-		return ErrParamError
+		return common.ErrParameter
 	}
 
 	t.relyAgent = agent
 	return nil
 }
 
+// 阻塞
 func (t *Chain) Start() {
 	// 启动矿工
-	t.miner.start()
+	t.miner.Start()
 }
 
 func (t *Chain) Stop() {
 	// 停止矿工
-	t.miner.stop()
+	t.miner.Stop()
 }
 
-func (t *Chain) Context() *def.ChainCtx {
+func (t *Chain) Context() *common.ChainCtx {
 	return t.ctx
 }
 
-func (t *Chain) Status() int {
-	return t.ctx.Status
-}
-
-func (t *Chain) Reader() reader.Reader {
-	return t.reader
-}
-
 // 交易预执行
-func (t *Chain) PreExec(request *pb.InvokeRPCRequest) (*pb.InvokeResponse, error) {
-	return t.ctx.State.PreExec(request)
-}
-
-// 交易和区块结构由账本定义
-func (t *Chain) ProcTx(request *pb.TxStatus) error {
-	if t.Status() != global.Normal {
-		t.log.Error("chain status not ready", "logid", request.Header.Logid)
-		return def.ErrBlockChainNotReady
+func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest) (*protos.InvokeResponse, error) {
+	if ctx == nil || ctx.GetLog() == nil || len(req) < 1 {
+		return nil, common.ErrParameter
 	}
 
+	// 生成沙盒
+
+	// 预执行
+
+	return nil, nil
+}
+
+// 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)
+func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
+	if tx == nil || ctx == nil || ctx.GetLog() == nil || len(tx.GetTxid()) <= 0 {
+		return common.ErrParameter
+	}
+	log := ctx.GetLog()
+
+	// 防止重复提交交易
+	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
+		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
+		return common.ErrTxAlreadyExist
+	}
+	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
+
 	// 验证交易
-	txValid, err := t.processor.verifyTx(request.Tx)
-	if !txValid {
-		t.log.Error("verify tx error", "logid", request.Header.Logid, "txid", global.F(request.Tx.Txid), "error", err)
-		return err
+	_, err := t.ctx.State.VerifyTx(tx)
+	if err != nil {
+		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
+		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
 	// 提交交易
-	err = t.processor.submitTx(request.Tx)
+	err = t.ctx.State.DoTx(tx)
 	if err != nil {
-		t.log.Error("submit tx error", "logid", request.Header.Logid, "txid", global.F(request.Tx.Txid), "error", err)
-		return err
+		log.Error("submit tx error", "txid", utils.F(tx.GetTxid()), "err", err)
+		if err == state.ErrAlreadyInUnconfirmed {
+			t.txIdCache.Delete(string(tx.GetTxid()))
+		}
+		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 
+	log.Info("submit tx succ", "txid", utils.F(tx.GetTxid()))
 	return nil
 }
 
-// 处理新区块
-func (t *Chain) ProcBlock(in *pb.Block) error {
-	hd := &global.XContext{Timer: global.NewXTimer()}
-	if t.ctx.Ledger.ExistBlock(in.GetBlock().GetBlockid()) {
-		t.log.Debug("block is exist", "logid", in.Header.Logid, "cost", hd.Timer.Print())
-		return nil
+// 处理P2P网络同步到的区块
+func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
+	if block == nil || ctx == nil || ctx.GetLog() == nil || block.GetBlockid() == nil {
+		return common.ErrParameter
+	}
+	log := ctx.GetLog()
+
+	err := t.miner.ProcBlock(ctx, block)
+	if err != nil {
+		log.Warn("miner process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
+		return common.ErrProcBlockFailed.More("err:%v", err)
 	}
 
-	if bytes.Equal(t.ctx.State.GetLatestBlockId(), in.GetBlock().GetPreHash()) {
-		t.log.Trace("appending block in SendBlock", "time", time.Now().UnixNano(), "bcName", t.ctx.BCName, "tipID", global.F(t.ctx.State.GetLatestBlockId()))
-		ctx := CreateLedgerTaskCtx([]*SimpleBlock{
-			&SimpleBlock{
-				internalBlock: in.GetBlock(),
-				logid:         in.GetHeader().GetLogid() + "_" + in.GetHeader().GetFromNode()},
-		}, nil, hd)
-		t.keeper.PutTask(ctx, Appending, -1)
-		return nil
-	}
-
-	t.log.Trace("sync blocks in SendBlock", "time", time.Now().UnixNano(), "bcName", t.ctx.BCName, "tipID", global.F(t.ctx.State.GetLatestBlockId()))
-	ctx := CreateLedgerTaskCtx(nil, []string{in.GetHeader().GetFromNode()}, hd)
-	t.keeper.PutTask(ctx, Syncing, -1)
+	log.Info("miner process block succ", "blockid", utils.F(block.GetBlockid()))
 	return nil
 }
 
+// 初始化链运行依赖上下文
 func (t *Chain) initChainCtx() error {
 	// 1.实例化账本
-	leg, err := t.relyAgent.CreateLedger(false)
+	leg, err := t.relyAgent.CreateLedger()
 	if err != nil {
 		t.log.Error("open ledger failed", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("open ledger failed")
 	}
 	t.ctx.Ledger = leg
 
-	// 2.实例化状态机
-	stat, err := t.relyAgent.CreateState(t.ctx.Ledger)
-	if err != nil {
-		t.log.Error("open state failed", "bcName", t.ctx.BCName, "err", err)
-		return fmt.Errorf("open state failed")
-	}
-	t.ctx.State = stat
-
-	// 3.实例化加密组件
-	ctype, err := agent.NewLedgerAgent(t.ctx).GetCryptoType()
+	// 2.实例化加密组件
+	// 从账本查询加密算法类型
+	cryptoType, err := agent.NewLedgerAgent(t.ctx).GetCryptoType()
 	if err != nil {
 		t.log.Error("query crypto type failed", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("query crypto type failed")
 	}
-	crypt, err := t.relyAgent.CreateCrypto(ctype)
+	crypt, err := t.relyAgent.CreateCrypto(cryptoType)
 	if err != nil {
 		t.log.Error("create crypto client failed", "error", err)
 		return fmt.Errorf("create crypto client failed")
 	}
 	t.ctx.Crypto = crypt
+
+	// 3.实例化状态机
+	stat, err := t.relyAgent.CreateState(leg, crypt)
+	if err != nil {
+		t.log.Error("open state failed", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("open state failed")
+	}
+	t.ctx.State = stat
 
 	// 4.加载节点账户信息
 	keyPath := t.ctx.EngCtx.EnvCfg.GenDataAbsPath(t.ctx.EngCtx.EnvCfg.KeyDir)
@@ -204,24 +212,28 @@ func (t *Chain) initChainCtx() error {
 	// 5.合约
 	contractObj, err := t.relyAgent.CreateContract()
 	if err != nil {
-		t.log.Error("create contract manager error", "bcName", ctx.BCName, "err", err)
+		t.log.Error("create contract manager error", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("create contract manager error")
 	}
 	t.ctx.Contract = contractObj
+	// 设置合约manager到状态机
+	t.ctx.State.SetContractMG(t.ctx.Contract)
 
 	// 6.Acl
 	aclObj, err := t.relyAgent.CreateAcl()
 	if err != nil {
-		t.log.Error("create acl error", "bcName", ctx.BCName, "err", err)
+		t.log.Error("create acl error", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("create acl error")
 	}
 	t.ctx.Acl = aclObj
+	// 设置acl manager到状态机
+	t.ctx.State.SetAclMG(t.ctx.Acl)
 
 	// 7.共识
 	cons, err := t.relyAgent.CreateConsensus()
 	if err != nil {
-		t.log.Error("create consensus error", "bcName", ctx.BCName, "err", err)
-		return err
+		t.log.Error("create consensus error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create consensus error")
 	}
 	t.ctx.Consensus = cons
 

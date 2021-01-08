@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+option go_package = "github.com/xuperchain/xupercore/protos";
+
+package protos;
+
+// 扩展输入
+message TxInputExt {
+    string bucket = 1;
+    bytes key = 2;
+    bytes ref_txid = 3;
+    int32 ref_offset = 4;
+}
+
+// 扩展输出
+message TxOutputExt {
+    string bucket = 1;
+    bytes key = 2;
+    bytes value = 3;
+}
+
+// Transaction input
+message TxInput {
+    // The transaction id referenced to
+    bytes ref_txid = 1;
+    // The output offset of the transaction referenced to
+    int32 ref_offset = 2;
+    // The address of the launcher
+    bytes from_addr = 5;
+    // The amount of the transaction
+    bytes amount = 6;
+    // Frozen height
+    int64 frozen_height = 7;
+}
+
+// Transaction output
+message TxOutput {
+    // The amount of the transaction
+    bytes amount = 1;
+    // The address of the launcher
+    bytes to_addr = 2;
+    // Fronzen height
+    int64 frozen_height = 4;
+}
+

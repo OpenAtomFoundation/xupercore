@@ -1,20 +1,19 @@
 package agent
 
 import (
-	"github.com/xuperchai/xupercore/kernel/ledger"
-	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 type LedgerAgent struct {
 	log      logs.Logger
-	chainCtx common.ChainCtx
+	chainCtx *common.ChainCtx
 }
 
-func NewLedgerAgent(chainCtx common.ChainCtx) *LedgerAgent {
+func NewLedgerAgent(chainCtx *common.ChainCtx) *LedgerAgent {
 	return &LedgerAgent{
-		log:      chainCtx.GetXLog(),
+		log:      chainCtx.GetLog(),
 		chainCtx: chainCtx,
 	}
 }
@@ -25,8 +24,8 @@ func (t *LedgerAgent) GetNewAccountGas() (int64, error) {
 }
 
 // 从创世块获取加密算法类型
-func (t *LedgerAgent) GetCryptoType() (int, error) {
-	return 0, nil
+func (t *LedgerAgent) GetCryptoType() (string, error) {
+	return "", nil
 }
 
 // 从创世块获取共识配置
@@ -44,6 +43,7 @@ func (t *LedgerAgent) QueryBlockByHeight(int64) (ledger.BlockHandle, error) {
 }
 
 func (t *LedgerAgent) GetTipBlock() ledger.BlockHandle {
+	return nil
 }
 
 // 获取状态机最新确认高度快照（只有Get方法，直接返回[]byte）
@@ -53,15 +53,15 @@ func (t *LedgerAgent) GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) 
 
 // 根据指定blockid创建快照（Select方法不可用）
 func (t *LedgerAgent) CreateSnapshot(blkId []byte) (ledger.XMReader, error) {
-
+	return nil, nil
 }
 
 // 获取最新确认高度快照（Select方法不可用）
 func (t *LedgerAgent) GetTipSnapshot() (ledger.XMReader, error) {
-
+	return nil, nil
 }
 
 // 获取最新状态数据
 func (t *LedgerAgent) CreateXMReader() (ledger.XMReader, error) {
-
+	return nil, nil
 }

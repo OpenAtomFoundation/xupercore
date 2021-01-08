@@ -5,7 +5,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/xuperchain/xupercore/lib/kv/mstorage"
+	"github.com/xuperchain/xupercore/lib/storage/mstorage"
 )
 
 func read() {

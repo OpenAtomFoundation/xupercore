@@ -15,10 +15,10 @@ import (
 type BCEngine interface {
 	// 初始化引擎
 	Init(*xconf.EnvConf) error
-	// 启动引擎
-	Start()
+	// 启动引擎(阻塞)
+	Run()
 	// 退出引擎，需要幂等
-	Stop()
+	Exit()
 }
 
 // 创建engine实例方法

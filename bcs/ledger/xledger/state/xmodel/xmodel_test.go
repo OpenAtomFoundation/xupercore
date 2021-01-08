@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	log "github.com/xuperchain/log15"
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 )
 
 const DefaultKvEngine = "default"

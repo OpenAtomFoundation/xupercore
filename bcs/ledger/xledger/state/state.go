@@ -4,8 +4,11 @@ package state
 import (
 	"bytes"
 	"encoding/hex"
+	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 	"math/big"
 	"path/filepath"
 	"time"
@@ -13,15 +16,15 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
-	"github.com/xuperchain/xupercore/kernel/permission/acl"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
-	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
-	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
@@ -55,74 +58,64 @@ var (
 	FeePlaceholder = "$"
 	// TxSizePercent max percent of txs' size in one block
 	TxSizePercent = 0.8
+	TxWaitTimeout = 5
 )
 
 type State struct {
-	lctx          *def.LedgerCtx
+	// 状态机运行环境上下文
+	sctx          *def.StateCtx
 	log           logs.Logger
-	ledger        ledger.Ledger
-	utxo          utxo.UtxoVM   //utxo表
-	xmodel        xmodel.XModel //xmodel数据表和历史表
-	meta          meta.Meta     //meta表
-	tx            tx.Tx         //未确认交易表
+	utxo          *utxo.UtxoVM   //utxo表
+	xmodel        *xmodel.XModel //xmodel数据表和历史表
+	meta          *meta.Meta     //meta表
+	tx            *tx.Tx         //未确认交易表
 	ldb           kvdb.Database
 	latestBlockid []byte
-	cryptoClient  crypto_base.CryptoClient
-	aclMgr        *acl.Manager
+
 	// 最新区块高度通知装置
 	heightNotifier *BlockHeightNotifier
 }
 
-func NewState(lctx *def.LedgerCtx) (*State, error) {
-	if lctx == nil {
+func NewState(sctx *def.StateCtx) (*State, error) {
+	if sctx == nil {
 		return nil, fmt.Errrof("create state failed because context set error")
 	}
 
 	obj := &State{
-		lctx: lctx,
-		log:  lctx.XLog,
+		sctx: sctx,
+		log:  sctx.XLog,
 	}
 
 	var err error
 	kvParam := &kvdb.KVParameter{
-		DBPath:                filepath.Join(lctx.LedgerCfg.StorePath, "state"),
-		KVEngineType:          lctx.LedgerCfg.KVEngineType,
+		DBPath:                filepath.Join(sctx.LedgerCfg.StorePath, "state"),
+		KVEngineType:          sctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          ledger.MemCacheSize,
 		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
-		OtherPaths:            lctx.LedgerCfg.OtherPaths,
-		StorageType:           lctx.LedgerCfg.StorageType,
+		OtherPaths:            sctx.LedgerCfg.OtherPaths,
+		StorageType:           sctx.LedgerCfg.StorageType,
 	}
 	obj.ldb, err = kvdb.CreateKVInstance(kvParam)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create ldb error:%s", err)
 	}
 
-	obj.cryptoClient, err = crypto_client.CreateCryptoClient(lctx.CryptoType)
-	if err != nil {
-		return nil, fmt.Errorf("create state failed because create crypto client error:%s", err)
-	}
-
-	obj.ledger, err = ledger.NewLedger(lctx)
-	if err != nil {
-		return nil, fmt.Errorf("create state failed because create ledger error:%s", err)
-	}
-
-	obj.utxo, err = utxo.NewUtxo(lctx, obj.ledger)
+	obj.utxo, err = utxo.NewUtxo(sctx)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create utxo error:%s", err)
 	}
 
-	obj.xmodel, err = xmodel.NewXModel(obj.ledger, obj.ldb, lctx.XLog)
+	obj.xmodel, err = xmodel.NewXModel(sctx, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create xmodel error:%s", err)
 	}
 
-	obj.meta, err = meta.NewMeta(lctx, obj.ldb)
+	obj.meta, err = meta.NewMeta(sctx, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create meta error:%s", err)
 	}
 
-	obj.tx, err = tx.NewTx(lctx, obj.ldb)
+	obj.tx, err = tx.NewTx(sctx, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create tx error:%s", err)
 	}
@@ -130,8 +123,16 @@ func NewState(lctx *def.LedgerCtx) (*State, error) {
 	return obj, nil
 }
 
+func (t *State) SetAclMG(aclMgr aclBase.AclManager) {
+	t.sctx.SetAclMG(aclMgr)
+}
+
+func (t *State) SetContractMG(contractMgr contract.Manager) {
+	t.sctx.SetContractMG(contractMgr)
+}
+
 // 选择足够金额的utxo
-func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error) {
+func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
 	return t.utxo.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
 }
 
@@ -153,7 +154,7 @@ func (t *State) HasTx(txid []byte) (bool, error) {
 func (t *State) GetFrozenBalance(addr string) (*big.Int, error) {
 	addrPrefix := fmt.Sprintf("%s%s_", pb.UTXOTablePrefix, addr)
 	utxoFrozen := big.NewInt(0)
-	curHeight := t.ledger.GetMeta().TrunkHeight
+	curHeight := t.sctx.Ledger.GetMeta().TrunkHeight
 	it := t.ldb.NewIteratorWithPrefix([]byte(addrPrefix))
 	defer it.Release()
 	for it.Next() {
@@ -179,7 +180,7 @@ func (t *State) GetBalanceDetail(addr string) ([]*pb.TokenFrozenDetail, error) {
 	addrPrefix := fmt.Sprintf("%s%s_", pb.UTXOTablePrefix, addr)
 	utxoFrozen := big.NewInt(0)
 	utxoUnFrozen := big.NewInt(0)
-	curHeight := t.ledger.GetMeta().TrunkHeight
+	curHeight := t.sctx.Ledger.GetMeta().TrunkHeight
 	it := t.ldb.NewIteratorWithPrefix([]byte(addrPrefix))
 	defer it.Release()
 	for it.Next() {
@@ -268,13 +269,13 @@ func (t *State) Play(blockid []byte) error {
 
 func (t *State) PlayForMiner(blockid []byte) error {
 	batch := t.NewBatch()
-	block, blockErr := t.ledger.QueryBlock(blockid)
+	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
 	if blockErr != nil {
 		return blockErr
 	}
 	if !bytes.Equal(block.PreHash, t.latestBlockid) {
 		t.log.Warn("play for miner failed", "block.PreHash", fmt.Sprintf("%x", block.PreHash),
-			"latestBlockid", fmt.Sprintf("%x", uv.latestBlockid))
+			"latestBlockid", fmt.Sprintf("%x", t.latestBlockid))
 		return ErrPreBlockMissMatch
 	}
 	t.utxo.Mutex.Lock()
@@ -331,7 +332,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 // 执行后会更新latestBlockid
 func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) error {
 	batch := t.ldb.NewBatch()
-	block, blockErr := t.ledger.QueryBlock(blockid)
+	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
 	if blockErr != nil {
 		return blockErr
 	}
@@ -343,8 +344,6 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 		return err
 	}
 
-	// 进入正题，开始执行block里面的交易，预期不会有冲突了
-	t.log.Debug("autogen tx list size, before play block", "len", len(autoGenTxList))
 	idx, length := 0, len(block.Transactions)
 
 	// parallel verify
@@ -372,7 +371,6 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 			return feeErr
 		}
 	}
-	t.log.Debug("autogen tx list size, after play block", "len", len(autoGenTxList))
 	// 更新不可逆区块高度
 	curIrreversibleBlockHeight := t.meta.GetIrreversibleBlockHeight()
 	curIrreversibleSlideWindow := t.meta.GetIrreversibleSlideWindow()
@@ -441,7 +439,7 @@ func (t *State) Walk(blockid []byte, ledgerPrune bool) error {
 	t.log.Info("utxoVM start walk.", "dest_block", hex.EncodeToString(blockid),
 		"latest_blockid", hex.EncodeToString(t.latestBlockid))
 
-	xTimer := t.lctx.Timer.NewXTimer()
+	xTimer := timer.NewXTimer()
 
 	// 获取全局锁
 	t.utxo.Mutex.Lock()
@@ -460,7 +458,7 @@ func (t *State) Walk(blockid []byte, ledgerPrune bool) error {
 	t.clearBalanceCache()
 
 	// 寻找blockid和latestBlockid的最低公共祖先, 生成undoBlocks和todoBlocks
-	undoBlocks, todoBlocks, err := t.ledger.FindUndoAndTodoBlocks(t.latestBlockid, blockid)
+	undoBlocks, todoBlocks, err := t.sctx.Ledger.FindUndoAndTodoBlocks(t.latestBlockid, blockid)
 	if err != nil {
 		t.log.Warn("walk fail,find common parent block fail", "dest_block", hex.EncodeToString(blockid),
 			"latest_block", hex.EncodeToString(t.latestBlockid), "err", err)
@@ -525,7 +523,7 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	succLockKeys, lockOK := t.utxo.SpLock.TryLock(spLockKeys)
 	defer t.utxo.SpLock.Unlock(succLockKeys)
 	if !lockOK {
-		t.log.Info("failed to lock", "txid", global.F(tx.Txid))
+		t.log.Info("failed to lock", "txid", utils.F(tx.Txid))
 		return ErrDoubleSpent
 	}
 	waitTime := time.Now().Unix() - recvTime
@@ -653,7 +651,7 @@ func (t *State) undoUnconfirmedTx(tx *pb.Transaction, txMap map[string]*pb.Trans
 	if undoErr != nil {
 		return undoErr
 	}
-	batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...))
+	batch.Delete(append([]byte(xldgpb.UnconfirmedTablePrefix), tx.Txid...))
 
 	// 记录回滚交易，用于重放
 	undoDone[string(tx.Txid)] = true
@@ -822,11 +820,11 @@ func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
 
 func (t *State) updateLatestBlockid(newBlockid []byte, batch kvdb.Batch, reason string) error {
 	// FIXME: 如果在高频的更新场景中可能有性能问题，需要账本加上cache
-	blk, err := t.ledger.QueryBlockHeader(newBlockid)
+	blk, err := t.sctx.Ledger.QueryBlockHeader(newBlockid)
 	if err != nil {
 		return err
 	}
-	batch.Put(append([]byte(pb.MetaTablePrefix), []byte(LatestBlockKey)...), newBlockid)
+	batch.Put(append([]byte(xldgpb.MetaTablePrefix), []byte(LatestBlockKey)...), newBlockid)
 	writeErr := batch.Write()
 	if writeErr != nil {
 		t.ClearCache()
@@ -964,7 +962,7 @@ func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
 		}
 
 		// 检查交易是否已经被确认（被其他节点打包倒区块并广播了过来）
-		isConfirm, err := t.ledger.HasTransaction(tx.Txid)
+		isConfirm, err := t.sctx.Ledger.HasTransaction(tx.Txid)
 		if err != nil && isConfirm {
 			confirmCnt++
 			t.log.Info("this tx has been confirmed,ignore recover", "txid", hex.EncodeToString(tx.Txid))
@@ -1040,7 +1038,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	for txid, unconfirmTx := range unconfirmTxMap {
 		if _, exist := txidsInBlock[string(txid)]; exist {
 			// 说明这个交易已经被确认
-			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
+			batch.Delete(append([]byte(xldgpb.UnconfirmedTablePrefix), []byte(txid)...))
 			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", txid))
 			// 直接从unconfirm表删除, 大部分情况是这样的
 			unconfirmToConfirm[txid] = true

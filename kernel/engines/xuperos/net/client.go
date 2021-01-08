@@ -1,45 +1,32 @@
 package xuperos
 
 import (
-    "context"
-    "github.com/xuperchain/xuperchain/core/pb"
-    "github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
-    "github.com/xuperchain/xupercore/kernel/network/p2p"
-    netPB "github.com/xuperchain/xupercore/kernel/network/pb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/protos"
 )
 
-func (t *NetEvent) GetBlock(ctx context.Context, in *pb.BlockID, opts ...p2p.OptionFunc) (*pb.Block, error) {
-    if in == nil || in.GetBcname() == "" || len(in.GetBlockid()) <= 0 {
-        return nil, def.ErrMessageParam
-    }
+func GetBlock(ctx *common.EngineCtx, request *protos.XuperMessage, opts ...p2p.OptionFunc) (*lpb.InternalBlock, error) {
+	responses, err := ctx.Net.SendMessageWithResponse(ctx, request, opts...)
+	if err != nil {
+		return nil, err
+	}
 
-    msgOpts := []p2p.MessageOption {
-        p2p.WithBCName(in.GetBcname()),
-        p2p.WithLogId(in.GetHeader().GetLogid()),
-    }
-    msg := p2p.NewMessage(netPB.XuperMessage_GET_BLOCK, in, msgOpts...)
+	for _, response := range responses {
+		if response.GetHeader().GetErrorType() != protos.XuperMessage_SUCCESS {
+			continue
+		}
 
-    engCtx := t.engine.Context()
-    responses, err := engCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
-    if err != nil {
-        t.log.Warn("GetBlock error", "error", err)
-        return nil, err
-    }
+		var block *lpb.InternalBlock
+		err := p2p.Unmarshal(response, block)
+		if err != nil {
+			ctx.GetLog().Warn("GetBlock unmarshal error", "error", err)
+			continue
+		}
 
-    for _, response := range responses {
-        if response.GetHeader().GetErrorType() != netPB.XuperMessage_SUCCESS {
-            continue
-        }
+		return block, nil
+	}
 
-        var block pb.Block
-        err := p2p.Unmarshal(response, &block)
-        if err != nil {
-            t.log.Warn("GetBlock unmarshal error", "error", err)
-            continue
-        }
-
-        return &block, nil
-    }
-
-    return nil, def.ErrNoResponse
+	return nil, common.ErrNetworkNoResponse
 }

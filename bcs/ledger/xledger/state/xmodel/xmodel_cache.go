@@ -11,8 +11,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb/memdb"
-	"github.com/xuperchain/xuperchain/core/pb"
-	xmodel_pb "github.com/xuperchain/xuperchain/core/xmodel/pb"
+	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 type BlockAgent struct {
@@ -80,8 +80,8 @@ func (t *BlockAgent) GetPreHash() []byte {
 	return t.blk.GetPreHash()
 }
 
-func (t *BlockAgent) GetPubkey() []byte {
-	return t.blk.GetPubkey()
+func (t *BlockAgent) GetPublicKey() string {
+	return string(t.blk.GetPubkey())
 }
 
 func (t *BlockAgent) GetSign() []byte {

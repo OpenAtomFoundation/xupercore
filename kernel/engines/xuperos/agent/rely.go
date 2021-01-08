@@ -2,10 +2,10 @@ package agent
 
 import (
 	"fmt"
-	"io/ioutil"
-	"path/filepath"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 
-	ldef "github.com/chunhui01/xupercore/bcs/ledger/xledger/def"
+	ldef "github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/kernel/consensus"
@@ -27,7 +27,7 @@ type EngineRelyAgentImpl struct {
 	engine common.Engine
 }
 
-func NewEngineRelyAgent(engine def.Engine) *EngineRelyAgentImpl {
+func NewEngineRelyAgent(engine common.Engine) *EngineRelyAgentImpl {
 	return &EngineRelyAgentImpl{engine}
 }
 
@@ -56,30 +56,31 @@ func NewChainRelyAgent(chain common.Chain) *ChainRelyAgentImpl {
 }
 
 // 创建账本
-func (t *ChainRelyAgentImpl) CreateLedger(isCreate bool) (*ledger.Ledger, error) {
+func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 	ctx := t.chain.Context()
 	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
 		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
 	}
 
-	leg, err := ledger.NewLedger(legCtx, isCreate)
+	leg, err := ledger.OpenLedger(legCtx)
 	if err != nil {
-		return nil, fmt.Errorf("new ledger failed.err:%v", err)
+		return nil, fmt.Errorf("open ledger failed.err:%v", err)
 	}
 
 	return leg, nil
 }
 
 // 创建状态机实例
-func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger) (*state.State, error) {
+func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger, crypt cryptoBase.CryptoClient) (*state.State, error) {
+	// 创建状态机上下文
 	ctx := t.chain.Context()
-	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
+	stateCtx, err := ldef.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, leg, crypt)
 	if err != nil {
-		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
+		return nil, fmt.Errorf("new state ctx failed.err:%v", err)
 	}
 
-	stat, err := state.NewState(legCtx, leg)
+	stat, err := state.NewState(stateCtx)
 	if err != nil {
 		return nil, fmt.Errorf("new state failed.err:%v", err)
 	}
@@ -132,13 +133,13 @@ func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
 func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, error) {
 	ctx := t.chain.Context()
 	legAgent := NewLedgerAgent(ctx)
-	consCtx := &cctx.ConsensusCtx{
+	consCtx := cctx.ConsensusCtx{
 		BcName:   ctx.BCName,
-		Address:  ctx.Address,
+		Address:  (*cctx.Address)(ctx.Address),
 		Crypto:   ctx.Crypto,
 		Contract: ctx.Contract,
 		Ledger:   legAgent,
-		Network:  ctx.Network,
+		Network:  ctx.EngCtx.Net,
 	}
 
 	log, err := logs.NewLogger("", cdef.SubModName)

@@ -33,6 +33,9 @@ func NewNetCtx(envCfg *xconf.EnvConf) (*NetCtx, error) {
 		return nil, fmt.Errorf("create net context failed because config load fail.err:%v", err)
 	}
 
+	// 配置路径转为绝对路径
+	cfg.KeyPath = envCfg.GenDataAbsPath(cfg.KeyPath)
+
 	log, err := logs.NewLogger("", def.SubModName)
 	if err != nil {
 		return nil, fmt.Errorf("create engine ctx failed because new logger error. err:%v", err)

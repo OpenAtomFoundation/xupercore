@@ -13,12 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/xuperchain/xuperchain/core/contract"
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/crypto/hash"
-	"github.com/xuperchain/xuperchain/core/global"
-	ledger_pkg "github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
+	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/crypto/hash"
 )
 
 // common test data

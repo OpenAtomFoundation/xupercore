@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option go_package = "github.com/xuperchain/xupercore/protos";
+
 package protos;
 
 // XuperMessage is the message of Xuper p2p server
@@ -53,6 +55,9 @@ message XuperMessage {
          */
         GET_BLOCKS = 22;
         GET_BLOCKS_RES = 23;
+
+        GET_PEER_INFO = 24;
+        GET_PEER_INFO_RES = 25;
     }
 
     enum ErrorType {
@@ -98,3 +103,10 @@ message XuperMessage {
 service p2pService {
     rpc SendP2pMessage(stream XuperMessage) returns (stream XuperMessage) {};
 }
+
+message PeerInfo {
+    string id = 1;
+    string address = 2;
+    string account = 3;
+}
+

@@ -2,12 +2,13 @@ package p2pv2
 
 import (
 	"errors"
+	"github.com/libp2p/go-libp2p-core/protocol"
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/xuperchain/xuperchain/core/common"
 
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
@@ -22,7 +23,7 @@ type StreamPool struct {
 	log            logs.Logger
 	srv            *P2PServerV2
 	limit          *StreamLimit
-	streams        *common.LRUCache // key: peer id, value: Stream
+	streams        *cache.LRUCache // key: peer id, value: Stream
 	maxStreamLimit int32
 }
 
@@ -37,7 +38,7 @@ func NewStreamPool(ctx *nctx.NetCtx, srv *P2PServerV2) (*StreamPool, error) {
 
 		srv:            srv,
 		limit:          limit,
-		streams:        common.NewLRUCache(int(cfg.MaxStreamLimits)),
+		streams:        cache.NewLRUCache(int(cfg.MaxStreamLimits)),
 		maxStreamLimit: cfg.MaxStreamLimits,
 	}, nil
 }
@@ -55,7 +56,7 @@ func (sp *StreamPool) Get(peerId peer.ID) (*Stream, error) {
 		}
 	}
 
-	netStream, err := sp.srv.host.NewStream(sp.ctx, peerId, protocolID)
+	netStream, err := sp.srv.host.NewStream(sp.ctx, peerId, protocol.ID(protocolID))
 	if err != nil {
 		sp.log.Warn("new net stream error", "peerId", peerId, "error", err)
 		return nil, ErrNewStream

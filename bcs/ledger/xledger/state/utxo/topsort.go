@@ -1,7 +1,7 @@
 package utxo
 
 import (
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 //交易依赖关系图

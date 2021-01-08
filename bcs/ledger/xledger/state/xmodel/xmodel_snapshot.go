@@ -6,8 +6,10 @@ import (
 	"fmt"
 
 	log "github.com/xuperchain/log15"
-	"github.com/xuperchain/xuperchain/core/pb"
-	xmodpb "github.com/xuperchain/xuperchain/core/xmodel/pb"
+
+	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type xModSnapshot struct {
@@ -22,7 +24,7 @@ type xModListCursor struct {
 	offset int32
 }
 
-func (t *xModSnapshot) Get(bucket string, key []byte) (*xmodpb.VersionedData, error) {
+func (t *xModSnapshot) Get(bucket string, key []byte) (*xmodel_pb.VersionedData, error) {
 	if !t.isInit() || bucket == "" || len(key) < 1 {
 		return nil, fmt.Errorf("xmod snapshot not init or param set error")
 	}
@@ -98,7 +100,7 @@ func (t *xModSnapshot) getBlockHeight(blockid []byte) (int64, error) {
 	return blkInfo.Height, nil
 }
 
-func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *xmodpb.VersionedData {
+func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *xmodel_pb.VersionedData {
 	if tx == nil || int(offset) >= len(tx.TxOutputsExt) || offset < 0 {
 		return nil
 	}
@@ -117,7 +119,7 @@ func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *xmodpb.
 }
 
 // 根据bucket和key从inputsExt中查找对应的outputsExt索引
-func (t *xModSnapshot) getPreOutExt(inputsExt []*pb.TxInputExt,
+func (t *xModSnapshot) getPreOutExt(inputsExt []*protos.TxInputExt,
 	bucket string, key []byte) ([]byte, int32, error) {
 	for _, inExt := range inputsExt {
 		if inExt.Bucket == bucket && bytes.Compare(inExt.Key, key) == 0 {

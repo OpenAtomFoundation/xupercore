@@ -3,33 +3,38 @@ package context
 import (
 	"fmt"
 
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	"github.com/xuperchain/xupercore/example/xchain/common/def"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-	"github.com/xuperchain/xupercore/server/common"
+)
+
+const (
+	ReqCtxKeyName = "reqCtx"
 )
 
 // 请求级别上下文
 type ReqCtx interface {
-	GetEngine() def.Engine
+	context.Context
+	GetEngine() common.Engine
 	GetLog() logs.Logger
 	GetTimer() *timer.XTimer
 	GetClientIp() string
 }
 
 type ReqCtxImpl struct {
-	engine   def.Engine
+	engine   common.Engine
 	log      logs.Logger
 	timer    *timer.XTimer
 	clientIp string
 }
 
-func NewReqCtx(engine def.Engine, reqId, clientIp string) (ReqCtx, error) {
+func NewReqCtx(engine common.Engine, reqId, clientIp string) (ReqCtx, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("new request context failed because engine is nil")
 	}
 
-	log, err := logs.NewLogger(reqId, common.SubModName)
+	log, err := logs.NewLogger(reqId, def.SubModName)
 	if err != nil {
 		return nil, fmt.Errorf("new request context failed because new logger failed.err:%s", err)
 	}
@@ -44,7 +49,19 @@ func NewReqCtx(engine def.Engine, reqId, clientIp string) (ReqCtx, error) {
 	return ctx, nil
 }
 
-func (t *ReqCtxImpl) GetEngine() def.Engine {
+func WithReqCtx(ctx context.Context, reqCtx ReqCtx) context.Context {
+	return context.WithValue(ctx, ReqCtxKeyName, reqCtx)
+}
+
+func ValueReqCtx(ctx context.Context) ReqCtx {
+	val := ctx.Value(ReqCtxKeyName)
+	if reqCtx, ok := val.(ReqCtx); ok {
+		return reqCtx
+	}
+	return nil
+}
+
+func (t *ReqCtxImpl) GetEngine() common.Engine {
 	return t.engine
 }
 
@@ -58,4 +75,20 @@ func (t *ReqCtxImpl) GetTimer() *timer.XTimer {
 
 func (t *ReqCtxImpl) GetClientIp() string {
 	return t.clientIp
+}
+
+func (t *BaseCtx) Deadline() (deadline time.Time, ok bool) {
+	return
+}
+
+func (t *BaseCtx) Done() <-chan struct{} {
+	return nil
+}
+
+func (t *BaseCtx) Err() error {
+	return nil
+}
+
+func (t *BaseCtx) Value(key interface{}) interface{} {
+	return nil
 }

@@ -71,7 +71,7 @@ type Network interface {
 	UnRegister(p2p.Subscriber) error
 
 	Context() *nctx.NetCtx
-	P2PState() *p2p.State
+	PeerInfo() pb.PeerInfo
 }
 
 // 如果有领域内公共逻辑，可以在这层扩展，对上层暴露高级接口
@@ -159,8 +159,8 @@ func (t *NetworkImpl) UnRegister(sub p2p.Subscriber) error {
 	return t.p2pServ.UnRegister(sub)
 }
 
-func (t *NetworkImpl) P2PState() *p2p.State {
-	return t.p2pServ.P2PState()
+func (t *NetworkImpl) PeerInfo() pb.PeerInfo {
+	return t.p2pServ.PeerInfo()
 }
 
 func (t *NetworkImpl) isInit() bool {
