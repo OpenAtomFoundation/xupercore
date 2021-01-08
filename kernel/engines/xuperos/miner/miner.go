@@ -13,9 +13,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xuperchain/core/pb"
 
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -33,7 +33,7 @@ type Miner struct {
 	// 矿工锁，用来确保矿工出块和同步操作串行进行
 	minerMutex sync.Mutex
 	// 记录同步中任务目标区块高度
-	inSyncHeight int64
+	inSyncHeight       int64
 	inSyncTargetHeight int64
 	// 记录同步中任务目标区块id
 	inSyncTargetBlockId []byte
@@ -99,7 +99,7 @@ func (t *Miner) Start() {
 	for !t.IsExit() {
 		log, _ := logs.NewLogger("", "miner")
 		ctx := &xctx.BaseCtx{
-			XLog: log,
+			XLog:  log,
 			Timer: timer.NewXTimer(),
 		}
 
@@ -116,7 +116,7 @@ func (t *Miner) Start() {
 		}
 		// 3.如需要同步，尝试同步网络最新区块
 		if err == nil && isSync {
-			err = t.trySyncBlock(ctx,nil)
+			err = t.trySyncBlock(ctx, nil)
 		}
 		// 4.如果是矿工，出块
 		if err == nil && isMiner {
@@ -334,7 +334,7 @@ func (t *Miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error 
 		}
 		ctx.GetLog().Trace("ledger confirm block success", "height", block.Height, "blockId", utils.F(block.Blockid))
 	} else {
-		ctx.GetLog().Warn("ledger confirm block error",  "confirm_status", confirmStatus)
+		ctx.GetLog().Warn("ledger confirm block error", "confirm_status", confirmStatus)
 		return errors.New("ledger confirm block error")
 	}
 
@@ -453,9 +453,10 @@ func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, 
 }
 
 type BCSByHeight []*pb.BCStatus
-func (s BCSByHeight) Len() int {return len(s)}
-func (s BCSByHeight) Less(i, j int) bool {return s[i].Meta.TrunkHeight > s[j].Meta.TrunkHeight}
-func (s BCSByHeight) Swap(i, j int) {s[i], s[j] = s[j], s[i]}
+
+func (s BCSByHeight) Len() int           { return len(s) }
+func (s BCSByHeight) Less(i, j int) bool { return s[i].Meta.TrunkHeight > s[j].Meta.TrunkHeight }
+func (s BCSByHeight) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) error {
 	// 1.判断账本当前高度，忽略小于账本高度或者等于tip block任务
@@ -521,8 +522,8 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext, targetBlock *lpb.InternalBl
 		}
 
 		input := &pb.BlockID{
-			Bcname: t.ctx.BCName,
-			Blockid: preHash,
+			Bcname:      t.ctx.BCName,
+			Blockid:     preHash,
 			NeedContent: true,
 		}
 		block, err := t.GetBlock(ctx, input)

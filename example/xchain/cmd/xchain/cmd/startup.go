@@ -10,9 +10,9 @@ import (
 	"github.com/xuperchain/xupercore/example/xchain/service"
 	"github.com/xuperchain/xupercore/example/xchain/service/rpc"
 
+	econf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
-	econf "github.com/xuperchain/xupercore/kernel/engines/config"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/def"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 	// import要使用的内核核心组件驱动
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
@@ -60,7 +60,7 @@ func StartupXchain(envCfgPath string) error {
 	logs.InitLog(envConf.GenConfFilePath(envConf.LogConf), envConf.GenDirAbsPath(envConf.LogDir))
 
 	// 实例化区块链引擎
-	engine, err := engines.CreateBCEngine(def.BCEngineName, envConf)
+	engine, err := engines.CreateBCEngine(common.BCEngineName, envConf)
 	if err != nil {
 		return err
 	}

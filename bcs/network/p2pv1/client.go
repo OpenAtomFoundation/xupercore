@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	ErrEmptyPeer = errors.New("empty peer")
+	ErrEmptyPeer  = errors.New("empty peer")
 	ErrNoResponse = errors.New("no response")
 )
 

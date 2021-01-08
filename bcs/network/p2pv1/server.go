@@ -31,8 +31,8 @@ const (
 )
 
 var (
-	ErrAddressIllegal = errors.New("address illegal")
-	ErrLoadAccount = errors.New("load account error")
+	ErrAddressIllegal  = errors.New("address illegal")
+	ErrLoadAccount     = errors.New("load account error")
 	ErrAccountNotExist = errors.New("account not exist")
 )
 
@@ -46,7 +46,7 @@ type P2PServerV1 struct {
 	log    logs.Logger
 	config *config.NetConf
 
-	address  multiaddr.Multiaddr
+	address    multiaddr.Multiaddr
 	pool       *ConnPool
 	dispatcher p2p.Dispatcher
 
@@ -55,7 +55,7 @@ type P2PServerV1 struct {
 	dynamicNodes []string
 
 	// local host account
-	account  string
+	account string
 	// accounts store remote peer account: key:account => v:peer.ID
 	accounts *cache.Cache
 }
@@ -211,7 +211,7 @@ func (p *P2PServerV1) PeerInfo() pb.PeerInfo {
 	}
 
 	return pb.PeerInfo{
-		Id: ip,
+		Id:      ip,
 		Address: ip,
 		Account: p.account,
 	}

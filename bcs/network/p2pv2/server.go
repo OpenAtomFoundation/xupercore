@@ -30,10 +30,10 @@ import (
 )
 
 const (
-	ServerName  = "p2pv2"
+	ServerName = "p2pv2"
 
-	namespace 	= "xuper"
-	retry       = 5
+	namespace = "xuper"
+	retry     = 5
 
 	expiredTime = time.Minute
 )
@@ -61,8 +61,8 @@ var (
 	ErrCreateStreamPool = errors.New("create stream pool error")
 	ErrCreateBootStrap  = errors.New("create bootstrap error pool error")
 	ErrConnectBootStrap = errors.New("error to connect to all bootstrap")
-	ErrLoadAccount 		= errors.New("load account error")
-	ErrStoreAccount 	= errors.New("dht store account error")
+	ErrLoadAccount      = errors.New("load account error")
+	ErrStoreAccount     = errors.New("dht store account error")
 )
 
 // P2PServerV2 is the node in the network
@@ -82,7 +82,7 @@ type P2PServerV2 struct {
 	staticNodes map[string][]peer.ID
 
 	// local host account
-	account  string
+	account string
 	// accounts store remote peer account: key:account => v:peer.ID
 	// accounts as cache, store in dht
 	accounts *cache.Cache
@@ -307,7 +307,7 @@ func (p *P2PServerV2) Context() *nctx.NetCtx {
 
 func (p *P2PServerV2) PeerInfo() pb.PeerInfo {
 	return pb.PeerInfo{
-		Id: p.host.ID().Pretty(),
+		Id:      p.host.ID().Pretty(),
 		Address: p.getMultiAddr(p.host.ID(), p.host.Addrs()),
 		Account: p.account,
 	}
