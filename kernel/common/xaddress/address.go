@@ -55,6 +55,7 @@ func LoadAddrInfo(keyDir string, crypto cryptoClinet.CryptoClient) (*Address, er
 		PrivateKey:    privateKey,
 		PrivateKeyStr: string(priKey),
 		PublicKey:     publicKey,
+		PublicKeyStr:  string(pubKey),
 	}
 	return addInfo, nil
 }

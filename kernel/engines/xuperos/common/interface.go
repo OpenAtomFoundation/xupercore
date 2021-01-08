@@ -1,25 +1,16 @@
-package def
+package common
 
 import (
-	"context"
-	"crypto/ecdsa"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/consensus/base"
-	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/network"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
-	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -45,7 +36,7 @@ type Chain interface {
 type Engine interface {
 	engines.BCEngine
 	Context() *EngineCtx
-	Get(string) Chain
+	Get(string) (Chain, error)
 	GetChains() []string
 	SetRelyAgent(EngineRelyAgent) error
 }
@@ -58,9 +49,9 @@ type EngineRelyAgent interface {
 // 定义链对各组件依赖接口约束
 type ChainRelyAgent interface {
 	CreateLedger() (*ledger.Ledger, error)
-	CreateState() (*state.State, error)
+	CreateState(*ledger.Ledger, cryptoBase.CryptoClient) (*state.State, error)
 	CreateContract() (contract.Manager, error)
 	CreateConsensus() (consensus.ConsensusInterface, error)
-	CreateCrypto() (cryptoBase.CryptoClient, error)
+	CreateCrypto(cryptoType string) (cryptoBase.CryptoClient, error)
 	CreateAcl() (aclBase.AclManager, error)
 }

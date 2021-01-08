@@ -100,12 +100,13 @@ message XuperMessage {
     MessageData Data = 2;
 }
 
+service p2pService {
+    rpc SendP2pMessage(stream XuperMessage) returns (stream XuperMessage) {};
+}
+
 message PeerInfo {
     string id = 1;
     string address = 2;
     string account = 3;
 }
 
-service p2pService {
-    rpc SendP2pMessage(stream XuperMessage) returns (stream XuperMessage) {};
-}

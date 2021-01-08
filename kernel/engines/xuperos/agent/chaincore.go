@@ -7,12 +7,12 @@ import (
 
 type ChainCoreAgent struct {
 	log      logs.Logger
-	chainCtx common.ChainCtx
+	chainCtx *common.ChainCtx
 }
 
-func NewChainCoreAgent(chainCtx common.ChainCtx) *ChainCoreAgent {
+func NewChainCoreAgent(chainCtx *common.ChainCtx) *ChainCoreAgent {
 	return &ChainCoreAgent{
-		log:      chainCtx.GetXLog(),
+		log:      chainCtx.GetLog(),
 		chainCtx: chainCtx,
 	}
 }

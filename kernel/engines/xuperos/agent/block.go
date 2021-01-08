@@ -80,8 +80,8 @@ func (t *BlockAgent) GetPreHash() []byte {
 	return t.blk.GetPreHash()
 }
 
-func (t *BlockAgent) GetPubkey() []byte {
-	return t.blk.GetPubkey()
+func (t *BlockAgent) GetPublicKey() string {
+	return string(t.blk.GetPubkey())
 }
 
 func (t *BlockAgent) GetSign() []byte {

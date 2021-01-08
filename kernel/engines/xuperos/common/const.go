@@ -1,9 +1,11 @@
-package commom
+package common
 
 // 引擎常量配置
 const (
 	// 引擎名
 	BCEngineName = "xuperos"
+
+	RootBlockChain = "xuper"
 )
 
 // 广播模式

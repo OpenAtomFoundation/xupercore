@@ -47,14 +47,14 @@ enum QCState {
 // Crypto lib support Threshold-Signatures.
 message QCSignInfos {
     // QCSignInfos
-   repeated SignInfo QCSignInfos = 1;
+    repeated SignInfo QCSignInfos = 1;
 }
 
 // SignInfo is the signature information of the
 message SignInfo {
-  string Address = 1;
-  string PublicKey = 2;
-  bytes  Sign = 3;
+    string Address = 1;
+    string PublicKey = 2;
+    bytes  Sign = 3;
 }
 
 // QuorumCert is a data type that combines a collection of signatures from replicas.
