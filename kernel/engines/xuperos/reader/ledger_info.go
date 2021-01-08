@@ -9,11 +9,11 @@ import (
 
 type LedgerReader interface {
 	// 查询交易信息（QueryTx）
-	QueryTx(txId []byte) (*lpb.TxInfo, error)
+	QueryTx(txId []byte) (*lpb.TxInfo, *common.Error)
 	// 查询区块ID信息（GetBlock）
-	QueryBlock(blkId []byte, needContent bool) (*lpb.BlockInfo, error)
+	QueryBlock(blkId []byte, needContent bool) (*lpb.BlockInfo, *common.Error)
 	// 通过区块高度查询区块信息（GetBlockByHeight）
-	QueryBlockByHeight(height int64, needContent bool) (*lpb.BlockInfo, error)
+	QueryBlockByHeight(height int64, needContent bool) (*lpb.BlockInfo, *common.Error)
 }
 
 type ledgerReader struct {
@@ -36,16 +36,16 @@ func NewLedgerReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) LedgerRea
 	return reader
 }
 
-func (t *ledgerReader) QueryTx(txId []byte) (*TxInfo, error) {
+func (t *ledgerReader) QueryTx(txId []byte) (*TxInfo, *common.Error) {
 	return nil, nil
 }
 
 // 注意不需要交易内容的时候不要查询
-func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*BlockInfo, error) {
+func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*BlockInfo, *common.Error) {
 	return nil, nil
 }
 
 // 注意不需要交易内容的时候不要查询
-func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*BlockInfo, error) {
+func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*BlockInfo, *common.Error) {
 	return nil, nil
 }

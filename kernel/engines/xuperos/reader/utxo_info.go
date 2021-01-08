@@ -11,17 +11,17 @@ import (
 
 type UtxoReader interface {
 	// 获取账户余额
-	GetBalance(account string) (string, error)
+	GetBalance(account string) (string, *common.Error)
 	// 获取账户冻结余额
-	GetFrozenBalance(account string) (string, error)
+	GetFrozenBalance(account string) (string, *common.Error)
 	// 获取账户余额详情
-	GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, error)
+	GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, *common.Error)
 	// 拉取固定数目的utxo
-	QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, error)
+	QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, *common.Error)
 	// 按最大交易大小选择utxo
-	SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, error)
+	SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
 	// 选择合适金额的utxo
-	SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, error)
+	SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
 }
 
 type utxoReader struct {

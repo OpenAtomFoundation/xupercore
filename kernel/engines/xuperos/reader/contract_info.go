@@ -9,17 +9,17 @@ import (
 
 type ContractReader interface {
 	// 查询该链合约统计数据
-	QueryContractStatData() (*protos.ContractStatData, error)
+	QueryContractStatData() (*protos.ContractStatData, *common.Error)
 	// 查询账户下合约状态
-	GetAccountContracts(account string) ([]*protos.ContractStatus, error)
+	GetAccountContracts(account string) ([]*protos.ContractStatus, *common.Error)
 	// 查询地址下合约状态
-	GetAddressContracts(address string, needContent bool) (map[string][]*protos.ContractStatus, error)
+	GetAddressContracts(addr string, needContent bool) (map[string][]*protos.ContractStatus, *common.Error)
 	// 查询地址下账户
-	GetAccountByAK(address string) ([]string, error)
+	GetAccountByAK(addr string) ([]string, *common.Error)
 	// 查询合约账户ACL
-	QueryAccountACL(account string) (*protos.Acl, bool, error)
+	QueryAccountACL(account string) (*protos.Acl, bool, *common.Error)
 	// 查询合约方法ACL
-	QueryContractMethodACL(contract, method string) (*protos.Acl, bool, error)
+	QueryContractMethodACL(contract, method string) (*protos.Acl, bool, *common.Error)
 }
 
 type contractReader struct {

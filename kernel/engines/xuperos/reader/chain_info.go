@@ -9,8 +9,8 @@ import (
 
 type ChainStatus struct {
 	LedgerMeta *lpb.LedgerMeta
-	TipBlock   *lpb.InternalBlock
 	UtxoMeta   *lpb.UtxoMeta
+	BranchIds  []string
 }
 
 type SystemStatus struct {
@@ -20,13 +20,13 @@ type SystemStatus struct {
 
 type ChainReader interface {
 	// 获取链状态 (GetBlockChainStatus)
-	GetChainStatus() (*ChainStatus, error)
+	GetChainStatus() (*ChainStatus, *common.Error)
 	// 检查是否是主干Tip Block (ConfirmBlockChainStatus)
-	IsTrunkTipBlock(blkId []byte) (bool, error)
+	IsTrunkTipBlock(blkId []byte) (bool, *common.Error)
 	// 获取系统状态
-	GetSystemStatus() (*ChainStatus, error)
+	GetSystemStatus() (*ChainStatus, *common.Error)
 	// 获取节点NetUR
-	GetNetURL() (string, error)
+	GetNetURL() (string, *common.Error)
 }
 
 type chainReader struct {
@@ -49,18 +49,18 @@ func NewChainReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) ChainReade
 	return reader
 }
 
-func (t *chainReader) GetChainStatus() (*ChainStatus, error) {
+func (t *chainReader) GetChainStatus() (*ChainStatus, *common.Error) {
 	return nil, nil
 }
 
-func (t *chainReader) IsTrunkTipBlock(blkId []byte) (bool, error) {
+func (t *chainReader) IsTrunkTipBlock(blkId []byte) (bool, *common.Error) {
 	return false, nil
 }
 
-func (t *chainReader) GetSystemStatus() (*ChainStatus, error) {
+func (t *chainReader) GetSystemStatus() (*ChainStatus, *common.Error) {
 	return nil, nil
 }
 
-func (t *chainReader) GetNetURL() (string, error) {
+func (t *chainReader) GetNetURL() (string, *common.Error) {
 	return "", nil
 }

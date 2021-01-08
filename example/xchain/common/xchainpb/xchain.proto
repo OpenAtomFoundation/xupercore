@@ -5,16 +5,6 @@ import "xupercore/protos/contract.proto";
 
 package xchainpb;
 
-enum XchainErrNo {
-    SUCCESS = 0;
-    // 内部错误
-    INTERNAL_ERROR = 1;
-    // 参数错误
-    PARAM_ERROR = 2;
-    // 未知错误
-    UNKNOW_ERROR = 3;
-}
-
 // 通用请求Header
 message ReqHeader {
     // 请求id
@@ -28,9 +18,11 @@ message RespHeader {
     // 请求id
     string log_id = 1;
     // 错误码
-    XchainErrNo error = 2;
+    int64 err_code = 2;
+    // 错误信息
+    string err_msg = 3;
     // 节点追踪信息，方便问题定位
-    string trace_id = 3;
+    string trace_id = 4;
 }
 
 message BaseReq {
