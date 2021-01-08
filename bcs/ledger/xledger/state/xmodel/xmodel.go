@@ -3,13 +3,14 @@ package xmodel
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"sync"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/pb"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
@@ -36,14 +37,14 @@ type XModel struct {
 }
 
 // NewXuperModel new an instance of XModel
-func NewXModel(ledger *ledger.Ledger, stateDB kvdb.Database, logger logs.Logger) (*XModel, error) {
+func NewXModel(sctx *def.StateCtx, stateDB kvdb.Database) (*XModel, error) {
 	return &XModel{
-		ledger:          ledger,
+		ledger:          sctx.Ledger,
 		stateDB:         stateDB,
 		unconfirmTable:  kvdb.NewTable(stateDB, pb.UnconfirmedTablePrefix),
 		extUtxoTable:    kvdb.NewTable(stateDB, pb.ExtUtxoTablePrefix),
 		extUtxoDelTable: kvdb.NewTable(stateDB, pb.ExtUtxoDelTablePrefix),
-		logger:          logger,
+		logger:          sctx.XLog,
 		batchCache:      &sync.Map{},
 	}, nil
 }
@@ -312,12 +313,12 @@ func (s *XModel) cleanCache(newBatch kvdb.Batch) {
 	}
 }
 
-func (s *XModel) bucketCache(bucket string) *common.LRUCache {
+func (s *XModel) bucketCache(bucket string) *cache.LRUCache {
 	icache, ok := s.extUtxoCache.Load(bucket)
 	if ok {
-		return icache.(*common.LRUCache)
+		return icache.(*cache.LRUCache)
 	}
-	cache := common.NewLRUCache(bucketExtUTXOCacheSize)
+	cache := cache.NewLRUCache(bucketExtUTXOCacheSize)
 	s.extUtxoCache.Store(bucket, cache)
 	return cache
 }

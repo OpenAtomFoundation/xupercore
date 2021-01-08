@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/xuperchain/xuperchain/core/common"
-	crypto_client "github.com/xuperchain/xuperchain/core/crypto/client"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xuperchain/core/utxo/txhash"
+	"github.com/golang/protobuf/proto"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 )
 
 // GenerateTx 根据一个原始订单, 得到UTXO格式的交易, 相当于预执行, 会在内存中锁定一段时间UTXO, 但是不修改kv存储
@@ -67,7 +67,7 @@ func (uv *UtxoVM) GenerateTx(txReq *pb.TxData) (*pb.Transaction, error) {
 	utxoTx.Txid, _ = txhash.MakeTransactionID(utxoTx)
 
 	// check if size limit exceeded
-	txSize, err := common.GetTxSerializedSize(utxoTx)
+	txSize := int64(proto.Size(utxoTx))
 	if nil != err {
 		uv.log.Warn("failed to GetTxSerializedSize", "err", err)
 		return nil, err

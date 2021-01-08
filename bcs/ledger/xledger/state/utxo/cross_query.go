@@ -3,9 +3,9 @@ package utxo
 import (
 	"encoding/json"
 
-	"github.com/xuperchain/xuperchain/core/contract"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xuperchain/core/xmodel"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/contract"
 )
 
 // ResolveChain implement contract service

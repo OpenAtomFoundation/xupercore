@@ -9,7 +9,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error) {

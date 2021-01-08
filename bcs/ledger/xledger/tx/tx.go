@@ -10,8 +10,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/pb"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
@@ -29,9 +29,9 @@ type Transaction struct {
 	*pb.Transaction
 }
 
-func NewTx(lctx *def.LedgerCtx, stateDB kvdb.DataBase) (*Tx, error) {
+func NewTx(sctx *def.StateCtx, stateDB kvdb.DataBase) (*Tx, error) {
 	return &Tx{
-		log:              lctx.XLog,
+		log:              sctx.XLog,
 		ldb:              stateDB,
 		unconfirmedTable: kvdb.NewTable(baseDB, pb.UnconfirmedTablePrefix),
 		unconfirmTxInMem: &sync.Map{},

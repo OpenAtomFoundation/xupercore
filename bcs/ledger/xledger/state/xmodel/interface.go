@@ -1,7 +1,7 @@
 package xmodel
 
 import (
-	xmodel_pb "github.com/xuperchain/xuperchain/core/xmodel/pb"
+	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 )
 
 // Iterator iterator interface

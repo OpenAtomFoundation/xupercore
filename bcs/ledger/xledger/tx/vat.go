@@ -1,9 +1,10 @@
 package tx
 
 import (
-	"github.com/xuperchain/xuperchain/core/pb"
 	"sort"
 	"sync"
+
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 // VATInterface define the VAT interface

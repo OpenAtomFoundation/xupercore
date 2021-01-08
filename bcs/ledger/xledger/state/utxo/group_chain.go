@@ -3,8 +3,8 @@ package utxo
 import (
 	"strings"
 
-	"github.com/xuperchain/xuperchain/core/contract"
-	"github.com/xuperchain/xuperchain/core/xmodel"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	"github.com/xuperchain/xupercore/kernel/contract"
 )
 
 func (uv *UtxoVM) QueryChainInList() map[string]bool {

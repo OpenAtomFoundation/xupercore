@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	log "github.com/xuperchain/log15"
-	"github.com/xuperchain/xuperchain/core/kv/kvdb"
-	"github.com/xuperchain/xuperchain/core/ledger"
-	"github.com/xuperchain/xuperchain/core/pb"
-	"github.com/xuperchain/xuperchain/core/utxo/txhash"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
 var (

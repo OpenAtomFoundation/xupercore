@@ -2,7 +2,7 @@ package utxo
 
 import (
 	"fmt"
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"sort"
 	"testing"
 )

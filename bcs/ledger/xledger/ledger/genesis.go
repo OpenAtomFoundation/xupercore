@@ -7,8 +7,9 @@ import (
 	"math/big"
 	"strconv"
 
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
-	"github.com/xuperchain/xupercore/lib/pb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // awardCacheSize system award cache, in avoid of double computing
@@ -71,10 +72,10 @@ type InvokeRequest struct {
 	Args         map[string]string `json:"args" mapstructure:"args"`
 }
 
-func InvokeRequestFromJSON2Pb(jsonRequest []InvokeRequest) ([]*pb.InvokeRequest, error) {
-	requestsWithPb := []*pb.InvokeRequest{}
+func InvokeRequestFromJSON2Pb(jsonRequest []InvokeRequest) ([]*protos.InvokeRequest, error) {
+	requestsWithPb := []*protos.InvokeRequest{}
 	for _, request := range jsonRequest {
-		tmpReqWithPB := &pb.InvokeRequest{
+		tmpReqWithPB := &protos.InvokeRequest{
 			ModuleName:   request.ModuleName,
 			ContractName: request.ContractName,
 			MethodName:   request.MethodName,
@@ -121,15 +122,15 @@ func (rc *RootConfig) GetGenesisConsensus() (map[string]interface{}, error) {
 }
 
 // GetReservedContract get default contract config of genesis block
-func (rc *RootConfig) GetReservedContract() ([]*pb.InvokeRequest, error) {
+func (rc *RootConfig) GetReservedContract() ([]*protos.InvokeRequest, error) {
 	return InvokeRequestFromJSON2Pb(rc.ReservedContracts)
 }
 
-func (rc *RootConfig) GetForbiddenContract() ([]*pb.InvokeRequest, error) {
+func (rc *RootConfig) GetForbiddenContract() ([]*protos.InvokeRequest, error) {
 	return InvokeRequestFromJSON2Pb([]InvokeRequest{rc.ForbiddenContract})
 }
 
-func (rc *RootConfig) GetGroupChainContract() ([]*pb.InvokeRequest, error) {
+func (rc *RootConfig) GetGroupChainContract() ([]*protos.InvokeRequest, error) {
 	return InvokeRequestFromJSON2Pb([]InvokeRequest{rc.GroupChainContract})
 }
 
@@ -142,7 +143,7 @@ func (rc *RootConfig) GetReservedWhitelistAccount() string {
 type GenesisBlock struct {
 	ib         *pb.InternalBlock
 	config     *RootConfig
-	awardCache *common.LRUCache
+	awardCache *cache.LRUCache
 }
 
 func getRootTx(ib *pb.InternalBlock) *pb.Transaction {
@@ -157,7 +158,7 @@ func getRootTx(ib *pb.InternalBlock) *pb.Transaction {
 // NewGenesisBlock new a genesis block
 func NewGenesisBlock(ib *pb.InternalBlock) (*GenesisBlock, error) {
 	gb := &GenesisBlock{
-		awardCache: common.NewLRUCache(awardCacheSize),
+		awardCache: cache.NewLRUCache(awardCacheSize),
 	}
 	gb.ib = ib
 	config := &RootConfig{}
@@ -217,8 +218,8 @@ func (gb *GenesisBlock) CalcAward(blockHeight int64) *big.Int {
 }
 
 // GetGasPrice get gas rate for different resource(cpu, mem, disk and xfee)
-func (rc *RootConfig) GetGasPrice() *pb.GasPrice {
-	gasPrice := &pb.GasPrice{
+func (rc *RootConfig) GetGasPrice() *protos.GasPrice {
+	gasPrice := &protos.GasPrice{
 		CpuRate:  rc.GasPrice.CpuRate,
 		MemRate:  rc.GasPrice.MemRate,
 		DiskRate: rc.GasPrice.DiskRate,

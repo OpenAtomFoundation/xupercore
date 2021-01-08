@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 func TestMarshalMessages(t *testing.T) {

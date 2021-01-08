@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"html/template"
 
-	"github.com/xuperchain/xuperchain/core/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // reservedArgs used to get contractnames from InvokeRPCRequest
@@ -12,7 +13,7 @@ type reservedArgs struct {
 	ContractNames string
 }
 
-func genArgs(req []*pb.InvokeRequest) *reservedArgs {
+func genArgs(req []*protos.InvokeRequest) *reservedArgs {
 	ra := &reservedArgs{}
 	for i, v := range req {
 		ra.ContractNames += v.GetContractName()

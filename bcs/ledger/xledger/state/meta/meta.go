@@ -8,7 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/pb"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
@@ -28,13 +28,13 @@ var (
 	TxSizePercent = 0.8
 )
 
-func NewMeta(lctx *def.LedgerCtx, stateDB kvdb.Database) (*Meta, nil) {
+func NewMeta(sctx *def.StateCtx, stateDB kvdb.Database) (*Meta, nil) {
 	return &Meta{
-		log:       lctx.XLog,
+		log:       sctx.XLog,
 		meta:      &pb.UtxoMeta{},
 		metaTmp:   &pb.UtxoMeta{},
 		mutexMeta: &sync.Map{},
-		metaTable: kvdb.NewTable(stateDB, pb.MetaTablePrefix),
+		metaTable: kvdb.NewTable(stateDB, xldgpb.MetaTablePrefix),
 	}, nil
 }
 
@@ -76,7 +76,7 @@ func (t *Meta) UpdateNewAccountResourceAmount(newAccountResourceAmount int64, ba
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.NewAccountResourceAmountKey), newAccountResourceAmountBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.NewAccountResourceAmountKey), newAccountResourceAmountBuf)
 	if err == nil {
 		t.log.Info("Update newAccountResourceAmount succeed")
 	}
@@ -129,7 +129,7 @@ func (t *Meta) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
 		return pbErr
 
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
 	if err == nil {
 		t.log.Info("Update maxBlockSize succeed")
 	}
@@ -170,7 +170,7 @@ func (t *Meta) UpdateReservedContracts(params []*pb.InvokeRequest, batch kvdb.Ba
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.ReservedContractsKey), paramsBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.ReservedContractsKey), paramsBuf)
 	if err == nil {
 		t.log.Info("Update reservered contract succeed")
 	}
@@ -236,7 +236,7 @@ func (t *Meta) UpdateForbiddenContract(param *pb.InvokeRequest, batch kvdb.Batch
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.ForbiddenContractKey), paramBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.ForbiddenContractKey), paramBuf)
 	if err == nil {
 		t.log.Info("Update forbidden contract succeed")
 	}
@@ -296,7 +296,7 @@ func (t *Meta) UpdateIrreversibleBlockHeight(nextIrreversibleBlockHeight int64, 
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.IrreversibleBlockHeightKey), irreversibleBlockHeightBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.IrreversibleBlockHeightKey), irreversibleBlockHeightBuf)
 	if err != nil {
 		return err
 	}
@@ -371,7 +371,7 @@ func (t *Meta) UpdateIrreversibleSlideWindow(nextIrreversibleSlideWindow int64, 
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.IrreversibleSlideWindowKey), irreversibleSlideWindowBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.IrreversibleSlideWindowKey), irreversibleSlideWindowBuf)
 	if err != nil {
 		return err
 	}
@@ -450,7 +450,7 @@ func (t *Meta) UpdateGasPrice(nextGasPrice *pb.GasPrice, batch kvdb.Batch) error
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.GasPriceKey), gasPriceBuf)
+	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.GasPriceKey), gasPriceBuf)
 	if err != nil {
 		return err
 	}

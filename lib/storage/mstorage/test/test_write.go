@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/xuperchain/xupercore/lib/kv/mstorage"
+	"github.com/xuperchain/xupercore/lib/storage/mstorage"
 )
 
 func write() {
