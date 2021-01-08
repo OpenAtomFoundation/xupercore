@@ -325,9 +325,6 @@ func (t *Miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error 
 	blkAgent := agent.NewBlockAgent(block)
 	err := t.ctx.Consensus.CalculateBlock(blkAgent)
 
-	// 获取转化后的新区块
-	//block = blkAgent.GetBlock()
-
 	// 账本确认区块
 	confirmStatus := t.ctx.Ledger.ConfirmBlock(block, false)
 	if confirmStatus.Succ {

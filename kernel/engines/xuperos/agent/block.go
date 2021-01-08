@@ -24,10 +24,6 @@ func NewBlockAgent(blk *lpb.InternalBlock) *BlockAgent {
 	}
 }
 
-func (t *BlockAgent) GetBlock() *lpb.InternalBlock {
-	return t.blk
-}
-
 func (t *BlockAgent) GetProposer() []byte {
 	return t.blk.GetProposer()
 }
