@@ -15,6 +15,7 @@ import (
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
@@ -68,8 +69,8 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	inSyncTargetHeight := t.inSyncTargetHeight
 	inSyncTargetBlockId := t.inSyncTargetBlockId
 	if block.GetHeight() < inSyncTargetHeight || bytes.Equal(block.GetBlockid(), inSyncTargetBlockId) {
-		ctx.GetLog().Trace("ignore block because recv block height lower than in sync height", "recvHeight",
-			block.GetHeight(), "inSyncTargetHeight", inSyncTargetHeight,
+		ctx.GetLog().Trace("ignore block because recv block height lower than in sync height",
+			"recvHeight", block.GetHeight(), "inSyncTargetHeight", inSyncTargetHeight,
 			"inSyncTargetBlockId", utils.F(inSyncTargetBlockId))
 		return nil
 	}
@@ -115,14 +116,14 @@ func (t *Miner) Start() {
 			isMiner, isSync, err = t.ctx.Consensus.CompeteMaster(ledgerTipHeight + 1)
 		}
 		// 3.如需要同步，尝试同步网络最新区块
-		if err == nil && isSync {
+		if err == nil && isMiner && isSync {
 			err = t.trySyncBlock(ctx, nil)
 		}
 		// 4.如果是矿工，出块
 		if err == nil && isMiner {
 			err = t.mining(ctx)
 		}
-		// 5.如果出错，休眠3s后重试
+		// 5.如果出错，休眠3s后重试，防止cpu被打满
 		if err != nil && !t.IsExit() {
 			ctx.GetLog().Warn("miner run occurred error,sleep 3s try", "err", err)
 			time.Sleep(3 * time.Second)
@@ -136,7 +137,8 @@ func (t *Miner) Start() {
 		}
 	}
 
-	t.log.Trace("miner exited", "ledgerTipHeight", ledgerTipHeight)
+	t.log.Trace("miner exited", "ledgerTipHeight", ledgerTipHeight,
+		"ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
 }
 
 // 停止矿工
@@ -164,7 +166,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 				"stateTipId", utils.F(stateTipId))
 			return fmt.Errorf("mining walk failed")
 		}
-		stateTipId = ledgerTipId
+		stateTipId = t.ctx.State.GetLatestBlockid()
 	}
 
 	// 3.共识挖矿前处理
@@ -188,9 +190,10 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	}
 
 	// 5.账本&状态机&共识确认新区块
-	err = t.confirmBlock(ctx, block)
+	err = t.confirmBlockForMiner(ctx, block)
 	if err != nil {
-		ctx.GetLog().Warn("confirm block error", "err", err)
+		ctx.GetLog().Warn("confirm block for miner failed", "err", err,
+			"blockId", utils.F(block.GetBlockid()))
 		return err
 	}
 
@@ -202,22 +205,24 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	return nil
 }
 
+// 裁剪掉账本最新的区块
 func (t *Miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
-	block, err := t.ctx.Ledger.QueryBlock(ledgerTipId)
+	block, err := t.ctx.Ledger.QueryBlockHeader(ledgerTipId)
 	if err != nil {
 		ctx.GetLog().Warn("truncate failed because query tip block error", "err", err)
 		return err
 	}
 
+	// 状态机回滚到前一个区块状态
 	err = t.ctx.State.Walk(block.PreHash, false)
 	if err != nil {
 		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.F(ledgerTipId),
-			"stateTipId", utils.F(block.PreHash))
+			"walkTargetBlockId", utils.F(block.PreHash))
 		return err
 	}
 
-	stateTipId := t.ctx.State.GetTipBlockid()
-	err = t.ctx.Ledger.Truncate(stateTipId)
+	// 账本裁剪掉这个区块
+	err = t.ctx.Ledger.Truncate(ledgerTipId)
 	if err != nil {
 		ctx.GetLog().Warn("truncate failed because ledger truncate error", "err", err)
 		return err
@@ -226,7 +231,8 @@ func (t *Miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
 	return nil
 }
 
-func (t *Miner) packBlock(ctx xctx.XContext, height int64, now time.Time, consData []byte) (*lpb.InternalBlock, error) {
+func (t *Miner) packBlock(ctx xctx.XContext, height int64,
+	now time.Time, consData []byte) (*lpb.InternalBlock, error) {
 	// 区块大小限制
 	sizeLimit, err := t.ctx.State.MaxTxSizePerBlock()
 	if err != nil {
@@ -238,14 +244,18 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64, now time.Time, consDa
 	for _, tx := range timerTxList {
 		sizeLimit -= proto.Size(tx)
 	}
-
 	// 2.选择本次要打包的tx
 	generalTxList, err := t.getUnconfirmedTx(sizeLimit)
-
+	if err != nil {
+		return nil, err
+	}
 	// 3.获取矿工奖励交易
 	awardTx, err := t.getAwardTx(height)
-
+	if err != nil {
+		return nil, err
+	}
 	txList := make([]*lpb.Transaction, 0)
+	txList = append(txList, awardTx)
 	if len(timerTxList) > 0 {
 		txList = append(txList, timerTxList...)
 	}
@@ -253,8 +263,7 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64, now time.Time, consDa
 		txList = append(txList, generalTxList...)
 	}
 
-	//3. 统一在最后插入矿工奖励
-	txList = append(txList, awardTx)
+	// 4.打包区块
 	block, err := t.ctx.Ledger.FormatMinerBlock(height, txList, t.ctx.Address, now.UnixNano(),
 		t.ctx.State.GetLatestBlockid(), t.ctx.State.GetTotal(), consData)
 	if err != nil {
@@ -289,7 +298,7 @@ func (t *Miner) getUnconfirmedTx(sizeLimit int) ([]*lpb.Transaction, error) {
 		return nil, err
 	}
 
-	txList := make([]*lpb.Transaction, 0, len(unconfirmedTxs))
+	txList := make([]*lpb.Transaction, 0)
 	for _, tx := range unconfirmedTxs {
 		size := proto.Size(tx)
 		if size > sizeLimit {
@@ -308,33 +317,40 @@ func (t *Miner) getAwardTx(height int64) (*lpb.Transaction, error) {
 		return nil, errors.New("amount in transaction can not be negative number")
 	}
 
-	txOutput := &protos.TxOutput{}
-	txOutput.ToAddr = []byte(t.ctx.Address.Address)
-	txOutput.Amount = amount.Bytes()
-	awardTx := &lpb.Transaction{Version: state.RootTxVersion}
-	awardTx.TxOutputs = append(awardTx.TxOutputs, txOutput)
-	awardTx.Desc = []byte{'1'}
-	awardTx.Coinbase = true
-	awardTx.Timestamp = time.Now().UnixNano()
-	awardTx.Txid, _ = txhash.MakeTransactionID(awardTx)
-	return nil, nil
+	awardTx, err := tx.GenerateAwardTx(t.ctx.Address.Address, amount.String(), []byte("award"))
+	if err != nil {
+		return nil, err
+	}
+
+	return awardTx, nil
 }
 
-func (t *Miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
+func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	// 需要转化下，为了共识做一些变更（比如pow）
+	origBlkId := block.Blockid
 	blkAgent := agent.NewBlockAgent(block)
 	err := t.ctx.Consensus.CalculateBlock(blkAgent)
+	if err != nil {
+		ctx.GetLog().Warn("consensus calculate block failed", "err", err,
+			"blockId", utils.F(block.Blockid))
+		return fmt.Errorf("consensus calculate block failed")
+	}
+	ctx.GetLog().Trace("start confirm block for miner", "originalBlockId", utils.F(origBlkId),
+		"newBlockId", utils.F(block.Blockid))
 
 	// 账本确认区块
 	confirmStatus := t.ctx.Ledger.ConfirmBlock(block, false)
 	if confirmStatus.Succ {
 		if confirmStatus.Orphan {
-			ctx.GetLog().Warn("the mined blocked was attached to branch, no need to play")
-			return errors.New("the mined blocked was attached to branch")
+			ctx.GetLog().Trace("the mined blocked was attached to branch,no need to play",
+				"blockId", utils.F(block.Blockid))
+			return nil
 		}
-		ctx.GetLog().Trace("ledger confirm block success", "height", block.Height, "blockId", utils.F(block.Blockid))
+		ctx.GetLog().Trace("ledger confirm block success", "height", block.Height,
+			"blockId", utils.F(block.Blockid))
 	} else {
-		ctx.GetLog().Warn("ledger confirm block error", "confirm_status", confirmStatus)
+		ctx.GetLog().Warn("ledger confirm block failed", "err", confirmStatus.Error,
+			"blockId", utils.F(block.Blockid))
 		return errors.New("ledger confirm block error")
 	}
 
@@ -348,10 +364,12 @@ func (t *Miner) confirmBlock(ctx xctx.XContext, block *lpb.InternalBlock) error 
 	// 共识确认区块
 	err = t.ctx.Consensus.ProcessConfirmBlock(blkAgent)
 	if err != nil {
-		ctx.GetLog().Warn("consensus confirm block error", "err", err)
+		ctx.GetLog().Warn("consensus confirm block error", "err", err,
+			"blockId", utils.F(block.Blockid))
 		return err
 	}
 
+	ctx.GetLog().Trace("confirm block for miner succ", "blockId", utils.F(block.Blockid))
 	return nil
 }
 
@@ -400,8 +418,8 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	if !bytes.Equal(ledgerTipId, stateTipId) {
 		err = t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
-			ctx.GetLog().Warn("try sync block walk failed", "error", err, "ledgerTipId", utils.F(ledgerTipId),
-				"stateTipId", utils.F(stateTipId))
+			ctx.GetLog().Warn("try sync block walk failed", "error", err,
+				"ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
 			return fmt.Errorf("try sync block walk failed")
 		}
 	}
@@ -409,7 +427,8 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	// 5.启动同步区块到目标高度
 	err = t.syncBlock(ctx, targetBlock)
 	if err != nil {
-		ctx.GetLog().Warn("try sync block failed", "err", err, "targetBlock", utils.F(targetBlock.GetBlockid()))
+		ctx.GetLog().Warn("try sync block failed", "err", err,
+			"targetBlock", utils.F(targetBlock.GetBlockid()))
 		return fmt.Errorf("try sync block failed")
 	}
 
@@ -454,10 +473,17 @@ func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, 
 
 type BCSByHeight []*pb.BCStatus
 
-func (s BCSByHeight) Len() int           { return len(s) }
-func (s BCSByHeight) Less(i, j int) bool { return s[i].Meta.TrunkHeight > s[j].Meta.TrunkHeight }
-func (s BCSByHeight) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+func (s BCSByHeight) Len() int {
+	return len(s)
+}
+func (s BCSByHeight) Less(i, j int) bool {
+	return s[i].Meta.TrunkHeight > s[j].Meta.TrunkHeight
+}
+func (s BCSByHeight) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
 
+// 同步本地账本到指定的目标高度
 func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) error {
 	// 1.判断账本当前高度，忽略小于账本高度或者等于tip block任务
 	if targetBlock.GetHeight() < t.ctx.Ledger.GetMeta().GetTrunkHeight() ||
@@ -465,7 +491,8 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 		return nil
 	}
 
-	// 2.从临近节点拉取缺失区块(可优化为并发拉取，如果上个块)
+	// 2.从临近节点拉取本地缺失的区块
+	// 可优化为并发拉取，可以优化为批处理，方便查看同步进度
 	beginBlock, err := t.downloadMissBlock(ctx, targetBlock)
 	if err != nil {
 		return err
@@ -477,6 +504,7 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 		stateTipId := t.ctx.State.GetLatestBlockid()
 		if !bytes.Equal(ledgerTipId, stateTipId) {
 			ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
+			// Walk相比PalyAndReport代价更高，后面可以优化下
 			err := t.ctx.State.Walk(ledgerTipId, false)
 			if err != nil {
 				ctx.GetLog().Warn("sync block walk failed", "ledgerTipId", utils.F(ledgerTipId),
@@ -505,7 +533,9 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 //                    | => D(beginBlock) => ... => E(targetBlock)
 //
 // 通过高度可以并发下载
-func (t *Miner) downloadMissBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) (*lpb.InternalBlock, error) {
+func (t *Miner) downloadMissBlock(ctx xctx.XContext,
+	targetBlock *lpb.InternalBlock) (*lpb.InternalBlock, error) {
+	// 先把targetBlock存入缓存栈
 	ledger := t.ctx.Ledger
 	err := ledger.SavePendingBlock(targetBlock)
 	if err != nil {
@@ -573,6 +603,7 @@ func (t *Miner) GetBlock(ctx xctx.XContext, input *pb.BlockID) (*pb.Block, error
 }
 
 // 批量追加区块到账本中
+// TODO:beginBlock可能不是账本最新区块的下一个区块，需要修复
 func (t *Miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.InternalBlock) error {
 	block := beginBlock
 	for blockId := block.Blockid; !bytes.Equal(blockId, endBlock.Blockid); blockId = block.NextHash {
@@ -670,8 +701,12 @@ func (t *Miner) broadcastBlock(ctx xctx.XContext, block *lpb.InternalBlock) {
 
 	err := engCtx.Net.SendMessage(t.ctx, msg)
 	if err != nil {
-		ctx.GetLog().Error("broadcast block error", "logid", msg.GetHeader().GetLogid(), "error", err)
+		ctx.GetLog().Warn("broadcast block error", "p2pLogId", msg.GetHeader().GetLogid(), "err", err,
+			"blockId", utils.F(block.GetBlockid()))
+		return
 	}
 
+	ctx.GetLog().Trace("broadcast block succ", "p2pLogId", msg.GetHeader().GetLogid(),
+		"blockId", utils.F(block.GetBlockid()))
 	return
 }

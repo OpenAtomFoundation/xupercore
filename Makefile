@@ -11,11 +11,9 @@ export X_ROOT_PATH
 all: clean compile
 
 # make compile, go build
-compile: xuperos
-xuperos:
-	bash $(HOMEDIR)/service/xuperos/build.sh
-xuperchain:
-	bash $(HOMEDIR)/service/xuperchain/build.sh
+compile: xchain
+xchain:
+	bash $(HOMEDIR)/example/xchain/auto/build.sh
 
 # make test, test your code
 test:
