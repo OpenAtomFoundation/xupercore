@@ -995,15 +995,14 @@ func (l *Ledger) GetNoFee() bool {
 }
 
 // SavePendingBlock put block into pending table
-func (l *Ledger) SavePendingBlock(block *pb.Block) error {
-	l.xlog.Debug("begin save pending block", "blockid", utils.F(block.Block.Blockid), "tx_count", len(block.Block.Transactions))
-	block.Blockid = block.Block.Blockid
+func (l *Ledger) SavePendingBlock(block *pb.InternalBlock) error {
+	l.xlog.Debug("begin save pending block", "blockid", utils.F(block.Blockid), "tx_count", len(block.Transactions))
 	blockBuf, pbErr := proto.Marshal(block)
 	if pbErr != nil {
 		l.xlog.Warn("save pending block fail, because marshal block fail", "pbErr", pbErr)
 		return pbErr
 	}
-	saveErr := l.pendingTable.Put(block.Block.Blockid, blockBuf)
+	saveErr := l.pendingTable.Put(block.Blockid, blockBuf)
 	if saveErr != nil {
 		l.xlog.Warn("save pending block to ldb fail", "err", saveErr)
 		return saveErr
@@ -1012,7 +1011,7 @@ func (l *Ledger) SavePendingBlock(block *pb.Block) error {
 }
 
 // GetPendingBlock get block from pending table
-func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.Block, error) {
+func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.InternalBlock, error) {
 	l.xlog.Debug("get pending block", "bockid", utils.F(blockID))
 	blockBuf, ldbErr := l.pendingTable.Get(blockID)
 	if ldbErr != nil {
@@ -1024,7 +1023,7 @@ func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.Block, error) {
 		}
 		return nil, ldbErr
 	}
-	block := &pb.Block{}
+	block := &pb.InternalBlock{}
 	unMarshalErr := proto.Unmarshal(blockBuf, block)
 	if unMarshalErr != nil {
 		l.xlog.Warn("unmarshal block failed", "err", unMarshalErr)

@@ -1,7 +1,10 @@
 package meta
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"github.com/xuperchain/xupercore/protos"
 	"html/template"
 	"sync"
 
@@ -15,6 +18,7 @@ import (
 
 type Meta struct {
 	log       logs.Logger
+	Ledger    *ledger.Ledger
 	Meta      *pb.UtxoMeta  // utxo meta
 	MetaTmp   *pb.UtxoMeta  // tmp utxo meta
 	MutexMeta *sync.Mutex   // access control for meta
@@ -24,36 +28,54 @@ type Meta struct {
 var (
 	ErrProposalParamsIsNegativeNumber    = errors.New("negative number for proposal parameter is not allowed")
 	ErrProposalParamsIsNotPositiveNumber = errors.New("negative number of zero for proposal parameter is not allowed")
+	ErrGetReservedContracts              = errors.New("Get reserved contracts error")
 	// TxSizePercent max percent of txs' size in one block
 	TxSizePercent = 0.8
 )
 
+// reservedArgs used to get contractnames from InvokeRPCRequest
+type reservedArgs struct {
+	ContractNames string
+}
+
+func genArgs(req []*protos.InvokeRequest) *reservedArgs {
+	ra := &reservedArgs{}
+	for i, v := range req {
+		ra.ContractNames += v.GetContractName()
+		if i < len(req)-1 {
+			ra.ContractNames += ","
+		}
+	}
+	return ra
+}
+
 func NewMeta(sctx *def.StateCtx, stateDB kvdb.Database) (*Meta, nil) {
 	return &Meta{
 		log:       sctx.XLog,
-		meta:      &pb.UtxoMeta{},
-		metaTmp:   &pb.UtxoMeta{},
-		mutexMeta: &sync.Map{},
-		metaTable: kvdb.NewTable(stateDB, xldgpb.MetaTablePrefix),
+		Ledger:    sctx.Ledger,
+		Meta:      &pb.UtxoMeta{},
+		MetaTmp:   &pb.UtxoMeta{},
+		MutexMeta: &sync.Mutex{},
+		MetaTable: kvdb.NewTable(stateDB, pb.MetaTablePrefix),
 	}, nil
 }
 
 // GetNewAccountResourceAmount get account for creating an account
 func (t *Meta) GetNewAccountResourceAmount() int64 {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.GetNewAccountResourceAmount()
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.GetNewAccountResourceAmount()
 }
 
 // LoadNewAccountResourceAmount load newAccountResourceAmount into memory
 func (t *Meta) LoadNewAccountResourceAmount() (int64, error) {
-	newAccountResourceAmountBuf, findErr := t.metaTable.Get([]byte(ledger.NewAccountResourceAmountKey))
+	newAccountResourceAmountBuf, findErr := t.MetaTable.Get([]byte(ledger.NewAccountResourceAmountKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(newAccountResourceAmountBuf, utxoMeta)
 		return utxoMeta.GetNewAccountResourceAmount(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		genesisNewAccountResourceAmount := ledger.ledger.GetNewAccountResourceAmount()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		genesisNewAccountResourceAmount := t.Ledger.GetNewAccountResourceAmount()
 		if genesisNewAccountResourceAmount < 0 {
 			return genesisNewAccountResourceAmount, ErrProposalParamsIsNegativeNumber
 		}
@@ -76,32 +98,32 @@ func (t *Meta) UpdateNewAccountResourceAmount(newAccountResourceAmount int64, ba
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.NewAccountResourceAmountKey), newAccountResourceAmountBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.NewAccountResourceAmountKey), newAccountResourceAmountBuf)
 	if err == nil {
 		t.log.Info("Update newAccountResourceAmount succeed")
 	}
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.NewAccountResourceAmount = newAccountResourceAmount
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.NewAccountResourceAmount = newAccountResourceAmount
 	return err
 }
 
 // GetMaxBlockSize get max block size effective in Utxo
 func (t *Meta) GetMaxBlockSize() int64 {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.GetMaxBlockSize()
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.GetMaxBlockSize()
 }
 
 // LoadMaxBlockSize load maxBlockSize into memory
 func (t *Meta) LoadMaxBlockSize() (int64, error) {
-	maxBlockSizeBuf, findErr := t.metaTable.Get([]byte(ledger.MaxBlockSizeKey))
+	maxBlockSizeBuf, findErr := t.MetaTable.Get([]byte(ledger.MaxBlockSizeKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(maxBlockSizeBuf, utxoMeta)
 		return utxoMeta.GetMaxBlockSize(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		genesisMaxBlockSize := ledger.ledger.GetMaxBlockSize()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		genesisMaxBlockSize := t.Ledger.GetMaxBlockSize()
 		if genesisMaxBlockSize <= 0 {
 			return genesisMaxBlockSize, ErrProposalParamsIsNotPositiveNumber
 		}
@@ -129,36 +151,36 @@ func (t *Meta) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
 		return pbErr
 
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
 	if err == nil {
 		t.log.Info("Update maxBlockSize succeed")
 	}
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.MaxBlockSize = maxBlockSize
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.MaxBlockSize = maxBlockSize
 	return err
 }
 
-func (t *Meta) GetReservedContracts() []*pb.InvokeRequest {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.ReservedContracts
+func (t *Meta) GetReservedContracts() []*protos.InvokeRequest {
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.ReservedContracts
 }
 
-func (t *Meta) LoadReservedContracts() ([]*pb.InvokeRequest, error) {
-	reservedContractsBuf, findErr := t.metaTable.Get([]byte(ledger.ReservedContractsKey))
+func (t *Meta) LoadReservedContracts() ([]*protos.InvokeRequest, error) {
+	reservedContractsBuf, findErr := t.MetaTable.Get([]byte(ledger.ReservedContractsKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(reservedContractsBuf, utxoMeta)
 		return utxoMeta.GetReservedContracts(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		return ledger.ledger.GetReservedContracts()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		return t.Ledger.GetReservedContracts()
 	}
 	return nil, findErr
 }
 
 //when to register to kernel method
-func (t *Meta) UpdateReservedContracts(params []*pb.InvokeRequest, batch kvdb.Batch) error {
+func (t *Meta) UpdateReservedContracts(params []*protos.InvokeRequest, batch kvdb.Batch) error {
 	if params == nil {
 		return fmt.Errorf("invalid reservered contract requests")
 	}
@@ -170,36 +192,36 @@ func (t *Meta) UpdateReservedContracts(params []*pb.InvokeRequest, batch kvdb.Ba
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.ReservedContractsKey), paramsBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.ReservedContractsKey), paramsBuf)
 	if err == nil {
 		t.log.Info("Update reservered contract succeed")
 	}
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.ReservedContracts = params
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.ReservedContracts = params
 	return err
 }
 
-func (t *Meta) GetForbiddenContract() *pb.InvokeRequest {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.GetForbiddenContract()
+func (t *Meta) GetForbiddenContract() *protos.InvokeRequest {
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.GetForbiddenContract()
 }
 
-func (t *Meta) GetGroupChainContract() *pb.InvokeRequest {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.GetGroupChainContract()
+func (t *Meta) GetGroupChainContract() *protos.InvokeRequest {
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.GetGroupChainContract()
 }
 
-func (t *Meta) LoadGroupChainContract() (*pb.InvokeRequest, error) {
-	groupChainContractBuf, findErr := t.metaTable.Get([]byte(ledger.GroupChainContractKey))
+func (t *Meta) LoadGroupChainContract() (*protos.InvokeRequest, error) {
+	groupChainContractBuf, findErr := t.MetaTable.Get([]byte(ledger.GroupChainContractKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(groupChainContractBuf, utxoMeta)
 		return utxoMeta.GetGroupChainContract(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		requests, err := ledger.ledger.GetGroupChainContract()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		requests, err := t.Ledger.GetGroupChainContract()
 		if len(requests) > 0 {
 			return requests[0], err
 		}
@@ -208,14 +230,14 @@ func (t *Meta) LoadGroupChainContract() (*pb.InvokeRequest, error) {
 	return nil, findErr
 }
 
-func (t *Meta) LoadForbiddenContract() (*pb.InvokeRequest, error) {
-	forbiddenContractBuf, findErr := t.metaTable.Get([]byte(ledger.ForbiddenContractKey))
+func (t *Meta) LoadForbiddenContract() (*protos.InvokeRequest, error) {
+	forbiddenContractBuf, findErr := t.MetaTable.Get([]byte(ledger.ForbiddenContractKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(forbiddenContractBuf, utxoMeta)
 		return utxoMeta.GetForbiddenContract(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		requests, err := t.ledger.GetForbiddenContract()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		requests, err := t.Ledger.GetForbiddenContract()
 		if len(requests) > 0 {
 			return requests[0], err
 		}
@@ -224,7 +246,7 @@ func (t *Meta) LoadForbiddenContract() (*pb.InvokeRequest, error) {
 	return nil, findErr
 }
 
-func (t *Meta) UpdateForbiddenContract(param *pb.InvokeRequest, batch kvdb.Batch) error {
+func (t *Meta) UpdateForbiddenContract(param *protos.InvokeRequest, batch kvdb.Batch) error {
 	if param == nil {
 		return fmt.Errorf("invalid forbidden contract request")
 	}
@@ -236,36 +258,36 @@ func (t *Meta) UpdateForbiddenContract(param *pb.InvokeRequest, batch kvdb.Batch
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.ForbiddenContractKey), paramBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.ForbiddenContractKey), paramBuf)
 	if err == nil {
 		t.log.Info("Update forbidden contract succeed")
 	}
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.ForbiddenContract = param
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.ForbiddenContract = param
 	return err
 }
 
 func (t *Meta) LoadIrreversibleBlockHeight() (int64, error) {
-	irreversibleBlockHeightBuf, findErr := t.metaTable.Get([]byte(ledger.IrreversibleBlockHeightKey))
+	irreversibleBlockHeightBuf, findErr := t.MetaTable.Get([]byte(ledger.IrreversibleBlockHeightKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(irreversibleBlockHeightBuf, utxoMeta)
 		return utxoMeta.GetIrreversibleBlockHeight(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 		return int64(0), nil
 	}
 	return int64(0), findErr
 }
 
 func (t *Meta) LoadIrreversibleSlideWindow() (int64, error) {
-	irreversibleSlideWindowBuf, findErr := t.metaTable.Get([]byte(ledger.IrreversibleSlideWindowKey))
+	irreversibleSlideWindowBuf, findErr := t.MetaTable.Get([]byte(ledger.IrreversibleSlideWindowKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(irreversibleSlideWindowBuf, utxoMeta)
 		return utxoMeta.GetIrreversibleSlideWindow(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		genesisSlideWindow := ledger.ledger.GetIrreversibleSlideWindow()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		genesisSlideWindow := t.Ledger.GetIrreversibleSlideWindow()
 		// negative number is not meaningful
 		if genesisSlideWindow < 0 {
 			return genesisSlideWindow, ErrProposalParamsIsNegativeNumber
@@ -276,15 +298,15 @@ func (t *Meta) LoadIrreversibleSlideWindow() (int64, error) {
 }
 
 func (t *Meta) GetIrreversibleBlockHeight() int64 {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.IrreversibleBlockHeight
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.IrreversibleBlockHeight
 }
 
 func (t *Meta) GetIrreversibleSlideWindow() int64 {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.IrreversibleSlideWindow
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.IrreversibleSlideWindow
 }
 
 func (t *Meta) UpdateIrreversibleBlockHeight(nextIrreversibleBlockHeight int64, batch kvdb.Batch) error {
@@ -296,14 +318,14 @@ func (t *Meta) UpdateIrreversibleBlockHeight(nextIrreversibleBlockHeight int64, 
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.IrreversibleBlockHeightKey), irreversibleBlockHeightBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.IrreversibleBlockHeightKey), irreversibleBlockHeightBuf)
 	if err != nil {
 		return err
 	}
 	t.log.Info("Update irreversibleBlockHeight succeed")
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.IrreversibleBlockHeight = nextIrreversibleBlockHeight
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.IrreversibleBlockHeight = nextIrreversibleBlockHeight
 	return nil
 }
 
@@ -337,7 +359,7 @@ func (t *Meta) UpdateNextIrreversibleBlockHeight(blockHeight int64, curIrreversi
 	return errors.New("unexpected error")
 }
 
-func (t *Meta) updateNextIrreversibleBlockHeightForPrune(blockHeight int64, curIrreversibleBlockHeight int64, curIrreversibleSlideWindow int64, batch kvdb.Batch) error {
+func (t *Meta) UpdateNextIrreversibleBlockHeightForPrune(blockHeight int64, curIrreversibleBlockHeight int64, curIrreversibleSlideWindow int64, batch kvdb.Batch) error {
 	// negative number for irreversible slide window is not allowed.
 	if curIrreversibleSlideWindow < 0 {
 		return ErrProposalParamsIsNegativeNumber
@@ -371,35 +393,35 @@ func (t *Meta) UpdateIrreversibleSlideWindow(nextIrreversibleSlideWindow int64, 
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.IrreversibleSlideWindowKey), irreversibleSlideWindowBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.IrreversibleSlideWindowKey), irreversibleSlideWindowBuf)
 	if err != nil {
 		return err
 	}
 	t.log.Info("Update irreversibleSlideWindow succeed")
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.IrreversibleSlideWindow = nextIrreversibleSlideWindow
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.IrreversibleSlideWindow = nextIrreversibleSlideWindow
 	return nil
 }
 
 // GetGasPrice get gas rate to utxo
-func (t *Meta) GetGasPrice() *pb.GasPrice {
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	return t.meta.GetGasPrice()
+func (t *Meta) GetGasPrice() *protos.GasPrice {
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	return t.Meta.GetGasPrice()
 }
 
 // LoadGasPrice load gas rate
-func (t *Meta) LoadGasPrice() (*pb.GasPrice, error) {
-	gasPriceBuf, findErr := t.metaTable.Get([]byte(ledger.GasPriceKey))
+func (t *Meta) LoadGasPrice() (*protos.GasPrice, error) {
+	gasPriceBuf, findErr := t.MetaTable.Get([]byte(ledger.GasPriceKey))
 	if findErr == nil {
 		utxoMeta := &pb.UtxoMeta{}
 		err := proto.Unmarshal(gasPriceBuf, utxoMeta)
 		return utxoMeta.GetGasPrice(), err
-	} else if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
-		nofee := ledger.ledger.GetNoFee()
+	} else if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
+		nofee := t.Ledger.GetNoFee()
 		if nofee {
-			gasPrice := &pb.GasPrice{
+			gasPrice := &protos.GasPrice{
 				CpuRate:  0,
 				MemRate:  0,
 				DiskRate: 0,
@@ -408,7 +430,7 @@ func (t *Meta) LoadGasPrice() (*pb.GasPrice, error) {
 			return gasPrice, nil
 
 		} else {
-			gasPrice := ledger.ledger.GetGasPrice()
+			gasPrice := t.Ledger.GetGasPrice()
 			cpuRate := gasPrice.CpuRate
 			memRate := gasPrice.MemRate
 			diskRate := gasPrice.DiskRate
@@ -419,7 +441,7 @@ func (t *Meta) LoadGasPrice() (*pb.GasPrice, error) {
 			// To be compatible with the old version v3.3
 			// If GasPrice configuration is missing or value euqals 0, support a default value
 			if cpuRate == 0 && memRate == 0 && diskRate == 0 && xfeeRate == 0 {
-				gasPrice = &pb.GasPrice{
+				gasPrice = &protos.GasPrice{
 					CpuRate:  1000,
 					MemRate:  1000000,
 					DiskRate: 1,
@@ -433,7 +455,7 @@ func (t *Meta) LoadGasPrice() (*pb.GasPrice, error) {
 }
 
 // UpdateGasPrice update gasPrice parameters
-func (t *Meta) UpdateGasPrice(nextGasPrice *pb.GasPrice, batch kvdb.Batch) error {
+func (t *Meta) UpdateGasPrice(nextGasPrice *protos.GasPrice, batch kvdb.Batch) error {
 	// check if the parameters are valid
 	cpuRate := nextGasPrice.GetCpuRate()
 	memRate := nextGasPrice.GetMemRate()
@@ -450,18 +472,18 @@ func (t *Meta) UpdateGasPrice(nextGasPrice *pb.GasPrice, batch kvdb.Batch) error
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := batch.Put([]byte(xldgpb.MetaTablePrefix+ledger.GasPriceKey), gasPriceBuf)
+	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.GasPriceKey), gasPriceBuf)
 	if err != nil {
 		return err
 	}
 	t.log.Info("Update gas price succeed")
-	t.mutexMeta.Lock()
-	defer t.mutexMeta.Unlock()
-	t.metaTmp.GasPrice = nextGasPrice
+	t.MutexMeta.Lock()
+	defer t.MutexMeta.Unlock()
+	t.MetaTmp.GasPrice = nextGasPrice
 	return nil
 }
 
-func (t *Meta) GetReservedContractRequests(req []*pb.InvokeRequest, isPreExec bool) ([]*pb.InvokeRequest, error) {
+func (t *Meta) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
 	MetaReservedContracts := t.GetReservedContracts()
 	if MetaReservedContracts == nil {
 		return nil, nil
@@ -483,7 +505,7 @@ func (t *Meta) GetReservedContractRequests(req []*pb.InvokeRequest, isPreExec bo
 		}
 	}
 
-	reservedContracts := []*pb.InvokeRequest{}
+	reservedContracts := []*protos.InvokeRequest{}
 	for _, rc := range reservedContractstpl {
 		rctmp := *rc
 		rctmp.Args = make(map[string][]byte)

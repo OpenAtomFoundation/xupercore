@@ -11,13 +11,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/permission/acl"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/protos"
@@ -148,7 +148,7 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 	}
 
 	// verify initiator
-	akType := acl.IsAccount(tx.Initiator)
+	akType := aclu.IsAccount(tx.Initiator)
 	if akType == 0 {
 		// check initiator address signature
 		ok, err := aclu.IdentifyAK(tx.Initiator, tx.InitiatorSigns[0], digestHash)
@@ -161,12 +161,12 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 		initiatorAddr := make([]string, 0)
 		// check initiator account signatures
 		for _, sign := range tx.InitiatorSigns {
-			ak, err := t.cryptoClient.GetEcdsaPublicKeyFromJSON([]byte(sign.PublicKey))
+			ak, err := t.sctx.Crypt.GetEcdsaPublicKeyFromJsonStr([]byte(sign.PublicKey))
 			if err != nil {
 				t.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
 			}
-			addr, err := t.cryptoClient.GetAddressFromPublicKey(ak)
+			addr, err := t.sctx.Crypt.GetAddressFromPublicKey(ak)
 			if err != nil {
 				t.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
@@ -230,20 +230,20 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 	}
 	pubkeys := make([]*ecdsa.PublicKey, 0)
 	for _, pubJSON := range tx.GetXuperSign().GetPublicKeys() {
-		pubkey, err := t.cryptoClient.GetEcdsaPublicKeyFromJSON(pubJSON)
+		pubkey, err := t.sctx.Crypt.GetEcdsaPublicKeyFromJsonStr(pubJSON)
 		if err != nil {
 			return false, nil, errors.New("XuperSign: found invalid public key")
 		}
 		pubkeys = append(pubkeys, pubkey)
 	}
 	for idx, addr := range addrList {
-		ok, _ := t.cryptoClient.VerifyAddressUsingPublicKey(addr, pubkeys[idx])
+		ok, _ := t.sctx.Crypt.VerifyAddressUsingPublicKey(addr, pubkeys[idx])
 		if !ok {
 			t.log.Warn("XuperSign: address and public key not match", "addr", addr, "pubkey", pubkeys[idx])
 			return false, nil, errors.New("XuperSign: address and public key not match")
 		}
 	}
-	ok, err := t.cryptoClient.XuperVerify(pubkeys, tx.GetXuperSign().GetSignature(), digestHash)
+	ok, err := t.sctx.Crypt.XuperVerify(pubkeys, tx.GetXuperSign().GetSignature(), digestHash)
 	if err != nil || !ok {
 		t.log.Warn("XuperSign: signature verify failed", "error", err)
 		return false, nil, errors.New("XuperSign: address and public key not match")
@@ -267,7 +267,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 		addr := conUtxoInput.GetFromAddr()
 		txid := conUtxoInput.GetRefTxid()
 		offset := conUtxoInput.GetRefOffset()
-		utxoKey := utxo.genUtxoKey(addr, txid, offset)
+		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
 		conUtxoInputsMap[utxoKey] = true
 	}
 
@@ -276,7 +276,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 		addr := txInput.GetFromAddr()
 		txid := txInput.GetRefTxid()
 		offset := txInput.GetRefOffset()
-		utxoKey := genUtxoKey(addr, txid, offset)
+		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
 		if conUtxoInputsMap[utxoKey] {
 			// this utxo transfer from contract, will verify in rwset verify
 			continue
@@ -287,7 +287,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 			// this ID(either AK or Account) is verified before
 			continue
 		}
-		akType := acl.IsAccount(name)
+		akType := aclu.IsAccount(name)
 		if akType == 1 {
 			// Identify account
 			acl, err := t.queryAccountACL(name)
@@ -604,11 +604,11 @@ func (t *State) verifyMarkedTx(tx *pb.Transaction) error {
 	if err != nil {
 		return err
 	}
-	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJSON(bytespk)
+	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJsonStr(bytespk)
 	if err != nil {
 		return err
 	}
-	isMatch, _ := xcc.VerifyAddressUsingPublicKey(t.modifyBlockAddr, ecdsaKey)
+	isMatch, _ := xcc.VerifyAddressUsingPublicKey(t.utxo.ModifyBlockAddr, ecdsaKey)
 	if !isMatch {
 		return errors.New("address and public key not match")
 	}
@@ -666,14 +666,14 @@ func (t *State) verifyRelyOnMarkedTxs(tx *pb.Transaction) (bool, bool, error) {
 // err
 func (t *State) checkRelyOnMarkedTxid(reftxid []byte, blockid []byte) (bool, bool, error) {
 	isRely := false
-	reftx, err := t.ledger.QueryTransaction(reftxid)
+	reftx, err := t.sctx.Ledger.QueryTransaction(reftxid)
 	if err != nil {
 		return true, isRely, nil
 	}
 	if reftx.GetModifyBlock() != nil && reftx.ModifyBlock.Marked {
 		isRely = true
 		if string(blockid) != "" {
-			ib, err := t.ledger.QueryBlock(blockid)
+			ib, err := t.sctx.Ledger.QueryBlock(blockid)
 			if err != nil {
 				return false, isRely, err
 			}
@@ -690,7 +690,7 @@ func (t *State) checkRelyOnMarkedTxid(reftxid []byte, blockid []byte) (bool, boo
 func (t *State) removeDuplicateUser(initiator string, authRequire []string) []string {
 	dupCheck := make(map[string]bool)
 	finalUsers := make([]string, 0)
-	if acl.IsAccount(initiator) == 0 {
+	if aclu.IsAccount(initiator) == 0 {
 		finalUsers = append(finalUsers, initiator)
 		dupCheck[initiator] = true
 	}
@@ -755,7 +755,7 @@ func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirm
 	var err error
 	var once sync.Once
 	wg := sync.WaitGroup{}
-	dags := tx.SplitToDags(block)
+	dags := txn.SplitToDags(block)
 	for _, txs := range dags {
 		wg.Add(1)
 		go func(txs []*pb.Transaction) {

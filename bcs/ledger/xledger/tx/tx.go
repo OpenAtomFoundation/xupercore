@@ -2,7 +2,10 @@
 package tx
 
 import (
+	"encoding/json"
 	"errors"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 	"math/big"
 	"sync"
 	"time"
@@ -10,9 +13,22 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+)
+
+var (
+	ErrNegativeAmount = errors.New("amount in transaction can not be negative number")
+	ErrTxNotFound     = errors.New("this tx can not be found in unconfirmed-table")
+	ErrUnexpected     = errors.New("this is a unexpected error")
+)
+
+const (
+	TxVersion                = 1
+	RootTxVersion            = 0
+	DefaultMaxConfirmedDelay = 300
 )
 
 type Tx struct {
@@ -21,32 +37,43 @@ type Tx struct {
 	unconfirmedTable  kvdb.Database
 	UnconfirmTxAmount int64
 	UnconfirmTxInMem  *sync.Map
-	avgDelay          int64
+	AvgDelay          int64
+	ledger            *ledger.Ledger
+	maxConfirmedDelay uint32
 }
 
-// Transaction is the internal represents of transaction
-type Transaction struct {
-	*pb.Transaction
+// RootJSON xuper.json对应的struct，目前先只写了utxovm关注的字段
+type RootJSON struct {
+	Version   string `json:"version"`
+	Consensus struct {
+		Miner string `json:"miner"`
+	} `json:"consensus"`
+	Predistribution []struct {
+		Address string `json:"address"`
+		Quota   string `json:"quota"`
+	} `json:"predistribution"`
 }
 
-func NewTx(sctx *def.StateCtx, stateDB kvdb.DataBase) (*Tx, error) {
+func NewTx(sctx *def.StateCtx, stateDB kvdb.Database) (*Tx, error) {
 	return &Tx{
-		log:              sctx.XLog,
-		ldb:              stateDB,
-		unconfirmedTable: kvdb.NewTable(baseDB, pb.UnconfirmedTablePrefix),
-		unconfirmTxInMem: &sync.Map{},
+		log:               sctx.XLog,
+		ldb:               stateDB,
+		unconfirmedTable:  kvdb.NewTable(stateDB, pb.UnconfirmedTablePrefix),
+		UnconfirmTxInMem:  &sync.Map{},
+		ledger:            sctx.Ledger,
+		maxConfirmedDelay: DefaultMaxConfirmedDelay,
 	}, nil
 }
 
 // 生成奖励TX
-func GenerateAwardTx(address []byte, awardAmount string, desc []byte) (Transaction, error) {
+func GenerateAwardTx(address []byte, awardAmount string, desc []byte) (*pb.Transaction, error) {
 	utxoTx := &pb.Transaction{Version: TxVersion}
 	amount := big.NewInt(0)
 	amount.SetString(awardAmount, 10) // 10进制转换大整数
 	if amount.Cmp(big.NewInt(0)) < 0 {
 		return nil, ErrNegativeAmount
 	}
-	txOutput := &pb.TxOutput{}
+	txOutput := &protos.TxOutput{}
 	txOutput.ToAddr = []byte(address)
 	txOutput.Amount = amount.Bytes()
 	utxoTx.TxOutputs = append(utxoTx.TxOutputs, txOutput)
@@ -58,7 +85,7 @@ func GenerateAwardTx(address []byte, awardAmount string, desc []byte) (Transacti
 }
 
 // 生成只有Desc的空交易
-func GenerateEmptyTx(desc []byte) (Transaction, error) {
+func GenerateEmptyTx(desc []byte) (*pb.Transaction, error) {
 	utxoTx := &pb.Transaction{Version: TxVersion}
 	utxoTx.Desc = desc
 	utxoTx.Timestamp = time.Now().UnixNano()
@@ -69,7 +96,7 @@ func GenerateEmptyTx(desc []byte) (Transaction, error) {
 }
 
 // 通过创世块配置生成创世区块交易
-func GenerateRootTx(js []byte) (Transaction, error) {
+func GenerateRootTx(js []byte) (*pb.Transaction, error) {
 	jsObj := &RootJSON{}
 	jsErr := json.Unmarshal(js, jsObj)
 	if jsErr != nil {
@@ -82,7 +109,7 @@ func GenerateRootTx(js []byte) (Transaction, error) {
 		if amount.Cmp(big.NewInt(0)) < 0 {
 			return nil, ErrNegativeAmount
 		}
-		txOutput := &pb.TxOutput{}
+		txOutput := &protos.TxOutput{}
 		txOutput.ToAddr = []byte(pd.Address)
 		txOutput.Amount = amount.Bytes()
 		utxoTx.TxOutputs = append(utxoTx.TxOutputs, txOutput)
@@ -93,7 +120,7 @@ func GenerateRootTx(js []byte) (Transaction, error) {
 	return utxoTx, nil
 }
 
-func ParseContractTransferRequest(requests []*pb.InvokeRequest) (string, *big.Int, error) {
+func ParseContractTransferRequest(requests []*protos.InvokeRequest) (string, *big.Int, error) {
 	// found is the flag of whether the contract already carries the amount parameter
 	var found bool
 	amount := new(big.Int)
@@ -120,7 +147,7 @@ func ParseContractTransferRequest(requests []*pb.InvokeRequest) (string, *big.In
 func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
 	pbBuf, findErr := t.unconfirmedTable.Get(txid)
 	if findErr != nil {
-		if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+		if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 			return nil, ErrTxNotFound
 		}
 		t.log.Warn("unexpected leveldb error, when do QueryTx, it may corrupted.", "findErr", findErr)
@@ -139,7 +166,7 @@ func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
 // maxSize: 打包交易最大的长度（in byte）, -1 表示不限制
 func (t *Tx) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
 	var selectedTxs []*pb.Transaction
-	txMap, txGraph, _, loadErr := t.sortUnconfirmedTx()
+	txMap, txGraph, _, loadErr := t.SortUnconfirmedTx()
 	if loadErr != nil {
 		return nil, loadErr
 	}
@@ -150,8 +177,7 @@ func (t *Tx) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
 		return nil, ErrUnexpected
 	}
 	for _, txid := range outputTxList {
-		//todo dedup目前调用都是传false可以去掉了?
-		if dedup && ledger.ledger.IsTxInTrunk([]byte(txid)) {
+		if dedup && t.ledger.IsTxInTrunk([]byte(txid)) {
 			continue
 		}
 		selectedTxs = append(selectedTxs, txMap[txid])
@@ -163,12 +189,12 @@ func (t *Tx) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
 // 参数: dedup : true-删除已经确认tx, false-保留已经确认tx
 // 返回: txMap : txid -> Transaction
 //        txGraph:  txid ->  [依赖此txid的tx]
-func (t *Tx) sortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[string]bool, error) {
+func (t *Tx) SortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[string]bool, error) {
 	// 构造反向依赖关系图, key是被依赖的交易
 	txMap := map[string]*pb.Transaction{}
 	delayedTxMap := map[string]bool{}
 	txGraph := TxGraph{}
-	t.unconfirmTxInMem.Range(func(k, v interface{}) bool {
+	t.UnconfirmTxInMem.Range(func(k, v interface{}) bool {
 		txid := k.(string)
 		txMap[txid] = v.(*pb.Transaction)
 		txGraph[txid] = []string{}
@@ -203,9 +229,9 @@ func (t *Tx) sortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[strin
 		avgDelay := totalDelay / txMapSize //平均unconfirm滞留时间
 		microSec := avgDelay / 1e6
 		t.log.Info("average unconfirm delay", "micro-senconds", microSec, "count", txMapSize)
-		t.avgDelay = microSec
+		t.AvgDelay = microSec
 	}
-	t.unconfirmTxAmount = txMapSize
+	t.UnconfirmTxAmount = txMapSize
 	return txMap, txGraph, delayedTxMap, nil
 }
 
@@ -217,16 +243,21 @@ func (t *Tx) loadUnconfirmedTxFromDisk() error {
 	for iter.Next() {
 		rawKey := iter.Key()
 		txid := string(rawKey[1:])
-		t.log.Trace("  load unconfirmed tx from db", "txid", fmt.Sprintf("%x", txid))
+		t.log.Trace("  load unconfirmed tx from db", "txid", utils.F(txid))
 		txBuf := iter.Value()
 		tx := &pb.Transaction{}
 		pbErr := proto.Unmarshal(txBuf, tx)
 		if pbErr != nil {
 			return pbErr
 		}
-		t.unconfirmTxInMem.Store(txid, tx)
+		t.UnconfirmTxInMem.Store(txid, tx)
 		count++
 	}
-	t.unconfirmTxAmount = int64(count)
+	t.UnconfirmTxAmount = int64(count)
 	return nil
+}
+
+func (t *Tx) SetMaxConfirmedDelay(seconds uint32) {
+	t.maxConfirmedDelay = seconds
+	t.log.Info("set max confirmed delay of tx", "seconds", seconds)
 }

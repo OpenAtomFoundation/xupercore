@@ -65,7 +65,7 @@ func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock
 			isOnChain := uv.ledger.IsTxInTrunk(refTxid)
 			if !isOnChain {
 				if needLock {
-					uv.unlockKey(key)
+					uv.UnlockKey(key)
 				}
 				continue
 			}
@@ -90,7 +90,7 @@ func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock
 			txInputs = txInputs[:len(txInputs)-1]
 			amount.Sub(amount, utxoItem.Amount)
 			if needLock {
-				uv.unlockKey(key)
+				uv.UnlockKey(key)
 			}
 			break
 		} else {
