@@ -6,19 +6,19 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/syndtr/goleveldb/leveldb/comparer"
+	"github.com/syndtr/goleveldb/leveldb/memdb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/syndtr/goleveldb/leveldb/memdb"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 const (
 	// DefaultMemDBSize 默认内存db大小
 	DefaultMemDBSize = 32
-	CrossTimeWindow
 )
 
 var (
@@ -51,7 +51,7 @@ type XMCache struct {
 	model           XMReader
 	utxoCache       *UtxoCache
 	crossQueryCache *CrossQueryCache
-	events          []*pb.ContractEvent
+	events          []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
@@ -67,7 +67,7 @@ func NewXModelCache(model XMReader, utxovm UtxoVM) (*XMCache, error) {
 }
 
 // NewXModelCacheWithInputs make new XModelCache with Inputs
-func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*pb.TxInput, crossQueries []*pb.CrossQueryInfo) *XMCache {
+func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*protos.TxInput, crossQueries []*protos.CrossQueryInfo) *XMCache {
 	xc := &XMCache{
 		isPenetrate:  false,
 		inputsCache:  memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
@@ -272,12 +272,12 @@ func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
 }
 
 // GetUtxoRWSets returns the inputs and outputs of utxo
-func (xc *XMCache) GetUtxoRWSets() ([]*pb.TxInput, []*pb.TxOutput) {
+func (xc *XMCache) GetUtxoRWSets() ([]*pb.TxInput, []*protos.TxOutput) {
 	return xc.utxoCache.GetRWSets()
 }
 
 // putUtxos put utxos to TransientBucket
-func (xc *XMCache) putUtxos(inputs []*pb.TxInput, outputs []*pb.TxOutput) error {
+func (xc *XMCache) putUtxos(inputs []*protos.TxInput, outputs []*protos.TxOutput) error {
 	var in, out []byte
 	var err error
 	if len(inputs) != 0 {
@@ -312,9 +312,9 @@ func (xc *XMCache) writeUtxoRWSet() error {
 }
 
 // ParseContractUtxoInputs parse contract utxo inputs from tx write sets
-func ParseContractUtxoInputs(tx *pb.Transaction) ([]*pb.TxInput, error) {
+func ParseContractUtxoInputs(tx *pb.Transaction) ([]*protos.TxInput, error) {
 	var (
-		utxoInputs []*pb.TxInput
+		utxoInputs []*protos.TxInput
 		extInput   []byte
 	)
 	for _, out := range tx.GetTxOutputsExt() {
@@ -335,10 +335,10 @@ func ParseContractUtxoInputs(tx *pb.Transaction) ([]*pb.TxInput, error) {
 }
 
 // ParseContractUtxo parse contract utxos from tx write sets
-func ParseContractUtxo(tx *pb.Transaction) ([]*pb.TxInput, []*pb.TxOutput, error) {
+func ParseContractUtxo(tx *pb.Transaction) ([]*protos.TxInput, []*protos.TxOutput, error) {
 	var (
-		utxoInputs  []*pb.TxInput
-		utxoOutputs []*pb.TxOutput
+		utxoInputs  []*protos.TxInput
+		utxoOutputs []*protos.TxOutput
 		extInput    []byte
 		extOutput   []byte
 	)
@@ -368,7 +368,7 @@ func ParseContractUtxo(tx *pb.Transaction) ([]*pb.TxInput, []*pb.TxOutput, error
 	return utxoInputs, utxoOutputs, nil
 }
 
-func makeInputsMap(txInputs []*pb.TxInput) map[string]bool {
+func makeInputsMap(txInputs []*protos.TxInput) map[string]bool {
 	res := map[string]bool{}
 	if len(txInputs) == 0 {
 		return nil
@@ -380,7 +380,7 @@ func makeInputsMap(txInputs []*pb.TxInput) map[string]bool {
 	return res
 }
 
-func isSubOutputs(contractOutputs, txOutputs []*pb.TxOutput) bool {
+func isSubOutputs(contractOutputs, txOutputs []*protos.TxOutput) bool {
 	markedOutput := map[string]int{}
 	for _, v := range txOutputs {
 		key := string(v.GetAmount()) + string(v.GetToAddr())
@@ -401,7 +401,7 @@ func isSubOutputs(contractOutputs, txOutputs []*pb.TxOutput) bool {
 }
 
 // IsContractUtxoEffective check if contract utxo in tx utxo
-func IsContractUtxoEffective(contractTxInputs []*pb.TxInput, contractTxOutputs []*pb.TxOutput, tx *pb.Transaction) bool {
+func IsContractUtxoEffective(contractTxInputs []*protos.TxInput, contractTxOutputs []*protos.TxOutput, tx *pb.Transaction) bool {
 	if len(contractTxInputs) > len(tx.GetTxInputs()) || len(contractTxOutputs) > len(tx.GetTxOutputs()) {
 		return false
 	}
@@ -421,7 +421,7 @@ func IsContractUtxoEffective(contractTxInputs []*pb.TxInput, contractTxOutputs [
 }
 
 // CrossQuery will query contract from other chain
-func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
+func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*protos.ContractResponse, error) {
 	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
 }
 
@@ -448,12 +448,6 @@ func ParseCrossQuery(tx *pb.Transaction) ([]*pb.CrossQueryInfo, error) {
 	return crossQueryInfos, nil
 }
 
-// IsCrossQueryEffective check if crossQueryInfos effective
-// TODO: zq
-func IsCrossQueryEffective(cqi []*pb.CrossQueryInfo, tx *pb.Transaction) bool {
-	return true
-}
-
 // PutCrossQueries put queryInfos to db
 func (xc *XMCache) putCrossQueries(queryInfos []*pb.CrossQueryInfo) error {
 	var qi []byte
@@ -478,8 +472,8 @@ func (xc *XMCache) writeCrossQueriesRWSet() error {
 }
 
 // ParseContractEvents parse contract events from tx
-func ParseContractEvents(tx *pb.Transaction) ([]*pb.ContractEvent, error) {
-	var events []*pb.ContractEvent
+func ParseContractEvents(tx *pb.Transaction) ([]*protos.ContractEvent, error) {
+	var events []*protos.ContractEvent
 	for _, out := range tx.GetTxOutputsExt() {
 		if out.GetBucket() != TransientBucket {
 			continue
@@ -497,7 +491,7 @@ func ParseContractEvents(tx *pb.Transaction) ([]*pb.ContractEvent, error) {
 }
 
 // AddEvent add contract event to xmodel cache
-func (xc *XMCache) AddEvent(events ...*pb.ContractEvent) {
+func (xc *XMCache) AddEvent(events ...*protos.ContractEvent) {
 	xc.events = append(xc.events, events...)
 }
 

@@ -98,7 +98,7 @@ func TopSortDFS(g TxGraph) (order []string, cyclic bool, childDAGSize []int) {
 	return L, false, childDAGSize
 }
 
-func splitToDags(block *pb.InternalBlock) [][]*pb.Transaction {
+func SplitToDags(block *pb.InternalBlock) [][]*pb.Transaction {
 	txs := block.Transactions
 	oneDag := []*pb.Transaction{}
 	dags := [][]*pb.Transaction{}

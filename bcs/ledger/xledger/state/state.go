@@ -22,7 +22,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -242,11 +241,11 @@ func (t *State) VerifyTx(tx *pb.Transaction) (bool, error) {
 func (t *State) DoTx(tx *pb.Transaction) error {
 	tx.ReceivedTimestamp = time.Now().UnixNano()
 	if tx.Coinbase {
-		t.log.Warn("coinbase tx can not be given by PostTx", "txid", fmt.Sprintf("%x", tx.Txid))
+		t.log.Warn("coinbase tx can not be given by PostTx", "txid", utils.F(tx.Txid))
 		return ErrUnexpected
 	}
 	if len(tx.Blockid) > 0 {
-		t.log.Warn("tx from PostTx must not have blockid", "txid", fmt.Sprintf("%x", tx.Txid))
+		t.log.Warn("tx from PostTx must not have blockid", "txid", utils.F(tx.Txid))
 		return ErrUnexpected
 	}
 	return t.doTxSync(tx)
@@ -274,7 +273,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 		return blockErr
 	}
 	if !bytes.Equal(block.PreHash, t.latestBlockid) {
-		t.log.Warn("play for miner failed", "block.PreHash", fmt.Sprintf("%x", block.PreHash),
+		t.log.Warn("play for miner failed", "block.PreHash", utils.F(block.PreHash),
 			"latestBlockid", fmt.Sprintf("%x", t.latestBlockid))
 		return ErrPreBlockMissMatch
 	}
@@ -291,7 +290,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 		if tx.Coinbase {
 			err = t.doTxInternal(tx, batch, nil)
 			if err != nil {
-				t.log.Warn("dotx failed when PlayForMiner", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+				t.log.Warn("dotx failed when PlayForMiner", "txid", utils.F(tx.Txid), "err", err)
 				return err
 			}
 		} else {
@@ -322,7 +321,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
 	defer t.meta.MutexMeta.Unlock()
-	newMeta := proto.Clone(uv.metaTmp).(*pb.UtxoMeta)
+	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 	t.meta.Meta = newMeta
 	return nil
 }
@@ -360,7 +359,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 			cacheFiller := &utxo.CacheFiller{}
 			err := t.doTxInternal(tx, batch, cacheFiller)
 			if err != nil {
-				t.log.Warn("dotx failed when Play", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+				t.log.Warn("dotx failed when Play", "txid", utils.F(tx.Txid), "err", err)
 				return err
 			}
 			cacheFiller.Commit()
@@ -414,7 +413,7 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 		undoErr := t.undoUnconfirmedTx(unconfirmTx, unconfirmTxMap, unconfirmTxGraph,
 			batch, undoDone, &undoList)
 		if undoErr != nil {
-			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", fmt.Sprintf("%x", txid))
+			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", utils.F(txid))
 			return nil, nil, undoErr
 		}
 	}
@@ -485,14 +484,9 @@ func (t *State) Walk(blockid []byte, ledgerPrune bool) error {
 	// 异步回放被回滚未确认交易
 	go t.recoverUnconfirmedTx(undoList)
 
-	t.log.Info("utxoVM walk finish", "dest_block", hex.EncodeToString(blockid),
+	t.log.Info("utxo walk finish", "dest_block", hex.EncodeToString(blockid),
 		"latest_blockid", hex.EncodeToString(t.latestBlockid), "costs", xTimer.Print())
 	return nil
-}
-
-// 获取状态机tip block id
-func (t *State) GetTipBlockid() []byte {
-	return t.GetMeta().GetTipBlockid()
 }
 
 // 查询交易
@@ -507,7 +501,20 @@ func (t *State) GetBalance(addr string) (*big.Int, error) {
 
 // 查找状态机meta信息
 func (t *State) GetMeta() *pb.UtxoMeta {
-	return t.meta.GetMeta()
+	meta := &pb.UtxoMeta{}
+	meta.LatestBlockid = t.latestBlockid
+	meta.UtxoTotal = t.utxo.GetTotal().String() // pb没有bigint，所以转换为字符串
+	meta.AvgDelay = t.tx.AvgDelay
+	meta.UnconfirmTxAmount = t.tx.UnconfirmTxAmount
+	meta.MaxBlockSize = t.meta.GetMaxBlockSize()
+	meta.ReservedContracts = t.meta.GetReservedContracts()
+	meta.ForbiddenContract = t.meta.GetForbiddenContract()
+	meta.NewAccountResourceAmount = t.meta.GetNewAccountResourceAmount()
+	meta.IrreversibleBlockHeight = t.meta.GetIrreversibleBlockHeight()
+	meta.IrreversibleSlideWindow = t.meta.GetIrreversibleSlideWindow()
+	meta.GasPrice = t.meta.GetGasPrice()
+	meta.GroupChainContract = t.meta.GetGroupChainContract()
+	return meta
 }
 
 func (t *State) doTxSync(tx *pb.Transaction) error {
@@ -528,11 +535,11 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	}
 	waitTime := time.Now().Unix() - recvTime
 	if waitTime > TxWaitTimeout {
-		t.log.Warn("dotx wait too long!", "waitTime", waitTime, "txid", fmt.Sprintf("%x", tx.Txid))
+		t.log.Warn("dotx wait too long!", "waitTime", waitTime, "txid", utils.F(tx.Txid))
 	}
 	_, exist := t.tx.UnconfirmTxInMem.Load(string(tx.Txid))
 	if exist {
-		t.log.Debug("this tx already in unconfirm table, when DoTx", "txid", fmt.Sprintf("%x", tx.Txid))
+		t.log.Debug("this tx already in unconfirm table, when DoTx", "txid", utils.F(tx.Txid))
 		return ErrAlreadyInUnconfirmed
 	}
 	batch := t.ldb.NewBatch()
@@ -543,7 +550,7 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		return doErr
 	}
 	batch.Put(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...), pbTxBuf)
-	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", fmt.Sprintf("%x", tx.Txid))
+	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", utils.F(tx.Txid))
 	writeErr := batch.Write()
 	if writeErr != nil {
 		t.utxo.ClearCache()
@@ -616,8 +623,8 @@ func (t *State) NewBatch() kvdb.Batch {
 }
 
 func (t *State) ClearCache() {
-	t.utxo.utxoCache = utxo.NewUtxoCache(t.cacheSize)
-	t.prevFoundKeyCache = cache.NewLRUCache(cacheSize)
+	t.utxo.UtxoCache = utxo.NewUtxoCache(t.utxo.CacheSize)
+	t.utxo.PrevFoundKeyCache = cache.NewLRUCache(t.utxo.CacheSize)
 	t.clearBalanceCache()
 	t.xmodel.CleanCache()
 	t.log.Warn("clear utxo cache")
@@ -625,8 +632,8 @@ func (t *State) ClearCache() {
 
 func (t *State) clearBalanceCache() {
 	t.log.Warn("clear balance cache")
-	t.balanceCache = cache.NewLRUCache(t.cacheSize) //清空balanceCache
-	t.balanceViewDirty = map[string]int{}           //清空cache dirty flag表
+	t.utxo.BalanceCache = cache.NewLRUCache(t.utxo.CacheSize) //清空balanceCache
+	t.utxo.BalanceViewDirty = map[string]int{}                //清空cache dirty flag表
 	t.xmodel.CleanCache()
 }
 
@@ -636,7 +643,7 @@ func (t *State) undoUnconfirmedTx(tx *pb.Transaction, txMap map[string]*pb.Trans
 		return nil
 	}
 
-	t.log.Info("start to undo transaction", "txid", fmt.Sprintf("%s", hex.EncodeToString(tx.Txid)))
+	t.log.Info("start to undo transaction", "txid", utils.F(hex.EncodeToString(tx.Txid)))
 	childrenTxids, exist := txGraph[string(tx.Txid)]
 	if exist {
 		for _, childTxid := range childrenTxids {
@@ -651,7 +658,7 @@ func (t *State) undoUnconfirmedTx(tx *pb.Transaction, txMap map[string]*pb.Trans
 	if undoErr != nil {
 		return undoErr
 	}
-	batch.Delete(append([]byte(xldgpb.UnconfirmedTablePrefix), tx.Txid...))
+	batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...))
 
 	// 记录回滚交易，用于重放
 	undoDone[string(tx.Txid)] = true
@@ -707,7 +714,7 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 		utxoKey := utxo.GenUtxoKeyWithPrefix(addr, tx.Txid, int32(offset))
 		// 删除产生的UTXO
 		batch.Delete([]byte(utxoKey))
-		t.UtxoCache.Remove(string(addr), utxoKey)
+		t.utxo.UtxoCache.Remove(string(addr), utxoKey)
 		t.utxo.SubBalance(addr, txOutputAmount)
 		t.log.Trace("undo delete utxo key", "utxoKey", utxoKey)
 		if tx.Coinbase {
@@ -719,29 +726,6 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 	}
 
 	return nil
-}
-
-// GetContractStatus get contract status of a contract
-func (t *State) GetContractStatus(contractName string) (*pb.ContractStatus, error) {
-	res := &pb.ContractStatus{}
-	res.ContractName = contractName
-	verdata, err := t.xmodel.Get("contract", bridge.ContractCodeDescKey(contractName))
-	if err != nil {
-		t.log.Warn("GetContractStatus get version data error", "error", err.Error())
-		return nil, err
-	}
-	txid := verdata.GetRefTxid()
-	res.Txid = fmt.Sprintf("%x", txid)
-	tx, _, err := t.xmodel.QueryTx(txid)
-	if err != nil {
-		t.log.Warn("GetContractStatus query tx error", "error", err.Error())
-		return nil, err
-	}
-	res.Desc = tx.GetDesc()
-	res.Timestamp = tx.GetReceivedTimestamp()
-	// query if contract is bannded
-	res.IsBanned, err = t.queryContractBannedStatus(contractName)
-	return res, nil
 }
 
 func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
@@ -807,10 +791,10 @@ func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
 		}
 
 		// 每回滚完一个块，内存级别更新UtxoMeta信息
-		t.meta.Lock()
-		newMeta := proto.Clone(t.metaTmp).(*pb.UtxoMeta)
-		t.meta.SetMeta(newMeta)
-		t.meta.Unlock()
+		t.utxo.MutexMeta.Lock()
+		newMeta := proto.Clone(t.utxo.MetaTmp).(*pb.UtxoMeta)
+		t.utxo.Meta = newMeta
+		t.utxo.MutexMeta.Unlock()
 
 		t.log.Info("finish undo this block", "blockid", showBlkId)
 	}
@@ -824,7 +808,7 @@ func (t *State) updateLatestBlockid(newBlockid []byte, batch kvdb.Batch, reason 
 	if err != nil {
 		return err
 	}
-	batch.Put(append([]byte(xldgpb.MetaTablePrefix), []byte(LatestBlockKey)...), newBlockid)
+	batch.Put(append([]byte(pb.MetaTablePrefix), []byte(utxo.LatestBlockKey)...), newBlockid)
 	writeErr := batch.Write()
 	if writeErr != nil {
 		t.ClearCache()
@@ -914,7 +898,7 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 
 		// 完成一个区块后，内存级别更新UtxoMeta信息
 		t.meta.MutexMeta.Lock()
-		newMeta := proto.Clone(uv.metaTmp).(*pb.UtxoMeta)
+		newMeta := proto.Clone(t.utxo.MetaTmp).(*pb.UtxoMeta)
 		t.meta.Meta = newMeta
 		t.meta.MutexMeta.Unlock()
 
@@ -948,7 +932,7 @@ func (t *State) payFee(tx *pb.Transaction, batch kvdb.Batch, block *pb.InternalB
 }
 
 func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
-	xTimer := t.lctx.Timer.NewXTimer()
+	xTimer := timer.NewXTimer()
 	t.log.Info("start recover unconfirm tx", "tx_count", len(undoList))
 
 	var tx *pb.Transaction
@@ -1001,8 +985,8 @@ func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
 //返回：被确认的txid集合、err
 func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, needRepost bool) (map[string]bool, map[string]bool, error) {
 	if !bytes.Equal(block.PreHash, t.latestBlockid) {
-		t.log.Warn("play failed", "block.PreHash", fmt.Sprintf("%x", block.PreHash),
-			"latestBlockid", fmt.Sprintf("%x", uv.latestBlockid))
+		t.log.Warn("play failed", "block.PreHash", utils.F(block.PreHash),
+			"latestBlockid", utils.F(t.latestBlockid))
 		return nil, nil, ErrPreBlockMissMatch
 	}
 	txidsInBlock := map[string]bool{}    // block里面所有的txid
@@ -1014,7 +998,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		for _, txInput := range tx.TxInputs {
 			utxoKey := utxo.GenUtxoKey(txInput.FromAddr, txInput.RefTxid, txInput.RefOffset)
 			if UTXOKeysInBlock[utxoKey] { //检查块内的utxo双花情况
-				t.log.Warn("found duplicated utxo in same block", "utxoKey", utxoKey, "txid", fmt.Sprintf("%x", tx.Txid))
+				t.log.Warn("found duplicated utxo in same block", "utxoKey", utxoKey, "txid", utils.F(tx.Txid))
 				t.utxo.Mutex.Lock()
 				return nil, nil, ErrUTXODuplicated
 			}
@@ -1032,14 +1016,14 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	if loadErr != nil {
 		return nil, nil, loadErr
 	}
-	t.log.Info("unconfirm table size", "unconfirmTxMap", uv.unconfirmTxAmount)
+	t.log.Info("unconfirm table size", "unconfirmTxMap", t.tx.UnconfirmTxAmount)
 	undoDone := map[string]bool{}
 	unconfirmToConfirm := map[string]bool{}
 	for txid, unconfirmTx := range unconfirmTxMap {
 		if _, exist := txidsInBlock[string(txid)]; exist {
 			// 说明这个交易已经被确认
-			batch.Delete(append([]byte(xldgpb.UnconfirmedTablePrefix), []byte(txid)...))
-			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", txid))
+			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
+			t.log.Trace("  delete from unconfirmed", "txid", utils.F(txid))
 			// 直接从unconfirm表删除, 大部分情况是这样的
 			unconfirmToConfirm[txid] = true
 			continue
@@ -1052,7 +1036,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 			utxoKey := utxo.GenUtxoKey(addr, txid, offset)
 			if _, exist := UTXOKeysInBlock[utxoKey]; exist {
 				// 说明此交易和block里面的交易存在双花冲突，需要回滚, 少数情况
-				t.log.Warn("conflict, refuse double spent", "key", utxoKey, "txid", global.F(unconfirmTx.Txid))
+				t.log.Warn("conflict, refuse double spent", "key", utxoKey, "txid", utils.F(unconfirmTx.Txid))
 				hasConflict = true
 				break
 			}
@@ -1087,7 +1071,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		}
 		tooDelayed := delayedTxMap[string(unconfirmTx.Txid)]
 		if tooDelayed {
-			t.log.Warn("will undo tx because it is beyond confirmed delay", "txid", global.F(unconfirmTx.Txid))
+			t.log.Warn("will undo tx because it is beyond confirmed delay", "txid", utils.F(unconfirmTx.Txid))
 		}
 		if hasConflict || tooDelayed {
 			undoErr := t.undoUnconfirmedTx(unconfirmTx, unconfirmTxMap,
@@ -1126,6 +1110,6 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	return unconfirmToConfirm, undoDone, nil
 }
 
-func GenWriteKeyWithPrefix(txOutputExt *pb.TxOutputExt) string {
+func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
 	return xmodel.GenWriteKeyWithPrefix(txOutputExt)
 }

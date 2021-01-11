@@ -125,9 +125,9 @@ message Transaction {
     // 交易发起需要被收集签名的AddressURL集合信息，包括用于utxo转账和用于合约调用
     repeated string auth_require = 27;
     // 交易发起者对交易元数据签名，签名的内容包括auth_require字段
-    repeated SignatureInfo initiator_signs = 28;
+    repeated protos.SignatureInfo initiator_signs = 28;
     // 收集到的签名
-    repeated SignatureInfo auth_require_signs = 29;
+    repeated protos.SignatureInfo auth_require_signs = 29;
     // 节点收到tx的时间戳，不参与签名
     int64 received_timestamp = 30;
     // 统一签名(支持多重签名/环签名等，与initiator_signs/auth_require_signs不同时使用)
@@ -292,5 +292,10 @@ message TxInfo {
 message BlockInfo {
     BlockStatus status = 1;
     InternalBlock block = 2;
+}
+
+message TokenFrozenDetail {
+  string balance = 1;
+  bool isFrozen = 2;
 }
 

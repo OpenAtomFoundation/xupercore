@@ -11,6 +11,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xuperchain/core/common"
+	xlog "github.com/xuperchain/xuperchain/core/common/log"
+	"github.com/xuperchain/xuperchain/core/global"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -80,13 +83,13 @@ const (
 type TxLists []*pb.Transaction
 
 type UtxoVM struct {
-	meta                 *pb.UtxoMeta // utxo meta
-	metaTmp              *pb.UtxoMeta // tmp utxo meta
-	mutexMeta            *sync.Mutex  // access control for meta
+	Meta                 *pb.UtxoMeta // utxo meta
+	MetaTmp              *pb.UtxoMeta // tmp utxo meta
+	MutexMeta            *sync.Mutex  // access control for meta
 	ldb                  kvdb.Database
 	Mutex                *sync.RWMutex // utxo leveldb表读写锁
 	MutexMem             *sync.Mutex   // 内存锁定状态互斥锁
-	spLock               *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
+	SpLock               *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
 	mutexBalance         *sync.Mutex   // 余额Cache锁
 	lockKeys             map[string]*UtxoLockItem
 	lockKeyList          *list.List // 按锁定的先后顺序，方便过期清理
@@ -97,13 +100,13 @@ type UtxoVM struct {
 	latestBlockid        []byte                   // 当前vm最后一次执行到的blockid
 	utxoTable            kvdb.Database            // utxo表
 	OfflineTxChan        chan []*pb.Transaction   // 未确认tx的通知chan
-	prevFoundKeyCache    *cache.LRUCache          // 上一次找到的可用utxo key，用于加速GenerateTx
+	PrevFoundKeyCache    *cache.LRUCache          // 上一次找到的可用utxo key，用于加速GenerateTx
 	utxoTotal            *big.Int                 // 总资产
 	cryptoClient         crypto_base.CryptoClient // 加密实例
-	modifyBlockAddr      string                   // 可修改区块链的监管地址
-	balanceCache         *cache.LRUCache          //余额cache,加速GetBalance查询
-	cacheSize            int                      //记录构造utxo时传入的cachesize
-	balanceViewDirty     map[string]int           //balanceCache 标记dirty: addr -> sequence of view
+	ModifyBlockAddr      string                   // 可修改区块链的监管地址
+	BalanceCache         *cache.LRUCache          //余额cache,加速GetBalance查询
+	CacheSize            int                      //记录构造utxo时传入的cachesize
+	BalanceViewDirty     map[string]int           //balanceCache 标记dirty: addr -> sequence of view
 	contractExectionTime int
 	unconfirmTxInMem     *sync.Map //未确认Tx表的内存镜像
 	maxConfirmedDelay    uint32    // 交易处于unconfirm状态的最长时间，超过后会被回滚
@@ -121,18 +124,6 @@ type InboundTx struct {
 	txBuf []byte
 }
 
-// RootJSON xuper.json对应的struct，目前先只写了utxovm关注的字段
-type RootJSON struct {
-	Version   string `json:"version"`
-	Consensus struct {
-		Miner string `json:"miner"`
-	} `json:"consensus"`
-	Predistribution []struct {
-		Address string `json:"address"`
-		Quota   string `json:"quota"`
-	} `json:"predistribution"`
-}
-
 type UtxoLockItem struct {
 	timestamp int64
 	holder    *list.Element
@@ -144,7 +135,7 @@ type contractChainCore struct {
 	*ledger.Ledger
 }
 
-func genUtxoKey(addr []byte, txid []byte, offset int32) string {
+func GenUtxoKey(addr []byte, txid []byte, offset int32) string {
 	return fmt.Sprintf("%s_%x_%d", addr, txid, offset)
 }
 
@@ -174,7 +165,7 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 		addr := txInput.FromAddr
 		txid := txInput.RefTxid
 		offset := txInput.RefOffset
-		utxoKey := genUtxoKey(addr, txid, offset)
+		utxoKey := GenUtxoKey(addr, txid, offset)
 		if utxoDedup[utxoKey] {
 			uv.log.Warn("found duplicated utxo in same tx", "utxoKey", utxoKey, "txid", global.F(tx.Txid))
 			return ErrUTXODuplicated
@@ -182,15 +173,15 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 		utxoDedup[utxoKey] = true
 		var amountBytes []byte
 		var frozenHeight int64
-		uv.utxoCache.Lock()
-		if l2Cache, exist := uv.utxoCache.All[string(addr)]; exist {
+		uv.UtxoCache.Lock()
+		if l2Cache, exist := uv.UtxoCache.All[string(addr)]; exist {
 			uItem := l2Cache[pb.UTXOTablePrefix+utxoKey]
 			if uItem != nil {
 				amountBytes = uItem.Amount.Bytes()
 				frozenHeight = uItem.FrozenHeight
 			}
 		}
-		uv.utxoCache.Unlock()
+		uv.UtxoCache.Unlock()
 		if amountBytes == nil {
 			uBinary, findErr := uv.utxoTable.Get([]byte(utxoKey))
 			if findErr != nil {
@@ -244,7 +235,7 @@ func (uv *UtxoVM) isLocked(utxoKey []byte) bool {
 }
 
 // 解锁utxo key
-func (uv *UtxoVM) unlockKey(utxoKey []byte) {
+func (uv *UtxoVM) UnlockKey(utxoKey []byte) {
 	uv.MutexMem.Lock()
 	defer uv.MutexMem.Unlock()
 	uv.log.Trace("    unlock utxo key", "key", string(utxoKey))
@@ -318,13 +309,13 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 
 	utxoMutex := &sync.RWMutex{}
 	utxoVM := &UtxoVM{
-		meta:                 &pb.UtxoMeta{},
-		metaTmp:              &pb.UtxoMeta{},
-		mutexMeta:            &sync.Mutex{},
+		Meta:                 &pb.UtxoMeta{},
+		MetaTmp:              &pb.UtxoMeta{},
+		MutexMeta:            &sync.Mutex{},
 		ldb:                  baseDB,
-		mutex:                utxoMutex,
-		mutexMem:             &sync.Mutex{},
-		spLock:               NewSpinLock(),
+		Mutex:                utxoMutex,
+		MutexMem:             &sync.Mutex{},
+		SpLock:               NewSpinLock(),
 		mutexBalance:         &sync.Mutex{},
 		lockKeys:             map[string]*UtxoLockItem{},
 		lockKeyList:          list.New(),
@@ -332,13 +323,13 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 		log:                  sctx.XLog,
 		ledger:               sctx.Ledger,
 		utxoTable:            kvdb.NewTable(baseDB, pb.UTXOTablePrefix),
-		utxoCache:            NewUtxoCache(cachesize),
+		UtxoCache:            NewUtxoCache(cachesize),
 		OfflineTxChan:        make(chan []*pb.Transaction, OfflineTxChanBuffer),
-		prevFoundKeyCache:    cache.NewLRUCache(cachesize),
+		PrevFoundKeyCache:    cache.NewLRUCache(cachesize),
 		utxoTotal:            big.NewInt(0),
-		balanceCache:         cache.NewLRUCache(cachesize),
-		cacheSize:            cachesize,
-		balanceViewDirty:     map[string]int{},
+		BalanceCache:         cache.NewLRUCache(cachesize),
+		CacheSize:            cachesize,
+		BalanceViewDirty:     map[string]int{},
 		contractExectionTime: contractExectionTime,
 		cryptoClient:         sctx.Crypt,
 		maxConfirmedDelay:    DefaultMaxConfirmedDelay,
@@ -350,7 +341,7 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 	if findErr == nil {
 		utxoVM.latestBlockid = latestBlockid
 	} else {
-		if common.NormalizedKVError(findErr) != common.ErrKVNotFound {
+		if def.NormalizedKVError(findErr) != def.ErrKVNotFound {
 			return nil, findErr
 		}
 	}
@@ -360,7 +351,7 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 		total.SetBytes(utxoTotalBytes)
 		utxoVM.utxoTotal = total
 	} else {
-		if common.NormalizedKVError(findTotalErr) != common.ErrKVNotFound {
+		if def.NormalizedKVError(findTotalErr) != def.ErrKVNotFound {
 			return nil, findTotalErr
 		}
 		//说明是1.1.1版本，没有utxo total字段, 估算一个
@@ -381,10 +372,9 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 
 // ClearCache 清空cache, 写盘失败的时候
 func (uv *UtxoVM) ClearCache() {
-	uv.utxoCache = NewUtxoCache(uv.cacheSize)
-	uv.prevFoundKeyCache = cache.NewLRUCache(uv.cacheSize)
+	uv.UtxoCache = NewUtxoCache(uv.CacheSize)
+	uv.PrevFoundKeyCache = cache.NewLRUCache(uv.CacheSize)
 	uv.clearBalanceCache()
-	uv.model3.CleanCache()
 	uv.log.Warn("clear utxo cache")
 }
 
@@ -395,7 +385,7 @@ func (uv *UtxoVM) clearBalanceCache() {
 	uv.model3.CleanCache()
 }
 
-func (uv *UtxoVM) updateUtxoTotal(delta *big.Int, batch kvdb.Batch, inc bool) {
+func (uv *UtxoVM) UpdateUtxoTotal(delta *big.Int, batch kvdb.Batch, inc bool) {
 	if inc {
 		uv.utxoTotal = uv.utxoTotal.Add(uv.utxoTotal, delta)
 	} else {
@@ -437,8 +427,8 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 	cacheKeys := map[string]bool{} // 先从cache里找找，不够再从leveldb找,因为leveldb prefix scan比较慢
 	txInputs := []*pb.TxInput{}
 	uv.clearExpiredLocks()
-	uv.utxoCache.Lock()
-	if l2Cache, exist := uv.utxoCache.Available[fromAddr]; exist {
+	uv.UtxoCache.Lock()
+	if l2Cache, exist := uv.UtxoCache.Available[fromAddr]; exist {
 		for uKey, uItem := range l2Cache {
 			if uItem.FrozenHeight > curLedgerHeight || uItem.FrozenHeight == -1 {
 				uv.log.Trace("utxo still frozen, skip it", "uKey", uKey, " fheight", uItem.FrozenHeight)
@@ -465,7 +455,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 					continue
 				}
 			}
-			uv.utxoCache.Use(fromAddr, uKey)
+			uv.UtxoCache.Use(fromAddr, uKey)
 			utxoTotal.Add(utxoTotal, uItem.Amount)
 			txInput := &pb.TxInput{
 				RefTxid:      refTxid,
@@ -482,7 +472,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 			}
 		}
 	}
-	uv.utxoCache.Unlock()
+	uv.UtxoCache.Unlock()
 	if !foundEnough {
 		// 底层key: table_prefix from_addr "_" txid "_" offset
 		addrPrefix := pb.UTXOTablePrefix + fromAddr + "_"
@@ -550,7 +540,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 	}
 	if !foundEnough {
 		for _, lk := range willLockKeys {
-			uv.unlockKey(lk)
+			uv.UnlockKey(lk)
 		}
 		return nil, nil, nil, ErrNoEnoughUTXO // 余额不足啦
 	}
@@ -558,7 +548,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 }
 
 // addBalance 增加cache中的Balance
-func (uv *UtxoVM) addBalance(addr []byte, delta *big.Int) {
+func (uv *UtxoVM) AddBalance(addr []byte, delta *big.Int) {
 	uv.mutexBalance.Lock()
 	defer uv.mutexBalance.Unlock()
 	balance, hitCache := uv.balanceCache.Get(string(addr))
@@ -668,7 +658,7 @@ func (uv *UtxoVM) GetFromTable(tablePrefix []byte, key []byte) ([]byte, error) {
 // RemoveUtxoCache 清理utxoCache
 func (uv *UtxoVM) RemoveUtxoCache(address string, utxoKey string) {
 	uv.log.Trace("RemoveUtxoCache", "address", address, "utxoKey", utxoKey)
-	uv.utxoCache.Remove(address, utxoKey)
+	uv.UtxoCache.Remove(address, utxoKey)
 }
 
 // NewBatch return batch instance
@@ -684,7 +674,7 @@ func (uv *UtxoVM) SetMaxConfirmedDelay(seconds uint32) {
 
 // SetModifyBlockAddr set modified block addr
 func (uv *UtxoVM) SetModifyBlockAddr(addr string) {
-	uv.modifyBlockAddr = addr
+	uv.ModifyBlockAddr = addr
 	uv.log.Info("set modified block addr", "addr", addr)
 }
 

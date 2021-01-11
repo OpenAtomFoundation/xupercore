@@ -264,7 +264,7 @@ func (uv *UtxoVM) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string
 		addr := conUtxoInput.GetFromAddr()
 		txid := conUtxoInput.GetRefTxid()
 		offset := conUtxoInput.GetRefOffset()
-		utxoKey := genUtxoKey(addr, txid, offset)
+		utxoKey := GenUtxoKey(addr, txid, offset)
 		conUtxoInputsMap[utxoKey] = true
 	}
 
@@ -273,7 +273,7 @@ func (uv *UtxoVM) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string
 		addr := txInput.GetFromAddr()
 		txid := txInput.GetRefTxid()
 		offset := txInput.GetRefOffset()
-		utxoKey := genUtxoKey(addr, txid, offset)
+		utxoKey := GenUtxoKey(addr, txid, offset)
 		if conUtxoInputsMap[utxoKey] {
 			// this utxo transfer from contract, will verify in rwset verify
 			continue
