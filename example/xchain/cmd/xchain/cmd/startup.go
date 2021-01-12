@@ -9,7 +9,6 @@ import (
 	sconf "github.com/xuperchain/xupercore/example/xchain/common/config"
 	"github.com/xuperchain/xupercore/example/xchain/service"
 	"github.com/xuperchain/xupercore/example/xchain/service/rpc"
-
 	econf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"

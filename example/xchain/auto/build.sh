@@ -34,15 +34,16 @@ function buildpkg() {
         mkdir "$OUTDIR/bin"
     fi
 
-    go build -o "$OUTDIR/bin/$output" -ldflags $ldflags $pkg
+    echo "go build -o "$OUTDIR/bin/$output" -ldflags $ldflags $pkg"
+    go build -o "$OUTDIR/bin/$output" -ldflags "'$ldflags'" $pkg
 }
 
 # build xuperos
 buildpkg xchain "$HOMEDIR/example/xchain/cmd/xchain/main.go"
-buildpkg xchain-cli "$HOMEDIR/example/xchain/cmd/client/main.go"
+#buildpkg xchain-cli "$HOMEDIR/example/xchain/cmd/client/main.go"
 
 # build output
 cp -r "$HOMEDIR/example/xchain/conf" "$OUTDIR"
-cp -r "$OUTDIR/example/xchain/data" "$OUTDIR"
+cp -r "$HOMEDIR/example/xchain/data" "$OUTDIR"
 cp "$HOMEDIR/example/xchain/auto/control.sh" "$OUTDIR"
 
