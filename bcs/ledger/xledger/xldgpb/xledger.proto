@@ -2,6 +2,7 @@ syntax = "proto3";
 
 import "xupercore/protos/contract.proto";
 import "xupercore/protos/ledger.proto";
+import "xupercore/protos/permission.proto";
 
 option go_package = "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb";
 
@@ -78,12 +79,6 @@ message HDInfo {
     bytes hd_public_key = 1;
     // original_hash
     bytes original_hash = 2;
-}
-
-// 签名详情
-message SignatureInfo {
-    string PublicKey = 1;
-    bytes Sign = 2;
 }
 
 // Unified Xuper Signature
