@@ -5,16 +5,15 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	log "github.com/xuperchain/log15"
-
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/protos"
 )
 
 type xModSnapshot struct {
 	xmod      *XModel
-	logger    log.Logger
+	logger    logs.Logger
 	blkHeight int64
 	blkId     []byte
 }
@@ -36,7 +35,7 @@ func (t *xModSnapshot) Get(bucket string, key []byte) (*xmodel_pb.VersionedData,
 	}
 
 	// 通过txid串联查询，直到找到<=blkHeight的交易
-	var verValue *xmodpb.VersionedData
+	var verValue *xmodel_pb.VersionedData
 	cursor := &xModListCursor{newestVD.RefTxid, newestVD.RefOffset}
 	for {
 		// 最初的InputExt是空值，只设置了Bucket和Key
@@ -106,10 +105,10 @@ func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *xmodel_
 	}
 
 	txOutputsExt := tx.TxOutputsExt[offset]
-	value := &xmodpb.VersionedData{
+	value := &xmodel_pb.VersionedData{
 		RefTxid:   tx.Txid,
 		RefOffset: offset,
-		PureData: &xmodpb.PureData{
+		PureData: &xmodel_pb.PureData{
 			Key:    txOutputsExt.Key,
 			Value:  txOutputsExt.Value,
 			Bucket: txOutputsExt.Bucket,

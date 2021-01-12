@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
@@ -45,18 +47,20 @@ var (
 	ErrInvalidTxExt   = errors.New("Invalid tx ext")
 	ErrTxTooLarge     = errors.New("Tx size is too large")
 
-	ErrInvokeReqParams    = errors.New("Invalid invoke request params")
 	ErrParseContractUtxos = errors.New("Parse contract utxos error")
 	ErrContractTxAmout    = errors.New("Contract transfer amount error")
 )
 
-var (
+const (
+	LatestBlockKey = "pointer"
+
 	// BetaTxVersion 为当前代码支持的最高交易版本
 	BetaTxVersion  = 3
 	RootTxVersion  = 0
 	FeePlaceholder = "$"
 	// TxSizePercent max percent of txs' size in one block
 	TxSizePercent = 0.8
+
 	TxWaitTimeout = 5
 )
 
@@ -77,7 +81,7 @@ type State struct {
 
 func NewState(sctx *context.StateCtx) (*State, error) {
 	if sctx == nil {
-		return nil, fmt.Errrof("create state failed because context set error")
+		return nil, fmt.Errorf("create state failed because context set error")
 	}
 
 	obj := &State{
@@ -99,11 +103,6 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 		return nil, fmt.Errorf("create state failed because create ldb error:%s", err)
 	}
 
-	obj.utxo, err = utxo.NewUtxo(sctx)
-	if err != nil {
-		return nil, fmt.Errorf("create state failed because create utxo error:%s", err)
-	}
-
 	obj.xmodel, err = xmodel.NewXModel(sctx, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create xmodel error:%s", err)
@@ -114,9 +113,28 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 		return nil, fmt.Errorf("create state failed because create meta error:%s", err)
 	}
 
+	obj.utxo, err = utxo.NewUtxo(sctx, obj.meta)
+	if err != nil {
+		return nil, fmt.Errorf("create state failed because create utxo error:%s", err)
+	}
+
 	obj.tx, err = tx.NewTx(sctx, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create tx error:%s", err)
+	}
+
+	latestBlockid, findErr := obj.meta.MetaTable.Get([]byte(LatestBlockKey))
+	if findErr == nil {
+		obj.latestBlockid = latestBlockid
+	} else {
+		if def.NormalizedKVError(findErr) != def.ErrKVNotFound {
+			return nil, findErr
+		}
+	}
+
+	loadErr := obj.tx.LoadUnconfirmedTxFromDisk()
+	if loadErr != nil {
+		return nil, loadErr
 	}
 
 	return obj, nil
@@ -142,6 +160,34 @@ func (t *State) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
 
 func (t *State) GetLatestBlockid() []byte {
 	return t.latestBlockid
+}
+
+func (t *State) QueryUtxoRecord(accountName string, displayCount int64) (*pb.UtxoRecordDetail, error) {
+	return t.utxo.QueryUtxoRecord(accountName, displayCount)
+}
+
+func (t *State) SelectUtxosBySize(fromAddr string, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
+	return t.utxo.SelectUtxosBySize(fromAddr, needLock, excludeUnconfirmed)
+}
+
+func (t *State) QueryContractStatData() (*protos.ContractStatData, error) {
+	return t.utxo.QueryContractStatData()
+}
+
+func (t *State) GetAccountContracts(account string) ([]string, error) {
+	return t.utxo.GetAccountContracts(account)
+}
+
+func (t *State) QueryAccountACL(accountName string) (*protos.Acl, error) {
+	return t.utxo.QueryAccountACL(accountName)
+}
+
+func (t *State) QueryContractMethodACL(contractName string, methodName string) (*protos.Acl, error) {
+	return t.utxo.QueryContractMethodACL(contractName, methodName)
+}
+
+func (t *State) QueryAccountContainAK(address string) ([]string, error) {
+	return t.utxo.QueryAccountContainAK(address)
 }
 
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供
@@ -413,7 +459,7 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 		undoErr := t.undoUnconfirmedTx(unconfirmTx, unconfirmTxMap, unconfirmTxGraph,
 			batch, undoDone, &undoList)
 		if undoErr != nil {
-			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", utils.F(txid))
+			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", fmt.Sprintf("%x", txid))
 			return nil, nil, undoErr
 		}
 	}
@@ -638,12 +684,12 @@ func (t *State) clearBalanceCache() {
 }
 
 func (t *State) undoUnconfirmedTx(tx *pb.Transaction, txMap map[string]*pb.Transaction, txGraph tx.TxGraph,
-	batch kvdb.Batch, undoDone map[string]bool, pundoList *[]pb.Transaction) error {
+	batch kvdb.Batch, undoDone map[string]bool, pundoList *[]*pb.Transaction) error {
 	if undoDone[string(tx.Txid)] == true {
 		return nil
 	}
 
-	t.log.Info("start to undo transaction", "txid", utils.F(hex.EncodeToString(tx.Txid)))
+	t.log.Info("start to undo transaction", "txid", fmt.Sprintf("%s", hex.EncodeToString(tx.Txid)))
 	childrenTxids, exist := txGraph[string(tx.Txid)]
 	if exist {
 		for _, childTxid := range childrenTxids {
@@ -1023,7 +1069,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		if _, exist := txidsInBlock[string(txid)]; exist {
 			// 说明这个交易已经被确认
 			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
-			t.log.Trace("  delete from unconfirmed", "txid", utils.F(txid))
+			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", txid))
 			// 直接从unconfirm表删除, 大部分情况是这样的
 			unconfirmToConfirm[txid] = true
 			continue

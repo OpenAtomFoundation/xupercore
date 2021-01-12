@@ -10,17 +10,18 @@ import (
 	"github.com/golang/protobuf/proto"
 
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
-func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error) {
+func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
 	uv.log.Trace("start to merge utxos", "address", fromAddr)
 
 	// Total amount selected
 	amount := big.NewInt(0)
-	maxTxSizePerBlock, _ := uv.MaxTxSizePerBlock()
+	maxTxSizePerBlock, _ := uv.metaHandle.MaxTxSizePerBlock()
 	maxTxSize := big.NewInt(int64(maxTxSizePerBlock / 2))
 	willLockKeys := make([][]byte, 0)
-	txInputs := []*pb.TxInput{}
+	txInputs := []*protos.TxInput{}
 	txInputSize := int64(0)
 
 	// same as the logic of SelectUTXO
@@ -72,7 +73,7 @@ func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, fromPubKey string, needLock
 		}
 		offset, _ := strconv.Atoi(string(realKey[2]))
 		// build a tx input
-		txInput := &pb.TxInput{
+		txInput := &protos.TxInput{
 			RefTxid:      refTxid,
 			RefOffset:    int32(offset),
 			FromAddr:     []byte(fromAddr),

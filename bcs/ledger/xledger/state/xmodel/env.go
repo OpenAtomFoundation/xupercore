@@ -51,13 +51,7 @@ func (s *XModel) PrepareEnv(tx *pb.Transaction) (*Env, error) {
 		return nil, errors.New("PrepareEnv CheckConUtxoEffective error")
 	}
 
-	crossQueries, err := ParseCrossQuery(tx)
-	if err != nil {
-		s.logger.Warn("PrepareEnv ParseCrossQuery error", "err", err.Error())
-		return nil, err
-	}
-
-	env.modelCache = NewXModelCacheWithInputs(inputs, utxoInputs, crossQueries)
+	env.modelCache = NewXModelCacheWithInputs(inputs, utxoInputs)
 	env.outputs = outputs
 	s.logger.Trace("PrepareEnv done!", "env", env)
 	return env, nil

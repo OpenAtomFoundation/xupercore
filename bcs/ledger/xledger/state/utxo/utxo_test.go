@@ -355,21 +355,6 @@ func TestUtxoWorkWithLedgerBasic(t *testing.T) {
 	ledger.Close()
 }
 
-func TestTSort(t *testing.T) {
-	g := TxGraph{}
-	g["tx3"] = []string{"tx1", "tx2"}
-	g["tx2"] = []string{"tx1", "tx0"}
-	g["tx1"] = []string{"tx0"}
-	output, cylic, _ := TopSortDFS(g)
-	t.Log(output)
-	if !reflect.DeepEqual(output, []string{"tx3", "tx2", "tx1", "tx0"}) {
-		t.Fatal("sort fail")
-	}
-	if cylic {
-		t.Fatal("sort fail2")
-	}
-}
-
 func TestCheckCylic(t *testing.T) {
 	g := TxGraph{}
 	g["tx3"] = []string{"tx1", "tx2"}
