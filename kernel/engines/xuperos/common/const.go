@@ -4,8 +4,6 @@ package common
 const (
 	// 引擎名
 	BCEngineName = "xuperos"
-
-	RootBlockChain = "xuper"
 )
 
 // 广播模式

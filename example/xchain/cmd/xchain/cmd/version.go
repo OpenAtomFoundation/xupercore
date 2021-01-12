@@ -3,8 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
 	"github.com/xuperchain/xupercore/example/xchain/common/version"
+
+	"github.com/spf13/cobra"
 )
 
 // 通过编译参数设置
