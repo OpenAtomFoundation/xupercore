@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
-func updateThresholdWithDel(ctx kernel.KContext, aksWeight map[string]float64, accountName string) error {
+func updateThresholdWithDel(ctx contract.KContext, aksWeight map[string]float64, accountName string) error {
 	for address := range aksWeight {
 		key := utils.MakeAK2AccountKey(address, accountName)
-		err := ctx.DeleteObject(utils.GetAK2AccountBucket(), []byte(key))
+		err := ctx.Del(utils.GetAK2AccountBucket(), []byte(key))
 		if err != nil {
 			return err
 		}
@@ -20,10 +20,10 @@ func updateThresholdWithDel(ctx kernel.KContext, aksWeight map[string]float64, a
 	return nil
 }
 
-func updateThresholdWithPut(ctx kernel.KContext, aksWeight map[string]float64, accountName string) error {
+func updateThresholdWithPut(ctx contract.KContext, aksWeight map[string]float64, accountName string) error {
 	for address := range aksWeight {
 		key := utils.MakeAK2AccountKey(address, accountName)
-		err := ctx.PutObject(utils.GetAK2AccountBucket(), []byte(key), []byte("true"))
+		err := ctx.Put(utils.GetAK2AccountBucket(), []byte(key), []byte("true"))
 		if err != nil {
 			return err
 		}
@@ -31,11 +31,11 @@ func updateThresholdWithPut(ctx kernel.KContext, aksWeight map[string]float64, a
 	return nil
 }
 
-func updateAkSetWithDel(ctx kernel.KContext, sets map[string]*pb.AkSet, accountName string) error {
+func updateAkSetWithDel(ctx contract.KContext, sets map[string]*pb.AkSet, accountName string) error {
 	for _, akSets := range sets {
 		for _, ak := range akSets.GetAks() {
 			key := utils.MakeAK2AccountKey(ak, accountName)
-			err := ctx.DeleteObject(utils.GetAK2AccountBucket(), []byte(key))
+			err := ctx.Del(utils.GetAK2AccountBucket(), []byte(key))
 			if err != nil {
 				return err
 			}
@@ -44,11 +44,11 @@ func updateAkSetWithDel(ctx kernel.KContext, sets map[string]*pb.AkSet, accountN
 	return nil
 }
 
-func updateAkSetWithPut(ctx kernel.KContext, sets map[string]*pb.AkSet, accountName string) error {
+func updateAkSetWithPut(ctx contract.KContext, sets map[string]*pb.AkSet, accountName string) error {
 	for _, akSets := range sets {
 		for _, ak := range akSets.GetAks() {
 			key := utils.MakeAK2AccountKey(ak, accountName)
-			err := ctx.PutObject(utils.GetAK2AccountBucket(), []byte(key), []byte("true"))
+			err := ctx.Put(utils.GetAK2AccountBucket(), []byte(key), []byte("true"))
 			if err != nil {
 				return err
 			}
@@ -57,7 +57,7 @@ func updateAkSetWithPut(ctx kernel.KContext, sets map[string]*pb.AkSet, accountN
 	return nil
 }
 
-func updateForThreshold(ctx kernel.KContext, aksWeight map[string]float64, accountName string, method string) error {
+func updateForThreshold(ctx contract.KContext, aksWeight map[string]float64, accountName string, method string) error {
 	switch method {
 	case "Del":
 		return updateThresholdWithDel(ctx, aksWeight, accountName)
@@ -68,7 +68,7 @@ func updateForThreshold(ctx kernel.KContext, aksWeight map[string]float64, accou
 	}
 }
 
-func updateForAKSet(ctx kernel.KContext, akSets *pb.AkSets, accountName string, method string) error {
+func updateForAKSet(ctx contract.KContext, akSets *pb.AkSets, accountName string, method string) error {
 	sets := akSets.GetSets()
 	switch method {
 	case "Del":
@@ -80,7 +80,7 @@ func updateForAKSet(ctx kernel.KContext, akSets *pb.AkSets, accountName string, 
 	}
 }
 
-func update(ctx kernel.KContext, aclJSON []byte, accountName string, method string) error {
+func update(ctx contract.KContext, aclJSON []byte, accountName string, method string) error {
 	if aclJSON == nil {
 		return nil
 	}
@@ -101,7 +101,7 @@ func update(ctx kernel.KContext, aclJSON []byte, accountName string, method stri
 	return nil
 }
 
-func UpdateAK2AccountReflection(ctx kernel.KContext, aclOldJSON []byte, aclNewJSON []byte, accountName string) error {
+func UpdateAK2AccountReflection(ctx contract.KContext, aclOldJSON []byte, aclNewJSON []byte, accountName string) error {
 	if err := update(ctx, aclOldJSON, accountName, "Del"); err != nil {
 		return err
 	}

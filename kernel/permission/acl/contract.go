@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	pb "github.com/xuperchain/xupercore/protos"
 )
@@ -23,7 +22,7 @@ func NewKernContractMethod(bcName string, NewAccountResourceAmount int64) *KernM
 	return t
 }
 
-func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error) {
+func (t *KernMethod) NewAccount(ctx contract.KContext) (*contract.Response, error) {
 	/*if ctx.ResourceLimit.XFee < t.NewAccountResourceAmount {
 		return nil, fmt.Errorf("gas not enough, expect no less than %d", t.NewAccountResourceAmount)
 	}*/
@@ -52,14 +51,14 @@ func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error)
 		return nil, validErr
 	}
 
-	oldAccount, err := ctx.GetObject(utils.GetAccountBucket(), []byte(accountStr))
+	oldAccount, err := ctx.Get(utils.GetAccountBucket(), []byte(accountStr))
 	if err != nil {
 		return nil, err
 	}
 	if oldAccount != nil {
 		return nil, fmt.Errorf("account already exists: %s", accountName)
 	}
-	err = ctx.PutObject(utils.GetAccountBucket(), []byte(accountStr), aclJSON)
+	err = ctx.Put(utils.GetAccountBucket(), []byte(accountStr), aclJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +78,7 @@ func (t *KernMethod) NewAccount(ctx kernel.KContext) (*contract.Response, error)
 	}, nil
 }
 
-func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, error) {
+func (t *KernMethod) SetAccountACL(ctx contract.KContext) (*contract.Response, error) {
 	/*if ctx.ResourceLimit.XFee < t.NewAccountResourceAmount/1000 {
 		return nil, fmt.Errorf("gas not enough, expect no less than %d", t.NewAccountResourceAmount/1000)
 	}*/
@@ -93,7 +92,7 @@ func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, err
 		return nil, validErr
 	}
 
-	data, err := ctx.GetObject(utils.GetAccountBucket(), accountName)
+	data, err := ctx.Get(utils.GetAccountBucket(), accountName)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +104,7 @@ func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, err
 		return nil, err
 	}
 
-	err = ctx.PutObject(utils.GetAccountBucket(), accountName, aclJSON)
+	err = ctx.Put(utils.GetAccountBucket(), accountName, aclJSON)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +118,7 @@ func (t *KernMethod) SetAccountACL(ctx kernel.KContext) (*contract.Response, err
 	}, nil
 }
 
-func (t *KernMethod) SetMethodACL(ctx kernel.KContext) (*contract.Response, error) {
+func (t *KernMethod) SetMethodACL(ctx contract.KContext) (*contract.Response, error) {
 	/*if ctx.ResourceLimit.XFee < t.NewAccountResourceAmount/1000 {
 		return nil, fmt.Errorf("gas not enough, expect no less than %d", t.NewAccountResourceAmount/1000)
 	}*/
@@ -141,7 +140,7 @@ func (t *KernMethod) SetMethodACL(ctx kernel.KContext) (*contract.Response, erro
 		return nil, validErr
 	}
 	key := utils.MakeContractMethodKey(contractName, methodName)
-	err := ctx.PutObject(utils.GetContractBucket(), []byte(key), aclJSON)
+	err := ctx.Put(utils.GetContractBucket(), []byte(key), aclJSON)
 	if err != nil {
 		return nil, err
 	}

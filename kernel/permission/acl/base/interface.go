@@ -1,7 +1,6 @@
 package base
 
 import (
-	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
