@@ -37,7 +37,7 @@ var (
 
 // UtxoVM manages utxos
 type UtxoVM interface {
-	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error)
+	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // XMCache data structure for XModel Cache
@@ -47,27 +47,25 @@ type XMCache struct {
 	// Key: bucket_key; Value: PureData
 	outputsCache *memdb.DB
 	// 是否穿透到model层
-	isPenetrate     bool
-	model           XMReader
-	utxoCache       *UtxoCache
-	crossQueryCache *CrossQueryCache
-	events          []*protos.ContractEvent
+	isPenetrate bool
+	model       XMReader
+	utxoCache   *UtxoCache
+	events      []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
 func NewXModelCache(model XMReader, utxovm UtxoVM) (*XMCache, error) {
 	return &XMCache{
-		isPenetrate:     true,
-		model:           model,
-		inputsCache:     memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-		outputsCache:    memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-		utxoCache:       NewUtxoCache(utxovm),
-		crossQueryCache: NewCrossQueryCache(),
+		isPenetrate:  true,
+		model:        model,
+		inputsCache:  memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
+		outputsCache: memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
+		utxoCache:    NewUtxoCache(utxovm),
 	}, nil
 }
 
 // NewXModelCacheWithInputs make new XModelCache with Inputs
-func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*protos.TxInput, crossQueries []*protos.CrossQueryInfo) *XMCache {
+func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*protos.TxInput) *XMCache {
 	xc := &XMCache{
 		isPenetrate:  false,
 		inputsCache:  memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
@@ -81,7 +79,6 @@ func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*p
 		xc.inputsCache.Put(rawKey, valBuf)
 	}
 	xc.utxoCache = NewUtxoCacheWithInputs(utxoInputs)
-	xc.crossQueryCache = NewCrossQueryCacheWithData(crossQueries)
 	return xc
 }
 
@@ -272,7 +269,7 @@ func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
 }
 
 // GetUtxoRWSets returns the inputs and outputs of utxo
-func (xc *XMCache) GetUtxoRWSets() ([]*pb.TxInput, []*protos.TxOutput) {
+func (xc *XMCache) GetUtxoRWSets() ([]*protos.TxInput, []*protos.TxOutput) {
 	return xc.utxoCache.GetRWSets()
 }
 
@@ -420,57 +417,6 @@ func IsContractUtxoEffective(contractTxInputs []*protos.TxInput, contractTxOutpu
 	return true
 }
 
-// CrossQuery will query contract from other chain
-func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*protos.ContractResponse, error) {
-	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
-}
-
-// ParseCrossQuery parse cross query from tx
-func ParseCrossQuery(tx *pb.Transaction) ([]*pb.CrossQueryInfo, error) {
-	var (
-		crossQueryInfos []*pb.CrossQueryInfo
-		queryInfos      []byte
-	)
-	for _, out := range tx.GetTxOutputsExt() {
-		if out.GetBucket() != TransientBucket {
-			continue
-		}
-		if bytes.Equal(out.GetKey(), crossQueryInfosKey) {
-			queryInfos = out.GetValue()
-		}
-	}
-	if queryInfos != nil {
-		err := UnmsarshalMessages(queryInfos, &crossQueryInfos)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return crossQueryInfos, nil
-}
-
-// PutCrossQueries put queryInfos to db
-func (xc *XMCache) putCrossQueries(queryInfos []*pb.CrossQueryInfo) error {
-	var qi []byte
-	var err error
-	if len(queryInfos) != 0 {
-		qi, err = MarshalMessages(queryInfos)
-		if err != nil {
-			return err
-		}
-	}
-	if qi != nil {
-		err = xc.Put(TransientBucket, crossQueryInfosKey, qi)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (xc *XMCache) writeCrossQueriesRWSet() error {
-	return xc.putCrossQueries(xc.crossQueryCache.GetCrossQueryRWSets())
-}
-
 // ParseContractEvents parse contract events from tx
 func ParseContractEvents(tx *pb.Transaction) ([]*protos.ContractEvent, error) {
 	var events []*protos.ContractEvent
@@ -511,11 +457,6 @@ func (xc *XMCache) writeEventRWSet() error {
 // generated during the execution of the contract, but will not be referenced by other txs.
 func (xc *XMCache) WriteTransientBucket() error {
 	err := xc.writeUtxoRWSet()
-	if err != nil {
-		return err
-	}
-
-	err = xc.writeCrossQueriesRWSet()
 	if err != nil {
 		return err
 	}

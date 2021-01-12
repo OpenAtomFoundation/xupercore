@@ -4,6 +4,7 @@ package tx
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -17,7 +18,6 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
-	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -238,14 +238,14 @@ func (t *Tx) SortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[strin
 }
 
 //从disk还原unconfirm表到内存, 初始化的时候
-func (t *Tx) loadUnconfirmedTxFromDisk() error {
+func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 	iter := t.ldb.NewIteratorWithPrefix([]byte(pb.UnconfirmedTablePrefix))
 	defer iter.Release()
 	count := 0
 	for iter.Next() {
 		rawKey := iter.Key()
 		txid := string(rawKey[1:])
-		t.log.Trace("  load unconfirmed tx from db", "txid", utils.F(txid))
+		t.log.Trace("  load unconfirmed tx from db", "txid", fmt.Sprintf("%x", txid))
 		txBuf := iter.Value()
 		tx := &pb.Transaction{}
 		pbErr := proto.Unmarshal(txBuf, tx)

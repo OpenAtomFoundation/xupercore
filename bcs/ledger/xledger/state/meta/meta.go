@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/protos"
 	"html/template"
 	"sync"
 
@@ -15,6 +14,7 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type Meta struct {
@@ -50,7 +50,7 @@ func genArgs(req []*protos.InvokeRequest) *reservedArgs {
 	return ra
 }
 
-func NewMeta(sctx *context.StateCtx, stateDB kvdb.Database) (*Meta, nil) {
+func NewMeta(sctx *context.StateCtx, stateDB kvdb.Database) (*Meta, error) {
 	return &Meta{
 		log:       sctx.XLog,
 		Ledger:    sctx.Ledger,
