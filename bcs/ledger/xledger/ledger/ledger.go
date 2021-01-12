@@ -119,7 +119,7 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 		KVEngineType:          lctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          MemCacheSize,
 		FileHandlersCacheSize: FileHandlersCacheSize,
-		OtherPaths:            lctx.LedgerCfg.KVEngineType,
+		OtherPaths:            lctx.LedgerCfg.OtherPaths,
 		StorageType:           lctx.LedgerCfg.StorageType,
 	}
 	baseDB, err := kvdb.CreateKVInstance(kvParam)
@@ -1195,7 +1195,7 @@ func (l *Ledger) VerifyBlock(block *pb.InternalBlock, logid string) (bool, error
 		return false, nil
 	}
 
-	k, err := l.cryptoClient.GetEcdsaPublicKeyFromJsonStr(block.Pubkey)
+	k, err := l.cryptoClient.GetEcdsaPublicKeyFromJsonStr(string(block.Pubkey))
 	if err != nil {
 		l.xlog.Warn("VerifyBlock get ecdsa from block error", "logid", logid, "error", err)
 		return false, nil

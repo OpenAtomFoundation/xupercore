@@ -3,6 +3,7 @@ package acl
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
@@ -17,7 +18,7 @@ type Manager struct {
 
 // NewACLManager create instance of ACLManager
 func NewACLManager(ctx *actx.AclCtx) (base.AclManager, error) {
-	if ctx == nil || ctx.Ledger == nil || ctx.Register == nil || ctx.BcName == "" {
+	if ctx == nil || ctx.Ledger == nil || ctx.Contract == nil || ctx.BcName == "" {
 		return nil, fmt.Errorf("acl ctx set error")
 	}
 
@@ -41,7 +42,7 @@ func NewACLManager(ctx *actx.AclCtx) (base.AclManager, error) {
 
 // GetAccountACL get acl of an account
 func (mgr *Manager) GetAccountACL(accountName string) (*pb.Acl, error) {
-	acl, err := t.GetObjectBySnapshot(utils.GetAccountBucket(), accountName)
+	acl, err := mgr.GetObjectBySnapshot(utils.GetAccountBucket(), []byte(accountName))
 	if err != nil {
 		return nil, fmt.Errorf("query account acl failed.err:%v", err)
 	}
@@ -57,7 +58,7 @@ func (mgr *Manager) GetAccountACL(accountName string) (*pb.Acl, error) {
 // GetContractMethodACL get acl of contract method
 func (mgr *Manager) GetContractMethodACL(contractName, methodName string) (*pb.Acl, error) {
 	key := utils.MakeContractMethodKey(contractName, methodName)
-	acl, err := t.GetObjectBySnapshot(utils.GetContractBucket(), key)
+	acl, err := mgr.GetObjectBySnapshot(utils.GetContractBucket(), []byte(key))
 	if err != nil {
 		return nil, fmt.Errorf("query contract method acl failed.err:%v", err)
 	}
