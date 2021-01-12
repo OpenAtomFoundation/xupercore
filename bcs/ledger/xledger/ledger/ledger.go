@@ -70,7 +70,7 @@ const (
 // Ledger define data structure of Ledger
 type Ledger struct {
 	// 运行上下文
-	ctx              *def.LedgerCtx
+	ctx              *LedgerCtx
 	baseDB           kvdb.Database // 底层是一个leveldb实例，kvdb进行了包装
 	metaTable        kvdb.Database // 记录区块链的根节点、高度、末端节点
 	confirmedTable   kvdb.Database // 已确认的订单表
@@ -99,16 +99,16 @@ type ConfirmStatus struct {
 }
 
 // NewLedger create an empty ledger, if it already exists, open it directly
-func NewLedger(lctx *def.LedgerCtx) (*Ledger, error) {
+func NewLedger(lctx *LedgerCtx) (*Ledger, error) {
 	return newLedger(lctx, true)
 }
 
 // OpenLedger open ledger which already exists
-func OpenLedger(lctx *def.LedgerCtx) (*Ledger, error) {
+func OpenLedger(lctx *LedgerCtx) (*Ledger, error) {
 	return newLedger(lctx, false)
 }
 
-func newLedger(lctx *def.LedgerCtx, createIfMissing bool) (*Ledger, error) {
+func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger := &Ledger{}
 	ledger.mutex = &sync.RWMutex{}
 	ledger.powMutex = &sync.Mutex{}

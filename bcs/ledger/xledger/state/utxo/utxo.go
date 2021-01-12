@@ -14,6 +14,7 @@ import (
 	"github.com/xuperchain/xuperchain/core/common"
 	xlog "github.com/xuperchain/xuperchain/core/common/log"
 	"github.com/xuperchain/xuperchain/core/global"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -286,12 +287,12 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param ledger 账本对象
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
-func NewUtxo(sctx *def.StateCtx) (*UtxoVM, error) {
+func NewUtxo(sctx *context.StateCtx) (*UtxoVM, error) {
 	return MakeUtxo(sctx, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
+func MakeUtxo(sctx *context.StateCtx, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
 	// new kvdb instance
 	kvParam := &kvdb.KVParameter{
 		DBPath:                filepath.Join(sctx.LedgerCfg.StorePath, "utxoVM"),

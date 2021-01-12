@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
@@ -49,7 +50,7 @@ func genArgs(req []*protos.InvokeRequest) *reservedArgs {
 	return ra
 }
 
-func NewMeta(sctx *def.StateCtx, stateDB kvdb.Database) (*Meta, nil) {
+func NewMeta(sctx *context.StateCtx, stateDB kvdb.Database) (*Meta, nil) {
 	return &Meta{
 		log:       sctx.XLog,
 		Ledger:    sctx.Ledger,

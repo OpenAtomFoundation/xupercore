@@ -3,7 +3,7 @@ package xmodel
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"sync"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
@@ -37,7 +37,7 @@ type XModel struct {
 }
 
 // NewXuperModel new an instance of XModel
-func NewXModel(sctx *def.StateCtx, stateDB kvdb.Database) (*XModel, error) {
+func NewXModel(sctx *context.StateCtx, stateDB kvdb.Database) (*XModel, error) {
 	return &XModel{
 		ledger:          sctx.Ledger,
 		stateDB:         stateDB,
