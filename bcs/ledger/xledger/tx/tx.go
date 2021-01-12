@@ -4,19 +4,21 @@ package tx
 import (
 	"encoding/json"
 	"errors"
-	"github.com/xuperchain/xupercore/lib/utils"
-	"github.com/xuperchain/xupercore/protos"
 	"math/big"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -54,7 +56,7 @@ type RootJSON struct {
 	} `json:"predistribution"`
 }
 
-func NewTx(sctx *def.StateCtx, stateDB kvdb.Database) (*Tx, error) {
+func NewTx(sctx *context.StateCtx, stateDB kvdb.Database) (*Tx, error) {
 	return &Tx{
 		log:               sctx.XLog,
 		ldb:               stateDB,

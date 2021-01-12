@@ -6,16 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/lib/timer"
-	"github.com/xuperchain/xupercore/lib/utils"
-	"github.com/xuperchain/xupercore/protos"
 	"math/big"
 	"path/filepath"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
@@ -26,6 +23,9 @@ import (
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -62,7 +62,7 @@ var (
 
 type State struct {
 	// 状态机运行环境上下文
-	sctx          *def.StateCtx
+	sctx          *context.StateCtx
 	log           logs.Logger
 	utxo          *utxo.UtxoVM   //utxo表
 	xmodel        *xmodel.XModel //xmodel数据表和历史表
@@ -75,7 +75,7 @@ type State struct {
 	heightNotifier *BlockHeightNotifier
 }
 
-func NewState(sctx *def.StateCtx) (*State, error) {
+func NewState(sctx *context.StateCtx) (*State, error) {
 	if sctx == nil {
 		return nil, fmt.Errrof("create state failed because context set error")
 	}
