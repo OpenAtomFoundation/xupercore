@@ -100,7 +100,7 @@ func (t *utxoReader) SelectUTXO(account string, need *big.Int, isLock, isExclude
 	}
 
 	out := &lpb.UtxoOutput{
-		UtxoList: utxoList,
+		UtxoList:      utxoList,
 		TotalSelected: totalSelected.String(),
 	}
 	return out, nil
@@ -125,7 +125,7 @@ func (t *utxoReader) SelectUTXOBySize(account string, isLock, isExclude bool) (*
 	}
 
 	out := &lpb.UtxoOutput{
-		UtxoList: utxoList,
+		UtxoList:      utxoList,
 		TotalSelected: totalSelected.String(),
 	}
 	return out, nil
