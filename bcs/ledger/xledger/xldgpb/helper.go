@@ -1,9 +1,9 @@
 package xldgpb
 
-import "math/big"
 import (
 	"bytes"
 	"fmt"
+	"math/big"
 )
 
 // FeePlaceholder fee identifier to miner
@@ -70,14 +70,6 @@ func (ib *InternalBlock) GetCoinbaseTotal() *big.Int {
 		}
 	}
 	return total
-}
-
-// GetVersion get refid and offset as version string
-func (txIn *TxInputExt) GetVersion() string {
-	if txIn.RefTxid == nil {
-		return ""
-	}
-	return fmt.Sprintf("%x_%d", txIn.RefTxid, txIn.RefOffset)
 }
 
 // ContainsTx returns whether a tx is included in a block

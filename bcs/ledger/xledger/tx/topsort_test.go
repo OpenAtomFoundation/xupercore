@@ -190,7 +190,7 @@ func TestSplitBlock(t *testing.T) {
 	tx5 := &pb.Transaction{Txid: []byte("tx5"), TxInputs: []*pb.TxInput{&pb.TxInput{RefTxid: []byte("tx4")}}}
 	tx6 := &pb.Transaction{Txid: []byte("tx6"), TxInputs: []*pb.TxInput{&pb.TxInput{RefTxid: []byte("tx777")}}}
 	block := &pb.InternalBlock{Transactions: []*pb.Transaction{tx1, tx2, tx3, tx4, tx5, tx6}}
-	dags := splitToDags(block)
+	dags := SplitToDags(block)
 	if len(dags) != 3 {
 		t.Error("dags count unexpected", len(dags))
 	}

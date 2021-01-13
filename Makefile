@@ -21,7 +21,7 @@ test:
 
 # make clean
 clean:
-	rm -rf output
+	rm -rf $(OUTDIR)
 
 # avoid filename conflict and speed up build
 .PHONY: all compile test clean

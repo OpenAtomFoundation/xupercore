@@ -2,9 +2,9 @@ package xmodel
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/protos"
 
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
-	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 func parseVersion(version string) ([]byte, int, error) {
@@ -40,7 +40,7 @@ func GetVersion(vd *xmodel_pb.VersionedData) string {
 }
 
 // GetVersionOfTxInput get version of TxInput
-func GetVersionOfTxInput(txIn *pb.TxInputExt) string {
+func GetVersionOfTxInput(txIn *protos.TxInputExt) string {
 	if txIn.RefTxid == nil {
 		return ""
 	}
@@ -48,10 +48,10 @@ func GetVersionOfTxInput(txIn *pb.TxInputExt) string {
 }
 
 // GetTxOutputs get transaction outputs
-func GetTxOutputs(pds []*xmodel_pb.PureData) []*pb.TxOutputExt {
-	outputs := make([]*pb.TxOutputExt, 0, len(pds))
+func GetTxOutputs(pds []*xmodel_pb.PureData) []*protos.TxOutputExt {
+	outputs := make([]*protos.TxOutputExt, 0, len(pds))
 	for _, pd := range pds {
-		outputs = append(outputs, &pb.TxOutputExt{
+		outputs = append(outputs, &protos.TxOutputExt{
 			Bucket: pd.Bucket,
 			Key:    pd.Key,
 			Value:  pd.Value,
@@ -61,10 +61,10 @@ func GetTxOutputs(pds []*xmodel_pb.PureData) []*pb.TxOutputExt {
 }
 
 // GetTxInputs get transaction inputs
-func GetTxInputs(vds []*xmodel_pb.VersionedData) []*pb.TxInputExt {
-	inputs := make([]*pb.TxInputExt, 0, len(vds))
+func GetTxInputs(vds []*xmodel_pb.VersionedData) []*protos.TxInputExt {
+	inputs := make([]*protos.TxInputExt, 0, len(vds))
 	for _, vd := range vds {
-		inputs = append(inputs, &pb.TxInputExt{
+		inputs = append(inputs, &protos.TxInputExt{
 			Bucket:    vd.GetPureData().GetBucket(),
 			Key:       vd.GetPureData().GetKey(),
 			RefTxid:   vd.RefTxid,

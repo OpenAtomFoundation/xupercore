@@ -3,10 +3,11 @@ package xmodel
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
+	"github.com/xuperchain/xupercore/protos"
 	"sync"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -37,7 +38,7 @@ type XModel struct {
 }
 
 // NewXuperModel new an instance of XModel
-func NewXModel(sctx *def.StateCtx, stateDB kvdb.Database) (*XModel, error) {
+func NewXModel(sctx *context.StateCtx, stateDB kvdb.Database) (*XModel, error) {
 	return &XModel{
 		ledger:          sctx.Ledger,
 		stateDB:         stateDB,
@@ -213,7 +214,7 @@ func (s *XModel) GetUncommited(bucket string, key []byte) (*xmodel_pb.VersionedD
 }
 
 // GetFromLedger get data directely from ledger
-func (s *XModel) GetFromLedger(txin *pb.TxInputExt) (*xmodel_pb.VersionedData, error) {
+func (s *XModel) GetFromLedger(txin *protos.TxInputExt) (*xmodel_pb.VersionedData, error) {
 	if txin.RefTxid == nil {
 		return makeEmptyVersionedData(txin.Bucket, txin.Key), nil
 	}
@@ -344,7 +345,7 @@ func (s *XModel) BucketCacheDelete(bucket, version string) {
 }
 
 // GenWriteKeyWithPrefix gen write key with perfix
-func GenWriteKeyWithPrefix(txOutputExt *pb.TxOutputExt) string {
+func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
 	bucket := txOutputExt.GetBucket()
 	key := txOutputExt.GetKey()
 	baseWriteSetKey := bucket + fmt.Sprintf("%s", key)

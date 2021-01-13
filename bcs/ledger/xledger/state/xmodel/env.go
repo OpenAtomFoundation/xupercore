@@ -3,6 +3,7 @@ package xmodel
 import (
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/protos"
 
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
@@ -32,8 +33,8 @@ func (s *XModel) PrepareEnv(tx *pb.Transaction) (*Env, error) {
 			return nil, err
 		}
 		s.logger.Trace("prepareEnv", "verData", verData, "txIn", txIn)
-		if GetVersion(verData) != txIn.GetVersion() {
-			err := fmt.Errorf("prepareEnv fail, key:%s, inputs version is not valid: %s != %s", string(verData.PureData.Key), GetVersion(verData), txIn.GetVersion())
+		if GetVersion(verData) != s.GetVersion(txIn) {
+			err := fmt.Errorf("prepareEnv fail, key:%s, inputs version is not valid: %s != %s", string(verData.PureData.Key), GetVersion(verData), s.GetVersion(txIn))
 			return nil, err
 		}
 		inputs = append(inputs, verData)
@@ -50,20 +51,18 @@ func (s *XModel) PrepareEnv(tx *pb.Transaction) (*Env, error) {
 		return nil, errors.New("PrepareEnv CheckConUtxoEffective error")
 	}
 
-	crossQueries, err := ParseCrossQuery(tx)
-	if err != nil {
-		s.logger.Warn("PrepareEnv ParseCrossQuery error", "err", err.Error())
-		return nil, err
-	}
-	if ok := IsCrossQueryEffective(crossQueries, tx); !ok {
-		s.logger.Warn("PrepareEnv IsCrossQueryEffective error")
-		return nil, errors.New("PrepareEnv CheckCrossQueryEffective error")
-	}
-
-	env.modelCache = NewXModelCacheWithInputs(inputs, utxoInputs, crossQueries)
+	env.modelCache = NewXModelCacheWithInputs(inputs, utxoInputs)
 	env.outputs = outputs
 	s.logger.Trace("PrepareEnv done!", "env", env)
 	return env, nil
+}
+
+// GetVersion get refid and offset as version string
+func (e *XModel) GetVersion(txIn *protos.TxInputExt) string {
+	if txIn.RefTxid == nil {
+		return ""
+	}
+	return fmt.Sprintf("%x_%d", txIn.RefTxid, txIn.RefOffset)
 }
 
 // GetModelCache get instance of model cache

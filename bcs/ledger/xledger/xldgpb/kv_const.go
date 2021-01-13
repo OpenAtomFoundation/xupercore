@@ -8,6 +8,7 @@ const (
 	ConfirmedTablePrefix     = "C"
 	MetaTablePrefix          = "M"
 	PendingBlocksTablePrefix = "PB"
+	ExtUtxoDelTablePrefix    = "ZD"
 	ExtUtxoTablePrefix       = "ZU"
 	BlockHeightPrefix        = "ZH"
 	BranchInfoPrefix         = "ZI"

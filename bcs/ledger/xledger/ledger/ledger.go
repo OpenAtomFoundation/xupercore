@@ -70,7 +70,7 @@ const (
 // Ledger define data structure of Ledger
 type Ledger struct {
 	// 运行上下文
-	ctx              *def.LedgerCtx
+	ctx              *LedgerCtx
 	baseDB           kvdb.Database // 底层是一个leveldb实例，kvdb进行了包装
 	metaTable        kvdb.Database // 记录区块链的根节点、高度、末端节点
 	confirmedTable   kvdb.Database // 已确认的订单表
@@ -99,16 +99,16 @@ type ConfirmStatus struct {
 }
 
 // NewLedger create an empty ledger, if it already exists, open it directly
-func NewLedger(lctx *def.LedgerCtx) (*Ledger, error) {
+func NewLedger(lctx *LedgerCtx) (*Ledger, error) {
 	return newLedger(lctx, true)
 }
 
 // OpenLedger open ledger which already exists
-func OpenLedger(lctx *def.LedgerCtx) (*Ledger, error) {
+func OpenLedger(lctx *LedgerCtx) (*Ledger, error) {
 	return newLedger(lctx, false)
 }
 
-func newLedger(lctx *def.LedgerCtx, createIfMissing bool) (*Ledger, error) {
+func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger := &Ledger{}
 	ledger.mutex = &sync.RWMutex{}
 	ledger.powMutex = &sync.Mutex{}
@@ -119,7 +119,7 @@ func newLedger(lctx *def.LedgerCtx, createIfMissing bool) (*Ledger, error) {
 		KVEngineType:          lctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          MemCacheSize,
 		FileHandlersCacheSize: FileHandlersCacheSize,
-		OtherPaths:            lctx.LedgerCfg.KVEngineType,
+		OtherPaths:            lctx.LedgerCfg.OtherPaths,
 		StorageType:           lctx.LedgerCfg.StorageType,
 	}
 	baseDB, err := kvdb.CreateKVInstance(kvParam)
@@ -995,15 +995,14 @@ func (l *Ledger) GetNoFee() bool {
 }
 
 // SavePendingBlock put block into pending table
-func (l *Ledger) SavePendingBlock(block *pb.Block) error {
-	l.xlog.Debug("begin save pending block", "blockid", utils.F(block.Block.Blockid), "tx_count", len(block.Block.Transactions))
-	block.Blockid = block.Block.Blockid
+func (l *Ledger) SavePendingBlock(block *pb.InternalBlock) error {
+	l.xlog.Debug("begin save pending block", "blockid", utils.F(block.Blockid), "tx_count", len(block.Transactions))
 	blockBuf, pbErr := proto.Marshal(block)
 	if pbErr != nil {
 		l.xlog.Warn("save pending block fail, because marshal block fail", "pbErr", pbErr)
 		return pbErr
 	}
-	saveErr := l.pendingTable.Put(block.Block.Blockid, blockBuf)
+	saveErr := l.pendingTable.Put(block.Blockid, blockBuf)
 	if saveErr != nil {
 		l.xlog.Warn("save pending block to ldb fail", "err", saveErr)
 		return saveErr
@@ -1012,7 +1011,7 @@ func (l *Ledger) SavePendingBlock(block *pb.Block) error {
 }
 
 // GetPendingBlock get block from pending table
-func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.Block, error) {
+func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.InternalBlock, error) {
 	l.xlog.Debug("get pending block", "bockid", utils.F(blockID))
 	blockBuf, ldbErr := l.pendingTable.Get(blockID)
 	if ldbErr != nil {
@@ -1024,7 +1023,7 @@ func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.Block, error) {
 		}
 		return nil, ldbErr
 	}
-	block := &pb.Block{}
+	block := &pb.InternalBlock{}
 	unMarshalErr := proto.Unmarshal(blockBuf, block)
 	if unMarshalErr != nil {
 		l.xlog.Warn("unmarshal block failed", "err", unMarshalErr)
@@ -1196,7 +1195,7 @@ func (l *Ledger) VerifyBlock(block *pb.InternalBlock, logid string) (bool, error
 		return false, nil
 	}
 
-	k, err := l.cryptoClient.GetEcdsaPublicKeyFromJsonStr(block.Pubkey)
+	k, err := l.cryptoClient.GetEcdsaPublicKeyFromJsonStr(string(block.Pubkey))
 	if err != nil {
 		l.xlog.Warn("VerifyBlock get ecdsa from block error", "logid", logid, "error", err)
 		return false, nil

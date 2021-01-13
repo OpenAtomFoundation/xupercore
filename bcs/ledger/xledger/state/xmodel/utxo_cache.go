@@ -5,14 +5,14 @@ import (
 	"errors"
 	"math/big"
 
-	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // UtxoCache makes utxo rwset
 type UtxoCache struct {
 	utxovm      UtxoVM
-	inputCache  []*pb.TxInput
-	outputCache []*pb.TxOutput
+	inputCache  []*protos.TxInput
+	outputCache []*protos.TxOutput
 	intputIdx   int
 	isPenetrate bool
 }
@@ -24,7 +24,7 @@ func NewUtxoCache(utxovm UtxoVM) *UtxoCache {
 	}
 }
 
-func NewUtxoCacheWithInputs(inputs []*pb.TxInput) *UtxoCache {
+func NewUtxoCacheWithInputs(inputs []*protos.TxInput) *UtxoCache {
 	return &UtxoCache{
 		inputCache:  inputs,
 		isPenetrate: false,
@@ -71,13 +71,13 @@ func (u *UtxoCache) Transfer(from, to string, amount *big.Int) error {
 	if err != nil {
 		return err
 	}
-	u.outputCache = append(u.outputCache, &pb.TxOutput{
+	u.outputCache = append(u.outputCache, &protos.TxOutput{
 		Amount: amount.Bytes(),
 		ToAddr: []byte(to),
 	})
 	// make change
 	if total.Cmp(amount) > 0 {
-		u.outputCache = append(u.outputCache, &pb.TxOutput{
+		u.outputCache = append(u.outputCache, &protos.TxOutput{
 			Amount: new(big.Int).Sub(total, amount).Bytes(),
 			ToAddr: []byte(from),
 		})
@@ -85,7 +85,7 @@ func (u *UtxoCache) Transfer(from, to string, amount *big.Int) error {
 	return nil
 }
 
-func (u *UtxoCache) GetRWSets() ([]*pb.TxInput, []*pb.TxOutput) {
+func (u *UtxoCache) GetRWSets() ([]*protos.TxInput, []*protos.TxOutput) {
 	if u.isPenetrate {
 		return u.inputCache, u.outputCache
 	}

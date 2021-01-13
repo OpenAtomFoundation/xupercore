@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type encoder struct {
@@ -155,7 +156,7 @@ func txDigestHashV2(tx *pb.Transaction, includeSigns bool) []byte {
 		enc.Encode(addr)
 	}
 
-	encSigs := func(sigs []*pb.SignatureInfo) {
+	encSigs := func(sigs []*protos.SignatureInfo) {
 		enc.Encode(len(sigs))
 		for _, sig := range sigs {
 			enc.Encode(sig.PublicKey)

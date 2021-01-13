@@ -11,13 +11,13 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/permission/acl"
+	//"github.com/xuperchain/xupercore/kernel/contract"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/protos"
@@ -148,7 +148,7 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 	}
 
 	// verify initiator
-	akType := acl.IsAccount(tx.Initiator)
+	akType := aclu.IsAccount(tx.Initiator)
 	if akType == 0 {
 		// check initiator address signature
 		ok, err := aclu.IdentifyAK(tx.Initiator, tx.InitiatorSigns[0], digestHash)
@@ -161,12 +161,12 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 		initiatorAddr := make([]string, 0)
 		// check initiator account signatures
 		for _, sign := range tx.InitiatorSigns {
-			ak, err := t.cryptoClient.GetEcdsaPublicKeyFromJSON([]byte(sign.PublicKey))
+			ak, err := t.sctx.Crypt.GetEcdsaPublicKeyFromJsonStr(sign.PublicKey)
 			if err != nil {
 				t.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
 			}
-			addr, err := t.cryptoClient.GetAddressFromPublicKey(ak)
+			addr, err := t.sctx.Crypt.GetAddressFromPublicKey(ak)
 			if err != nil {
 				t.log.Warn("verifySignatures failed", "address", tx.Initiator, "error", err)
 				return false, nil, err
@@ -179,7 +179,7 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 			verifiedAddr[addr] = true
 			initiatorAddr = append(initiatorAddr, tx.Initiator+"/"+addr)
 		}
-		ok, err := aclu.IdentifyAccount(t.aclMgr, tx.Initiator, initiatorAddr)
+		ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, tx.Initiator, initiatorAddr)
 		if !ok {
 			t.log.Warn("verifySignatures initiator permission check failed",
 				"account", tx.Initiator, "error", err)
@@ -230,25 +230,25 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 	}
 	pubkeys := make([]*ecdsa.PublicKey, 0)
 	for _, pubJSON := range tx.GetXuperSign().GetPublicKeys() {
-		pubkey, err := t.cryptoClient.GetEcdsaPublicKeyFromJSON(pubJSON)
+		pubkey, err := t.sctx.Crypt.GetEcdsaPublicKeyFromJsonStr(string(pubJSON))
 		if err != nil {
 			return false, nil, errors.New("XuperSign: found invalid public key")
 		}
 		pubkeys = append(pubkeys, pubkey)
 	}
 	for idx, addr := range addrList {
-		ok, _ := t.cryptoClient.VerifyAddressUsingPublicKey(addr, pubkeys[idx])
+		ok, _ := t.sctx.Crypt.VerifyAddressUsingPublicKey(addr, pubkeys[idx])
 		if !ok {
 			t.log.Warn("XuperSign: address and public key not match", "addr", addr, "pubkey", pubkeys[idx])
 			return false, nil, errors.New("XuperSign: address and public key not match")
 		}
 	}
-	ok, err := t.cryptoClient.XuperVerify(pubkeys, tx.GetXuperSign().GetSignature(), digestHash)
+	/*ok, err := t.sctx.Crypt.XuperVerify(pubkeys, tx.GetXuperSign().GetSignature(), digestHash)
 	if err != nil || !ok {
 		t.log.Warn("XuperSign: signature verify failed", "error", err)
 		return false, nil, errors.New("XuperSign: address and public key not match")
-	}
-	return ok, uniqueAddrs, nil
+	}*/
+	return true, uniqueAddrs, nil
 }
 
 // verify utxo inputs, there are three kinds of input validation
@@ -267,7 +267,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 		addr := conUtxoInput.GetFromAddr()
 		txid := conUtxoInput.GetRefTxid()
 		offset := conUtxoInput.GetRefOffset()
-		utxoKey := utxo.genUtxoKey(addr, txid, offset)
+		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
 		conUtxoInputsMap[utxoKey] = true
 	}
 
@@ -276,7 +276,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 		addr := txInput.GetFromAddr()
 		txid := txInput.GetRefTxid()
 		offset := txInput.GetRefOffset()
-		utxoKey := genUtxoKey(addr, txid, offset)
+		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
 		if conUtxoInputsMap[utxoKey] {
 			// this utxo transfer from contract, will verify in rwset verify
 			continue
@@ -287,7 +287,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 			// this ID(either AK or Account) is verified before
 			continue
 		}
-		akType := acl.IsAccount(name)
+		akType := aclu.IsAccount(name)
 		if akType == 1 {
 			// Identify account
 			acl, err := t.queryAccountACL(name)
@@ -296,7 +296,7 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 				t.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
 				return false, ErrInvalidAccount
 			}
-			if ok, err := aclu.IdentifyAccount(t.aclMgr, string(name), tx.AuthRequire); !ok {
+			if ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, string(name), tx.AuthRequire); !ok {
 				t.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
 				return false, ErrACLNotEnough
 			}
@@ -329,7 +329,7 @@ func (t *State) verifyContractOwnerPermission(contractName string, tx *pb.Transa
 	if verifiedID[accountName] {
 		return true, nil
 	}
-	ok, err := aclu.IdentifyAccount(t.aclMgr, accountName, tx.AuthRequire)
+	ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, accountName, tx.AuthRequire)
 	if err == nil && ok {
 		verifiedID[accountName] = true
 	}
@@ -357,7 +357,7 @@ func (t *State) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[string]
 			if verifiedID[accountName] {
 				continue
 			}
-			ok, err := aclu.IdentifyAccount(t.aclMgr, accountName, tx.AuthRequire)
+			ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, accountName, tx.AuthRequire)
 			if !ok {
 				t.log.Warn("verifyRWSetPermission check account bucket failed",
 					"account", accountName, "AuthRequire ", tx.AuthRequire, "error", err)
@@ -389,7 +389,7 @@ func (t *State) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[string]
 			if verifiedID[accountName] {
 				continue
 			}
-			ok, accountErr := aclu.IdentifyAccount(t.aclMgr, accountName, tx.AuthRequire)
+			ok, accountErr := aclu.IdentifyAccount(t.sctx.AclMgr, accountName, tx.AuthRequire)
 			if !ok {
 				t.log.Warn("verifyRWSetPermission check contract2account bucket failed",
 					"account", accountName, "AuthRequire ", tx.AuthRequire, "error", accountErr)
@@ -414,7 +414,7 @@ func (t *State) verifyContractPermission(tx *pb.Transaction, allUsers []string) 
 		contractName := tmpReq.GetContractName()
 		methodName := tmpReq.GetMethodName()
 
-		ok, err := aclu.CheckContractMethodPerm(t.aclMgr, allUsers, contractName, methodName)
+		ok, err := aclu.CheckContractMethodPerm(t.sctx.AclMgr, allUsers, contractName, methodName)
 		if err != nil || !ok {
 			t.log.Warn("verify contract method ACL failed ", "contract", contractName, "method",
 				methodName, "error", err)
@@ -462,19 +462,19 @@ func (t *State) verifyContractTxAmount(tx *pb.Transaction) (bool, error) {
 
 // verifyTxRWSets verify tx read sets and write sets
 func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
-	if t.verifyReservedWhitelist(tx) {
+	if t.utxo.VerifyReservedWhitelist(tx) {
 		t.log.Info("verifyReservedWhitelist true", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 		return true, nil
 	}
 
 	req := tx.GetContractRequests()
-	reservedRequests, err := t.getReservedContractRequests(tx.GetContractRequests(), false)
+	reservedRequests, err := t.utxo.GetReservedContractRequests(tx.GetContractRequests(), false)
 	if err != nil {
 		t.log.Error("getReservedContractRequests error", "error", err.Error())
 		return false, err
 	}
 
-	if !t.verifyReservedContractRequests(reservedRequests, req) {
+	if !t.utxo.VerifyReservedContractRequests(reservedRequests, req) {
 		t.log.Error("verifyReservedContractRequests error", "reservedRequests", reservedRequests, "req", req)
 		return false, fmt.Errorf("verify reservedContracts error")
 	}
@@ -486,13 +486,13 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		}
 		return true, nil
 	}
+	env, err := t.xmodel.PrepareEnv(tx)
 	// transfer in contract
-	transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
+	/*transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
 	if err != nil {
 		return false, err
 	}
 
-	env, err := t.xmodel.PrepareEnv(tx)
 	if err != nil {
 		return false, err
 	}
@@ -515,9 +515,9 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	t.log.Trace("get gas limit from tx", "gasLimit", gasLimit, "txid", hex.EncodeToString(tx.Txid))
 
 	// get gas rate to utxo
-	gasPrice := t.GetGasPrice()
+	//gasPrice := t.meta.Meta.GetGasPrice()
 
-	for i, tmpReq := range tx.GetContractRequests() {
+	/*for i, tmpReq := range tx.GetContractRequests() {
 		moduleName := tmpReq.GetModuleName()
 		vm, err := t.vmMgr3.GetVM(moduleName)
 		if err != nil {
@@ -533,7 +533,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 				"txid", hex.EncodeToString(tx.Txid))
 			return false, errors.New("out of gas")
 		}
-		contextConfig.ResourceLimits = limits
+		//contextConfig.ResourceLimits = limits
 		contextConfig.ContractName = tmpReq.GetContractName()
 		if transContractName == tmpReq.GetContractName() {
 			contextConfig.TransferAmount = transAmount.String()
@@ -543,7 +543,6 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 
 		ctx, err := vm.NewContext(contextConfig)
 		if err != nil {
-			// FIXME zq @icexin: need to return contract not found
 			t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
 			if i < len(reservedRequests) && (err.Error() == "leveldb: not found" || strings.HasSuffix(err.Error(), "not found")) {
 				continue
@@ -565,7 +564,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		}
 
 		ctx.Release()
-	}
+	}*/
 
 	err = env.GetModelCache().WriteTransientBucket()
 	if err != nil {
@@ -604,11 +603,11 @@ func (t *State) verifyMarkedTx(tx *pb.Transaction) error {
 	if err != nil {
 		return err
 	}
-	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJSON(bytespk)
+	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJsonStr(tx.ModifyBlock.PublicKey)
 	if err != nil {
 		return err
 	}
-	isMatch, _ := xcc.VerifyAddressUsingPublicKey(t.modifyBlockAddr, ecdsaKey)
+	isMatch, _ := xcc.VerifyAddressUsingPublicKey(t.utxo.ModifyBlockAddr, ecdsaKey)
 	if !isMatch {
 		return errors.New("address and public key not match")
 	}
@@ -666,14 +665,14 @@ func (t *State) verifyRelyOnMarkedTxs(tx *pb.Transaction) (bool, bool, error) {
 // err
 func (t *State) checkRelyOnMarkedTxid(reftxid []byte, blockid []byte) (bool, bool, error) {
 	isRely := false
-	reftx, err := t.ledger.QueryTransaction(reftxid)
+	reftx, err := t.sctx.Ledger.QueryTransaction(reftxid)
 	if err != nil {
 		return true, isRely, nil
 	}
 	if reftx.GetModifyBlock() != nil && reftx.ModifyBlock.Marked {
 		isRely = true
 		if string(blockid) != "" {
-			ib, err := t.ledger.QueryBlock(blockid)
+			ib, err := t.sctx.Ledger.QueryBlock(blockid)
 			if err != nil {
 				return false, isRely, err
 			}
@@ -690,7 +689,7 @@ func (t *State) checkRelyOnMarkedTxid(reftxid []byte, blockid []byte) (bool, boo
 func (t *State) removeDuplicateUser(initiator string, authRequire []string) []string {
 	dupCheck := make(map[string]bool)
 	finalUsers := make([]string, 0)
-	if acl.IsAccount(initiator) == 0 {
+	if aclu.IsAccount(initiator) == 0 {
 		finalUsers = append(finalUsers, initiator)
 		dupCheck[initiator] = true
 	}
@@ -707,7 +706,7 @@ func (t *State) removeDuplicateUser(initiator string, authRequire []string) []st
 // VerifyContractPermission implement Contract ChainCore, used to verify contract permission while contract running
 func (t *State) VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error) {
 	allUsers := t.removeDuplicateUser(initiator, authRequire)
-	return aclu.CheckContractMethodPerm(t.aclMgr, allUsers, contractName, methodName)
+	return aclu.CheckContractMethodPerm(t.sctx.AclMgr, allUsers, contractName, methodName)
 }
 
 // VerifyContractOwnerPermission implement Contract ChainCore, used to verify contract ownership permisson
@@ -723,7 +722,7 @@ func (t *State) VerifyContractOwnerPermission(contractName string, authRequire [
 	if accountName == "" {
 		return errors.New("contract not found")
 	}
-	ok, err := aclu.IdentifyAccount(t.aclMgr, accountName, authRequire)
+	ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, accountName, authRequire)
 	if err != nil {
 		return err
 	}
@@ -745,17 +744,17 @@ func (t *State) GetMaxBlockSize() int64 {
 }
 
 func (t *State) queryAccountACL(accountName string) (*protos.Acl, error) {
-	if t.aclMgr == nil {
+	if t.sctx.AclMgr == nil {
 		return nil, errors.New("acl manager is nil")
 	}
-	return t.aclMgr.GetAccountACL(accountName)
+	return t.sctx.AclMgr.GetAccountACL(accountName)
 }
 
 func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirmToConfirm map[string]bool) error {
 	var err error
 	var once sync.Once
 	wg := sync.WaitGroup{}
-	dags := tx.SplitToDags(block)
+	dags := txn.SplitToDags(block)
 	for _, txs := range dags {
 		wg.Add(1)
 		go func(txs []*pb.Transaction) {

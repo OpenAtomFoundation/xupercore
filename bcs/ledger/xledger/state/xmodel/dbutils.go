@@ -6,9 +6,9 @@ import (
 	"sort"
 
 	"github.com/golang/protobuf/proto"
-	log "github.com/xuperchain/log15"
 	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
@@ -68,16 +68,17 @@ func saveUnconfirmTx(tx *pb.Transaction, batch kvdb.Batch) error {
 	return nil
 }
 
-func openDB(dbPath string, logger log.Logger) (kvdb.Database, error) {
+func openDB(dbPath string, logger logs.Logger) (kvdb.Database, error) {
 	// new kvdb instance
 	kvParam := &kvdb.KVParameter{
 		DBPath:                dbPath,
 		KVEngineType:          "default",
 		MemCacheSize:          128,
 		FileHandlersCacheSize: 512,
-		OtherPaths:            []string{},
+		//StorageType
+		OtherPaths: []string{},
 	}
-	baseDB, err := kvdb.NewKVDBInstance(kvParam)
+	baseDB, err := kvdb.CreateKVInstance(kvParam)
 	if err != nil {
 		logger.Warn("xmodel::openDB failed to open db", "dbPath", dbPath, "err", err)
 		return nil, err

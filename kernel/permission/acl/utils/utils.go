@@ -11,7 +11,6 @@ import (
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
-	pctx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 )
 
 func IdentifyAK(akuri string, sign *pb.SignatureInfo, msg []byte) (bool, error) {

@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -19,16 +20,21 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
-	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
+	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/cache"
 	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // 常用VM执行错误码
@@ -40,22 +46,9 @@ var (
 	ErrUnexpected          = errors.New("this is a unexpected error")
 	ErrNegativeAmount      = errors.New("amount in transaction can not be negative number")
 	ErrUTXOFrozen          = errors.New("utxo is still frozen")
-	ErrTxSizeLimitExceeded = errors.New("tx size limit exceeded")
-	ErrInvalidAutogenTx    = errors.New("found invalid autogen-tx")
 	ErrUTXODuplicated      = errors.New("found duplicated utxo in same tx")
-	ErrRWSetInvalid        = errors.New("RWSet of transaction invalid")
-	ErrACLNotEnough        = errors.New("ACL not enough")
-	ErrInvalidSignature    = errors.New("the signature is invalid or not match the address")
-
-	ErrGasNotEnough   = errors.New("Gas not enough")
-	ErrInvalidAccount = errors.New("Invalid account")
-	ErrVersionInvalid = errors.New("Invalid tx version")
-	ErrInvalidTxExt   = errors.New("Invalid tx ext")
-	ErrTxTooLarge     = errors.New("Tx size is too large")
 
 	ErrGetReservedContracts = errors.New("Get reserved contracts error")
-	ErrParseContractUtxos   = errors.New("Parse contract utxos error")
-	ErrContractTxAmout      = errors.New("Contract transfer amount error")
 )
 
 // package constants
@@ -67,10 +60,7 @@ const (
 
 	// TxVersion 为所有交易使用的版本
 	TxVersion = 1
-	// BetaTxVersion 为当前代码支持的最高交易版本
-	BetaTxVersion = 3
 
-	RootTxVersion             = 0
 	FeePlaceholder            = "$"
 	UTXOTotalKey              = "xtotal"
 	UTXOContractExecutionTime = 500
@@ -80,13 +70,14 @@ const (
 type TxLists []*pb.Transaction
 
 type UtxoVM struct {
-	meta                 *pb.UtxoMeta // utxo meta
-	metaTmp              *pb.UtxoMeta // tmp utxo meta
-	mutexMeta            *sync.Mutex  // access control for meta
+	Meta                 *pb.UtxoMeta // utxo meta
+	MetaTmp              *pb.UtxoMeta // tmp utxo meta
+	MutexMeta            *sync.Mutex  // access control for meta
+	metaHandle           *meta.Meta
 	ldb                  kvdb.Database
 	Mutex                *sync.RWMutex // utxo leveldb表读写锁
 	MutexMem             *sync.Mutex   // 内存锁定状态互斥锁
-	spLock               *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
+	SpLock               *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
 	mutexBalance         *sync.Mutex   // 余额Cache锁
 	lockKeys             map[string]*UtxoLockItem
 	lockKeyList          *list.List // 按锁定的先后顺序，方便过期清理
@@ -94,22 +85,22 @@ type UtxoVM struct {
 	UtxoCache            *UtxoCache
 	log                  logs.Logger
 	ledger               *ledger.Ledger           // 引用的账本对象
-	latestBlockid        []byte                   // 当前vm最后一次执行到的blockid
 	utxoTable            kvdb.Database            // utxo表
 	OfflineTxChan        chan []*pb.Transaction   // 未确认tx的通知chan
-	prevFoundKeyCache    *cache.LRUCache          // 上一次找到的可用utxo key，用于加速GenerateTx
+	PrevFoundKeyCache    *cache.LRUCache          // 上一次找到的可用utxo key，用于加速GenerateTx
 	utxoTotal            *big.Int                 // 总资产
 	cryptoClient         crypto_base.CryptoClient // 加密实例
-	modifyBlockAddr      string                   // 可修改区块链的监管地址
-	balanceCache         *cache.LRUCache          //余额cache,加速GetBalance查询
-	cacheSize            int                      //记录构造utxo时传入的cachesize
-	balanceViewDirty     map[string]int           //balanceCache 标记dirty: addr -> sequence of view
+	ModifyBlockAddr      string                   // 可修改区块链的监管地址
+	BalanceCache         *cache.LRUCache          //余额cache,加速GetBalance查询
+	CacheSize            int                      //记录构造utxo时传入的cachesize
+	BalanceViewDirty     map[string]int           //balanceCache 标记dirty: addr -> sequence of view
 	contractExectionTime int
 	unconfirmTxInMem     *sync.Map //未确认Tx表的内存镜像
 	maxConfirmedDelay    uint32    // 交易处于unconfirm状态的最长时间，超过后会被回滚
 	unconfirmTxAmount    int64     // 未确认的Tx数目，用于监控
 	avgDelay             int64     // 平均上链延时
 	bcname               string
+	aclMgr               aclBase.AclManager
 
 	// 最新区块高度通知装置
 	heightNotifier *BlockHeightNotifier
@@ -119,18 +110,6 @@ type UtxoVM struct {
 type InboundTx struct {
 	tx    *pb.Transaction
 	txBuf []byte
-}
-
-// RootJSON xuper.json对应的struct，目前先只写了utxovm关注的字段
-type RootJSON struct {
-	Version   string `json:"version"`
-	Consensus struct {
-		Miner string `json:"miner"`
-	} `json:"consensus"`
-	Predistribution []struct {
-		Address string `json:"address"`
-		Quota   string `json:"quota"`
-	} `json:"predistribution"`
 }
 
 type UtxoLockItem struct {
@@ -144,13 +123,13 @@ type contractChainCore struct {
 	*ledger.Ledger
 }
 
-func genUtxoKey(addr []byte, txid []byte, offset int32) string {
+func GenUtxoKey(addr []byte, txid []byte, offset int32) string {
 	return fmt.Sprintf("%s_%x_%d", addr, txid, offset)
 }
 
 // GenUtxoKeyWithPrefix generate UTXO key with given prefix
 func GenUtxoKeyWithPrefix(addr []byte, txid []byte, offset int32) string {
-	baseUtxoKey := genUtxoKey(addr, txid, offset)
+	baseUtxoKey := GenUtxoKey(addr, txid, offset)
 	return pb.UTXOTablePrefix + baseUtxoKey
 }
 
@@ -174,27 +153,27 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 		addr := txInput.FromAddr
 		txid := txInput.RefTxid
 		offset := txInput.RefOffset
-		utxoKey := genUtxoKey(addr, txid, offset)
+		utxoKey := GenUtxoKey(addr, txid, offset)
 		if utxoDedup[utxoKey] {
-			uv.log.Warn("found duplicated utxo in same tx", "utxoKey", utxoKey, "txid", global.F(tx.Txid))
+			uv.log.Warn("found duplicated utxo in same tx", "utxoKey", utxoKey, "txid", utils.F(tx.Txid))
 			return ErrUTXODuplicated
 		}
 		utxoDedup[utxoKey] = true
 		var amountBytes []byte
 		var frozenHeight int64
-		uv.utxoCache.Lock()
-		if l2Cache, exist := uv.utxoCache.All[string(addr)]; exist {
+		uv.UtxoCache.Lock()
+		if l2Cache, exist := uv.UtxoCache.All[string(addr)]; exist {
 			uItem := l2Cache[pb.UTXOTablePrefix+utxoKey]
 			if uItem != nil {
 				amountBytes = uItem.Amount.Bytes()
 				frozenHeight = uItem.FrozenHeight
 			}
 		}
-		uv.utxoCache.Unlock()
+		uv.UtxoCache.Unlock()
 		if amountBytes == nil {
 			uBinary, findErr := uv.utxoTable.Get([]byte(utxoKey))
 			if findErr != nil {
-				if common.NormalizedKVError(findErr) == common.ErrKVNotFound {
+				if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
 					uv.log.Info("not found utxo key:", "utxoKey", utxoKey)
 					return ErrUTXONotFound
 				}
@@ -215,7 +194,7 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 			txInputAmount := big.NewInt(0)
 			txInputAmount.SetBytes(txInput.Amount)
 			uv.log.Warn("unexpected error, txInput amount missmatch utxo amount",
-				"in_utxo", amount, "txInputAmount", txInputAmount, "txid", fmt.Sprintf("%x", tx.Txid), "reftxid", fmt.Sprintf("%x", txid))
+				"in_utxo", amount, "txInputAmount", txInputAmount, "txid", utils.F(tx.Txid), "reftxid", utils.F(txid))
 			return ErrUnexpected
 		}
 		if frozenHeight > curLedgerHeight || frozenHeight == -1 {
@@ -244,7 +223,7 @@ func (uv *UtxoVM) isLocked(utxoKey []byte) bool {
 }
 
 // 解锁utxo key
-func (uv *UtxoVM) unlockKey(utxoKey []byte) {
+func (uv *UtxoVM) UnlockKey(utxoKey []byte) {
 	uv.MutexMem.Lock()
 	defer uv.MutexMem.Unlock()
 	uv.log.Trace("    unlock utxo key", "key", string(utxoKey))
@@ -257,8 +236,8 @@ func (uv *UtxoVM) unlockKey(utxoKey []byte) {
 
 // 试图临时锁定utxo, 返回是否锁定成功
 func (uv *UtxoVM) tryLockKey(key []byte) bool {
-	uv.mutexMem.Lock()
-	defer uv.mutexMem.Unlock()
+	uv.MutexMem.Lock()
+	defer uv.MutexMem.Unlock()
 	if _, exist := uv.lockKeys[string(key)]; !exist {
 		holder := uv.lockKeyList.PushBack(key)
 		uv.lockKeys[string(key)] = &UtxoLockItem{timestamp: time.Now().Unix(), holder: holder}
@@ -270,8 +249,8 @@ func (uv *UtxoVM) tryLockKey(key []byte) bool {
 
 // 清理过期的utxo锁定
 func (uv *UtxoVM) clearExpiredLocks() {
-	uv.mutexMem.Lock()
-	defer uv.mutexMem.Unlock()
+	uv.MutexMem.Lock()
+	defer uv.MutexMem.Unlock()
 	now := time.Now().Unix()
 	for {
 		topItem := uv.lockKeyList.Front()
@@ -295,12 +274,12 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param ledger 账本对象
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
-func NewUtxo(sctx *def.StateCtx) (*UtxoVM, error) {
-	return MakeUtxo(sctx, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime)
+func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta) (*UtxoVM, error) {
+	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
+func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
 	// new kvdb instance
 	kvParam := &kvdb.KVParameter{
 		DBPath:                filepath.Join(sctx.LedgerCfg.StorePath, "utxoVM"),
@@ -312,19 +291,19 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 	}
 	baseDB, err := kvdb.CreateKVInstance(kvParam)
 	if err != nil {
-		xlog.Warn("fail to open leveldb", "dbPath", sctx.LedgerCfg.StorePath+"/utxoVM", "err", err)
 		return nil, err
 	}
 
 	utxoMutex := &sync.RWMutex{}
 	utxoVM := &UtxoVM{
-		meta:                 &pb.UtxoMeta{},
-		metaTmp:              &pb.UtxoMeta{},
-		mutexMeta:            &sync.Mutex{},
+		Meta:                 &pb.UtxoMeta{},
+		MetaTmp:              &pb.UtxoMeta{},
+		MutexMeta:            &sync.Mutex{},
+		metaHandle:           metaHandle,
 		ldb:                  baseDB,
-		mutex:                utxoMutex,
-		mutexMem:             &sync.Mutex{},
-		spLock:               NewSpinLock(),
+		Mutex:                utxoMutex,
+		MutexMem:             &sync.Mutex{},
+		SpLock:               NewSpinLock(),
 		mutexBalance:         &sync.Mutex{},
 		lockKeys:             map[string]*UtxoLockItem{},
 		lockKeyList:          list.New(),
@@ -332,70 +311,53 @@ func MakeUtxo(sctx *def.StateCtx, cachesize int, tmplockSeconds, contractExectio
 		log:                  sctx.XLog,
 		ledger:               sctx.Ledger,
 		utxoTable:            kvdb.NewTable(baseDB, pb.UTXOTablePrefix),
-		utxoCache:            NewUtxoCache(cachesize),
+		UtxoCache:            NewUtxoCache(cachesize),
 		OfflineTxChan:        make(chan []*pb.Transaction, OfflineTxChanBuffer),
-		prevFoundKeyCache:    cache.NewLRUCache(cachesize),
+		PrevFoundKeyCache:    cache.NewLRUCache(cachesize),
 		utxoTotal:            big.NewInt(0),
-		balanceCache:         cache.NewLRUCache(cachesize),
-		cacheSize:            cachesize,
-		balanceViewDirty:     map[string]int{},
+		BalanceCache:         cache.NewLRUCache(cachesize),
+		CacheSize:            cachesize,
+		BalanceViewDirty:     map[string]int{},
 		contractExectionTime: contractExectionTime,
 		cryptoClient:         sctx.Crypt,
 		maxConfirmedDelay:    DefaultMaxConfirmedDelay,
 		bcname:               sctx.BCName,
+		aclMgr:               sctx.AclMgr,
 		heightNotifier:       NewBlockHeightNotifier(),
 	}
 
-	latestBlockid, findErr := utxoVM.metaTable.Get([]byte(LatestBlockKey))
-	if findErr == nil {
-		utxoVM.latestBlockid = latestBlockid
-	} else {
-		if common.NormalizedKVError(findErr) != common.ErrKVNotFound {
-			return nil, findErr
-		}
-	}
-	utxoTotalBytes, findTotalErr := utxoVM.metaTable.Get([]byte(UTXOTotalKey))
+	utxoTotalBytes, findTotalErr := utxoVM.metaHandle.MetaTable.Get([]byte(UTXOTotalKey))
 	if findTotalErr == nil {
 		total := big.NewInt(0)
 		total.SetBytes(utxoTotalBytes)
 		utxoVM.utxoTotal = total
 	} else {
-		if common.NormalizedKVError(findTotalErr) != common.ErrKVNotFound {
+		if def.NormalizedKVError(findTotalErr) != def.ErrKVNotFound {
 			return nil, findTotalErr
 		}
-		//说明是1.1.1版本，没有utxo total字段, 估算一个
-		//utxoVM.utxoTotal = ledger.GetEstimatedTotal()
 		utxoVM.utxoTotal = big.NewInt(0)
-		xlog.Info("utxo total is estimated", "total", utxoVM.utxoTotal)
-	}
-	loadErr := tx.LoadUnconfirmedTxFromDisk()
-	if loadErr != nil {
-		xlog.Warn("faile to load unconfirmed tx from disk", "loadErr", loadErr)
-		return nil, loadErr
 	}
 	// cp not reference
-	newMeta := proto.Clone(utxoVM.meta).(*pb.UtxoMeta)
-	utxoVM.metaTmp = newMeta
+	newMeta := proto.Clone(utxoVM.Meta).(*pb.UtxoMeta)
+	utxoVM.MetaTmp = newMeta
 	return utxoVM, nil
 }
 
 // ClearCache 清空cache, 写盘失败的时候
 func (uv *UtxoVM) ClearCache() {
-	uv.utxoCache = NewUtxoCache(uv.cacheSize)
-	uv.prevFoundKeyCache = cache.NewLRUCache(uv.cacheSize)
+	uv.UtxoCache = NewUtxoCache(uv.CacheSize)
+	uv.PrevFoundKeyCache = cache.NewLRUCache(uv.CacheSize)
 	uv.clearBalanceCache()
-	uv.model3.CleanCache()
 	uv.log.Warn("clear utxo cache")
 }
 
 func (uv *UtxoVM) clearBalanceCache() {
 	uv.log.Warn("clear balance cache")
-	uv.balanceCache = cache.NewLRUCache(uv.cacheSize) //清空balanceCache
-	uv.balanceViewDirty = map[string]int{}            //清空cache dirty flag表
-	uv.model3.CleanCache()
+	uv.BalanceCache = cache.NewLRUCache(uv.CacheSize) //清空balanceCache
+	uv.BalanceViewDirty = map[string]int{}            //清空cache dirty flag表
 }
 
-func (uv *UtxoVM) updateUtxoTotal(delta *big.Int, batch kvdb.Batch, inc bool) {
+func (uv *UtxoVM) UpdateUtxoTotal(delta *big.Int, batch kvdb.Batch, inc bool) {
 	if inc {
 		uv.utxoTotal = uv.utxoTotal.Add(uv.utxoTotal, delta)
 	} else {
@@ -426,7 +388,7 @@ func (uv *UtxoVM) parseUtxoKeys(uKey string) ([]byte, int, error) {
 //SelectUtxos 选择足够的utxo
 //输入: 转账人地址、公钥、金额、是否需要锁定utxo
 //输出：选出的utxo、utxo keys、实际构成的金额(可能大于需要的金额)、错误码
-func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error) {
+func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
 	if totalNeed.Cmp(big.NewInt(0)) == 0 {
 		return nil, nil, big.NewInt(0), nil
 	}
@@ -435,10 +397,10 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 	foundEnough := false
 	utxoTotal := big.NewInt(0)
 	cacheKeys := map[string]bool{} // 先从cache里找找，不够再从leveldb找,因为leveldb prefix scan比较慢
-	txInputs := []*pb.TxInput{}
+	txInputs := []*protos.TxInput{}
 	uv.clearExpiredLocks()
-	uv.utxoCache.Lock()
-	if l2Cache, exist := uv.utxoCache.Available[fromAddr]; exist {
+	uv.UtxoCache.Lock()
+	if l2Cache, exist := uv.UtxoCache.Available[fromAddr]; exist {
 		for uKey, uItem := range l2Cache {
 			if uItem.FrozenHeight > curLedgerHeight || uItem.FrozenHeight == -1 {
 				uv.log.Trace("utxo still frozen, skip it", "uKey", uKey, " fheight", uItem.FrozenHeight)
@@ -465,9 +427,9 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 					continue
 				}
 			}
-			uv.utxoCache.Use(fromAddr, uKey)
+			uv.UtxoCache.Use(fromAddr, uKey)
 			utxoTotal.Add(utxoTotal, uItem.Amount)
-			txInput := &pb.TxInput{
+			txInput := &protos.TxInput{
 				RefTxid:      refTxid,
 				RefOffset:    int32(offset),
 				FromAddr:     []byte(fromAddr),
@@ -482,12 +444,12 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 			}
 		}
 	}
-	uv.utxoCache.Unlock()
+	uv.UtxoCache.Unlock()
 	if !foundEnough {
 		// 底层key: table_prefix from_addr "_" txid "_" offset
 		addrPrefix := pb.UTXOTablePrefix + fromAddr + "_"
 		var middleKey []byte
-		preFoundUtxoKey, mdOK := uv.prevFoundKeyCache.Get(fromAddr)
+		preFoundUtxoKey, mdOK := uv.PrevFoundKeyCache.Get(fromAddr)
 		if mdOK {
 			middleKey = preFoundUtxoKey.([]byte)
 		}
@@ -529,7 +491,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 					continue
 				}
 			}
-			txInput := &pb.TxInput{
+			txInput := &protos.TxInput{
 				RefTxid:      refTxid,
 				RefOffset:    int32(offset),
 				FromAddr:     []byte(fromAddr),
@@ -540,7 +502,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 			utxoTotal.Add(utxoTotal, uItem.Amount) // utxo累加
 			if utxoTotal.Cmp(totalNeed) >= 0 {     // 找到了足够的utxo用于支付
 				foundEnough = true
-				uv.prevFoundKeyCache.Add(fromAddr, key)
+				uv.PrevFoundKeyCache.Add(fromAddr, key)
 				break
 			}
 		}
@@ -550,7 +512,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 	}
 	if !foundEnough {
 		for _, lk := range willLockKeys {
-			uv.unlockKey(lk)
+			uv.UnlockKey(lk)
 		}
 		return nil, nil, nil, ErrNoEnoughUTXO // 余额不足啦
 	}
@@ -558,15 +520,15 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 }
 
 // addBalance 增加cache中的Balance
-func (uv *UtxoVM) addBalance(addr []byte, delta *big.Int) {
+func (uv *UtxoVM) AddBalance(addr []byte, delta *big.Int) {
 	uv.mutexBalance.Lock()
 	defer uv.mutexBalance.Unlock()
-	balance, hitCache := uv.balanceCache.Get(string(addr))
+	balance, hitCache := uv.BalanceCache.Get(string(addr))
 	if hitCache {
 		iBalance := balance.(*big.Int)
 		iBalance.Add(iBalance, delta)
 	} else {
-		uv.balanceViewDirty[string(addr)] = uv.balanceViewDirty[string(addr)] + 1
+		uv.BalanceViewDirty[string(addr)] = uv.BalanceViewDirty[string(addr)] + 1
 	}
 }
 
@@ -574,18 +536,18 @@ func (uv *UtxoVM) addBalance(addr []byte, delta *big.Int) {
 func (uv *UtxoVM) SubBalance(addr []byte, delta *big.Int) {
 	uv.mutexBalance.Lock()
 	defer uv.mutexBalance.Unlock()
-	balance, hitCache := uv.balanceCache.Get(string(addr))
+	balance, hitCache := uv.BalanceCache.Get(string(addr))
 	if hitCache {
 		iBalance := balance.(*big.Int)
 		iBalance.Sub(iBalance, delta)
 	} else {
-		uv.balanceViewDirty[string(addr)] = uv.balanceViewDirty[string(addr)] + 1
+		uv.BalanceViewDirty[string(addr)] = uv.BalanceViewDirty[string(addr)] + 1
 	}
 }
 
 //获得一个账号的余额，inLock表示在调用此函数时已经对uv.mutex加过锁了
 func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
-	cachedBalance, ok := uv.balanceCache.Get(addr)
+	cachedBalance, ok := uv.BalanceCache.Get(addr)
 	if ok {
 		uv.log.Debug("hit getbalance cache", "addr", addr)
 		uv.mutexBalance.Lock()
@@ -596,7 +558,7 @@ func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
 	addrPrefix := fmt.Sprintf("%s%s_", pb.UTXOTablePrefix, addr)
 	utxoTotal := big.NewInt(0)
 	uv.mutexBalance.Lock()
-	myBalanceView := uv.balanceViewDirty[addr]
+	myBalanceView := uv.BalanceViewDirty[addr]
 	uv.mutexBalance.Unlock()
 	it := uv.ldb.NewIteratorWithPrefix([]byte(addrPrefix))
 	defer it.Release()
@@ -614,32 +576,27 @@ func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
 	}
 	uv.mutexBalance.Lock()
 	defer uv.mutexBalance.Unlock()
-	if myBalanceView != uv.balanceViewDirty[addr] {
+	if myBalanceView != uv.BalanceViewDirty[addr] {
 		return utxoTotal, nil
 	}
-	_, exist := uv.balanceCache.Get(addr)
+	_, exist := uv.BalanceCache.Get(addr)
 	if !exist {
 		//首次填充cache
-		uv.balanceCache.Add(addr, utxoTotal)
-		delete(uv.balanceViewDirty, addr)
+		uv.BalanceCache.Add(addr, utxoTotal)
+		delete(uv.BalanceViewDirty, addr)
 	}
 	balanceCopy := big.NewInt(0).Set(utxoTotal)
 	return balanceCopy, nil
 }
 
 // QueryAccountACLWithConfirmed query account's ACL with confirm status
-func (uv *UtxoVM) QueryAccountACLWithConfirmed(accountName string) (*pb.Acl, bool, error) {
-	return uv.queryAccountACLWithConfirmed(accountName)
+func (uv *UtxoVM) QueryAccountACL(accountName string) (*protos.Acl, error) {
+	return uv.aclMgr.GetAccountACL(accountName)
 }
 
 // QueryContractMethodACLWithConfirmed query contract method's ACL with confirm status
-func (uv *UtxoVM) QueryContractMethodACLWithConfirmed(contractName string, methodName string) (*pb.Acl, bool, error) {
-	return uv.queryContractMethodACLWithConfirmed(contractName, methodName)
-}
-
-// GetBalance 查询Address的可用余额
-func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
-	return uv.getBalance(addr)
+func (uv *UtxoVM) QueryContractMethodACL(contractName string, methodName string) (*protos.Acl, error) {
+	return uv.aclMgr.GetContractMethodACL(contractName, methodName)
 }
 
 // Close 关闭utxo vm, 目前主要是关闭leveldb
@@ -668,7 +625,7 @@ func (uv *UtxoVM) GetFromTable(tablePrefix []byte, key []byte) ([]byte, error) {
 // RemoveUtxoCache 清理utxoCache
 func (uv *UtxoVM) RemoveUtxoCache(address string, utxoKey string) {
 	uv.log.Trace("RemoveUtxoCache", "address", address, "utxoKey", utxoKey)
-	uv.utxoCache.Remove(address, utxoKey)
+	uv.UtxoCache.Remove(address, utxoKey)
 }
 
 // NewBatch return batch instance
@@ -684,23 +641,23 @@ func (uv *UtxoVM) SetMaxConfirmedDelay(seconds uint32) {
 
 // SetModifyBlockAddr set modified block addr
 func (uv *UtxoVM) SetModifyBlockAddr(addr string) {
-	uv.modifyBlockAddr = addr
+	uv.ModifyBlockAddr = addr
 	uv.log.Info("set modified block addr", "addr", addr)
 }
 
 // GetAccountContracts get account contracts, return a slice of contract names
 func (uv *UtxoVM) GetAccountContracts(account string) ([]string, error) {
 	contracts := []string{}
-	if acl.IsAccount(account) != 1 {
+	if aclu.IsAccount(account) != 1 {
 		uv.log.Warn("GetAccountContracts valid account name error", "error", "account name is not valid")
 		return nil, errors.New("account name is not valid")
 	}
-	prefKey := pb.ExtUtxoTablePrefix + string(xmodel.MakeRawKey(utils.GetAccount2ContractBucket(), []byte(account+utils.GetACLSeparator())))
+	prefKey := pb.ExtUtxoTablePrefix + string(xmodel.MakeRawKey(aclu.GetAccount2ContractBucket(), []byte(account+aclu.GetACLSeparator())))
 	it := uv.ldb.NewIteratorWithPrefix([]byte(prefKey))
 	defer it.Release()
 	for it.Next() {
 		key := string(it.Key())
-		ret := strings.Split(key, utils.GetACLSeparator())
+		ret := strings.Split(key, aclu.GetACLSeparator())
 		size := len(ret)
 		if size >= 1 {
 			contracts = append(contracts, ret[size-1])
@@ -714,9 +671,7 @@ func (uv *UtxoVM) GetAccountContracts(account string) ([]string, error) {
 
 // QueryUtxoRecord query utxo record details
 func (uv *UtxoVM) QueryUtxoRecord(accountName string, displayCount int64) (*pb.UtxoRecordDetail, error) {
-	utxoRecordDetail := &pb.UtxoRecordDetail{
-		Header: &pb.Header{},
-	}
+	utxoRecordDetail := &pb.UtxoRecordDetail{}
 
 	addrPrefix := fmt.Sprintf("%s%s_", pb.UTXOTablePrefix, accountName)
 	it := uv.ldb.NewIteratorWithPrefix([]byte(addrPrefix))
@@ -769,23 +724,45 @@ func (uv *UtxoVM) QueryUtxoRecord(accountName string, displayCount int64) (*pb.U
 		return utxoRecordDetail, it.Error()
 	}
 
-	utxoRecordDetail.OpenUtxoRecord = &pb.UtxoRecord{
+	utxoRecordDetail.OpenUtxo = &pb.UtxoRecord{
 		UtxoCount:  openUtxoCount.String(),
 		UtxoAmount: openUtxoAmount.String(),
 		Item:       openItem,
 	}
-	utxoRecordDetail.LockedUtxoRecord = &pb.UtxoRecord{
+	utxoRecordDetail.LockedUtxo = &pb.UtxoRecord{
 		UtxoCount:  lockedUtxoCount.String(),
 		UtxoAmount: lockedUtxoAmount.String(),
 		Item:       lockedItem,
 	}
-	utxoRecordDetail.FrozenUtxoRecord = &pb.UtxoRecord{
+	utxoRecordDetail.FrozenUtxo = &pb.UtxoRecord{
 		UtxoCount:  frozenUtxoCount.String(),
 		UtxoAmount: frozenUtxoAmount.String(),
 		Item:       frozenItem,
 	}
 
 	return utxoRecordDetail, nil
+}
+
+func (uv *UtxoVM) QueryAccountContainAK(address string) ([]string, error) {
+	accounts := []string{}
+	if aclu.IsAccount(address) != 0 {
+		return accounts, errors.New("address is not valid")
+	}
+	prefixKey := pb.ExtUtxoTablePrefix + aclu.GetAK2AccountBucket() + "/" + address
+	it := uv.ldb.NewIteratorWithPrefix([]byte(prefixKey))
+	defer it.Release()
+	for it.Next() {
+		key := string(it.Key())
+		ret := strings.Split(key, aclu.GetAKAccountSeparator())
+		size := len(ret)
+		if size >= 1 {
+			accounts = append(accounts, ret[size-1])
+		}
+	}
+	if it.Error() != nil {
+		return []string{}, it.Error()
+	}
+	return accounts, nil
 }
 
 // WaitBlockHeight wait util the height of current block >= target

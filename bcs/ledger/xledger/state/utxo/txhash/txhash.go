@@ -163,7 +163,7 @@ func encodeTxData(tx *pb.Transaction, includeSigns bool) ([]byte, error) {
 
 // ProcessSignTx 签名Tx
 func ProcessSignTx(cryptoClient crypto_base.CryptoClient, tx *pb.Transaction, jsonSK []byte) ([]byte, error) {
-	privateKey, err := cryptoClient.GetEcdsaPrivateKeyFromJSON(jsonSK)
+	privateKey, err := cryptoClient.GetEcdsaPrivateKeyFromJsonStr(string(jsonSK))
 	if err != nil {
 		return nil, err
 	}
