@@ -60,12 +60,18 @@ func (t *BlockAgent) GetTimestamp() int64 {
 // 用于pow挖矿时需更新nonce
 func (t *BlockAgent) SetItem(item string, value interface{}) error {
 	switch item {
-	case "Nonce":
-		v, ok := value.(string)
+	case "nonce":
+		nonce, ok := value.(int32)
 		if !ok {
-			return fmt.Errorf("value type not match")
+			return fmt.Errorf("nonce type not match")
 		}
-		t.blk.Nonce = v
+		t.blk.Nonce = nonce
+	case "blockid":
+		blockId, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("blockid type not match")
+		}
+		t.blk.Blockid = blockId
 	default:
 		return fmt.Errorf("item not support set")
 	}

@@ -1,12 +1,13 @@
 package reader
 
 import (
-	"github.com/xuperchain/xuperchain/core/global"
-	"github.com/xuperchain/xuperchain/core/pb"
+	"math/big"
+
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 type UtxoReader interface {
@@ -18,10 +19,10 @@ type UtxoReader interface {
 	GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, *common.Error)
 	// 拉取固定数目的utxo
 	QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, *common.Error)
-	// 按最大交易大小选择utxo
-	SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
 	// 选择合适金额的utxo
 	SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
+	// 按最大交易大小选择utxo
+	SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
 }
 
 type utxoReader struct {
@@ -38,4 +39,94 @@ func NewUtxoReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) UtxoReader 
 	}
 
 	return reader
+}
+
+func (t *utxoReader) GetBalance(address string) (string, *common.Error) {
+	balance, err := t.chainCtx.State.GetBalance(address)
+	if err != nil {
+		t.log.Warn("get balance error", "err", err)
+		return "", common.CastError(err)
+	}
+
+	return balance.String(), nil
+}
+
+func (t *utxoReader) GetFrozenBalance(account string) (string, *common.Error) {
+	balance, err := t.chainCtx.State.GetFrozenBalance(account)
+	if err != nil {
+		t.log.Warn("get frozen balance error", "err", err)
+		return "", common.CastError(err)
+	}
+
+	return balance.String(), nil
+}
+
+func (t *utxoReader) GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, *common.Error) {
+	tokenDetails, err := t.chainCtx.State.GetBalanceDetail(account)
+	if err != nil {
+		t.log.Warn("get balance detail error", "err", err)
+		return nil, common.CastError(err)
+	}
+
+	return tokenDetails, nil
+}
+
+func (t *utxoReader) QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, *common.Error) {
+	utxoRecord, err := t.chainCtx.State.QueryUtxoRecord(account, count)
+	if err != nil {
+		t.log.Warn("get utxo record error", "err", err)
+		return nil, common.CastError(err)
+	}
+
+	return utxoRecord, nil
+}
+
+func (t *utxoReader) SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error) {
+	utxos, _, totalSelected, err := t.chainCtx.State.SelectUtxos(account, need, isLock, isExclude)
+	if err != nil {
+		t.log.Warn("failed to select utxo", "err", err)
+		return nil, common.CastError(err)
+	}
+
+	utxoList := make([]*lpb.Utxo, 0, len(utxos))
+	for _, v := range utxos {
+		utxo := &lpb.Utxo{}
+		utxo.RefTxid = v.RefTxid
+		utxo.Amount = v.Amount
+		utxo.RefOffset = v.RefOffset
+		utxo.ToAddr = v.FromAddr
+		utxoList = append(utxoList, utxo)
+		t.log.Trace("Select utxo list", "refTxid", utils.F(v.RefTxid), "refOffset", v.RefOffset, "amount", new(big.Int).SetBytes(v.Amount).String())
+	}
+
+	out := &lpb.UtxoOutput{
+		UtxoList: utxoList,
+		TotalSelected: totalSelected.String(),
+	}
+	return out, nil
+}
+
+func (t *utxoReader) SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error) {
+	utxos, _, totalSelected, err := t.chainCtx.State.SelectUtxosBySize(account, isLock, isExclude)
+	if err != nil {
+		t.log.Warn("failed to select utxo", "err", err)
+		return nil, common.CastError(err)
+	}
+
+	utxoList := make([]*lpb.Utxo, 0, len(utxos))
+	for _, v := range utxos {
+		utxo := &lpb.Utxo{}
+		utxo.RefTxid = v.RefTxid
+		utxo.Amount = v.Amount
+		utxo.RefOffset = v.RefOffset
+		utxo.ToAddr = v.FromAddr
+		utxoList = append(utxoList, utxo)
+		t.log.Trace("Select utxo list", "refTxid", utils.F(v.RefTxid), "refOffset", v.RefOffset, "amount", new(big.Int).SetBytes(v.Amount).String())
+	}
+
+	out := &lpb.UtxoOutput{
+		UtxoList: utxoList,
+		TotalSelected: totalSelected.String(),
+	}
+	return out, nil
 }
