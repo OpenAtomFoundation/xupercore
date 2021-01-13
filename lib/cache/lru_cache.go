@@ -7,7 +7,7 @@
  * DESCRIPTION
  * Usage:
  * import (
- *     "github.com/xuperchain/xuperchain/core/common"
+ *	   "github.com/xuperchain/xupercore/lib/cache"
  * )
  * // Create lru cache
  * cache := common.NewLRUCache(10000)

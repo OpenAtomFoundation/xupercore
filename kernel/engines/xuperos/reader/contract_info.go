@@ -17,9 +17,9 @@ type ContractReader interface {
 	// 查询地址下账户
 	GetAccountByAK(addr string) ([]string, *common.Error)
 	// 查询合约账户ACL
-	QueryAccountACL(account string) (*protos.Acl, bool, *common.Error)
+	QueryAccountACL(account string) (*protos.Acl, *common.Error)
 	// 查询合约方法ACL
-	QueryContractMethodACL(contract, method string) (*protos.Acl, bool, *common.Error)
+	QueryContractMethodACL(contract, method string) (*protos.Acl, *common.Error)
 }
 
 type contractReader struct {
@@ -42,7 +42,7 @@ func NewContractReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) Contrac
 	return reader
 }
 
-func (t *contractReader) QueryContractStatData() (*protos.ContractStatData, *common.Error)  {
+func (t *contractReader) QueryContractStatData() (*protos.ContractStatData, *common.Error) {
 	contractStatData, err := t.chainCtx.State.QueryContractStatData()
 	if err != nil {
 		return nil, common.CastError(err)
@@ -100,20 +100,20 @@ func (t *contractReader) GetAccountByAK(address string) ([]string, *common.Error
 	return accounts, nil
 }
 
-func (t *contractReader) QueryAccountACL(account string) (*protos.Acl, bool, *common.Error) {
-	acl, confirmed, err := t.chainCtx.State.QueryAccountACLWithConfirmed(account)
+func (t *contractReader) QueryAccountACL(account string) (*protos.Acl, *common.Error) {
+	acl, err := t.chainCtx.State.QueryAccountACL(account)
 	if err != nil {
-		return nil, false, common.CastError(err)
+		return nil, common.CastError(err)
 	}
 
-	return acl, confirmed, nil
+	return acl, nil
 }
 
-func (t *contractReader) QueryContractMethodACL(contract, method string) (*protos.Acl, bool, *common.Error) {
-	acl, confirmed, err := t.chainCtx.State.QueryContractMethodACLWithConfirmed(contract, method)
+func (t *contractReader) QueryContractMethodACL(contract, method string) (*protos.Acl, *common.Error) {
+	acl, err := t.chainCtx.State.QueryContractMethodACL(contract, method)
 	if err != nil {
-		return nil, false, common.CastError(err)
+		return nil, common.CastError(err)
 	}
 
-	return acl, confirmed, nil
+	return acl, nil
 }

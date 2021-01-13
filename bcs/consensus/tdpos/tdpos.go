@@ -137,12 +137,17 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
 		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger)
+		if qcTree == nil {
+			cCtx.XLog.Error("Xpoa::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
+			return nil
+		}
 		pacemaker := &chainedBft.DefaultPaceMaker{
 			StartView: cCfg.StartHeight,
 		}
 		saftyrules := &chainedBft.DefaultSaftyRules{
 			Crypto: cryptoClient,
 			QcTree: qcTree,
+			Log:    cCtx.XLog,
 		}
 		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
 		go smr.Start()
@@ -270,7 +275,7 @@ func (tp *tdposConsensus) CalculateBlock(block cctx.BlockInterface) error {
 
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
-func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	// 获取当前共识存储
 	bv, err := tp.ParseConsensusStorage(block)
 	if err != nil {

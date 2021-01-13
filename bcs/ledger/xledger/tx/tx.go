@@ -68,7 +68,7 @@ func NewTx(sctx *context.StateCtx, stateDB kvdb.Database) (*Tx, error) {
 }
 
 // 生成奖励TX
-func GenerateAwardTx(address []byte, awardAmount string, desc []byte) (*pb.Transaction, error) {
+func GenerateAwardTx(address, awardAmount string, desc []byte) (*pb.Transaction, error) {
 	utxoTx := &pb.Transaction{Version: TxVersion}
 	amount := big.NewInt(0)
 	amount.SetString(awardAmount, 10) // 10进制转换大整数

@@ -192,76 +192,78 @@ func (pow *PoWConsensus) CompeteMaster(height int64) (bool, bool, error) {
 
 // CheckMinerMatch 验证区块，包括merkel根和hash
 // ATTENTION: TODO: 上层需要先检查VerifyMerkle(block)
-func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block context.BlockInterface) (bool, error) {
+func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.BlockInterface) (bool, error) {
 	// TODO: 报错统一打出矿工地址
 	// 检查区块是否有targetBits字段
 	in, err := pow.ParseConsensusStorage(block)
 	if err != nil {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::ParseConsensusStorage err", "logid", ctx.XLog.GetLogId(), "err", err, "blockId", block.GetBlockid())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::ParseConsensusStorage err", "err", err,
+			"blockId", block.GetBlockid())
 		return false, err
 	}
 	s, ok := in.(PoWStorage)
 	if !ok {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::transfer PoWStorage err", "logid", ctx.XLog.GetLogId(), "blockId", block.GetBlockid())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::transfer PoWStorage err", "blockId", block.GetBlockid())
 		return false, err
 	}
 	// 检查区块的区块头是否和和区块中的targetBits字段匹配
 	if !pow.IsProofed(block.GetBlockid(), s.TargetBits) {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::the actual difficulty of block received doesn't match its' blockid", "logid", ctx.XLog.GetLogId(), "blockid", fmt.Sprintf("%x", block.GetBlockid()))
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::the actual difficulty of block received doesn't match its' blockid", "blockid", fmt.Sprintf("%x", block.GetBlockid()))
 		return false, err
 	}
 	// 检查区块的区块头是否hash正确
 	id, err := block.MakeBlockId()
 	if err != nil {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::make blockid error", "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::make blockid error", "error", err)
 		return false, err
 	}
 	if !bytes.Equal(id, block.GetBlockid()) {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::equal blockid error", "logid", ctx.XLog.GetLogId())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::equal blockid error")
 		return false, err
 	}
 	// 验证difficulty是否正确
 	targetBits, err := pow.refreshDifficulty(block.GetPreHash(), block.GetHeight())
 	if err != nil {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::refreshDifficulty err", "logid", ctx.XLog.GetLogId(), "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::refreshDifficulty err", "error", err)
 		return false, err
 	}
 	if targetBits != s.TargetBits {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::unexpected target bits", "logid", ctx.XLog.GetLogId(), "expect", targetBits, "got", s.TargetBits)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::unexpected target bits", "expect", targetBits, "got", s.TargetBits)
 		return false, err
 	}
 	// 验证时间戳是否正确
 	preBlock, err := pow.ctx.Ledger.QueryBlock(block.GetPreHash())
 	if err != nil {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::get preblock error", "logid", ctx.XLog.GetLogId())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::get preblock error")
 		return false, err
 	}
 	if block.GetTimestamp() < preBlock.GetTimestamp() {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::unexpected block timestamp", "logid", ctx.XLog.GetLogId(), "pre", preBlock.GetTimestamp(), "next", block.GetTimestamp())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::unexpected block timestamp",
+			"pre", preBlock.GetTimestamp(), "next", block.GetTimestamp())
 		return false, err
 	}
 	// 验证前导0
 	if !pow.IsProofed(block.GetBlockid(), targetBits) {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::blockid IsProofed error", "logid", ctx.XLog.GetLogId())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::blockid IsProofed error")
 		return false, err
 	}
 	//验证签名
 	//1 验证一下签名和公钥是不是能对上
 	k, err := pow.ctx.Crypto.GetEcdsaPublicKeyFromJsonStr(block.GetPublicKey())
 	if err != nil {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::get ecdsa from block error", "logid", ctx.XLog.GetLogId(), "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::get ecdsa from block error", "error", err)
 		return false, err
 	}
 	//Todo 跟address比较
 	chkResult, _ := pow.ctx.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
 	if chkResult == false {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::address is not match publickey", "logid", ctx.XLog.GetLogId())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::address is not match publickey")
 		return false, err
 	}
 	//2 验证一下签名是否正确
 	valid, err := pow.ctx.Crypto.VerifyECDSA(k, block.GetSign(), block.GetBlockid())
 	if err != nil {
-		ctx.XLog.Warn("PoW::CheckMinerMatch::verifyECDSA error", "logid", ctx.XLog.GetLogId(), "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::verifyECDSA error", "error", err)
 	}
 	return valid, err
 }

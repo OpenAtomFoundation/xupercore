@@ -8,7 +8,6 @@ import (
 
 	sconf "github.com/xuperchain/xupercore/example/xchain/common/config"
 	"github.com/xuperchain/xupercore/example/xchain/service"
-	"github.com/xuperchain/xupercore/example/xchain/service/rpc"
 	econf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -85,7 +84,7 @@ func StartupXchain(envCfgPath string) error {
 			case <-engChan:
 				serv.Exit()
 				wg.Done()
-			case <-rpcChan:
+			case <-servChan:
 				engine.Exit()
 				wg.Done()
 			case <-sigChan:
@@ -121,7 +120,7 @@ func runEngine(engine engines.BCEngine) <-chan bool {
 
 	// 启动引擎，监听退出信号
 	go func() {
-		engine.Start()
+		engine.Run()
 		exitCh <- true
 	}()
 

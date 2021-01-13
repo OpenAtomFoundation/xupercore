@@ -82,7 +82,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 			cCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::parse consensus configuration error!", "error", err.Error())
 			return nil, err
 		}
-		cfg.StartHeight = 0
+		cfg.StartHeight = 1
 		cfg.Index = 0
 		genesisConsensus, err := pc.makeConsensusItem(cCtx, cfg)
 		if err != nil {
@@ -173,8 +173,12 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 	cfg := def.ConsensusConfig{
 		ConsensusName: consensusName,
 		Config:        string(consensusConfigBytes),
-		StartHeight:   int64(startHeight),
 		Index:         pc.stepConsensus.len(),
+	}
+	if startHeightBytes != nil {
+		cfg.StartHeight = int64(startHeight)
+	} else {
+		cfg.StartHeight = pc.ctx.Ledger.GetTipBlock().GetHeight()
 	}
 	consensusItem, err := pc.makeConsensusItem(pc.ctx, cfg)
 	if err != nil {
@@ -196,11 +200,10 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		// 解析提取字段生成ConsensusConfig
 		cfg := def.ConsensusConfig{}
 		_ = json.Unmarshal(consensusBuf, &cfg)
-		cfg.StartHeight = 0
+		cfg.StartHeight = 1
 		cfg.Index = 0
 		c[0] = cfg
-	}
-	if pluggableConfig != nil {
+	} else {
 		err = json.Unmarshal(pluggableConfig, &c)
 		if err != nil {
 			pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::unmarshal error", "error", err)
@@ -260,7 +263,7 @@ func (pc *PluggableConsensus) CompeteMaster(height int64) (bool, bool, error) {
 }
 
 // CheckMinerMatch 调用具体实例的CheckMinerMatch()
-func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		return false, EmptyConsensusListErr

@@ -8,6 +8,7 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	ecom "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/protos"
 )
@@ -26,7 +27,7 @@ func NewChainHandle(bcName string, reqCtx sctx.ReqCtx) (*ChainHandle, *ecom.Erro
 
 	chain, err := reqCtx.GetEngine().Get(bcName)
 	if err != nil {
-		return nil, ErrChainNotExist
+		return nil, ecom.ErrChainNotExist
 	}
 
 	obj := &ChainHandle{
@@ -47,7 +48,7 @@ func (t *ChainHandle) PreExec(req []*protos.InvokeRequest,
 	return t.chain.PreExec(t.genXctx(), req, initiator, authRequires)
 }
 
-func (t *ChainHandle) QueryTx(txId []byte) (*lpb.TxInfo, *ecom.Error) {
+func (t *ChainHandle) QueryTx(txId []byte) (*xpb.TxInfo, *ecom.Error) {
 	return reader.NewLedgerReader(t.chain.Context(), t.genXctx()).QueryTx(txId)
 }
 
@@ -57,11 +58,11 @@ func (t *ChainHandle) SelectUtxo(account string, need *big.Int,
 		isLock, isExclude)
 }
 
-func (t *ChainHandle) QueryBlock(blkId []byte, needContent bool) (*lpb.BlockInfo, *ecom.Error) {
+func (t *ChainHandle) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, *ecom.Error) {
 	return reader.NewLedgerReader(t.chain.Context(), t.genXctx()).QueryBlock(blkId, needContent)
 }
 
-func (t *ChainHandle) QueryChainStatus(needBranch bool) (*reader.ChainStatus, *ecom.Error) {
+func (t *ChainHandle) QueryChainStatus(needBranch bool) (*xpb.ChainStatus, *ecom.Error) {
 	return reader.NewChainReader(t.chain.Context(), t.genXctx()).GetChainStatus()
 }
 

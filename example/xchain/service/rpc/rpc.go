@@ -32,7 +32,7 @@ func NewRpcServ(engine ecom.Engine, log logs.Logger) *RpcServ {
 // UnaryInterceptor provides a hook to intercept the execution of a unary RPC on the server.
 func (t *RpcServ) UnaryInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler) (resp interface{}, err error) {
+		handler grpc.UnaryHandler) (interface{}, error) {
 
 		// panic recover
 		defer func() {
@@ -69,25 +69,30 @@ func (t *RpcServ) UnaryInterceptor() grpc.UnaryServerInterceptor {
 		// handle request
 		// 根据err自动设置响应错误码，err需要是定义的标准err，否则会响应为未知错误
 		stdErr := ecom.ErrSuccess
-		resp, err := handler(ctx, req)
+		respRes, err := handler(ctx, req)
 		if err != nil {
 			stdErr = ecom.CastError(err)
 		}
 		// 根据错误统一设置header，对外统一响应err=nil，通过Header.ErrCode判断
-		resp.Header = &pb.RespHeader{
+		respHeader := &pb.RespHeader{
 			LogId:   reqHeader.GetLogId(),
-			ErrCode: stdErr.Code,
+			ErrCode: int64(stdErr.Code),
 			ErrMsg:  stdErr.Msg,
 			TraceId: t.genTraceId(),
+		}
+		// 通过反射设置header到response
+		header := reflect.ValueOf(respRes).Elem().FieldByName("Header")
+		if header.IsValid() && header.IsNil() && header.CanSet() {
+			header.Set(reflect.ValueOf(respHeader))
 		}
 
 		// output ending log
 		// 可以通过log库提供的SetInfoField方法附加输出到ending log
 		logFields = append(logFields, "status", stdErr.Status, "err_code", stdErr.Code,
 			"err_msg", stdErr.Msg, "cost_time", reqCtx.GetTimer().Print())
-		rctx.GetLog().Info("request done", logFields...)
+		reqCtx.GetLog().Info("request done", logFields...)
 
-		return resp, nil
+		return respRes, nil
 	}
 }
 

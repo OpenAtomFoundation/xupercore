@@ -20,7 +20,8 @@ type xpoaSchedule struct {
 	// address到neturl的映射
 	addrToNet map[string]string
 
-	ledger cctx.LedgerRely
+	ledger    cctx.LedgerRely
+	enableBFT bool
 }
 
 // minerScheduling 按照时间调度计算目标候选人轮换数term, 目标候选人index和候选人生成block的index
@@ -29,9 +30,9 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 	termTime := s.period * int64(length) * s.blockNum
 	// 每个矿工轮值时间
 	posTime := s.period * s.blockNum
-	term = (timestamp)/termTime + 1
+	term = (timestamp/1e6)/termTime + 1
 	//10640483 180000
-	resTime := timestamp - (term-1)*termTime
+	resTime := timestamp/1e6 - (term-1)*termTime
 	pos = resTime / posTime
 	resTime = resTime - (resTime/posTime)*posTime
 	blockPos = resTime/s.period + 1
@@ -45,16 +46,19 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 // ATTENTION: 由于GetLeader()永远在GetIntAddress()之前，故在GetLeader时更新schedule的addrToNet Map，可以保证能及时提供Addr到NetUrl的映射
 func (s *xpoaSchedule) GetLeader(round int64) string {
 	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
-	if b, err := s.ledger.QueryBlockByHeight(round); err != nil {
+	if b, err := s.ledger.QueryBlockByHeight(round); err == nil {
 		return string(b.GetProposer())
 	}
 	tipBlock := s.ledger.GetTipBlock()
 	tipHeight := tipBlock.GetHeight()
 	v := s.GetValidators(round)
+	if v == nil {
+		return ""
+	}
 	// 计算round对应的timestamp大致区间
 	time := time.Now().UnixNano()
-	for i := 0; i < int(tipHeight-round)-1; i++ {
-		time += s.period * 1000
+	if round > tipHeight {
+		time += s.period * 1e6
 	}
 	_, pos, _ := s.minerScheduling(time, len(v))
 	return v[pos]
@@ -69,8 +73,7 @@ func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
 		return ""
 	}
 	localValidators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if localValidators == nil && err == nil {
-		// 使用初始变量
+	if err != nil {
 		return ""
 	}
 	_, pos, _ := s.minerScheduling(timestamp, len(localValidators))
@@ -84,12 +87,12 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		// xpoa.lg.Error("Xpoa updateValidates getCurrentValidates error", "CreateSnapshot err:", err)
 		return nil, err
 	}
-	res, err := reader.Get(xpoaBucket, []byte(xpoaKey))
+	res, err := reader.Get(XPOABUCKET, []byte(XPOAKEY))
 	if res == nil {
 		// 即合约还未被调用，未有变量更新
-		return nil, nil
+		return s.validators, nil
 	}
-	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
+	validators, err := common.LoadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
 	if err != nil {
 		return nil, err
 	}

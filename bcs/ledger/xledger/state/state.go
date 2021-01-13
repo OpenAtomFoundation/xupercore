@@ -183,6 +183,12 @@ func (t *State) GetAccountContracts(account string) ([]string, error) {
 	return t.utxo.GetAccountContracts(account)
 }
 
+// 查询合约状态
+// TODO:需要实现
+func (t *State) GetContractStatus(contractName string) (*protos.ContractStatus, error) {
+	return nil, fmt.Errorf("not impl")
+}
+
 func (t *State) QueryAccountACL(accountName string) (*protos.Acl, error) {
 	return t.utxo.QueryAccountACL(accountName)
 }
@@ -226,7 +232,7 @@ func (t *State) GetFrozenBalance(addr string) (*big.Int, error) {
 }
 
 // GetFrozenBalance 查询Address的被冻结的余额 / 未冻结的余额
-func (t *State) GetBalanceDetail(addr string) ([]*pb.TokenFrozenDetail, error) {
+func (t *State) GetBalanceDetail(addr string) ([]*pb.BalanceDetailInfo, error) {
 	addrPrefix := fmt.Sprintf("%s%s_", pb.UTXOTablePrefix, addr)
 	utxoFrozen := big.NewInt(0)
 	utxoUnFrozen := big.NewInt(0)
@@ -250,15 +256,15 @@ func (t *State) GetBalanceDetail(addr string) ([]*pb.TokenFrozenDetail, error) {
 		return nil, it.Error()
 	}
 
-	var tokenFrozenDetails []*pb.TokenFrozenDetail
+	var tokenFrozenDetails []*pb.BalanceDetailInfo
 
-	tokenFrozenDetail := &pb.TokenFrozenDetail{
+	tokenFrozenDetail := &pb.BalanceDetailInfo{
 		Balance:  utxoFrozen.String(),
 		IsFrozen: true,
 	}
 	tokenFrozenDetails = append(tokenFrozenDetails, tokenFrozenDetail)
 
-	tokenUnFrozenDetail := &pb.TokenFrozenDetail{
+	tokenUnFrozenDetail := &pb.BalanceDetailInfo{
 		Balance:  utxoUnFrozen.String(),
 		IsFrozen: false,
 	}
@@ -548,6 +554,11 @@ func (t *State) QueryTx(txid []byte) (*pb.Transaction, bool, error) {
 // 查询账余额
 func (t *State) GetBalance(addr string) (*big.Int, error) {
 	return t.utxo.GetBalance(addr)
+}
+
+// GetTotal 返回当前总资产
+func (t *State) GetTotal() *big.Int {
+	return t.utxo.GetTotal()
 }
 
 // 查找状态机meta信息
