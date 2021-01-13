@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/pb"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -16,10 +16,10 @@ type stateReader interface {
 }
 
 type xmStateReader struct {
-	r contract.XMReader
+	r ledger.XMReader
 }
 
-func fromXMReader(r contract.XMReader) stateReader {
+func fromXMReader(r ledger.XMReader) stateReader {
 	return &xmStateReader{
 		r: r,
 	}
@@ -42,7 +42,7 @@ type codeProvider struct {
 	xstore stateReader
 }
 
-func newCodeProviderFromXMReader(r contract.XMReader) ContractCodeProvider {
+func newCodeProviderFromXMReader(r ledger.XMReader) ContractCodeProvider {
 	return newCodeProvider(fromXMReader(r))
 }
 
