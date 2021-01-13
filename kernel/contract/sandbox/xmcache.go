@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/syndtr/goleveldb/leveldb/memdb"
-	"github.com/xuperchain/xuperchain/core/pb"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -25,7 +25,7 @@ var (
 
 // UtxoVM manages utxos
 type UtxoVM interface {
-	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*pb.TxInput, [][]byte, *big.Int, error)
+	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // XMCache data structure for XModel Cache

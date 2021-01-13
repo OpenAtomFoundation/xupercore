@@ -611,7 +611,7 @@ func getVoteId(vote *VoteInfo) []byte {
 	return hash.DoubleSha256([]byte(voteBytes))
 }
 
-func createNewBCtx() *xctx.BaseCtx {
+func createNewBCtx() xctx.XContext {
 	log, _ := logs.NewLogger("", "smr")
 	return &xctx.BaseCtx{
 		XLog:  log,

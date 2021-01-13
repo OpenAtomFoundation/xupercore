@@ -5,20 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"math/big"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xuperchain/core/pb"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -263,8 +261,12 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	}
 
 	// 4.打包区块
-	block, err := t.ctx.Ledger.FormatMinerBlock(height, txList, t.ctx.Address, now.UnixNano(),
-		t.ctx.State.GetLatestBlockid(), t.ctx.State.GetTotal(), consData)
+	// TODO:需要修复
+	consInfo, _ := t.convertConsData(consData)
+	block, err := t.ctx.Ledger.FormatMinerBlock(txList, []byte(t.ctx.Address.Address),
+		t.ctx.Address.PrivateKey, now.UnixNano(), consInfo.CurTerm, consInfo.CurBlockNum,
+		t.ctx.State.GetLatestBlockid(), consInfo.TargetBits, t.ctx.State.GetTotal(),
+		consInfo.Justify, nil, height)
 	if err != nil {
 		ctx.GetLog().Warn("format block error", "err", err)
 		return nil, err
@@ -273,18 +275,18 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	return block, nil
 }
 
-func (t *Miner) convertConsData(data []byte) *protos.ConsensusInfo {
+func (t *Miner) convertConsData(data []byte) (*agent.ConsensusStorage, error) {
 	if data == nil {
-		return nil
+		return nil, fmt.Errorf("param error")
 	}
 
-	var consInfo *protos.ConsensusInfo
-	err := json.Unmarshal(data, consInfo)
+	var consInfo agent.ConsensusStorage
+	err := json.Unmarshal(data, &consInfo)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 
-	return consInfo
+	return &consInfo, nil
 }
 
 func (t *Miner) getTimerTx(height int64) ([]*lpb.Transaction, error) {
@@ -549,12 +551,7 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 			continue
 		}
 
-		input := &pb.BlockID{
-			Bcname:      t.ctx.BCName,
-			Blockid:     preHash,
-			NeedContent: true,
-		}
-		block, err := t.GetBlock(ctx, input)
+		block, err := t.getBlock(ctx, preHash)
 		if err != nil {
 			ctx.GetLog().Warn("get block error", "err", err)
 			return nil, err
@@ -567,14 +564,20 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 		}
 
 		// TODO: 确定ledger接口返回值
-		beginBlock = block.Block
-		preHash = block.Block.PreHash
+		beginBlock = block
+		preHash = block.PreHash
 	}
 
 	return beginBlock, nil
 }
 
-func (t *Miner) GetBlock(ctx xctx.XContext, input *pb.BlockID) (*pb.Block, error) {
+func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock, error) {
+	input := &xpb.BlockID{
+		Bcname:      t.ctx.BCName,
+		Blockid:     blockId,
+		NeedContent: true,
+	}
+
 	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, input, p2p.WithBCName(t.ctx.BCName))
 	response, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
 	if err != nil {
@@ -587,14 +590,15 @@ func (t *Miner) GetBlock(ctx xctx.XContext, input *pb.BlockID) (*pb.Block, error
 			continue
 		}
 
-		var block *pb.Block
+		var block *xpb.BlockInfo
 		err = p2p.Unmarshal(msg, block)
 		if err != nil {
 			ctx.GetLog().Warn("get block error", "err", err)
 			continue
 		}
 
-		return block, nil
+		// TODO:这里需要检查区块状态
+		return block.Block, nil
 	}
 
 	return nil, errors.New("no response")
@@ -638,7 +642,7 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.I
 
 // syncConfirm 向周围节点询问块是否可以被接受
 func (t *Miner) isConfirmed(ctx xctx.XContext, bcs *xpb.ChainStatus) bool {
-	input := &pb.InternalBlock{Blockid: bcs.Block.Blockid}
+	input := &lpb.InternalBlock{Blockid: bcs.Block.Blockid}
 	opt := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
 		//p2p.WithLogId(ctx.GetLog().GetLogId()),

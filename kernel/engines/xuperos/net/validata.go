@@ -4,9 +4,6 @@ import (
 	"errors"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xuperchain/core/contract"
-	"github.com/xuperchain/xuperchain/core/pb"
-
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
@@ -41,18 +38,6 @@ func validatePostTx(tx *lpb.Transaction) error {
 	}
 
 	return nil
-}
-
-func checkContractAuthority(contractWhiteList map[string]map[string]bool, tx *pb.Transaction) (bool, error) {
-	descParse, err := contract.Parse(string(tx.GetDesc()))
-	if err != nil {
-		return true, nil
-	}
-
-	if contractWhiteList[descParse.Module] == nil {
-		return true, nil
-	}
-	return tx.FromAddrInList(contractWhiteList[descParse.Module]), nil
 }
 
 func validateSendBlock(block *lpb.InternalBlock) error {

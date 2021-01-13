@@ -1,7 +1,9 @@
 package context
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/xuperchain/xupercore/example/xchain/common/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -77,18 +79,18 @@ func (t *ReqCtxImpl) GetClientIp() string {
 	return t.clientIp
 }
 
-func (t *BaseCtx) Deadline() (deadline time.Time, ok bool) {
+func (t *ReqCtxImpl) Deadline() (deadline time.Time, ok bool) {
 	return
 }
 
-func (t *BaseCtx) Done() <-chan struct{} {
+func (t *ReqCtxImpl) Done() <-chan struct{} {
 	return nil
 }
 
-func (t *BaseCtx) Err() error {
+func (t *ReqCtxImpl) Err() error {
 	return nil
 }
 
-func (t *BaseCtx) Value(key interface{}) interface{} {
+func (t *ReqCtxImpl) Value(key interface{}) interface{} {
 	return nil
 }

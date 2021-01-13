@@ -144,32 +144,32 @@ func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
 
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyMerkle(block)
-func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	// 检查区块的区块头是否hash正确
 	bid, err := block.MakeBlockId()
 	if err != nil {
 		return false, err
 	}
 	if !bytes.Equal(bid, block.GetBlockid()) {
-		ctx.XLog.Warn("Single::CheckMinerMatch::equal blockid error", "logid", ctx.XLog.GetLogId())
+		ctx.GetLog().Warn("Single::CheckMinerMatch::equal blockid error")
 		return false, err
 	}
 	// 检查矿工地址是否合法
 	if string(block.GetProposer()) != s.config.Miner {
-		ctx.XLog.Warn("Single::CheckMinerMatch::miner check error", "logid", ctx.XLog.GetLogId(),
-			"blockid", block.GetBlockid(), "proposer", string(block.GetProposer()), "local proposer", s.config.Miner)
+		ctx.GetLog().Warn("Single::CheckMinerMatch::miner check error", "blockid", block.GetBlockid(),
+			"proposer", string(block.GetProposer()), "local proposer", s.config.Miner)
 		return false, err
 	}
 	//验证签名
 	//1 验证一下签名和公钥是不是能对上
 	k, err := s.ctx.Crypto.GetEcdsaPublicKeyFromJsonStr(block.GetPublicKey())
 	if err != nil {
-		ctx.XLog.Warn("Single::CheckMinerMatch::get ecdsa from block error", "logid", ctx.XLog.GetLogId(), "error", err)
+		ctx.GetLog().Warn("Single::CheckMinerMatch::get ecdsa from block error", "error", err)
 		return false, err
 	}
 	chkResult, _ := s.ctx.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
 	if chkResult == false {
-		ctx.XLog.Warn("Single::CheckMinerMatch::address is not match publickey", "logid", ctx.XLog.GetLogId())
+		ctx.GetLog().Warn("Single::CheckMinerMatch::address is not match publickey")
 		return false, err
 	}
 	//2 验证地址
@@ -183,7 +183,8 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.Block
 	//3 验证一下签名是否正确
 	valid, err := s.ctx.Crypto.VerifyECDSA(k, block.GetSign(), block.GetBlockid())
 	if err != nil {
-		ctx.XLog.Warn("Single::CheckMinerMatch::verifyECDSA error", "logid", ctx.XLog.GetLogId(), "error", err, "sign", block.GetSign())
+		ctx.GetLog().Warn("Single::CheckMinerMatch::verifyECDSA error",
+			"error", err, "sign", block.GetSign())
 	}
 	return valid, err
 }

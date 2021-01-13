@@ -275,7 +275,7 @@ func (tp *tdposConsensus) CalculateBlock(block cctx.BlockInterface) error {
 
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
-func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	// 获取当前共识存储
 	bv, err := tp.ParseConsensusStorage(block)
 	if err != nil {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"math/big"
 
+	sctx "github.com/xuperchain/xupercore/example/xchain/common/context"
 	pb "github.com/xuperchain/xupercore/example/xchain/common/xchainpb"
+	"github.com/xuperchain/xupercore/example/xchain/models"
 	ecom "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
@@ -19,6 +21,9 @@ import (
 func (t *RpcServ) CheckAlive(gctx context.Context, req *pb.BaseReq) (*pb.BaseResp, error) {
 	// 默认响应
 	resp := &pb.BaseResp{}
+	// 获取请求上下文，对内传递rctx
+	rctx := sctx.ValueReqCtx(gctx)
+
 	rctx.GetLog().Debug("check alive succ")
 	return resp, nil
 }
@@ -28,7 +33,7 @@ func (t *RpcServ) SubmitTx(gctx context.Context, req *pb.SubmitTxReq) (*pb.BaseR
 	// 默认响应
 	resp := &pb.BaseResp{}
 	// 获取请求上下文，对内传递rctx
-	rctx := gctx.ValueReqCtx(gctx)
+	rctx := sctx.ValueReqCtx(gctx)
 
 	// 校验参数
 	if req == nil || req.GetTx() == nil || req.GetBcname() == "" {
@@ -53,7 +58,7 @@ func (t *RpcServ) PreExec(gctx context.Context, req *pb.PreExecReq) (*pb.PreExec
 	// 默认响应
 	resp := &pb.PreExecResp{}
 	// 获取请求上下文，对内传递rctx
-	rctx := gctx.ValueReqCtx(gctx)
+	rctx := sctx.ValueReqCtx(gctx)
 
 	// 校验参数
 	if req == nil || req.GetBcname() == "" || len(req.GetRequests()) < 1 {
@@ -84,7 +89,7 @@ func (t *RpcServ) SelectUtxo(gctx context.Context, req *pb.SelectUtxoReq) (*pb.S
 	// 默认响应
 	resp := &pb.SelectUtxoResp{}
 	// 获取请求上下文，对内传递rctx
-	rctx := gctx.ValueReqCtx(gctx)
+	rctx := sctx.ValueReqCtx(gctx)
 
 	// 校验参数
 	if req == nil || req.GetBcname() == "" || req.GetAddress() == "" || req.GetTotalNeed() == "" {
@@ -119,7 +124,7 @@ func (t *RpcServ) QueryTx(gctx context.Context, req *pb.QueryTxReq) (*pb.QueryTx
 	// 默认响应
 	resp := &pb.QueryTxResp{}
 	// 获取请求上下文，对内传递rctx
-	rctx := gctx.ValueReqCtx(gctx)
+	rctx := sctx.ValueReqCtx(gctx)
 
 	// 校验参数
 	if req == nil || req.GetBcname() == "" || len(req.GetTxid()) < 1 {
@@ -150,7 +155,7 @@ func (t *RpcServ) QueryBlock(gctx context.Context, req *pb.QueryBlockReq) (*pb.Q
 	// 默认响应
 	resp := &pb.QueryBlockResp{}
 	// 获取请求上下文，对内传递rctx
-	rctx := gctx.ValueReqCtx(gctx)
+	rctx := sctx.ValueReqCtx(gctx)
 
 	// 校验参数
 	if req == nil || req.GetBcname() == "" || len(req.GetBlockId()) < 1 {
@@ -169,7 +174,7 @@ func (t *RpcServ) QueryBlock(gctx context.Context, req *pb.QueryBlockReq) (*pb.Q
 	rctx.GetLog().SetInfoField("block_id", utils.F(req.GetBlockId()))
 	// 设置响应
 	if err == nil {
-		resp.Status = req.GetStatus()
+		resp.Status = res.GetStatus()
 		resp.Block = res.GetBlock()
 	}
 
@@ -182,7 +187,7 @@ func (t *RpcServ) QueryChainStatus(gctx context.Context,
 	// 默认响应
 	resp := &pb.QueryChainStatusResp{}
 	// 获取请求上下文，对内传递rctx
-	rctx := gctx.ValueReqCtx(gctx)
+	rctx := sctx.ValueReqCtx(gctx)
 
 	// 校验参数
 	if req == nil || req.GetBcname() == "" {
@@ -202,7 +207,7 @@ func (t *RpcServ) QueryChainStatus(gctx context.Context,
 		resp.Bcname = req.GetBcname()
 		resp.LedgerMeta = res.LedgerMeta
 		resp.UtxoMeta = res.UtxoMeta
-		resp.BranchBlockId = BranchIds
+		resp.BranchBlockId = res.BranchIds
 	}
 
 	return resp, err

@@ -276,7 +276,3 @@ message UtxoOutput {
     string totalSelected = 2;
 }
 
-message TokenFrozenDetail {
-  string balance = 1;
-  bool isFrozen = 2;
-}

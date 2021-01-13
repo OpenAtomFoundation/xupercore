@@ -90,7 +90,7 @@ func (con *FakeConsensusImp) CompeteMaster(height int64) (bool, bool, error) {
 	return true, true, nil
 }
 
-func (con *FakeConsensusImp) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (con *FakeConsensusImp) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 
 	return true, nil
 }
@@ -142,7 +142,7 @@ func (con *AnotherConsensusImp) CompeteMaster(height int64) (bool, bool, error) 
 	return true, true, nil
 }
 
-func (con *AnotherConsensusImp) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (con *AnotherConsensusImp) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 
 	return true, nil
 }

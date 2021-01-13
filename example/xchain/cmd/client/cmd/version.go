@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/xuperchain/xupercore/example/xchain/common/version"
 
 	"github.com/spf13/cobra"

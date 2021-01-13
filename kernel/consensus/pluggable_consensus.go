@@ -263,7 +263,7 @@ func (pc *PluggableConsensus) CompeteMaster(height int64) (bool, bool, error) {
 }
 
 // CheckMinerMatch 调用具体实例的CheckMinerMatch()
-func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		return false, EmptyConsensusListErr
