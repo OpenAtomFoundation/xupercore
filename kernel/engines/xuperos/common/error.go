@@ -83,6 +83,9 @@ var (
 	ErrRootChainNotExist  = &Error{ErrStatusRefused, 40006, "root chain not exist"}
 	ErrLoadChainFailed    = &Error{ErrStatusInternalErr, 50004, "load chain failed"}
 
+	ErrContractNewCtxFailed = &Error{ErrStatusInternalErr, 50004, "contract new context failed"}
+	ErrContractInvokeFailed = &Error{ErrStatusInternalErr, 50004, "contract invoke failed"}
+
 	// tx
 	ErrTxVerifyFailed     = &Error{ErrStatusInternalErr, 40011, "verify tx failed"}
 	ErrTxAlreadyExist     = &Error{ErrStatusInternalErr, 40013, "tx already exist"}
