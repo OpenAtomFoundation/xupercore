@@ -112,7 +112,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 
 	// create xpoaConsensus实例
 	xpoa := &xpoaConsensus{
-		bctx:          cCtx.BaseCtx,
+		bctx:          &cCtx.BaseCtx,
 		election:      schedule,
 		isProduce:     make(map[int64]bool),
 		config:        xconfig,
@@ -165,12 +165,12 @@ Again:
 	x.election.UpdateValidator()
 	leader := x.election.GetLeader(height)
 	if leader == x.election.address {
-		x.bctx.XLog.Info("Xpoa::CompeteMaster", "isMiner", true, "height", height)
+		x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", true, "height", height)
 		// TODO: 首次切换为矿工时SyncBlcok, Bug: 可能会导致第一次出块失败
 		needSync := x.election.ledger.GetTipBlock().GetHeight() == 0 || string(x.election.ledger.GetTipBlock().GetProposer()) != leader
 		return true, needSync, nil
 	}
-	x.bctx.XLog.Info("Xpoa::CompeteMaster", "isMiner", false, "height", height)
+	x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", false, "height", height)
 	// TODO: 后续调试时，确定此处是否需要sync
 	return false, false, nil
 }
@@ -216,7 +216,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 	// 再次检查目前是否是矿工，TODO: check是否有必要，因为和sync抢一把锁，按道理不会有这个问题
 	_, pos, _ := x.election.minerScheduling(timestamp, len(x.election.validators))
 	if x.election.validators[pos] != x.election.address {
-		x.bctx.XLog.Warn("smr::ProcessBeforeMiner::timeout", "now", x.election.validators[pos])
+		x.bctx.GetLog().Warn("smr::ProcessBeforeMiner::timeout", "now", x.election.validators[pos])
 		return false, nil, MinerSelectErr
 	}
 	if !x.election.enableBFT {
@@ -228,7 +228,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 		if len(x.election.validators) == 1 {
 			return false, nil, nil
 		}
-		x.bctx.XLog.Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "ledger", x.election.ledger.GetTipBlock().GetHeight(),
+		x.bctx.GetLog().Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "ledger", x.election.ledger.GetTipBlock().GetHeight(),
 			"HighQC", x.smr.GetHighQC().GetProposalView())
 		// ATTENTION：若返回true后，需miner再次调用ProcessBeforeMiner， 原因：若后续继续走CompeteMaster循环，会导致刚刚truncate掉的区块再次同步回来
 		return true, nil, NotEnoughVotes
@@ -236,7 +236,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 	qc := x.smr.GetHighQC()
 	qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
 	if !ok {
-		x.bctx.XLog.Warn("smr::ProcessBeforeMiner::qc transfer err", "qc", qc)
+		x.bctx.GetLog().Warn("smr::ProcessBeforeMiner::qc transfer err", "qc", qc)
 		return false, nil, InvalidQC
 	}
 	s := &XpoaStorage{
@@ -279,16 +279,16 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 			ips = append(ips, x.election.addrToNet[v])
 		}
 		if err := x.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), ips); err != nil {
-			x.bctx.XLog.Warn("smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
+			x.bctx.GetLog().Warn("smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
 			return err
 		}
-		x.bctx.XLog.Info("smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
+		x.bctx.GetLog().Info("smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
 		return nil
 	}
 	// 若当前节点不在候选人节点中，直接调用smr生成新的qc树
 	pNode := x.smr.BlockToProposalNode(block)
 	x.smr.UpdateQcStatus(pNode)
-	x.bctx.XLog.Info("smr::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()))
+	x.bctx.GetLog().Info("smr::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()))
 	return nil
 }
 
@@ -317,7 +317,7 @@ func (x *xpoaConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interf
 	}
 	err = json.Unmarshal(b, &store)
 	if err != nil {
-		x.bctx.XLog.Error("Xpoa::ParseConsensusStorage invalid consensus storage", "err", err)
+		x.bctx.GetLog().Error("Xpoa::ParseConsensusStorage invalid consensus storage", "err", err)
 		return nil, err
 	}
 	return store, nil

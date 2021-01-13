@@ -4,6 +4,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -43,7 +44,7 @@ type Engine interface {
 
 // 定义引擎对各组件依赖接口约束
 type EngineRelyAgent interface {
-	CreateNetwork() (network.Network, error)
+	CreateNetwork(*xconf.EnvConf) (network.Network, error)
 }
 
 // 定义链对各组件依赖接口约束

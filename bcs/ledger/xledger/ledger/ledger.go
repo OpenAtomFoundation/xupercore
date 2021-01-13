@@ -114,8 +114,11 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger.powMutex = &sync.Mutex{}
 
 	// new kvdb instance
+	storePath := lctx.EnvCfg.GenDataAbsPath(lctx.EnvCfg.ChainDir)
+	storePath = filepath.Join(storePath, lctx.BCName)
+	ledgDBPath := filepath.Join(storePath, "ledger")
 	kvParam := &kvdb.KVParameter{
-		DBPath:                filepath.Join(lctx.LedgerCfg.StorePath, "ledger"),
+		DBPath:                ledgDBPath,
 		KVEngineType:          lctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          MemCacheSize,
 		FileHandlersCacheSize: FileHandlersCacheSize,
@@ -124,7 +127,7 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	}
 	baseDB, err := kvdb.CreateKVInstance(kvParam)
 	if err != nil {
-		lctx.XLog.Warn("fail to open leveldb", "dbPath", lctx.LedgerCfg.StorePath+"/ledger", "err", err)
+		lctx.XLog.Warn("fail to open leveldb", "dbPath", ledgDBPath, "err", err)
 		return nil, err
 	}
 

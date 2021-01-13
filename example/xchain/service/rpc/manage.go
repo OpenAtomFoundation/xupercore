@@ -88,7 +88,7 @@ func (t *RpcServMG) runRpcServ() error {
 	unaryInterceptors = append(unaryInterceptors, t.rpcServ.UnaryInterceptor())
 	rpcOptions = append(rpcOptions,
 		middleware.WithUnaryServerChain(unaryInterceptors...),
-		grpc.MaxMsgSize(t.scfg.MaxMsgSize),
+		grpc.MaxRecvMsgSize(t.scfg.MaxRecvMsgSize),
 		grpc.ReadBufferSize(t.scfg.ReadBufSize),
 		grpc.InitialWindowSize(t.scfg.InitWindowSize),
 		grpc.InitialConnWindowSize(t.scfg.InitConnWindowSize),

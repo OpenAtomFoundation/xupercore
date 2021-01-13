@@ -15,7 +15,7 @@ type LDBDatabase struct {
 
 // GetInstance get instance of LDBDatabase
 func NewKVDBInstance(param *kvdb.KVParameter) (kvdb.Database, error) {
-	var baseDB kvdb.Database
+	baseDB := new(LDBDatabase)
 	err := baseDB.Open(param.GetDBPath(), map[string]interface{}{
 		"cache":       param.GetMemCacheSize(),
 		"fds":         param.GetFileHandlersCacheSize(),
