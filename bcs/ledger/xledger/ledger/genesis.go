@@ -17,6 +17,8 @@ const awardCacheSize = 1000
 
 // RootConfig genesis block configure
 type RootConfig struct {
+	Crypto string `json:"crypto"`
+	Kvengine string `json:"kvengine"`
 	Version   string `json:"version"`
 	Consensus struct {
 		Type  string `json:"type"`
@@ -87,6 +89,14 @@ func InvokeRequestFromJSON2Pb(jsonRequest []InvokeRequest) ([]*protos.InvokeRequ
 		requestsWithPb = append(requestsWithPb, tmpReqWithPB)
 	}
 	return requestsWithPb, nil
+}
+
+func (rc *RootConfig) GetCryptoType() string {
+	if rc.Crypto != "" {
+		return rc.Crypto
+	}
+
+	return "default"
 }
 
 // GetIrreversibleSlideWindow get irreversible slide window

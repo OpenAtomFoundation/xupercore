@@ -36,5 +36,6 @@ func NewConsensusReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) Consen
 }
 
 func (t *consensusReader) GetConsStatus() (consBase.ConsensusStatus, *common.Error) {
-	return t.chainCtx.Consensus.GetConsensusStatus()
+	cons, _ := t.chainCtx.Consensus.GetConsensusStatus()
+	return cons, nil
 }

@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+import "xupercore/bcs/ledger/xledger/xldgpb/xledger.proto";
+
+option go_package = "github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb";
+
+package protos;
+
+message Transactions {
+  repeated xldgpb.Transaction txs = 1;
+}
+
+message TxInfo {
+  // 当前状态
+  xldgpb.TransactionStatus status = 1;
+  // 离主干末端的距离（如果在主干上)
+  int64 distance = 2;
+  xldgpb.Transaction tx = 3;
+}
+
+message BlockInfo {
+  xldgpb.BlockStatus status = 1;
+  xldgpb.InternalBlock block = 2;
+}
+
+message ChainStatus {
+  xldgpb.LedgerMeta ledger_meta = 1;
+  xldgpb.UtxoMeta utxo_meta = 2;
+  xldgpb.InternalBlock block = 3;
+  repeated string branch_ids = 4;
+}
+
+message SystemStatus {
+  ChainStatus chain_status = 1;
+  repeated string peer_urls = 2;
+}
+
+message TipStatus {
+  bool is_trunk_tip = 1;
+}

@@ -22,13 +22,13 @@ type Chain interface {
 	// 关闭链
 	Stop()
 	// 合约预执行
-	PreExec(xctx.XContext, []*protos.InvokeRequest) (*protos.InvokeResponse, *common.Error)
+	PreExec(xctx.XContext, []*protos.InvokeRequest, string, []string) (*protos.InvokeResponse, *Error)
 	// 提交交易
-	SubmitTx(xctx.XContext, *lpb.Transaction) *common.Error
+	SubmitTx(xctx.XContext, *lpb.Transaction) *Error
 	// 处理新区块
-	ProcBlock(xctx.XContext, *lpb.InternalBlock) *common.Error
+	ProcBlock(xctx.XContext, *lpb.InternalBlock) *Error
 	// 设置依赖实例化代理
-	SetRelyAgent(ChainRelyAgent) *common.Error
+	SetRelyAgent(ChainRelyAgent) *Error
 }
 
 // 定义xuperos引擎对外暴露接口
@@ -36,9 +36,9 @@ type Chain interface {
 type Engine interface {
 	engines.BCEngine
 	Context() *EngineCtx
-	Get(string) (Chain, *common.Error)
+	Get(string) (Chain, *Error)
 	GetChains() []string
-	SetRelyAgent(EngineRelyAgent) *common.Error
+	SetRelyAgent(EngineRelyAgent) *Error
 }
 
 // 定义引擎对各组件依赖接口约束

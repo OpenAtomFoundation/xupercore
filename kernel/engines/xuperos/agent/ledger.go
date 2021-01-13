@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -20,30 +22,49 @@ func NewLedgerAgent(chainCtx *common.ChainCtx) *LedgerAgent {
 
 // 从创世块获取创建合约账户消耗gas
 func (t *LedgerAgent) GetNewAccountGas() (int64, error) {
-	return 0, nil
+	amount := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetNewAccountResourceAmount()
+	return amount, nil
 }
 
 // 从创世块获取加密算法类型
 func (t *LedgerAgent) GetCryptoType() (string, error) {
-	return "", nil
+	cryptoType := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetCryptoType()
+	return cryptoType, nil
 }
 
 // 从创世块获取共识配置
 func (t *LedgerAgent) GetConsensusConf() ([]byte, error) {
-	return nil, nil
+	consensusConf := t.chainCtx.Ledger.GenesisBlock.GetConfig().GenesisConsensus
+	data, err := json.Marshal(consensusConf)
+	if err != nil {
+		return nil, fmt.Errorf("marshal consensus conf error: %s", err)
+	}
+	return data, nil
 }
 
 // 查询区块
 func (t *LedgerAgent) QueryBlock(blkId []byte) (ledger.BlockHandle, error) {
-	return nil, nil
+	block, err := t.chainCtx.Ledger.QueryBlock(blkId)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBlockAgent(block), nil
 }
 
-func (t *LedgerAgent) QueryBlockByHeight(int64) (ledger.BlockHandle, error) {
-	return nil, nil
+func (t *LedgerAgent) QueryBlockByHeight(height int64) (ledger.BlockHandle, error) {
+	block, err := t.chainCtx.Ledger.QueryBlockByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBlockAgent(block), nil
 }
 
 func (t *LedgerAgent) GetTipBlock() ledger.BlockHandle {
-	return nil
+	meta := t.chainCtx.Ledger.GetMeta()
+	blkAgent, _ := t.QueryBlock(meta.TipBlockid)
+	return blkAgent
 }
 
 // 获取状态机最新确认高度快照（只有Get方法，直接返回[]byte）

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"math/big"
 	"sort"
 	"sync"
@@ -13,8 +14,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xuperchain/core/pb"
 
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -437,33 +436,32 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 }
 
 func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, error) {
-	input := &pb.BCStatus{Bcname: t.ctx.BCName}
 	opt := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
 		p2p.WithLogId(ctx.GetLog().GetLogId()),
 	}
-	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS, input, opt...)
-	response, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
+	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS, nil, opt...)
+	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
 	if err != nil {
 		ctx.GetLog().Warn("get block chain status error", "err", err)
 		return nil, err
 	}
 
-	bcStatus := make([]*pb.BCStatus, 0, len(response))
-	for _, resp := range response {
-		var status pb.BCStatus
-		err = p2p.Unmarshal(resp, &status)
+	bcStatus := make([]*xpb.ChainStatus, 0, len(responses))
+	for _, response := range responses {
+		var status *xpb.ChainStatus
+		err = p2p.Unmarshal(response, status)
 		if err != nil {
 			ctx.GetLog().Warn("unmarshal block chain status error", "err", err)
 			continue
 		}
 
-		bcStatus = append(bcStatus, &status)
+		bcStatus = append(bcStatus, status)
 	}
 
 	sort.Sort(BCSByHeight(bcStatus))
 	for _, bcs := range bcStatus {
-		if t.isConfirmed(bcs) {
+		if t.isConfirmed(ctx, bcs) {
 			return bcs.Block, nil
 		}
 	}
@@ -471,13 +469,13 @@ func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, 
 	return nil, errors.New("not found longest block")
 }
 
-type BCSByHeight []*pb.BCStatus
+type BCSByHeight []*xpb.ChainStatus
 
 func (s BCSByHeight) Len() int {
 	return len(s)
 }
 func (s BCSByHeight) Less(i, j int) bool {
-	return s[i].Meta.TrunkHeight > s[j].Meta.TrunkHeight
+	return s[i].LedgerMeta.TrunkHeight > s[j].LedgerMeta.TrunkHeight
 }
 func (s BCSByHeight) Swap(i, j int) {
 	s[i], s[j] = s[j], s[i]
@@ -639,8 +637,8 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.I
 }
 
 // syncConfirm 向周围节点询问块是否可以被接受
-func (t *Miner) isConfirmed(ctx xctx.XContext, bcs *pb.BCStatus) bool {
-	input := &pb.BCStatus{Bcname: t.ctx.BCName, Block: &pb.InternalBlock{Blockid: bcs.Block.Blockid}}
+func (t *Miner) isConfirmed(ctx xctx.XContext, bcs *xpb.ChainStatus) bool {
+	input := &pb.InternalBlock{Blockid: bcs.Block.Blockid}
 	opt := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
 		//p2p.WithLogId(ctx.GetLog().GetLogId()),
@@ -661,7 +659,7 @@ func countConfirmBlock(messages []*protos.XuperMessage) bool {
 	agreeCnt := 0
 	disagreeCnt := 0
 	for _, msg := range messages {
-		var bts pb.BCTipStatus
+		var bts xpb.TipStatus
 		err := p2p.Unmarshal(msg, &bts)
 		if err != nil {
 			continue

@@ -1,12 +1,14 @@
 package xuperos
 
 import (
+	"bytes"
 	"fmt"
 
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -91,7 +93,6 @@ func (t *NetEvent) Subscriber() error {
 	// 订阅同步处理消息
 	for msgType, handle := range SyncMsgHandle {
 		// 注册订阅
-		// TODO: ctx
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, handle)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
 		}
@@ -144,11 +145,11 @@ func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 
 	chain, err := t.engine.Get(request.Header.Bcname)
 	if err != nil {
-		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
-	err := t.PostTx(ctx, chain, tx)
+	err = t.PostTx(ctx, chain, tx)
 	if err == nil {
 		ctx := t.engine.Context()
 		go ctx.Net.SendMessage(ctx, request)
@@ -156,15 +157,15 @@ func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 }
 
 func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMessage) {
-	var input lpb.Transactions
+	var input xpb.Transactions
 	if err := p2p.Unmarshal(request, &input); err != nil {
 		ctx.GetLog().Warn("handleBatchPostTx Unmarshal request error", "error", err)
 		return
 	}
 
 	chain, err := t.engine.Get(request.Header.Bcname)
-	if chain == nil {
-		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
+	if err != nil {
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
@@ -185,10 +186,10 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	go t.engine.Context().Net.SendMessage(ctx, msg)
 }
 
-func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
+func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) *common.Error {
 	if err := validatePostTx(tx); err != nil {
 		ctx.GetLog().Trace("PostTx validate param errror", "error", err)
-		return err
+		return common.CastError(err)
 	}
 
 	if len(tx.TxInputs) == 0 && !chain.Context().Ledger.GetNoFee() {
@@ -208,7 +209,7 @@ func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 
 	chain, err := t.engine.Get(request.Header.Bcname)
 	if chain == nil {
-		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
@@ -230,30 +231,19 @@ func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 }
 
 func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
-	var block lpb.InternalBlock
-	if err := p2p.Unmarshal(request, &block); err != nil {
-		ctx.GetLog().Warn("handleNewBlockID Unmarshal request error", "error", err)
-		return
-	}
-
 	chain, err := t.engine.Get(request.Header.Bcname)
-	if chain != nil {
-		ctx.GetLog().Warn("block chain not exist", "bcName", request.Header.Bcname)
+	if err != nil {
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
-	msgOpts := []p2p.MessageOption{
-		p2p.WithBCName(request.Header.Bcname),
-		p2p.WithLogId(request.Header.Bcname),
-	}
-	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, &block, msgOpts...)
-	out, err := GetBlock(t.engine.Context(), msg, p2p.WithPeerIDs([]string{request.GetHeader().GetFrom()}))
+	block, err := t.GetBlock(ctx, request)
 	if err != nil {
 		ctx.GetLog().Warn("GetBlock error", "error", err, "blockId", block.Blockid)
 		return
 	}
 
-	if err := t.SendBlock(ctx, chain, out); err != nil {
+	if err := t.SendBlock(ctx, chain, block); err != nil {
 		ctx.GetLog().Warn("proc block error", "error", err)
 		return
 	}
@@ -285,13 +275,13 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 
 func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
 	var input lpb.InternalBlock
-	var output *lpb.BlockInfo
+	var output *xpb.BlockInfo
 
 	bcName := request.Header.Bcname
 	response := func(err error) (*protos.XuperMessage, error) {
 		opts := []p2p.MessageOption{
 			p2p.WithBCName(bcName),
-			p2p.WithErrorType(common.ErrorType(err)),
+			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
 		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCKIDS_RES, output, opts...)
@@ -306,45 +296,37 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessag
 
 	chain, err := t.engine.Get(bcName)
 	if err != nil {
-		ctx.GetLog().Error("chain not exist", "bcName", bcName)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return response(common.ErrChainNotExist)
 	}
 
-	ledger := reader.NewLedgerReader(chain.Context(), ctx)
-
-	output, err = ledger.QueryBlock(input.Blockid, true)
+	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
+	output, err = ledgerReader.QueryBlock(input.Blockid, true)
 	if err != nil {
-		ctx.GetLog().Error("ledger reader query block error", "err", err)
-		return response(common.ErrInternal)
+		ctx.GetLog().Error("ledger reader query block error", "error", err)
+		return response(err)
 	}
 
 	return response(nil)
 }
 
 func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
-	var input pb.BCStatus
-	var output *lpb.Status
+	var output *xpb.ChainStatus
 
 	bcName := request.GetHeader().GetBcname()
 	response := func(err error) (*protos.XuperMessage, error) {
 		opts := []p2p.MessageOption{
 			p2p.WithBCName(bcName),
-			p2p.WithErrorType(common.ErrorType(err)),
+			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
 		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS_RES, output, opts...)
 		return resp, err
 	}
 
-	err := p2p.Unmarshal(request, &input)
-	if err != nil {
-		ctx.GetLog().Error("unmarshal error", "bcName", bcName, "error", err)
-		return response(common.ErrParameter)
-	}
-
 	chain, err := t.engine.Get(bcName)
 	if err != nil {
-		ctx.GetLog().Error("chain not exist", "bcName", bcName)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return response(common.ErrChainNotExist)
 	}
 
@@ -352,7 +334,7 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 	output, err = chainReader.GetChainStatus()
 	if err != nil {
 		ctx.GetLog().Error("handleGetChainStatus error", "error", err)
-		return response(common.ErrInternal)
+		return response(err)
 	}
 
 	return response(nil)
@@ -360,13 +342,13 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 
 func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
 	var input lpb.InternalBlock
-	var output *lpb.InternalBlock
+	var output *xpb.TipStatus
 
 	bcName := request.GetHeader().GetBcname()
 	response := func(err error) (*protos.XuperMessage, error) {
 		opts := []p2p.MessageOption{
 			p2p.WithBCName(bcName),
-			p2p.WithErrorType(common.ErrorType(err)),
+			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
 		resp := p2p.NewMessage(protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS_RES, output, opts...)
@@ -381,15 +363,22 @@ func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.X
 
 	chain, err := t.engine.Get(bcName)
 	if err != nil {
-		ctx.GetLog().Error("chain not exist", "bcName", bcName)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return response(common.ErrChainNotExist)
 	}
 
-	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
-	meta, err := ledgerReader.QueryMeta()
+	chainReader := reader.NewChainReader(chain.Context(), ctx)
+	chainStatus, err := chainReader.GetChainStatus()
 	if err != nil {
-		ctx.GetLog().Error("handleConfirmChainStatus error", "bcName", bcName, "error", output.Header.Error)
-		return response(common.ErrInternal)
+		ctx.GetLog().Error("handleConfirmChainStatus error", "bcName", bcName, "error", err)
+		return response(err)
+	}
+
+	output = &xpb.TipStatus{
+		IsTrunkTip: false,
+	}
+	if bytes.Equal(input.Blockid, chainStatus.LedgerMeta.TipBlockid) {
+		output.IsTrunkTip = true
 	}
 
 	return response(nil)

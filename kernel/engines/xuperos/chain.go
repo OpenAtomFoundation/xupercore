@@ -104,8 +104,7 @@ func (t *Chain) Context() *common.ChainCtx {
 }
 
 // 交易预执行
-func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest,
-	initiator string, authRequires []string) (*protos.InvokeResponse, *common.Error) {
+func (t *Chain) PreExec(ctx xctx.XContext, req []*protos.InvokeRequest, initiator string, authRequires []string) (*protos.InvokeResponse, *common.Error) {
 	if ctx == nil || ctx.GetLog() == nil || len(req) < 1 {
 		return nil, common.ErrParameter
 	}

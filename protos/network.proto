@@ -108,5 +108,6 @@ message PeerInfo {
     string id = 1;
     string address = 2;
     string account = 3;
+    repeated PeerInfo peer = 4;
 }
 

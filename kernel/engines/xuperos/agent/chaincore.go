@@ -21,18 +21,17 @@ func (t *ChainCoreAgent) BCName() string {
 	return t.chainCtx.BCName
 }
 
+// 查询合约acl
 func (t *ChainCoreAgent) GetAccountAddresses(accountName string) ([]string, error) {
-	// 查询合约acl
-	return nil, nil
+	return t.chainCtx.Acl.GetAccountAddresses(accountName)
 }
 
-func (t *ChainCoreAgent) VerifyContractPermission(initiator string, authRequire []string,
-	contractName, methodName string) (bool, error) {
-	// 结合合约acl设置鉴权
-	return false, nil
+// 结合合约acl设置鉴权
+func (t *ChainCoreAgent) VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error) {
+	return t.chainCtx.State.VerifyContractPermission(initiator, authRequire, contractName, methodName)
 }
 
+// 结合合约acl设置鉴权
 func (t *ChainCoreAgent) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
-	// 结合合约acl设置鉴权
-	return nil
+	return t.chainCtx.State.VerifyContractOwnerPermission(contractName, authRequire)
 }
