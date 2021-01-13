@@ -67,7 +67,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, *common.Error) 
 	// 初始化链运行环境上下文
 	err = chainObj.initChainCtx()
 	if err != nil {
-		log.Error("init chain ctx failed", "bcName", engCtx, "err", err)
+		log.Error("init chain ctx failed", "bcName", bcName, "err", err)
 		return nil, common.ErrNewChainCtxFailed.More("err:%v", err)
 	}
 

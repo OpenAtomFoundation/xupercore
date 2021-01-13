@@ -22,7 +22,7 @@ type EngineConf struct {
 	// TxCacheExpiredTime expired time for tx cache
 	TxIdCacheExpiredTime time.Duration `yaml:"txidCacheExpiredTime,omitempty"`
 	// TxIdCacheGCInterval clean up interval for tx cache
-	TxIdCacheGCInterval time.Duration `yaml:"TxIdCacheGCInterval,omitempty"`
+	TxIdCacheGCInterval time.Duration `yaml:"txIdCacheGCInterval,omitempty"`
 }
 
 func LoadEngineConf(cfgFile string) (*EngineConf, error) {

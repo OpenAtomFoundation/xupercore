@@ -1,0 +1,12 @@
+# p2p network config
+
+# Module is the name of p2p module plugin.(p2pv1 | p2pv2)
+module: p2pv2
+# Port the p2p network listened
+port: 38101
+# KeyPath is the netdisk private key path
+keyPath: netkeys
+# BootNodes config the bootNodes the node to connect
+# BootNodes节点自身不能配置bootNodes
+# bootNodes:
+#    - ""

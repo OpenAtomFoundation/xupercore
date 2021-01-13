@@ -236,7 +236,7 @@ func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*common.EngineCtx, error) 
 	engCtx.EngCfg = engCfg
 
 	// 实例化p2p网络
-	engCtx.Net, err = t.relyAgent.CreateNetwork()
+	engCtx.Net, err = t.relyAgent.CreateNetwork(envCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create network failed.err:%v", err)
 	}

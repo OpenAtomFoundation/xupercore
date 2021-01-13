@@ -24,7 +24,7 @@ type EnvConf struct {
 	// node key directory
 	KeyDir string `yaml:"keyDir,omitempty"`
 	// blockchain data directory
-	ChainDir string `yaml:"ChainDir,omitempty"`
+	ChainDir string `yaml:"chainDir,omitempty"`
 	// engine config file name
 	EngineConf string `yaml:"engineConf,omitempty"`
 	// log config file name
