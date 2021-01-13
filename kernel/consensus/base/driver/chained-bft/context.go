@@ -199,3 +199,8 @@ func DFSQuery(node *ProposalNode, target []byte) *ProposalNode {
 	}
 	return nil
 }
+
+type ProposerInfo struct {
+	Address string `json:"address"`
+	Neturl  string `json:"neturl"`
+}

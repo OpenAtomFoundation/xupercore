@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 var (
@@ -16,6 +17,7 @@ var (
 	EmptyParentQC      = errors.New("Parent qc is empty.")
 	NoEnoughVotes      = errors.New("Parent qc doesn't have enough votes.")
 	EmptyParentNode    = errors.New("Parent's node is empty.")
+	EmptyValidators    = errors.New("Justify validators are empty.")
 )
 
 type saftyRulesInterface interface {
@@ -36,6 +38,8 @@ type DefaultSaftyRules struct {
 	preferredRound int64
 	Crypto         *cCrypto.CBFTCrypto
 	QcTree         *QCPendingTree
+
+	Log logs.Logger
 }
 
 func (s *DefaultSaftyRules) UpdatePreferredRound(qc QuorumCertInterface) bool {
@@ -71,6 +75,7 @@ func (s *DefaultSaftyRules) CheckVote(qc QuorumCertInterface, logid string, vali
 	}
 	// 是否是来自有效的候选人
 	if !isInSlice(signs[0].GetAddress(), validators) {
+		s.Log.Error("DefaultSaftyRules::CheckVote error", "validators", validators, "from", signs[0].GetAddress())
 		return InvalidVoteAddr
 	}
 	// 签名和公钥是否匹配
@@ -112,6 +117,9 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, justifyValidators []string) error {
 	if proposal.GetProposalView() < s.lastVoteRound-3 {
 		return TooLowProposalView
+	}
+	if justifyValidators == nil {
+		return EmptyValidators
 	}
 	// step2: verify justify's votes
 
