@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 // LogConfig is the log config of node
@@ -35,7 +36,7 @@ type XBridge struct {
 	basedir        string
 	vmconfigs      map[ContractType]VMConfig
 	creators       map[ContractType]InstanceCreator
-	xmodel         contract.XMReader
+	xmodel         ledger.XMReader
 	config         ContractConfig
 
 	// debugLogger *log.Logger
@@ -46,7 +47,7 @@ type XBridge struct {
 type XBridgeConfig struct {
 	Basedir   string
 	VMConfigs map[ContractType]VMConfig
-	XModel    contract.XMReader
+	XModel    ledger.XMReader
 	Config    ContractConfig
 	LogWriter io.Writer
 	Core      contract.ChainCore

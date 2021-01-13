@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 // BucketSeperator separator between bucket and raw key
@@ -24,12 +24,12 @@ func parseRawKey(rawKey []byte) (string, []byte, error) {
 		return "", nil, fmt.Errorf("parseRawKey failed, invalid raw key:%s", string(rawKey))
 	}
 	bucket := string(rawKey[:idx])
-	key := rawKey[idx+1 : len(rawKey)]
+	key := rawKey[idx+1:]
 	return bucket, key, nil
 }
 
 // IsEmptyVersionedData check if VersionedData is empty
-func IsEmptyVersionedData(vd *contract.VersionedData) bool {
+func IsEmptyVersionedData(vd *ledger.VersionedData) bool {
 	return vd.RefTxid == nil && vd.RefOffset == 0
 }
 

@@ -3,6 +3,7 @@ package manager
 import (
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 )
 
 type managerImpl struct {
@@ -26,7 +27,7 @@ func (m *managerImpl) NewContext(cfg *contract.ContextConfig) (contract.Context,
 }
 
 func (m *managerImpl) NewStateSandbox(cfg *contract.SandboxConfig) (contract.StateSandbox, error) {
-	return nil, nil
+	return sandbox.NewXModelCache(cfg.XMReader)
 }
 
 func (m *managerImpl) GetKernRegistry() contract.KernRegistry {

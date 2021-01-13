@@ -4,23 +4,24 @@ import (
 	"bytes"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 // multiIterator 按照归并排序合并两个XMIterator
 // 如果两个XMIterator在某次迭代返回同样的Key，选取front的Value
 type multiIterator struct {
-	front contract.XMIterator
-	back  contract.XMIterator
+	front ledger.XMIterator
+	back  ledger.XMIterator
 
 	first    bool
 	frontEnd bool
 	backEnd  bool
 
 	key   []byte
-	value *contract.VersionedData
+	value *ledger.VersionedData
 }
 
-func newMultiIterator(front, back contract.XMIterator) contract.XMIterator {
+func newMultiIterator(front, back ledger.XMIterator) ledger.XMIterator {
 	m := &multiIterator{
 		front: front,
 		back:  back,
@@ -46,7 +47,7 @@ func (m *multiIterator) Key() []byte {
 	return m.key
 }
 
-func (m *multiIterator) Value() *contract.VersionedData {
+func (m *multiIterator) Value() *ledger.VersionedData {
 	if m.frontEnd && m.backEnd {
 		return nil
 	}
@@ -82,7 +83,7 @@ func (m *multiIterator) Next() bool {
 	return !(m.frontEnd && m.backEnd)
 }
 
-func (m *multiIterator) setKeyValue(iter contract.XMIterator) {
+func (m *multiIterator) setKeyValue(iter ledger.XMIterator) {
 	m.key = iter.Key()
 	m.value = iter.Value()
 }
@@ -109,11 +110,11 @@ func (m *multiIterator) Close() {
 // rsetIterator 把迭代到的Key记录到读集里面
 type rsetIterator struct {
 	mc *XMCache
-	contract.XMIterator
+	ledger.XMIterator
 	err error
 }
 
-func newRsetIterator(iter contract.XMIterator, mc *XMCache) contract.XMIterator {
+func newRsetIterator(iter ledger.XMIterator, mc *XMCache) ledger.XMIterator {
 	return &rsetIterator{
 		mc:         mc,
 		XMIterator: iter,
@@ -146,34 +147,12 @@ func (r *rsetIterator) Error() error {
 	return r.XMIterator.Error()
 }
 
-// // memIterator 把leveldb的Iterator转换成XMIterator
-// type memIterator struct {
-// 	mc *XMCache
-// 	iterator.Iterator
-// }
-
-// func newMemIterator(iter iterator.Iterator, mc *XMCache) contract.XMIterator {
-// 	return &memIterator{
-// 		mc:       mc,
-// 		Iterator: iter,
-// 	}
-// }
-
-// func (m *memIterator) Value() *contract.VersionedData {
-// 	return m.mc.getRawData(m.Iterator.Value())
-// }
-
-// // Iterator 必须在使用完毕后关闭
-// func (m *memIterator) Close() {
-// 	m.Release()
-// }
-
 // ContractIterator 把contract.XMIterator转换成contract.Iterator
 type ContractIterator struct {
-	contract.XMIterator
+	ledger.XMIterator
 }
 
-func newContractIterator(xmiter contract.XMIterator) contract.Iterator {
+func newContractIterator(xmiter ledger.XMIterator) contract.Iterator {
 	return &ContractIterator{
 		XMIterator: xmiter,
 	}
@@ -186,10 +165,10 @@ func (c *ContractIterator) Value() []byte {
 
 // stripDelIterator 从迭代器里剔除删除标注和空版本
 type stripDelIterator struct {
-	contract.XMIterator
+	ledger.XMIterator
 }
 
-func newStripDelIterator(xmiter contract.XMIterator) contract.XMIterator {
+func newStripDelIterator(xmiter ledger.XMIterator) ledger.XMIterator {
 	return &stripDelIterator{
 		XMIterator: xmiter,
 	}
