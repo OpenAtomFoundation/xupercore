@@ -14,9 +14,10 @@ type BlockAgent struct {
 
 // 兼容xledger账本历史原因共识部分字段分开存储在区块中
 type ConsensusStorage struct {
-	TargetBits int32           `json:"targetBits,omitempty"`
-	Justify    *lpb.QuorumCert `json:"justify,omitempty"`
-	CurTerm    int64           `json:"curTerm,omitempty"`
+	TargetBits  int32           `json:"targetBits,omitempty"`
+	Justify     *lpb.QuorumCert `json:"justify,omitempty"`
+	CurTerm     int64           `json:"curTerm,omitempty"`
+	CurBlockNum int64           `json:"curBlockNum,omitempty"`
 }
 
 func NewBlockAgent(blk *lpb.InternalBlock) *BlockAgent {

@@ -56,7 +56,7 @@ func EngineConvert(engine engines.BCEngine) (common.Engine, *common.Error) {
 }
 
 // 初始化执行引擎环境上下文
-func (t *Engine) Init(envCfg *xconf.EnvConf) *common.Error {
+func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	if envCfg == nil {
 		return common.ErrParameter
 	}

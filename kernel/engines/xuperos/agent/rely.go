@@ -5,9 +5,9 @@ import (
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 
-	ldef "github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	statctx "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	cdef "github.com/xuperchain/xupercore/kernel/consensus/def"
@@ -58,7 +58,7 @@ func NewChainRelyAgent(chain common.Chain) *ChainRelyAgentImpl {
 // 创建账本
 func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 	ctx := t.chain.Context()
-	legCtx, err := ldef.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName, ctx.Crypto)
+	legCtx, err := ledger.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName, ctx.Crypto)
 	if err != nil {
 		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
 	}
@@ -72,10 +72,12 @@ func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 }
 
 // 创建状态机实例
-func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger, crypt cryptoBase.CryptoClient) (*state.State, error) {
+func (t *ChainRelyAgentImpl) CreateState(leg *ledger.Ledger,
+	crypt cryptoBase.CryptoClient) (*state.State, error) {
+
 	// 创建状态机上下文
 	ctx := t.chain.Context()
-	stateCtx, err := ldef.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, leg, crypt)
+	stateCtx, err := statctx.NewStateCtx(ctx.EngCtx.EnvCfg, ctx.BCName, leg, crypt)
 	if err != nil {
 		return nil, fmt.Errorf("new state ctx failed.err:%v", err)
 	}

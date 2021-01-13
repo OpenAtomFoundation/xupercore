@@ -41,7 +41,7 @@ func init() {
 }
 
 type xpoaConsensus struct {
-	bctx          xcontext.BaseCtx
+	bctx          xcontext.XContext
 	election      *xpoaSchedule
 	smr           *chainedBft.Smr
 	isProduce     map[int64]bool
@@ -177,11 +177,11 @@ Again:
 
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
-func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockInterface) (bool, error) {
+func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	// 验证矿工身份
 	proposer := x.election.GetLocalLeader(block.GetTimestamp(), block.GetHeight())
 	if proposer != string(block.GetProposer()) {
-		x.bctx.XLog.Warn("Xpoa::CheckMinerMatch::calculate proposer error", "want", proposer, "have", string(block.GetProposer()))
+		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::calculate proposer error", "want", proposer, "have", string(block.GetProposer()))
 		return false, MinerSelectErr
 	}
 	if !x.election.enableBFT {
@@ -190,7 +190,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockIn
 	// 获取block中共识专有存储, 检查justify是否符合要求
 	justifyBytes, err := block.GetConsensusStorage()
 	if err != nil && block.GetHeight() != x.status.StartHeight {
-		x.bctx.XLog.Warn("Xpoa::CheckMinerMatch::justify bytes nil")
+		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::justify bytes nil")
 		return false, err
 	}
 	if block.GetHeight() == x.status.StartHeight {
@@ -203,7 +203,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.BaseCtx, block cctx.BlockIn
 	pNode := x.smr.BlockToProposalNode(block)
 	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify.Justify, x.election.GetValidators(block.GetHeight()))
 	if err != nil {
-		x.bctx.XLog.Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
+		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
 			"proposalQC:[id]", pNode.In.GetProposalId, "justifyQC:[height]", justify.Justify.GetProposalView(),
 			"justifyQC:[id]", justify.Justify.GetProposalId(), "error", err)
 		return false, err
