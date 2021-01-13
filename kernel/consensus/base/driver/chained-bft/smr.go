@@ -28,6 +28,7 @@ var (
 	EmptyViewNotify    = errors.New("No NewView Msg valid.")
 	SameProposalNotify = errors.New("Same proposal has been made.")
 	JustifyVotesEmpty  = errors.New("justify qc's votes are empty.")
+	EmptyTarget        = errors.New("Target parameter is empty.")
 )
 
 const (
@@ -253,6 +254,9 @@ func (s *Smr) handleReceivedNewView(msg *xuperp2p.XuperMessage) error {
 // 全部完成后leader更新本地localProposal
 func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpInfo []string) error {
 	// ATTENTION::TODO:: 由于本次设计面向的是viewNumber可能重复的BFT，因此账本回滚后高度会相同，在此用LockedQC高度为标记
+	if validatesIpInfo == nil {
+		return EmptyTarget
+	}
 	if s.qcTree.GetLockedQC() != nil && s.pacemaker.GetCurrentView() < s.qcTree.GetLockedQC().In.GetProposalView() {
 		s.log.Error("smr::ProcessProposal error", "error", TooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
 			s.qcTree.GetLockedQC().In.GetProposalView())
@@ -458,6 +462,7 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 	}
 	nextSign, err := s.cryptoClient.SignVoteMsg(msg)
 	if err != nil {
+		s.log.Error("smr::voteProposal::SignVoteMsg error", "err", err)
 		return
 	}
 	signs = append(signs, nextSign)
@@ -465,20 +470,18 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 
 	voteBytes, err := json.Marshal(vote)
 	if err != nil {
+		s.log.Error("smr::voteProposal::Marshal vote error", "err", err)
 		return
 	}
 	ledgerBytes, err := json.Marshal(ledger)
 	if err != nil {
-		return
-	}
-	sig, err := s.cryptoClient.SignVoteMsg(msg)
-	if err != nil {
+		s.log.Error("smr::voteProposal::Marshal commit error", "err", err)
 		return
 	}
 	voteMsg := &chainedBftPb.VoteMsg{
 		VoteInfo:         voteBytes,
 		LedgerCommitInfo: ledgerBytes,
-		Signature:        []*chainedBftPb.QuorumCertSign{sig},
+		Signature:        []*chainedBftPb.QuorumCertSign{signs[len(signs)-1]},
 	}
 	netMsg := p2p.NewMessage(xuperp2p.XuperMessage_CHAINED_BFT_VOTE_MSG, voteMsg, p2p.WithBCName(s.bcName))
 	// 全部预备之后，再调用该接口
@@ -487,6 +490,7 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 		return
 	}
 	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(voteTo)}))
+	s.log.Info("smr::voteProposal::vote", "vote to next leader", voteTo, "vote view number", vote.ProposalView)
 	return
 }
 
@@ -506,19 +510,27 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	}
 	// 检查logid、voteInfoHash是否正确
 	if err := s.saftyrules.CheckVote(voteQC, msg.GetHeader().GetLogid(), s.Election.GetValidators(voteQC.GetProposalView())); err != nil {
-		s.log.Error("smr::handleReceivedVoteMsg CheckVote error", "error", err, "msg", voteQC.GetProposalId())
+		s.log.Error("smr::handleReceivedVoteMsg CheckVote error", "error", err, "msg", utils.F(voteQC.GetProposalId()))
 		return err
 	}
-	s.log.Info("smr::handleReceivedVoteMsg::receive vote", "voteId", voteQC.GetProposalId(), "voteView", voteQC.GetProposalView())
+	s.log.Info("smr::handleReceivedVoteMsg::receive vote", "voteId", utils.F(voteQC.GetProposalId()), "voteView", voteQC.GetProposalView(), "from", voteQC.SignInfos[0].Address)
 	// 存入本地voteInfo内存，查看签名数量是否超过2f+1
 	var VoteLen int
 	// 注意隐式，若!ok则证明签名数量为1，此时不可能超过2f+1
 	v, ok := s.qcVoteMsgs.LoadOrStore(utils.F(voteQC.LedgerCommitInfo.VoteInfoHash), voteQC.SignInfos)
 	if ok {
 		signs, _ := v.([]*chainedBftPb.QuorumCertSign)
-		signs = append(signs, voteQC.SignInfos[0])
+		stored := false
+		for _, sign := range signs {
+			if sign.Address == voteQC.SignInfos[0].Address {
+				stored = true
+			}
+		}
+		if !stored {
+			signs = append(signs, voteQC.SignInfos[0])
+			s.qcVoteMsgs.Store(utils.F(voteQC.LedgerCommitInfo.VoteInfoHash), signs)
+		}
 		VoteLen = len(signs)
-		s.qcVoteMsgs.Store(utils.F(voteQC.LedgerCommitInfo.VoteInfoHash), signs)
 	}
 	// 查看签名数量是否达到2f+1, 需要获取justify对应的validators
 	if !s.saftyrules.CalVotesThreshold(VoteLen, len(s.Election.GetValidators(voteQC.GetProposalView()))) {

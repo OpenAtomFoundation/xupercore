@@ -217,8 +217,11 @@ func (s *tdposSchedule) GetLeader(round int64) string {
 	tipHeight := tipBlock.GetHeight()
 	proposers := s.GetValidators(round)
 	time := time.Now().UnixNano()
-	for i := 0; i < int(tipHeight-round)-1; i++ {
-		time += s.period * 1000
+	if round > tipHeight {
+		for i := 0; i < int(round-tipHeight)-1; i++ {
+			// s.period为毫秒单位
+			time += s.period * 1e6
+		}
 	}
 	_, pos, _ := s.minerScheduling(time)
 	return proposers[pos]
