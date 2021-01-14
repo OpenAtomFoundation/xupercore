@@ -5,8 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/protos"
 )
@@ -23,7 +23,7 @@ type xModListCursor struct {
 	offset int32
 }
 
-func (t *xModSnapshot) Get(bucket string, key []byte) (*xmodel_pb.VersionedData, error) {
+func (t *xModSnapshot) Get(bucket string, key []byte) (*kledger.VersionedData, error) {
 	if !t.isInit() || bucket == "" || len(key) < 1 {
 		return nil, fmt.Errorf("xmod snapshot not init or param set error")
 	}
@@ -35,7 +35,7 @@ func (t *xModSnapshot) Get(bucket string, key []byte) (*xmodel_pb.VersionedData,
 	}
 
 	// 通过txid串联查询，直到找到<=blkHeight的交易
-	var verValue *xmodel_pb.VersionedData
+	var verValue *kledger.VersionedData
 	cursor := &xModListCursor{newestVD.RefTxid, newestVD.RefOffset}
 	for {
 		// 最初的InputExt是空值，只设置了Bucket和Key
@@ -77,7 +77,7 @@ func (t *xModSnapshot) Get(bucket string, key []byte) (*xmodel_pb.VersionedData,
 	return verValue, nil
 }
 
-func (t *xModSnapshot) Select(bucket string, startKey []byte, endKey []byte) (Iterator, error) {
+func (t *xModSnapshot) Select(bucket string, startKey []byte, endKey []byte) (kledger.XMIterator, error) {
 	return nil, fmt.Errorf("xmodel snapshot temporarily not supported select")
 }
 
@@ -99,16 +99,16 @@ func (t *xModSnapshot) getBlockHeight(blockid []byte) (int64, error) {
 	return blkInfo.Height, nil
 }
 
-func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *xmodel_pb.VersionedData {
+func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *kledger.VersionedData {
 	if tx == nil || int(offset) >= len(tx.TxOutputsExt) || offset < 0 {
 		return nil
 	}
 
 	txOutputsExt := tx.TxOutputsExt[offset]
-	value := &xmodel_pb.VersionedData{
+	value := &kledger.VersionedData{
 		RefTxid:   tx.Txid,
 		RefOffset: offset,
-		PureData: &xmodel_pb.PureData{
+		PureData: &kledger.PureData{
 			Key:    txOutputsExt.Key,
 			Value:  txOutputsExt.Value,
 			Bucket: txOutputsExt.Bucket,
@@ -127,4 +127,23 @@ func (t *xModSnapshot) getPreOutExt(inputsExt []*protos.TxInputExt,
 	}
 
 	return nil, 0, fmt.Errorf("bucket and key not exist.bucket:%s key:%s", bucket, string(key))
+}
+
+type xMSnapshotReader struct {
+	xMReader kledger.XMReader
+}
+
+func NewXMSnapshotReader(xMReader kledger.XMReader) *xMSnapshotReader {
+	return &xMSnapshotReader{
+		xMReader: xMReader,
+	}
+}
+
+func (t *xMSnapshotReader) Get(bucket string, key []byte) ([]byte, error) {
+	verData, err := t.xMReader.Get(bucket, key)
+	if err != nil {
+		return nil, err
+	}
+
+	return verData.PureData.Value, nil
 }

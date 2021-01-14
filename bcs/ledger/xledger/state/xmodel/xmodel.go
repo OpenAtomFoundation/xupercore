@@ -3,16 +3,16 @@ package xmodel
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/xuperchain/xupercore/protos"
 	"sync"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 const (
@@ -50,7 +50,7 @@ func NewXModel(sctx *context.StateCtx, stateDB kvdb.Database) (*XModel, error) {
 	}, nil
 }
 
-func (s *XModel) CreateSnapshot(blkId []byte) (XMReader, error) {
+func (s *XModel) CreateSnapshot(blkId []byte) (kledger.XMReader, error) {
 	// 查询快照区块高度
 	blkInfo, err := s.ledger.QueryBlockHeader(blkId)
 	if err != nil {
@@ -65,6 +65,15 @@ func (s *XModel) CreateSnapshot(blkId []byte) (XMReader, error) {
 		blkId:     blkId,
 	}
 	return xms, nil
+}
+
+func (s *XModel) CreateXMSnapshotReader(blkId []byte) (kledger.XMSnapshotReader, error) {
+	xMReader, err := s.CreateSnapshot(blkId)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewXMSnapshotReader(xMReader), nil
 }
 
 func (s *XModel) updateExtUtxo(tx *pb.Transaction, batch kvdb.Batch) error {
@@ -89,10 +98,10 @@ func (s *XModel) updateExtUtxo(tx *pb.Transaction, batch kvdb.Batch) error {
 		if len(tx.Blockid) > 0 {
 			s.batchCache.Store(string(bucketAndKey), valueVersion)
 		}
-		s.bucketCacheStore(txOut.Bucket, valueVersion, &xmodel_pb.VersionedData{
+		s.bucketCacheStore(txOut.Bucket, valueVersion, &kledger.VersionedData{
 			RefTxid:   tx.Txid,
 			RefOffset: int32(offset),
-			PureData: &xmodel_pb.PureData{
+			PureData: &kledger.PureData{
 				Key:    txOut.Key,
 				Value:  txOut.Value,
 				Bucket: txOut.Bucket,
@@ -169,7 +178,7 @@ func (s *XModel) UndoTx(tx *pb.Transaction, batch kvdb.Batch) error {
 	return nil
 }
 
-func (s *XModel) fetchVersionedData(bucket, version string) (*xmodel_pb.VersionedData, error) {
+func (s *XModel) fetchVersionedData(bucket, version string) (*kledger.VersionedData, error) {
 	value, ok := s.bucketCacheGet(bucket, version)
 	if ok {
 		return value, nil
@@ -186,10 +195,10 @@ func (s *XModel) fetchVersionedData(bucket, version string) (*xmodel_pb.Versione
 		return nil, fmt.Errorf("xmodel.Get failed, offset overflow: %d, %d", offset, len(tx.TxOutputsExt))
 	}
 	txOutputs := tx.TxOutputsExt[offset]
-	value = &xmodel_pb.VersionedData{
+	value = &kledger.VersionedData{
 		RefTxid:   txid,
 		RefOffset: int32(offset),
-		PureData: &xmodel_pb.PureData{
+		PureData: &kledger.PureData{
 			Key:    txOutputs.Key,
 			Value:  txOutputs.Value,
 			Bucket: txOutputs.Bucket,
@@ -200,7 +209,7 @@ func (s *XModel) fetchVersionedData(bucket, version string) (*xmodel_pb.Versione
 }
 
 // GetUncommited get value for specific key, return the value with version, even it is in batch cache
-func (s *XModel) GetUncommited(bucket string, key []byte) (*xmodel_pb.VersionedData, error) {
+func (s *XModel) GetUncommited(bucket string, key []byte) (*kledger.VersionedData, error) {
 	rawKey := makeRawKey(bucket, key)
 	cacheObj, cacheHit := s.batchCache.Load(string(rawKey))
 	if cacheHit {
@@ -214,7 +223,7 @@ func (s *XModel) GetUncommited(bucket string, key []byte) (*xmodel_pb.VersionedD
 }
 
 // GetFromLedger get data directely from ledger
-func (s *XModel) GetFromLedger(txin *protos.TxInputExt) (*xmodel_pb.VersionedData, error) {
+func (s *XModel) GetFromLedger(txin *protos.TxInputExt) (*kledger.VersionedData, error) {
 	if txin.RefTxid == nil {
 		return makeEmptyVersionedData(txin.Bucket, txin.Key), nil
 	}
@@ -223,7 +232,7 @@ func (s *XModel) GetFromLedger(txin *protos.TxInputExt) (*xmodel_pb.VersionedDat
 }
 
 // Get get value for specific key, return value with version
-func (s *XModel) Get(bucket string, key []byte) (*xmodel_pb.VersionedData, error) {
+func (s *XModel) Get(bucket string, key []byte) (*kledger.VersionedData, error) {
 	rawKey := makeRawKey(bucket, key)
 	version, err := s.extUtxoTable.Get(rawKey)
 	if err != nil {
@@ -244,7 +253,7 @@ func (s *XModel) Get(bucket string, key []byte) (*xmodel_pb.VersionedData, error
 }
 
 // GetWithTxStatus likes Get but also return tx status information
-func (s *XModel) GetWithTxStatus(bucket string, key []byte) (*xmodel_pb.VersionedData, bool, error) {
+func (s *XModel) GetWithTxStatus(bucket string, key []byte) (*kledger.VersionedData, bool, error) {
 	data, err := s.Get(bucket, key)
 	if err != nil {
 		return nil, false, err
@@ -257,7 +266,7 @@ func (s *XModel) GetWithTxStatus(bucket string, key []byte) (*xmodel_pb.Versione
 }
 
 // Select select all kv from a bucket, can set key range, left closed, right opend
-func (s *XModel) Select(bucket string, startKey []byte, endKey []byte) (Iterator, error) {
+func (s *XModel) Select(bucket string, startKey []byte, endKey []byte) (kledger.XMIterator, error) {
 	rawStartKey := makeRawKey(bucket, startKey)
 	rawEndKey := makeRawKey(bucket, endKey)
 	iter := &XMIterator{
@@ -324,18 +333,18 @@ func (s *XModel) bucketCache(bucket string) *cache.LRUCache {
 	return cache
 }
 
-func (s *XModel) bucketCacheStore(bucket, version string, value *xmodel_pb.VersionedData) {
+func (s *XModel) bucketCacheStore(bucket, version string, value *kledger.VersionedData) {
 	cache := s.bucketCache(bucket)
 	cache.Add(version, value)
 }
 
-func (s *XModel) bucketCacheGet(bucket, version string) (*xmodel_pb.VersionedData, bool) {
+func (s *XModel) bucketCacheGet(bucket, version string) (*kledger.VersionedData, bool) {
 	cache := s.bucketCache(bucket)
 	value, ok := cache.Get(version)
 	if !ok {
 		return nil, false
 	}
-	return value.(*xmodel_pb.VersionedData), true
+	return value.(*kledger.VersionedData), true
 }
 
 // BucketCacheDelete gen write key with perfix
