@@ -100,15 +100,15 @@ func (s *DefaultSaftyRules) increaseLastVoteRound(round int64) {
 }
 
 func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
-	// 计算最大恶意节点数
+	// 计算最大恶意节点数, input+1表示去除自己的签名
 	f := (sum - 1) / 3
 	if f < 0 {
 		return false
 	}
 	if f == 0 {
-		return input == sum
+		return input+1 == sum
 	}
-	return input >= 2*f+1
+	return input+1 >= 2*f+1
 }
 
 // CheckProposalMsg 原IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法

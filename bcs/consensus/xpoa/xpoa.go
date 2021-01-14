@@ -122,7 +122,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	if schedule.enableBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger)
+		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 		if qcTree == nil {
 			cCtx.XLog.Error("Xpoa::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
 			return nil
@@ -163,7 +163,7 @@ Again:
 
 	// update validates
 	x.election.UpdateValidator()
-	leader := x.election.GetLeader(height)
+	leader := x.election.GetLocalLeader(time.Now().UnixNano(), height)
 	if leader == x.election.address {
 		x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", true, "height", height)
 		// TODO: 首次切换为矿工时SyncBlcok, Bug: 可能会导致第一次出块失败
@@ -287,8 +287,8 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	}
 	// 若当前节点不在候选人节点中，直接调用smr生成新的qc树
 	pNode := x.smr.BlockToProposalNode(block)
-	x.smr.UpdateQcStatus(pNode)
-	x.bctx.GetLog().Info("smr::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()))
+	err = x.smr.UpdateQcStatus(pNode)
+	x.bctx.GetLog().Info("smr::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err)
 	return nil
 }
 
