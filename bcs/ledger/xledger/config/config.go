@@ -11,7 +11,6 @@ import (
 type XLedgerConf struct {
 	// kv storage type
 	KVEngineType string   `yaml:"kvEngineType,omitempty"`
-	StorePath    string   `yaml:"storePath,omitempty"`
 	OtherPaths   []string `yaml:"otherPaths,omitempty"`
 	StorageType  string   `yaml:"storageType,omitempty"`
 }
@@ -29,7 +28,6 @@ func LoadLedgerConf(cfgFile string) (*XLedgerConf, error) {
 func GetDefLedgerConf() *XLedgerConf {
 	return &XLedgerConf{
 		KVEngineType: "leveldb",
-		StorePath:    "",
 		OtherPaths:   nil,
 		StorageType:  "",
 	}

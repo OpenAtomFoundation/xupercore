@@ -92,7 +92,7 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 	var err error
 	storePath := sctx.EnvCfg.GenDataAbsPath(sctx.EnvCfg.ChainDir)
 	storePath = filepath.Join(storePath, sctx.BCName)
-	stateDBPath := filepath.Join(storePath, "state")
+	stateDBPath := filepath.Join(storePath, def.StateStrgDirName)
 	kvParam := &kvdb.KVParameter{
 		DBPath:                stateDBPath,
 		KVEngineType:          sctx.LedgerCfg.KVEngineType,

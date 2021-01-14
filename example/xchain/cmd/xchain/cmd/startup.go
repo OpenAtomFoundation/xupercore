@@ -18,6 +18,7 @@ import (
 	_ "github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/xpoa"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
+	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	_ "github.com/xuperchain/xupercore/lib/crypto/client"
 	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
 

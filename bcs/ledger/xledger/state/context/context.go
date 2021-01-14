@@ -49,7 +49,7 @@ func NewStateCtx(envCfg *xconf.EnvConf, bcName string,
 	if err != nil {
 		return nil, fmt.Errorf("create state context failed because load config error.err:%v", err)
 	}
-	log, err := logs.NewLogger("", def.SubModName)
+	log, err := logs.NewLogger("", def.StateSubModName)
 	if err != nil {
 		return nil, fmt.Errorf("create state context failed because new logger error. err:%v", err)
 	}
