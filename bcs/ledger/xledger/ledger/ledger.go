@@ -116,7 +116,7 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	// new kvdb instance
 	storePath := lctx.EnvCfg.GenDataAbsPath(lctx.EnvCfg.ChainDir)
 	storePath = filepath.Join(storePath, lctx.BCName)
-	ledgDBPath := filepath.Join(storePath, "ledger")
+	ledgDBPath := filepath.Join(storePath, def.LedgerStrgDirName)
 	kvParam := &kvdb.KVParameter{
 		DBPath:                ledgDBPath,
 		KVEngineType:          lctx.LedgerCfg.KVEngineType,

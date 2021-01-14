@@ -26,7 +26,9 @@ type LedgerCtx struct {
 	Crypt cryptoBase.CryptoClient
 }
 
-func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string, crypt cryptoBase.CryptoClient) (*LedgerCtx, error) {
+func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string,
+	crypt cryptoBase.CryptoClient) (*LedgerCtx, error) {
+
 	if envCfg == nil {
 		return nil, fmt.Errorf("create ledger context failed because env conf is nil")
 	}
@@ -37,7 +39,7 @@ func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string, crypt cryptoBase.CryptoC
 		return nil, fmt.Errorf("create ledger context failed because load config error.err:%v", err)
 	}
 
-	log, err := logs.NewLogger("", def.SubModName)
+	log, err := logs.NewLogger("", def.LedgerSubModName)
 	if err != nil {
 		return nil, fmt.Errorf("create ledger context failed because new logger error. err:%v", err)
 	}
