@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	consdef "github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -36,10 +37,31 @@ func (t *LedgerAgent) GetCryptoType() (string, error) {
 // 从创世块获取共识配置
 func (t *LedgerAgent) GetConsensusConf() ([]byte, error) {
 	consensusConf := t.chainCtx.Ledger.GenesisBlock.GetConfig().GenesisConsensus
-	data, err := json.Marshal(consensusConf)
-	if err != nil {
-		return nil, fmt.Errorf("marshal consensus conf error: %s", err)
+	if _, ok := consensusConf["name"]; !ok {
+		return nil, fmt.Errorf("consensus config set error,unset name")
 	}
+	if _, ok := consensusConf["config"]; !ok {
+		return nil, fmt.Errorf("consensus config set error,unset config")
+	}
+
+	confStr, err := json.Marshal(consensusConf["config"])
+	if err != nil {
+		return nil, fmt.Errorf("json marshal consensus config failed.error:%s", err)
+	}
+	if _, ok := consensusConf["name"].(string); !ok {
+		return nil, fmt.Errorf("consensus name set error")
+	}
+
+	conf := consdef.ConsensusConfig{
+		ConsensusName: consensusConf["name"].(string),
+		Config:        string(confStr),
+	}
+
+	data, err := json.Marshal(conf)
+	if err != nil {
+		return nil, fmt.Errorf("marshal consensus conf failed.error:%s", err)
+	}
+
 	return data, nil
 }
 
