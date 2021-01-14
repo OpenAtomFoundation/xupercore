@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 var _ QuorumCertInterface = (*QuorumCert)(nil)
@@ -87,6 +89,8 @@ type QCPendingTree struct {
 	GenericQC *ProposalNode
 	LockedQC  *ProposalNode
 	CommitQC  *ProposalNode
+
+	Log logs.Logger
 }
 
 type ProposalNode struct {
@@ -119,14 +123,17 @@ func (t *QCPendingTree) GetLockedQC() *ProposalNode {
 // 更新本地qcTree, insert新节点, 将新节点parentQC和本地HighQC对比，如有必要进行更新
 func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
 	if t.DFSQueryNode(node.In.GetProposalId()) != nil {
+		t.Log.Warn("QCPendingTree::updateQcStatus::has been inserted", "search", utils.F(node.In.GetProposalId()))
 		return QCRepeatErr
 	}
 	if err := t.insert(node); err != nil {
+		t.Log.Error("QCPendingTree::updateQcStatus insert err", "err", err)
 		return err
 	}
 	if node.Parent != nil {
 		t.updateHighQC(node.Parent.In.GetProposalId())
 	}
+	t.Log.Info("QCPendingTree::updateQcStatus", "insert new", utils.F(node.In.GetProposalId()), "height", node.In.GetProposalView(), "highQC", utils.F(t.GetHighQC().In.GetProposalId()))
 	return nil
 }
 
@@ -142,20 +149,24 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	}
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
 	t.HighQC = node
+	t.Log.Info("QCPendingTree::updateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
 	if node.Parent == nil {
 		return
 	}
 	t.GenericQC = node.Parent
+	t.Log.Info("QCPendingTree::updateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
 	// 找grand节点，标为LockedQC
 	if node.Parent.Parent == nil {
 		return
 	}
 	t.LockedQC = node.Parent.Parent
+	t.Log.Info("QCPendingTree::updateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
 	// 找grandgrand节点，标为CommitQC
 	if node.Parent.Parent.Parent == nil {
 		return
 	}
 	t.CommitQC = node.Parent.Parent.Parent
+	t.Log.Info("QCPendingTree::updateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
 }
 
 // insert 向本地QC树Insert一个ProposalNode，如有必要，连同HighQC、GenericQC、LockedQC、CommitQC一起修改

@@ -68,12 +68,8 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
 	// xpoa.lg.Info("ConfirmBlock Propcess update validates")
 	// ATTENTION: 获取候选人信息时，时刻注意拿取的是check目的round的前三个块，候选人变更是在3个块之后生效，即round-3
-	b, err := s.ledger.QueryBlockByHeight(round - 3)
-	if err != nil {
-		return ""
-	}
-	localValidators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if err != nil {
+	localValidators := s.GetValidators(round)
+	if localValidators == nil {
 		return ""
 	}
 	_, pos, _ := s.minerScheduling(timestamp, len(localValidators))

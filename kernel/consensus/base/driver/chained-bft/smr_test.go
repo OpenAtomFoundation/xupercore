@@ -314,7 +314,7 @@ func TestSMR(t *testing.T) {
 		ParentId:     []byte{0},
 		ParentView:   0,
 	}
-	v, ok := sB.qcVoteMsgs.Load(utils.F(getVoteId(vote)))
+	v, ok := sB.qcVoteMsgs.Load(utils.F(vote.ProposalId))
 	if !ok {
 		t.Error("B votesMsg error")
 	}
