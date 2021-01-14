@@ -82,7 +82,7 @@ stop() {
     pid=$(getpid)
     if [ "$pid" != "" ]; then
         echo "kill $BinPath: $pid"
-        kill -2 "$pid"
+        kill -15 "$pid"
 
         # 等待进程退出
         waitExit "$pid" "$BinPath"

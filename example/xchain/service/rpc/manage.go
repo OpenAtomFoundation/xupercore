@@ -59,6 +59,8 @@ func (t *RpcServMG) Run() error {
 		return errors.New("RpcServMG not init")
 	}
 
+	t.log.Trace("run grpc server")
+
 	// 启动rpc server，阻塞直到退出
 	err := t.runRpcServ()
 	if err != nil {

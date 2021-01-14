@@ -68,11 +68,11 @@ type tdposConfig struct {
 	// 初始时间
 	InitTimestamp int64 `json:"timestamp"`
 	// 系统指定的前两轮的候选人名单
-	InitProposer       *map[string][]string `json:"init_proposer"`
-	InitProposerNeturl *map[string][]string `json:"init_proposer_neturl"`
+	InitProposer       map[string][]string `json:"init_proposer"`
+	InitProposerNeturl map[string][]string `json:"init_proposer_neturl"`
 	// json支持两种格式的解析形式
-	NeedNetURL bool             `json:"need_neturl"`
-	EnableBFT  *map[string]bool `json:"bft_config,omitempty"`
+	NeedNetURL bool            `json:"need_neturl"`
+	EnableBFT  map[string]bool `json:"bft_config,omitempty"`
 }
 
 type tdposConsensus struct {
@@ -110,7 +110,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		cCtx.XLog.Error("Tdpos::NewSingleConsensus::tdpos struct unmarshal error", "error", err)
 		return nil
 	}
-	if len((*xconfig.InitProposer)["1"]) != len((*xconfig.InitProposerNeturl)["1"]) {
+	if len((xconfig.InitProposer)["1"]) != len((xconfig.InitProposerNeturl)["1"]) {
 		cCtx.XLog.Error("Tdpos::NewSingleConsensus::initProposer should be mapped into initProposerNeturl", "error", InitProposerNeturlErr)
 		return nil
 	}
@@ -170,13 +170,13 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) 
 		alternateInterval: xconfig.AlternateInterval,
 		termInterval:      xconfig.TermInterval,
 		initTimestamp:     xconfig.InitTimestamp,
-		proposers:         (*xconfig.InitProposer)["1"],
+		proposers:         (xconfig.InitProposer)["1"],
 		netUrlMap:         make(map[string]string),
 		log:               log,
 		ledger:            ledger,
 	}
 	index := 0
-	netUrls := (*xconfig.InitProposerNeturl)["1"]
+	netUrls := (xconfig.InitProposerNeturl)["1"]
 	for index < len(schedule.proposers) {
 		schedule.netUrlMap[schedule.proposers[index]] = netUrls[index]
 	}

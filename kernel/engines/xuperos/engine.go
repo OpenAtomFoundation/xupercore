@@ -23,7 +23,7 @@ type Engine struct {
 	// 日志
 	log logs.Logger
 	// 链实例
-	chains *sync.Map
+	chains sync.Map
 	// p2p网络事件处理
 	netEvent *xnet.NetEvent
 	// 依赖代理组件
@@ -74,7 +74,6 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文
-	t.chains = new(sync.Map)
 	err = t.loadChains()
 	if err != nil {
 		t.log.Error("load chain failed", "err", err)
@@ -128,9 +127,10 @@ func (t *Engine) Run() {
 		go func() {
 			defer wg.Done()
 
-			t.log.Trace("chain " + k.(string) + "started")
+			t.log.Trace("run chain " + k.(string))
 			// 启动链
 			chainHD.Start()
+			t.log.Trace("chain " + k.(string) + "exit")
 		}()
 
 		return true
@@ -199,6 +199,7 @@ func (t *Engine) loadChains() error {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
 			return fmt.Errorf("load chain failed")
 		}
+		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
 
 		// 记录链实例
 		t.chains.Store(fInfo.Name(), chain)

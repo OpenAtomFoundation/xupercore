@@ -177,6 +177,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("open ledger failed")
 	}
 	t.ctx.Ledger = leg
+	t.log.Trace("open ledger succ", "bcName", t.ctx.BCName)
 
 	// 2.实例化加密组件
 	// 从账本查询加密算法类型
@@ -191,6 +192,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("create crypto client failed")
 	}
 	t.ctx.Crypto = crypt
+	t.log.Trace("create crypto client succ", "bcName", t.ctx.BCName, "cryptoType", cryptoType)
 
 	// 3.实例化状态机
 	stat, err := t.relyAgent.CreateState(leg, crypt)
@@ -199,6 +201,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("open state failed")
 	}
 	t.ctx.State = stat
+	t.log.Trace("open state succ", "bcName", t.ctx.BCName)
 
 	// 4.加载节点账户信息
 	keyPath := t.ctx.EngCtx.EnvCfg.GenDataAbsPath(t.ctx.EngCtx.EnvCfg.KeyDir)
@@ -208,6 +211,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("load node addr info error")
 	}
 	t.ctx.Address = addr
+	t.log.Trace("load node addr info succ", "bcName", t.ctx.BCName, "address", addr.Address)
 
 	// 5.合约
 	contractObj, err := t.relyAgent.CreateContract()
@@ -218,6 +222,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Contract = contractObj
 	// 设置合约manager到状态机
 	t.ctx.State.SetContractMG(t.ctx.Contract)
+	t.log.Trace("create contract manager succ", "bcName", t.ctx.BCName)
 
 	// 6.Acl
 	aclObj, err := t.relyAgent.CreateAcl()
@@ -228,6 +233,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Acl = aclObj
 	// 设置acl manager到状态机
 	t.ctx.State.SetAclMG(t.ctx.Acl)
+	t.log.Trace("create acl succ", "bcName", t.ctx.BCName)
 
 	// 7.共识
 	cons, err := t.relyAgent.CreateConsensus()
@@ -236,6 +242,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("create consensus error")
 	}
 	t.ctx.Consensus = cons
+	t.log.Trace("create consensus succ", "bcName", t.ctx.BCName)
 
 	return nil
 }
