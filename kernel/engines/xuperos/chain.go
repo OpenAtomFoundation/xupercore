@@ -2,17 +2,14 @@ package xuperos
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
@@ -107,11 +104,12 @@ func (t *Chain) Context() *common.ChainCtx {
 }
 
 // 交易预执行
+
 func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string, authRequires []string) (*protos.InvokeResponse, *common.Error) {
 	if ctx == nil || ctx.GetLog() == nil || len(reqs) < 1 {
 		return nil, common.ErrParameter
 	}
-
+	/*
 	reservedRequests, err := t.ctx.State.GetReservedContractRequests(reqs, true)
 	if err != nil {
 		t.log.Error("PreExec get reserved contract request error", "error", err)
@@ -128,8 +126,8 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		return &protos.InvokeResponse{}, nil
 	}
 
-	model := t.ctx.State.GetXModel()
-	stateConfig := &contract.SandboxConfig{XMReader: model}
+	xmReader := t.ctx.State.GetXMReader()
+	stateConfig := &contract.SandboxConfig{XMReader: xmReader}
 	sandbox, err := t.ctx.Contract.NewStateSandbox(stateConfig)
 	contextConfig := &contract.ContextConfig{
 		State:     		sandbox,
@@ -235,6 +233,9 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	}
 
 	return invokeResponse, nil
+
+	/**/
+	return nil, nil
 }
 
 // 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)

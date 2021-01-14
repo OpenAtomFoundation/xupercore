@@ -153,10 +153,9 @@ func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exclu
 	return t.utxo.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
 }
 
-//func (t *State) GetXModel() *xmodel.XModel {
-func (t *State) GetXModel() *xmodel.XModel {
-	return t.xmodel
-}
+//func (t *State) GetXMReader() contract.XMReader {
+//	return t.xmodel
+//}
 
 // 获取一批未确认交易（用于矿工打包区块）
 func (t *State) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
