@@ -10,17 +10,18 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
+	//"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	//"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	//"github.com/xuperchain/xupercore/kernel/contract"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/protos"
+
+	"github.com/golang/protobuf/proto"
 )
 
 // ImmediateVerifyTx verify tx Immediately
@@ -257,59 +258,62 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 //	3). Contract logic transferring from contract
 func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]bool) (bool, error) {
 	// verify tx input
-	conUtxoInputs, err := xmodel.ParseContractUtxoInputs(tx)
-	if err != nil {
-		t.log.Warn("verifyUTXOPermission error, parseContractUtxo ")
-		return false, ErrParseContractUtxos
-	}
-	conUtxoInputsMap := map[string]bool{}
-	for _, conUtxoInput := range conUtxoInputs {
-		addr := conUtxoInput.GetFromAddr()
-		txid := conUtxoInput.GetRefTxid()
-		offset := conUtxoInput.GetRefOffset()
-		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
-		conUtxoInputsMap[utxoKey] = true
-	}
-
-	for _, txInput := range tx.TxInputs {
-		// if transfer from contract
-		addr := txInput.GetFromAddr()
-		txid := txInput.GetRefTxid()
-		offset := txInput.GetRefOffset()
-		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
-		if conUtxoInputsMap[utxoKey] {
-			// this utxo transfer from contract, will verify in rwset verify
-			continue
+	// TODO:待按新合约调用方式修改
+	/*
+		conUtxoInputs, err := xmodel.ParseContractUtxoInputs(tx)
+		if err != nil {
+			t.log.Warn("verifyUTXOPermission error, parseContractUtxo ")
+			return false, ErrParseContractUtxos
+		}
+		conUtxoInputsMap := map[string]bool{}
+		for _, conUtxoInput := range conUtxoInputs {
+			addr := conUtxoInput.GetFromAddr()
+			txid := conUtxoInput.GetRefTxid()
+			offset := conUtxoInput.GetRefOffset()
+			utxoKey := utxo.GenUtxoKey(addr, txid, offset)
+			conUtxoInputsMap[utxoKey] = true
 		}
 
-		name := string(txInput.FromAddr)
-		if verifiedID[name] {
-			// this ID(either AK or Account) is verified before
-			continue
-		}
-		akType := aclu.IsAccount(name)
-		if akType == 1 {
-			// Identify account
-			acl, err := t.queryAccountACL(name)
-			if err != nil || acl == nil {
-				// valid account should have ACL info, so this account might not exsit
-				t.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
+		for _, txInput := range tx.TxInputs {
+			// if transfer from contract
+			addr := txInput.GetFromAddr()
+			txid := txInput.GetRefTxid()
+			offset := txInput.GetRefOffset()
+			utxoKey := utxo.GenUtxoKey(addr, txid, offset)
+			if conUtxoInputsMap[utxoKey] {
+				// this utxo transfer from contract, will verify in rwset verify
+				continue
+			}
+
+			name := string(txInput.FromAddr)
+			if verifiedID[name] {
+				// this ID(either AK or Account) is verified before
+				continue
+			}
+			akType := aclu.IsAccount(name)
+			if akType == 1 {
+				// Identify account
+				acl, err := t.queryAccountACL(name)
+				if err != nil || acl == nil {
+					// valid account should have ACL info, so this account might not exsit
+					t.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
+					return false, ErrInvalidAccount
+				}
+				if ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, string(name), tx.AuthRequire); !ok {
+					t.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
+					return false, ErrACLNotEnough
+				}
+			} else if akType == 0 {
+				// Identify address failed, if address not in verifiedID then it must have no signature
+				t.log.Warn("verifyUTXOPermission error, address has no signature", "address", name)
+				return false, ErrInvalidSignature
+			} else {
+				t.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
 				return false, ErrInvalidAccount
 			}
-			if ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, string(name), tx.AuthRequire); !ok {
-				t.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
-				return false, ErrACLNotEnough
-			}
-		} else if akType == 0 {
-			// Identify address failed, if address not in verifiedID then it must have no signature
-			t.log.Warn("verifyUTXOPermission error, address has no signature", "address", name)
-			return false, ErrInvalidSignature
-		} else {
-			t.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
-			return false, ErrInvalidAccount
+			verifiedID[name] = true
 		}
-		verifiedID[name] = true
-	}
+	*/
 	return true, nil
 }
 
@@ -343,9 +347,9 @@ func (t *State) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[string]
 	if req == nil {
 		return true, nil
 	}
-	writeSet := []*xmodel_pb.PureData{}
+	writeSet := []*kledger.PureData{}
 	for _, txOut := range tx.TxOutputsExt {
-		writeSet = append(writeSet, &xmodel_pb.PureData{Bucket: txOut.Bucket, Key: txOut.Key, Value: txOut.Value})
+		writeSet = append(writeSet, &kledger.PureData{Bucket: txOut.Bucket, Key: txOut.Key, Value: txOut.Value})
 	}
 	for _, ele := range writeSet {
 		bucket := ele.GetBucket()
@@ -486,100 +490,104 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		}
 		return true, nil
 	}
-	env, err := t.xmodel.PrepareEnv(tx)
-	// transfer in contract
-	/*transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
-	if err != nil {
-		return false, err
-	}
 
-	if err != nil {
-		return false, err
-	}
-	contextConfig := &contract.ContextConfig{
-		XMCache:      env.GetModelCache(),
-		Initiator:    tx.GetInitiator(),
-		AuthRequire:  tx.GetAuthRequire(),
-		ContractName: "",
-		Core: contractChainCore{
-			Manager: t.aclMgr,
-			UtxoVM:  uv,
-			Ledger:  t.ledger,
-		},
-		BCName: t.bcname,
-	}
-	gasLimit, err := getGasLimitFromTx(tx)
-	if err != nil {
-		return false, err
-	}
-	t.log.Trace("get gas limit from tx", "gasLimit", gasLimit, "txid", hex.EncodeToString(tx.Txid))
-
-	// get gas rate to utxo
-	//gasPrice := t.meta.Meta.GetGasPrice()
-
-	/*for i, tmpReq := range tx.GetContractRequests() {
-		moduleName := tmpReq.GetModuleName()
-		vm, err := t.vmMgr3.GetVM(moduleName)
+	/*
+		// TODO:待按新合约调用方式修改
+		env, err := t.xmodel.PrepareEnv(tx)
+		// transfer in contract
+		transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
 		if err != nil {
 			return false, err
 		}
 
-		limits := contract.FromPbLimits(tmpReq.GetResourceLimits())
-		if i >= len(reservedRequests) {
-			gasLimit -= limits.TotalGas(gasPrice)
-		}
-		if gasLimit < 0 {
-			t.log.Error("virifyTxRWSets error:out of gas", "contractName", tmpReq.GetContractName(),
-				"txid", hex.EncodeToString(tx.Txid))
-			return false, errors.New("out of gas")
-		}
-		//contextConfig.ResourceLimits = limits
-		contextConfig.ContractName = tmpReq.GetContractName()
-		if transContractName == tmpReq.GetContractName() {
-			contextConfig.TransferAmount = transAmount.String()
-		} else {
-			contextConfig.TransferAmount = ""
-		}
-
-		ctx, err := vm.NewContext(contextConfig)
 		if err != nil {
-			t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
-			if i < len(reservedRequests) && (err.Error() == "leveldb: not found" || strings.HasSuffix(err.Error(), "not found")) {
-				continue
+			return false, err
+		}
+		contextConfig := &contract.ContextConfig{
+			XMCache:      env.GetModelCache(),
+			Initiator:    tx.GetInitiator(),
+			AuthRequire:  tx.GetAuthRequire(),
+			ContractName: "",
+			Core: contractChainCore{
+				Manager: t.aclMgr,
+				UtxoVM:  uv,
+				Ledger:  t.ledger,
+			},
+			BCName: t.bcname,
+		}
+		gasLimit, err := getGasLimitFromTx(tx)
+		if err != nil {
+			return false, err
+		}
+		t.log.Trace("get gas limit from tx", "gasLimit", gasLimit, "txid", hex.EncodeToString(tx.Txid))
+
+		// get gas rate to utxo
+		//gasPrice := t.meta.Meta.GetGasPrice()
+
+		/*for i, tmpReq := range tx.GetContractRequests() {
+			moduleName := tmpReq.GetModuleName()
+			vm, err := t.vmMgr3.GetVM(moduleName)
+			if err != nil {
+				return false, err
 			}
+
+			limits := contract.FromPbLimits(tmpReq.GetResourceLimits())
+			if i >= len(reservedRequests) {
+				gasLimit -= limits.TotalGas(gasPrice)
+			}
+			if gasLimit < 0 {
+				t.log.Error("virifyTxRWSets error:out of gas", "contractName", tmpReq.GetContractName(),
+					"txid", hex.EncodeToString(tx.Txid))
+				return false, errors.New("out of gas")
+			}
+			//contextConfig.ResourceLimits = limits
+			contextConfig.ContractName = tmpReq.GetContractName()
+			if transContractName == tmpReq.GetContractName() {
+				contextConfig.TransferAmount = transAmount.String()
+			} else {
+				contextConfig.TransferAmount = ""
+			}
+
+			ctx, err := vm.NewContext(contextConfig)
+			if err != nil {
+				t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
+				if i < len(reservedRequests) && (err.Error() == "leveldb: not found" || strings.HasSuffix(err.Error(), "not found")) {
+					continue
+				}
+				return false, err
+			}
+
+			ctxResponse, ctxErr := ctx.Invoke(tmpReq.MethodName, tmpReq.Args)
+			if ctxErr != nil {
+				ctx.Release()
+				t.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", tmpReq.GetContractName())
+				return false, ctxErr
+			}
+			// 判断合约调用的返回码
+			if ctxResponse.Status >= 400 && i < len(reservedRequests) {
+				ctx.Release()
+				t.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", tmpReq.GetContractName())
+				return false, errors.New(ctxResponse.Message)
+			}
+
+			ctx.Release()
+		}
+
+		err = env.GetModelCache().WriteTransientBucket()
+		if err != nil {
 			return false, err
 		}
 
-		ctxResponse, ctxErr := ctx.Invoke(tmpReq.MethodName, tmpReq.Args)
-		if ctxErr != nil {
-			ctx.Release()
-			t.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", tmpReq.GetContractName())
-			return false, ctxErr
+		_, writeSet, err := env.GetModelCache().GetRWSets()
+		if err != nil {
+			return false, err
 		}
-		// 判断合约调用的返回码
-		if ctxResponse.Status >= 400 && i < len(reservedRequests) {
-			ctx.Release()
-			t.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", tmpReq.GetContractName())
-			return false, errors.New(ctxResponse.Message)
+		t.log.Trace("verifyTxRWSets", "env.output", env.GetOutputs(), "writeSet", writeSet)
+		ok := xmodel.Equal(env.GetOutputs(), writeSet)
+		if !ok {
+			return false, fmt.Errorf("write set not equal")
 		}
-
-		ctx.Release()
-	}*/
-
-	err = env.GetModelCache().WriteTransientBucket()
-	if err != nil {
-		return false, err
-	}
-
-	_, writeSet, err := env.GetModelCache().GetRWSets()
-	if err != nil {
-		return false, err
-	}
-	t.log.Trace("verifyTxRWSets", "env.output", env.GetOutputs(), "writeSet", writeSet)
-	ok := xmodel.Equal(env.GetOutputs(), writeSet)
-	if !ok {
-		return false, fmt.Errorf("write set not equal")
-	}
+	*/
 	return true, nil
 }
 

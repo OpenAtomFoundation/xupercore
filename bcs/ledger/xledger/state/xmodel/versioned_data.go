@@ -2,9 +2,9 @@ package xmodel
 
 import (
 	"fmt"
-	"github.com/xuperchain/xupercore/protos"
 
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 func parseVersion(version string) ([]byte, int, error) {
@@ -32,7 +32,7 @@ func MakeVersion(txid []byte, offset int32) string {
 }
 
 // GetVersion get VersionedData's version, if refTxid is nil, return ""
-func GetVersion(vd *xmodel_pb.VersionedData) string {
+func GetVersion(vd *kledger.VersionedData) string {
 	if vd.RefTxid == nil {
 		return ""
 	}
@@ -48,7 +48,7 @@ func GetVersionOfTxInput(txIn *protos.TxInputExt) string {
 }
 
 // GetTxOutputs get transaction outputs
-func GetTxOutputs(pds []*xmodel_pb.PureData) []*protos.TxOutputExt {
+func GetTxOutputs(pds []*kledger.PureData) []*protos.TxOutputExt {
 	outputs := make([]*protos.TxOutputExt, 0, len(pds))
 	for _, pd := range pds {
 		outputs = append(outputs, &protos.TxOutputExt{
@@ -61,7 +61,7 @@ func GetTxOutputs(pds []*xmodel_pb.PureData) []*protos.TxOutputExt {
 }
 
 // GetTxInputs get transaction inputs
-func GetTxInputs(vds []*xmodel_pb.VersionedData) []*protos.TxInputExt {
+func GetTxInputs(vds []*kledger.VersionedData) []*protos.TxInputExt {
 	inputs := make([]*protos.TxInputExt, 0, len(vds))
 	for _, vd := range vds {
 		inputs = append(inputs, &protos.TxInputExt{
@@ -75,12 +75,12 @@ func GetTxInputs(vds []*xmodel_pb.VersionedData) []*protos.TxInputExt {
 }
 
 // IsEmptyVersionedData check if VersionedData is empty
-func IsEmptyVersionedData(vd *xmodel_pb.VersionedData) bool {
+func IsEmptyVersionedData(vd *kledger.VersionedData) bool {
 	return vd.RefTxid == nil && vd.RefOffset == 0
 }
 
-func makeEmptyVersionedData(bucket string, key []byte) *xmodel_pb.VersionedData {
-	verData := &xmodel_pb.VersionedData{PureData: &xmodel_pb.PureData{}}
+func makeEmptyVersionedData(bucket string, key []byte) *kledger.VersionedData {
+	verData := &kledger.VersionedData{PureData: &kledger.PureData{}}
 	verData.PureData.Bucket = bucket
 	verData.PureData.Key = key
 	return verData
