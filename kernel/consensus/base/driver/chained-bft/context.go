@@ -12,9 +12,7 @@ import (
 var _ QuorumCertInterface = (*QuorumCert)(nil)
 
 var (
-	NoParentErr       = errors.New("Node doesn't have a parent node while trying to insert the local tree.")
-	InvalidHighQCNode = errors.New("Invalid node when updateHighQC")
-	QCRepeatErr       = errors.New("QC has been included in qcTree")
+	NoValidQC = errors.New("Target QC is empty.")
 )
 
 // 本文件定义了chained-bft下有关的数据结构和接口
@@ -124,7 +122,7 @@ func (t *QCPendingTree) GetLockedQC() *ProposalNode {
 func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
 	if t.DFSQueryNode(node.In.GetProposalId()) != nil {
 		t.Log.Warn("QCPendingTree::updateQcStatus::has been inserted", "search", utils.F(node.In.GetProposalId()))
-		return QCRepeatErr
+		return nil
 	}
 	if err := t.insert(node); err != nil {
 		t.Log.Error("QCPendingTree::updateQcStatus insert err", "err", err)
@@ -141,6 +139,7 @@ func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
 func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	node := t.DFSQueryNode(inProposalId)
 	if node == nil {
+		t.Log.Error("QCPendingTree::updateHighQC::DFSQueryNode nil!")
 		return
 	}
 	// 若新验证过的node和原HighQC高度相同，使用新验证的node
@@ -167,6 +166,36 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	}
 	t.CommitQC = node.Parent.Parent.Parent
 	t.Log.Info("QCPendingTree::updateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
+}
+
+// enforceUpdateHighQC 强制更改HighQC指针，用于错误时回滚，注意: 本实现没有timeoutQC因此需要此方法
+func (t *QCPendingTree) enforceUpdateHighQC(inProposalId []byte) error {
+	node := t.DFSQueryNode(inProposalId)
+	if node == nil {
+		t.Log.Info("QCPendingTree::enforceUpdateHighQC::DFSQueryNode nil")
+		return NoValidQC
+	}
+	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
+	t.HighQC = node
+	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
+	if node.Parent == nil {
+		return nil
+	}
+	t.GenericQC = node.Parent
+	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
+	// 找grand节点，标为LockedQC
+	if node.Parent.Parent == nil {
+		return nil
+	}
+	t.LockedQC = node.Parent.Parent
+	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
+	// 找grandgrand节点，标为CommitQC
+	if node.Parent.Parent.Parent == nil {
+		return nil
+	}
+	t.CommitQC = node.Parent.Parent.Parent
+	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
+	return nil
 }
 
 // insert 向本地QC树Insert一个ProposalNode，如有必要，连同HighQC、GenericQC、LockedQC、CommitQC一起修改

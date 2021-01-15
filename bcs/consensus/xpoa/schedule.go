@@ -30,9 +30,9 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 	termTime := s.period * int64(length) * s.blockNum
 	// 每个矿工轮值时间
 	posTime := s.period * s.blockNum
-	term = (timestamp/1e6)/termTime + 1
+	term = (timestamp/int64(time.Millisecond))/termTime + 1
 	//10640483 180000
-	resTime := timestamp/1e6 - (term-1)*termTime
+	resTime := timestamp/int64(time.Millisecond) - (term-1)*termTime
 	pos = resTime / posTime
 	resTime = resTime - (resTime/posTime)*posTime
 	blockPos = resTime/s.period + 1
@@ -56,11 +56,11 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 		return ""
 	}
 	// 计算round对应的timestamp大致区间
-	time := time.Now().UnixNano()
+	nTime := time.Now().UnixNano()
 	if round > tipHeight {
-		time += s.period * 1e6
+		nTime += s.period * int64(time.Millisecond)
 	}
-	_, pos, _ := s.minerScheduling(time, len(v))
+	_, pos, _ := s.minerScheduling(nTime, len(v))
 	return v[pos]
 }
 
@@ -130,20 +130,22 @@ func (s *xpoaSchedule) GetValidatorsMsgAddr() []string {
 	return urls
 }
 
-func (s *xpoaSchedule) UpdateValidator() {
+func (s *xpoaSchedule) UpdateValidator() bool {
 	tipBlock := s.ledger.GetTipBlock()
 	if tipBlock.GetHeight() <= 3 {
-		return
+		return false
 	}
 	b, err := s.ledger.QueryBlockByHeight(tipBlock.GetHeight() - 3)
 	if err != nil {
-		return
+		return false
 	}
 	validators, err := s.getValidatesByBlockId(b.GetBlockid())
 	if err != nil {
-		return
+		return false
 	}
 	if !common.AddressEqual(validators, s.validators) {
 		s.validators = validators
+		return true
 	}
+	return false
 }

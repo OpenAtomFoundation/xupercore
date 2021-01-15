@@ -22,7 +22,7 @@ import (
 const (
 	// 为了避免调用utxoVM systemCall方法, 直接通过ledger读取xpoa合约存储
 	// ATTENTION: 此处xpoaBucket和xpoaKey必须和对应三代合约严格一致，并且该xpoa隐式限制只能包含xmodel机制的ledger才可调用
-	XPOABUCKET = "xpoa"
+	XPOABUCKET = "xpoa_validates"
 	XPOAKEY    = "VALIDATES"
 
 	MAXSLEEPTIME = 1000
@@ -145,7 +145,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 // CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
 func (x *xpoaConsensus) CompeteMaster(height int64) (bool, bool, error) {
 Again:
-	t := time.Now().UnixNano() / 1e6
+	t := time.Now().UnixNano() / int64(time.Millisecond)
 	key := t / x.election.period
 	sleep := x.election.period - t%x.election.period
 	if sleep > MAXSLEEPTIME {
@@ -162,7 +162,9 @@ Again:
 	}
 
 	// update validates
-	x.election.UpdateValidator()
+	if x.election.UpdateValidator() {
+		x.bctx.GetLog().Info("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
+	}
 	leader := x.election.GetLocalLeader(time.Now().UnixNano(), height)
 	if leader == x.election.address {
 		x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", true, "height", height)
@@ -228,12 +230,49 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 		if len(x.election.validators) == 1 {
 			return false, nil, nil
 		}
-		x.bctx.GetLog().Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "ledger", x.election.ledger.GetTipBlock().GetHeight(),
-			"HighQC", x.smr.GetHighQC().GetProposalView())
-		// ATTENTION：若返回true后，需miner再次调用ProcessBeforeMiner， 原因：若后续继续走CompeteMaster循环，会导致刚刚truncate掉的区块再次同步回来
-		return true, nil, NotEnoughVotes
+		truncate, err := func() (bool, error) {
+			// 1. 比对HighQC与ledger高度
+			b, err := x.election.ledger.QueryBlock(x.smr.GetHighQC().GetProposalId())
+			if err != nil {
+				// 不存在时需要把本地HighQC回滚到ledger
+				if err := x.smr.EnforceUpdateHighQC(x.election.ledger.GetTipBlock().GetBlockid()); err != nil {
+					// 本地HighQC回滚错误直接退出
+					return false, err
+				}
+				return false, nil
+			}
+			// HighQC高度高于或等于账本高度，本地HighQC回滚到ledger
+			if b.GetHeight() > x.election.ledger.GetTipBlock().GetHeight() {
+				// 不存在时需要把本地HighQC回滚到ledger
+				if err := x.smr.EnforceUpdateHighQC(x.election.ledger.GetTipBlock().GetBlockid()); err != nil {
+					// 本地HighQC回滚错误直接退出
+					return false, err
+				}
+				return false, nil
+			}
+			// 高度相等时，应统一回滚到上一高度，此时genericQC一定存在
+			if b.GetHeight() == x.election.ledger.GetTipBlock().GetHeight() {
+				if err := x.smr.EnforceUpdateHighQC(x.smr.GetGenericQC().GetProposalId()); err != nil {
+					// 本地HighQC回滚错误直接退出
+					return false, err
+				}
+				return true, nil
+			}
+			// 2. 账本高度更高时，裁剪账本
+			return true, nil
+		}()
+		if truncate {
+			x.bctx.GetLog().Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "ledger", x.election.ledger.GetTipBlock().GetHeight(),
+				"HighQC", x.smr.GetHighQC().GetProposalView())
+			// ATTENTION：若返回true后，需miner再次调用ProcessBeforeMiner， 原因：若后续继续走CompeteMaster循环，会导致刚刚truncate掉的区块再次同步回来
+			return true, nil, NotEnoughVotes
+		}
+		if err != nil {
+			return false, nil, err
+		}
 	}
-	qc := x.smr.GetHighQC()
+	// 此处需要获取带签名的完整Justify
+	qc := x.smr.GetCompleteHighQC()
 	qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
 	if !ok {
 		x.bctx.GetLog().Warn("smr::ProcessBeforeMiner::qc transfer err", "qc", qc)
@@ -271,7 +310,7 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	}
 	// 查看本地是否是最新round的生产者
 	_, pos, _ := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
-	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
+	// 如果是当前矿工，则发送Proposal消息
 	if x.election.validators[pos] == x.election.address && string(block.GetProposer()) == x.election.address {
 		validators := x.election.GetValidators(block.GetHeight() + 1)
 		var ips []string
@@ -283,9 +322,8 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 			return err
 		}
 		x.bctx.GetLog().Info("smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
-		return nil
 	}
-	// 若当前节点不在候选人节点中，直接调用smr生成新的qc树
+	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
 	pNode := x.smr.BlockToProposalNode(block)
 	err = x.smr.UpdateQcStatus(pNode)
 	x.bctx.GetLog().Info("smr::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err)

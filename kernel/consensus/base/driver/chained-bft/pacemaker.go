@@ -1,14 +1,5 @@
 package chained_bft
 
-import (
-	"errors"
-)
-
-var (
-	TooLowAdvView = errors.New("Input view is lower than current view in AdvanceView().")
-	TransferError = errors.New("QuorumCertInterface cannot be transfered into ProposalMsg")
-)
-
 // PacemakerInterface is the interface of Pacemaker. It responsible for generating a new round.
 // We assume Pacemaker in all correct replicas will have synchronized leadership after GST.
 // Safty is entirely decoupled from liveness by any potential instantiation of Packmaker.
