@@ -4,14 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	noise "github.com/libp2p/go-libp2p-noise"
-	record "github.com/libp2p/go-libp2p-record"
-	"github.com/patrickmn/go-cache"
-	"github.com/xuperchain/xupercore/kernel/common/xaddress"
-	"math/rand"
 	"time"
 
+	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	knet "github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
@@ -25,15 +20,19 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-kad-dht"
+	noise "github.com/libp2p/go-libp2p-noise"
+	record "github.com/libp2p/go-libp2p-record"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/patrickmn/go-cache"
 )
 
 const (
 	ServerName = "p2pv2"
 
 	namespace = "xuper"
-	retry     = 5
+	retry     = 10
 
 	expiredTime = time.Minute
 )
@@ -244,9 +243,9 @@ func (p *P2PServerV2) Start() {
 			select {
 			case <-ctx.Done():
 				return
-			case <-t.C:
-				p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
-				p.kdht.RoutingTable().Print()
+				//case <-t.C:
+				// p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
+				//p.kdht.RoutingTable().Print()
 			}
 		}
 	}()
@@ -382,8 +381,7 @@ func (p *P2PServerV2) connectPeer(addrInfos []peer.AddrInfo) int {
 		}
 
 		retry--
-		num := rand.Int63n(10)
-		time.Sleep(time.Duration(num) * time.Second)
+		time.Sleep(3 * time.Second)
 	}
 
 	return success

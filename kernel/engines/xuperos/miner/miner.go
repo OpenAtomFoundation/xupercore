@@ -37,6 +37,8 @@ type Miner struct {
 	inSyncTargetBlockId []byte
 	// 标记是否退出运行
 	isExit bool
+	// 用户等待退出
+	exitWG sync.WaitGroup
 }
 
 func NewMiner(ctx *common.ChainCtx) *Miner {
@@ -87,6 +89,10 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 // 启动矿工，周期检查矿工身份
 // 同一时间，矿工状态是唯一的。0:休眠中 1:同步区块中 2:打包区块中
 func (t *Miner) Start() {
+	// 用于监测退出
+	t.exitWG.Add(1)
+	defer t.exitWG.Done()
+
 	// 启动矿工循环
 	var err error
 	isMiner := false
@@ -111,6 +117,7 @@ func (t *Miner) Start() {
 		// 2.通过共识检查矿工身份
 		if err == nil {
 			isMiner, isSync, err = t.ctx.Consensus.CompeteMaster(ledgerTipHeight + 1)
+			ctx.GetLog().Trace("compete master result", "isMiner", isMiner, "isSync", isSync, "err", err)
 		}
 		// 3.如需要同步，尝试同步网络最新区块
 		if err == nil && isMiner && isSync {
@@ -141,6 +148,7 @@ func (t *Miner) Start() {
 // 停止矿工
 func (t *Miner) Stop() {
 	t.isExit = true
+	t.exitWG.Wait()
 }
 
 func (t *Miner) IsExit() bool {
@@ -174,6 +182,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 		ctx.GetLog().Warn("consensus process before miner failed", "err", err)
 		return fmt.Errorf("consensus process before miner failed")
 	}
+	ctx.GetLog().Debug("consensus before miner succ", "isTruncate", isTruncate, "extData", string(extData))
 	if isTruncate {
 		// 裁剪掉账本最高区块，裁掉的交易判断冲突重新回放，裁剪完后结束本次出块操作
 		return t.truncateForMiner(ctx, ledgerTipId)
@@ -185,6 +194,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 		ctx.GetLog().Warn("pack block error", "err", err)
 		return err
 	}
+	ctx.GetLog().Debug("pack block succ", "height", height, "blockId", utils.F(block.GetBlockid()))
 
 	// 5.账本&状态机&共识确认新区块
 	err = t.confirmBlockForMiner(ctx, block)
@@ -193,6 +203,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 			"blockId", utils.F(block.GetBlockid()))
 		return err
 	}
+	ctx.GetLog().Debug("confirm block for miner succ", "blockId", utils.F(block.GetBlockid()))
 
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
@@ -235,22 +246,29 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	if err != nil {
 		return nil, err
 	}
+	ctx.GetLog().Debug("pack block get max size succ", "sizeLimit", sizeLimit)
 
 	// 1.查询timer异步交易
 	timerTxList, err := t.getTimerTx(height)
 	for _, tx := range timerTxList {
 		sizeLimit -= proto.Size(tx)
 	}
+	ctx.GetLog().Debug("pack block get timer tx succ", "txCount", len(timerTxList))
+
 	// 2.选择本次要打包的tx
 	generalTxList, err := t.getUnconfirmedTx(sizeLimit)
 	if err != nil {
 		return nil, err
 	}
+	ctx.GetLog().Debug("pack block get general tx succ", "txCount", len(generalTxList))
+
 	// 3.获取矿工奖励交易
 	awardTx, err := t.getAwardTx(height)
 	if err != nil {
 		return nil, err
 	}
+	ctx.GetLog().Debug("pack block get award tx succ", "txid", awardTx.GetTxid())
+
 	txList := make([]*lpb.Transaction, 0)
 	txList = append(txList, awardTx)
 	if len(timerTxList) > 0 {

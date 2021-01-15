@@ -128,12 +128,8 @@ func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
 // CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
 // 该函数返回两个bool，第一个表示是否当前应当出块，第二个表示是否当前需要向其他节点同步区块
 func (s *SingleConsensus) CompeteMaster(height int64) (bool, bool, error) {
-	t := time.Now().UnixNano() / 1e6
-	if t%s.config.Period != 0 {
-		sleep := s.config.Period - t%s.config.Period
-		time.Sleep(time.Duration(sleep) * time.Millisecond)
-		return false, false, nil
-	}
+	time.Sleep(time.Duration(s.config.Period) * time.Millisecond)
+
 	if s.ctx.Address.Address == s.config.Miner {
 		// single共识确定miner后只能通过共识升级改变miner，因此在单个single实例中miner是不可更改的
 		// 此时一个miner从始至终都是自己在挖矿，故不需要向其他节点同步区块
