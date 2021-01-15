@@ -89,11 +89,11 @@ func StartupXchain(envCfgPath string) error {
 		for {
 			select {
 			case <-engChan:
+				wg.Done()
 				serv.Exit()
-				wg.Done()
 			case <-servChan:
-				engine.Exit()
 				wg.Done()
+				engine.Exit()
 			case <-sigChan:
 				serv.Exit()
 				engine.Exit()

@@ -87,6 +87,7 @@ func (t *NetEvent) Subscriber() error {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, t.msgChan)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
+			return fmt.Errorf("register subscriber failed", "type", msgType, "error", err)
 		}
 	}
 
@@ -95,10 +96,12 @@ func (t *NetEvent) Subscriber() error {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, handle)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
+			return fmt.Errorf("register subscriber failed", "type", msgType, "error", err)
 		}
 	}
 
-	return fmt.Errorf("the interface is not implemented")
+	t.log.Trace("register subscriber succ")
+	return nil
 }
 
 // 阻塞等待chan中消息，直到收到退出信号

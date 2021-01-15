@@ -64,7 +64,7 @@ func (t *RpcServMG) Run() error {
 	// 启动rpc server，阻塞直到退出
 	err := t.runRpcServ()
 	if err != nil {
-		t.log.Error("grpc server abnormal exit.err:%v", err)
+		t.log.Error("grpc server abnormal exit", "err", err)
 		return err
 	}
 
@@ -100,7 +100,7 @@ func (t *RpcServMG) runRpcServ() error {
 	t.servHD = grpc.NewServer(rpcOptions...)
 	pb.RegisterXchainServer(t.servHD, t.rpcServ)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("%d", t.scfg.RpcPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", t.scfg.RpcPort))
 	if err != nil {
 		t.log.Error("failed to listen", "err", err.Error())
 		return fmt.Errorf("failed to listen")

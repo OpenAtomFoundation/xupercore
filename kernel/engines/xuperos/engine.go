@@ -130,7 +130,7 @@ func (t *Engine) Run() {
 			t.log.Trace("run chain " + k.(string))
 			// 启动链
 			chainHD.Start()
-			t.log.Trace("chain " + k.(string) + "exit")
+			t.log.Trace("chain " + k.(string) + " exit")
 		}()
 
 		return true
@@ -250,15 +250,13 @@ func (t *Engine) exit() {
 	wg := &sync.WaitGroup{}
 	t.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(common.Chain)
+
 		t.log.Trace("stop chain " + k.(string))
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// 关闭链
-			chainHD.Stop()
-			t.log.Trace("chain " + k.(string) + "closed")
-		}()
+		// 关闭链
+		chainHD.Stop()
+		wg.Done()
+		t.log.Trace("chain " + k.(string) + " closed")
 
 		return true
 	})

@@ -746,8 +746,6 @@ func (t *State) MaxTxSizePerBlock() (int, error) {
 }
 
 func (t *State) GetMaxBlockSize() int64 {
-	t.meta.MutexMeta.Lock()
-	defer t.meta.MutexMeta.Unlock()
 	return t.meta.GetMaxBlockSize()
 }
 
