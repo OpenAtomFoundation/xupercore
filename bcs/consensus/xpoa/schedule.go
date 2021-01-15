@@ -88,7 +88,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		// 即合约还未被调用，未有变量更新
 		return s.validators, nil
 	}
-	validators, err := common.LoadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
+	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (s *xpoaSchedule) UpdateValidator() bool {
 		return false
 	}
 	validators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if err != nil {
+	if err != nil || len(validators) == 0 {
 		return false
 	}
 	if !common.AddressEqual(validators, s.validators) {

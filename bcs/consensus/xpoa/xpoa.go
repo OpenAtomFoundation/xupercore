@@ -98,7 +98,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	reader, _ := schedule.ledger.GetTipXMSnapshotReader()
 	res, err := reader.Get(XPOABUCKET, []byte(XPOAKEY))
-	if snapshotValidators, _ := common.LoadValidatorsMultiInfo(res, &schedule.addrToNet); snapshotValidators != nil {
+	if snapshotValidators, _ := loadValidatorsMultiInfo(res, &schedule.addrToNet); snapshotValidators != nil {
 		validators = snapshotValidators
 	}
 	schedule.validators = validators
