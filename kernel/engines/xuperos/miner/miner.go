@@ -284,7 +284,6 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 		ctx.GetLog().Warn("convert consensus data failed", "err", err, "consData", string(consData))
 		return nil, fmt.Errorf("convert consensus data failed")
 	}
-	// TODO:需要修复
 	block, err := t.ctx.Ledger.FormatMinerBlock(txList, []byte(t.ctx.Address.Address),
 		t.ctx.Address.PrivateKey, now.UnixNano(), consInfo.CurTerm, consInfo.CurBlockNum,
 		t.ctx.State.GetLatestBlockid(), consInfo.TargetBits, t.ctx.State.GetTotal(),
@@ -515,9 +514,10 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 
 	// 2.从临近节点拉取本地缺失的区块
 	// 可优化为并发拉取，可以优化为批处理，方便查看同步进度
-	beginBlock, err := t.downloadMissBlock(ctx, targetBlock)
+	blkIds, err := t.downloadMissBlock(ctx, targetBlock)
 	if err != nil {
-		return err
+		ctx.GetLog().Warn("download miss block failed", "err", err)
+		return fmt.Errorf("download miss block failed")
 	}
 
 	// 4.如果账本发生变更，触发同步账本和状态机
@@ -538,9 +538,10 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 	}()
 
 	// 3.将拉取到的区块加入账本
-	err = t.batchConfirmBlock(ctx, beginBlock, targetBlock)
+	err = t.batchConfirmBlock(ctx, blkIds)
 	if err != nil {
-		return err
+		ctx.GetLog().Warn("batch confirm block to ledger failed", "err", err, "blockCount", len(blkIds))
+		return fmt.Errorf("batch confirm block to ledger failed")
 	}
 
 	return nil
@@ -554,43 +555,46 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 //                    |
 //                    | => D(beginBlock) => ... => E(targetBlock)
 //
-// 通过高度可以并发下载
 func (t *Miner) downloadMissBlock(ctx xctx.XContext,
-	targetBlock *lpb.InternalBlock) (*lpb.InternalBlock, error) {
+	targetBlock *lpb.InternalBlock) ([][]byte, error) {
+	// 记录下载到的区块id
+	blkIds := make([][]byte, 0)
+
 	// 先把targetBlock存入缓存栈
 	ledger := t.ctx.Ledger
 	err := ledger.SavePendingBlock(targetBlock)
 	if err != nil {
 		ctx.GetLog().Warn("save pending block error", "blockId", targetBlock.Blockid, "err", err)
-		return nil, err
+		return blkIds, err
 	}
+	blkIds = append(blkIds, targetBlock.GetBlockid())
 
 	beginBlock := targetBlock
-	preHash := targetBlock.PreHash
-	for !ledger.ExistBlock(preHash) {
-		block, _ := ledger.GetPendingBlock(preHash)
+	for !ledger.ExistBlock(beginBlock.PreHash) {
+		block, _ := ledger.GetPendingBlock(beginBlock.PreHash)
 		if block != nil {
+			beginBlock = block
+			blkIds = append(blkIds, block.GetBlockid())
 			continue
 		}
 
-		block, err := t.getBlock(ctx, preHash)
+		// 从临近节点下载区块
+		block, err := t.getBlock(ctx, beginBlock.PreHash)
 		if err != nil {
 			ctx.GetLog().Warn("get block error", "err", err)
-			return nil, err
+			return blkIds, err
 		}
-
+		// 保存区块到本地栈中
 		err = ledger.SavePendingBlock(block)
 		if err != nil {
 			ctx.GetLog().Warn("save pending block error", "err", err)
-			return nil, err
+			return blkIds, err
 		}
-
-		// TODO: 确定ledger接口返回值
 		beginBlock = block
-		preHash = block.PreHash
+		blkIds = append(blkIds, block.GetBlockid())
 	}
 
-	return beginBlock, nil
+	return blkIds, nil
 }
 
 func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock, error) {
@@ -626,39 +630,44 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 	return nil, errors.New("no response")
 }
 
-// 批量追加区块到账本中
-// TODO:beginBlock可能不是账本最新区块的下一个区块，需要修复
-func (t *Miner) batchConfirmBlock(ctx xctx.XContext, beginBlock, endBlock *lpb.InternalBlock) error {
-	block := beginBlock
-	for blockId := block.Blockid; !bytes.Equal(blockId, endBlock.Blockid); blockId = block.NextHash {
-		var err error
-		block, err = t.ctx.Ledger.GetPendingBlock(blockId)
+// 追加区块到账本中
+func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
+	if len(blkIds) < 1 {
+		return nil
+	}
+
+	for index := len(blkIds) - 1; index >= 0; index-- {
+		block, err := t.ctx.Ledger.GetPendingBlock(blkIds[index])
 		if err != nil {
-			ctx.GetLog().Warn("ledger get pending block error", "blockId", blockId, "err", err)
-			return err
+			ctx.GetLog().Warn("ledger get pending block error",
+				"blockId", utils.F(blkIds[index]), "err", err)
+			return fmt.Errorf("get pending block failed from ledger")
 		}
 
 		blockAgent := agent.NewBlockAgent(block)
 		isMatch, err := t.ctx.Consensus.CheckMinerMatch(ctx, blockAgent)
 		if !isMatch {
-			ctx.GetLog().Warn("consensus check block error", "err", err)
-			return errors.New("consensus check block error")
+			ctx.GetLog().Warn("consensus check miner match failed",
+				"blockId", utils.F(blkIds[index]), "err", err)
+			return errors.New("consensus check miner match failed")
 		}
 
 		status := t.ctx.Ledger.ConfirmBlock(block, false)
 		if !status.Succ {
-			ctx.GetLog().Warn("ledger confirm block error", "err", status.Error)
-			return errors.New("ledger confirm block error")
+			ctx.GetLog().Warn("ledger confirm block failed",
+				"blockId", utils.F(blkIds[index]), "err", status.Error)
+			return errors.New("ledger confirm block failed")
+		}
+
+		err = t.ctx.Consensus.ProcessConfirmBlock(blockAgent)
+		if err != nil {
+			ctx.GetLog().Warn("consensus process confirm block failed",
+				"blockId", utils.F(blkIds[index]), "err", err)
+			return errors.New("consensus process confirm block failed")
 		}
 	}
 
-	blkAgent := agent.NewBlockAgent(endBlock)
-	err := t.ctx.Consensus.ProcessConfirmBlock(blkAgent)
-	if err != nil {
-		ctx.GetLog().Warn("consensus confirm block error")
-		return errors.New("consensus confirm block error")
-	}
-
+	ctx.GetLog().Trace("batch confirm block to ledger succ", "blockCount", len(blkIds))
 	return nil
 }
 
