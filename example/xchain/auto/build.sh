@@ -40,7 +40,7 @@ function buildpkg() {
 
 # build xuperos
 buildpkg xchain "$HOMEDIR/example/xchain/cmd/xchain/main.go"
-#buildpkg xchain-cli "$HOMEDIR/example/xchain/cmd/client/main.go"
+buildpkg xchain-cli "$HOMEDIR/example/xchain/cmd/client/main.go"
 
 # build output
 cp -r "$HOMEDIR/example/xchain/conf" "$OUTDIR"
