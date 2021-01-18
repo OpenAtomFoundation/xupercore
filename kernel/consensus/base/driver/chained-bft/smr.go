@@ -472,6 +472,8 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	var VoteLen int
 	// 注意隐式，若!ok则证明签名数量为1，此时不可能超过2f+1
 	v, ok := s.qcVoteMsgs.LoadOrStore(utils.F(voteQC.GetProposalId()), voteQC.SignInfos)
+	// 若ok=false，则仅store一个vote签名
+	VoteLen = 1
 	if ok {
 		signs, _ := v.([]*chainedBftPb.QuorumCertSign)
 		stored := false

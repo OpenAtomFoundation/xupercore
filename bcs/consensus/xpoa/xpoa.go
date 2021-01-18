@@ -98,7 +98,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	reader, _ := schedule.ledger.GetTipXMSnapshotReader()
 	res, err := reader.Get(XPOABUCKET, []byte(XPOAKEY))
-	if snapshotValidators, _ := loadValidatorsMultiInfo(res, &schedule.addrToNet); snapshotValidators != nil {
+	if snapshotValidators, _ := loadValidatorsMultiInfo(res, &schedule.addrToNet, &schedule.mutex); snapshotValidators != nil {
 		validators = snapshotValidators
 	}
 	schedule.validators = validators
@@ -162,7 +162,7 @@ Again:
 	}
 
 	// update validates
-	if x.election.UpdateValidator() {
+	if x.election.UpdateValidator(height) {
 		x.bctx.GetLog().Info("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
 	}
 	leader := x.election.GetLocalLeader(time.Now().UnixNano(), height)
@@ -312,7 +312,7 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	_, pos, _ := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
 	// 如果是当前矿工，则发送Proposal消息
 	if x.election.validators[pos] == x.election.address && string(block.GetProposer()) == x.election.address {
-		validators := x.election.GetValidators(block.GetHeight() + 1)
+		validators := x.election.GetValidators(block.GetHeight())
 		var ips []string
 		for _, v := range validators {
 			ips = append(ips, x.election.addrToNet[v])

@@ -1,6 +1,7 @@
 package xpoa
 
 import (
+	"sync"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -19,6 +20,8 @@ type xpoaSchedule struct {
 	validators []string
 	// address到neturl的映射
 	addrToNet map[string]string
+	// 该锁的作用是保证addrToNet并发安全
+	mutex sync.Mutex
 
 	ledger    cctx.LedgerRely
 	enableBFT bool
@@ -88,7 +91,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		// 即合约还未被调用，未有变量更新
 		return s.validators, nil
 	}
-	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
+	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet, &s.mutex)
 	if err != nil {
 		return nil, err
 	}
@@ -101,11 +104,6 @@ func (s *xpoaSchedule) GetValidators(round int64) []string {
 		return s.validators
 	}
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
-	tipBlock := s.ledger.GetTipBlock()
-	// round区间在(tipBlock()-3, tipBlock()]之间时，validators不会发生改变
-	if tipBlock.GetHeight() <= round && round > tipBlock.GetHeight()-3 {
-		return s.validators
-	}
 	b, err := s.ledger.QueryBlockByHeight(round - 3)
 	if err != nil {
 		// err包含当前高度小于3，s.validators此时是initValidators
@@ -130,12 +128,11 @@ func (s *xpoaSchedule) GetValidatorsMsgAddr() []string {
 	return urls
 }
 
-func (s *xpoaSchedule) UpdateValidator() bool {
-	tipBlock := s.ledger.GetTipBlock()
-	if tipBlock.GetHeight() <= 3 {
+func (s *xpoaSchedule) UpdateValidator(height int64) bool {
+	if height <= 3 {
 		return false
 	}
-	b, err := s.ledger.QueryBlockByHeight(tipBlock.GetHeight() - 3)
+	b, err := s.ledger.QueryBlockByHeight(height - 3)
 	if err != nil {
 		return false
 	}
