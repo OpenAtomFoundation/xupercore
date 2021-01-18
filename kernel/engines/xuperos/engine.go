@@ -43,7 +43,7 @@ func NewEngine() engines.BCEngine {
 
 // 转换引擎句柄类型
 // 对外提供类型转义方法，以接口形式对外暴露
-func EngineConvert(engine engines.BCEngine) (common.Engine, *common.Error) {
+func EngineConvert(engine engines.BCEngine) (common.Engine, error) {
 	if engine == nil {
 		return nil, common.ErrParameter
 	}
@@ -95,7 +95,7 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *Engine) SetRelyAgent(agent common.EngineRelyAgent) *common.Error {
+func (t *Engine) SetRelyAgent(agent common.EngineRelyAgent) error {
 	if agent == nil {
 		return common.ErrParameter
 	}
@@ -147,7 +147,7 @@ func (t *Engine) Exit() {
 	})
 }
 
-func (t *Engine) Get(name string) (common.Chain, *common.Error) {
+func (t *Engine) Get(name string) (common.Chain, error) {
 	if chain, ok := t.chains.Load(name); ok {
 		return chain.(common.Chain), nil
 	}

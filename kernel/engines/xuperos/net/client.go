@@ -8,7 +8,7 @@ import (
 	"github.com/xuperchain/xupercore/protos"
 )
 
-func (t *NetEvent) GetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*lpb.InternalBlock, *common.Error) {
+func (t *NetEvent) GetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*lpb.InternalBlock, error) {
 	var block lpb.InternalBlock
 	if err := p2p.Unmarshal(request, &block); err != nil {
 		ctx.GetLog().Warn("handleNewBlockID Unmarshal request error", "error", err)
