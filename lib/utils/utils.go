@@ -86,3 +86,14 @@ func GetHostName() string {
 func F(b []byte) string {
 	return fmt.Sprintf("%x", b)
 }
+
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
+}
