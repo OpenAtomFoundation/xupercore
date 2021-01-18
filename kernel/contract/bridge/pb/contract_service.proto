@@ -1,6 +1,6 @@
 syntax = "proto3";
 option optimize_for = LITE_RUNTIME;
-option go_package = "github.com/xuperchain/xupercore/contractsdk/go/pbrpc";
+option go_package = "github.com/xuperchain/xupercore/kernel/contract/bridge/pbrpc";
 option java_package = "com.baidu.xuper.contractpb";
 
 import "contract.proto";

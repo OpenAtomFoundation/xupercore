@@ -3,8 +3,8 @@ package main
 import (
 	"strconv"
 
-	"github.com/xuperchain/xuperchain/core/contractsdk/go/code"
-	"github.com/xuperchain/xuperchain/core/contractsdk/go/driver"
+	"github.com/xuperchain/xupercore/contractsdk/go/code"
+	"github.com/xuperchain/xupercore/contractsdk/go/driver"
 )
 
 type counter struct{}
