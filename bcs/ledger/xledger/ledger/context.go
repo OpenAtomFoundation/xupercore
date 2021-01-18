@@ -7,7 +7,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 )
@@ -22,13 +21,9 @@ type LedgerCtx struct {
 	LedgerCfg *lconf.XLedgerConf
 	// 链名
 	BCName string
-	// crypto client
-	Crypt cryptoBase.CryptoClient
 }
 
-func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string,
-	crypt cryptoBase.CryptoClient) (*LedgerCtx, error) {
-
+func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string) (*LedgerCtx, error) {
 	if envCfg == nil {
 		return nil, fmt.Errorf("create ledger context failed because env conf is nil")
 	}
@@ -50,7 +45,6 @@ func NewLedgerCtx(envCfg *xconf.EnvConf, bcName string,
 	ctx.EnvCfg = envCfg
 	ctx.LedgerCfg = lcfg
 	ctx.BCName = bcName
-	ctx.Crypt = crypt
 
 	return ctx, nil
 }

@@ -15,7 +15,8 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
-	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
+	cryptoClient "github.com/xuperchain/xupercore/lib/crypto/client"
+	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -70,23 +71,21 @@ const (
 // Ledger define data structure of Ledger
 type Ledger struct {
 	// 运行上下文
-	ctx              *LedgerCtx
-	baseDB           kvdb.Database // 底层是一个leveldb实例，kvdb进行了包装
-	metaTable        kvdb.Database // 记录区块链的根节点、高度、末端节点
-	confirmedTable   kvdb.Database // 已确认的订单表
-	blocksTable      kvdb.Database // 区块表
-	mutex            *sync.RWMutex
-	xlog             logs.Logger     //日志库
-	meta             *pb.LedgerMeta  //账本关键的元数据{genesis, tip, height}
-	GenesisBlock     *GenesisBlock   //创始块
-	pendingTable     kvdb.Database   //保存临时的block区块
-	heightTable      kvdb.Database   //保存高度到Blockid的映射
-	blockCache       *cache.LRUCache // block cache, 加速QueryBlock
-	blkHeaderCache   *cache.LRUCache // block header cache, 加速fetchBlock
-	cryptoClient     crypto_base.CryptoClient
-	enablePowMinning bool
-	powMutex         *sync.Mutex
-	confirmBatch     kvdb.Batch //新增区块
+	ctx            *LedgerCtx
+	baseDB         kvdb.Database // 底层是一个leveldb实例，kvdb进行了包装
+	metaTable      kvdb.Database // 记录区块链的根节点、高度、末端节点
+	confirmedTable kvdb.Database // 已确认的订单表
+	blocksTable    kvdb.Database // 区块表
+	mutex          *sync.RWMutex
+	xlog           logs.Logger     //日志库
+	meta           *pb.LedgerMeta  //账本关键的元数据{genesis, tip, height}
+	GenesisBlock   *GenesisBlock   //创始块
+	pendingTable   kvdb.Database   //保存临时的block区块
+	heightTable    kvdb.Database   //保存高度到Blockid的映射
+	blockCache     *cache.LRUCache // block cache, 加速QueryBlock
+	blkHeaderCache *cache.LRUCache // block header cache, 加速fetchBlock
+	cryptoClient   cryptoBase.CryptoClient
+	confirmBatch   kvdb.Batch //新增区块
 }
 
 // ConfirmStatus block status
@@ -111,7 +110,6 @@ func OpenLedger(lctx *LedgerCtx) (*Ledger, error) {
 func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger := &Ledger{}
 	ledger.mutex = &sync.RWMutex{}
-	ledger.powMutex = &sync.Mutex{}
 
 	// new kvdb instance
 	storePath := lctx.EnvCfg.GenDataAbsPath(lctx.EnvCfg.ChainDir)
@@ -141,8 +139,6 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger.meta = &pb.LedgerMeta{}
 	ledger.blockCache = cache.NewLRUCache(BlockCacheSize)
 	ledger.blkHeaderCache = cache.NewLRUCache(BlockCacheSize)
-	ledger.cryptoClient = lctx.Crypt
-	ledger.enablePowMinning = true
 	ledger.confirmBatch = baseDB.NewBatch()
 	metaBuf, metaErr := ledger.metaTable.Get([]byte(""))
 	emptyLedger := false
@@ -177,6 +173,16 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 			return nil, gErr
 		}
 	}
+
+	// 根据创世块牌照加密类型实例化加密组件
+	cryptoType := ledger.GenesisBlock.GetConfig().GetCryptoType()
+	crypto, err := cryptoClient.CreateCryptoClient(cryptoType)
+	if err != nil {
+		lctx.XLog.Warn("failed to create crypto client", "cryptoType", cryptoType, "err", err)
+		return nil, fmt.Errorf("failed to create crypto client")
+	}
+	ledger.cryptoClient = crypto
+
 	return ledger, nil
 }
 
@@ -312,13 +318,6 @@ func (l *Ledger) formatBlock(txList []*pb.Transaction,
 	block.Blockid, err = MakeBlockID(block)
 	if err != nil {
 		return nil, err
-	}
-
-	if targetBits != 0 {
-		block, err = l.processFormatBlockForPOW(block, targetBits)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	if len(preHash) > 0 && needSign {
@@ -1156,27 +1155,6 @@ func (l *Ledger) Truncate(utxovmLastID []byte) error {
 
 	l.xlog.Info("truncate blockid succeed")
 	return nil
-}
-
-// StartPowMinning set the value of enablePowMinning true to tell the miner to start minning
-func (l *Ledger) StartPowMinning() {
-	l.powMutex.Lock()
-	defer l.powMutex.Unlock()
-	l.enablePowMinning = true
-}
-
-// AbortPowMinning set the value of enablePowMinning false to tell the miner to stop minning
-func (l *Ledger) AbortPowMinning() {
-	l.powMutex.Lock()
-	defer l.powMutex.Unlock()
-	l.enablePowMinning = false
-}
-
-// IsEnablePowMinning get the value of enablePowMinning
-func (l *Ledger) IsEnablePowMinning() bool {
-	l.powMutex.Lock()
-	defer l.powMutex.Unlock()
-	return l.enablePowMinning
 }
 
 // VerifyBlock verify block

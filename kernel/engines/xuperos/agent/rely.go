@@ -59,7 +59,7 @@ func NewChainRelyAgent(chain common.Chain) *ChainRelyAgentImpl {
 // 创建账本
 func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 	ctx := t.chain.Context()
-	legCtx, err := ledger.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName, ctx.Crypto)
+	legCtx, err := ledger.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
 		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
 	}

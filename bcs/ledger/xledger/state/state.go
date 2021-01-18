@@ -141,6 +141,8 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 		return nil, loadErr
 	}
 
+	obj.heightNotifier = NewBlockHeightNotifier()
+
 	return obj, nil
 }
 
