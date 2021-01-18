@@ -202,6 +202,10 @@ func (t *State) QueryAccountContainAK(address string) ([]string, error) {
 	return t.utxo.QueryAccountContainAK(address)
 }
 
+func (t *State) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
+	return t.utxo.GetReservedContractRequests(req, isPreExec)
+}
+
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供
 func (t *State) HasTx(txid []byte) (bool, error) {
 	_, exist := t.tx.UnconfirmTxInMem.Load(string(txid))
@@ -1190,6 +1194,10 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		}()
 	}
 	return unconfirmToConfirm, undoDone, nil
+}
+
+func (t *State) Close() {
+	t.ldb.Close()
 }
 
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
