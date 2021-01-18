@@ -2,6 +2,7 @@ package xpoa
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
@@ -40,7 +41,7 @@ type ProposerInfo struct {
 // LoadValidatorsMultiInfo
 // xpoa 格式为
 // { "proposers": [{"Address":$STRING, "PeerAddr":$STRING}...] }
-func loadValidatorsMultiInfo(res []byte, addrToNet *map[string]string) ([]string, error) {
+func loadValidatorsMultiInfo(res []byte, addrToNet *map[string]string, mutex *sync.Mutex) ([]string, error) {
 	if res == nil {
 		return nil, NotValidContract
 	}
@@ -52,7 +53,11 @@ func loadValidatorsMultiInfo(res []byte, addrToNet *map[string]string) ([]string
 	var validators []string
 	for _, node := range contractInfo.Proposers {
 		validators = append(validators, node.Address)
-		(*addrToNet)[node.Address] = node.Neturl
+		if _, ok := (*addrToNet)[node.Address]; !ok {
+			mutex.Lock()
+			(*addrToNet)[node.Address] = node.Neturl
+			mutex.Unlock()
+		}
 	}
 	return validators, nil
 }

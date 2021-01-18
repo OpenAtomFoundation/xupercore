@@ -106,7 +106,7 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 		return false
 	}
 	if f == 0 {
-		return input+1 == sum
+		return input+1 >= sum
 	}
 	return input+1 >= 2*f+1
 }
