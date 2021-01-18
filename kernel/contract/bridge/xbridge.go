@@ -6,28 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 )
-
-// LogConfig is the log config of node
-type LogConfig struct {
-	Module         string `yaml:"module,omitempty"`
-	Filepath       string `yaml:"filepath,omitempty"`
-	Filename       string `yaml:"filename,omitempty"`
-	Fmt            string `yaml:"fmt,omitempty"`
-	Console        bool   `yaml:"console,omitempty"`
-	Level          string `yaml:"level,omitempty"`
-	Async          bool   `yaml:"async,omitempty"`
-	RotateInterval int    `yaml:"rotateinterval,omitempty"`
-	RotateBackups  int    `yaml:"rotatebackups,omitempty"`
-}
-
-// ContractConfig define the config of XuperBridge
-type ContractConfig struct {
-	EnableDebugLog bool
-	DebugLog       LogConfig
-	EnableUpgrade  bool
-}
 
 // XBridge 用于注册用户虚拟机以及向Xchain Core注册可被识别的vm.VirtualMachine
 type XBridge struct {
@@ -83,7 +64,7 @@ func New(cfg *XBridgeConfig) (*XBridge, error) {
 }
 
 func (v *XBridge) initVM() error {
-	types := []ContractType{TypeWasm, TypeNative, TypeEvm}
+	types := []ContractType{TypeWasm, TypeNative, TypeEvm, TypeKernel}
 	for _, tp := range types {
 		vmconfig, ok := v.vmconfigs[tp]
 		if !ok {
@@ -134,16 +115,25 @@ func (v *XBridge) getCreator(tp ContractType) InstanceCreator {
 }
 
 func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, error) {
-	// test if contract exists
-	desc, err := newCodeProvider(ctxCfg.State).GetContractCodeDesc(ctxCfg.ContractName)
-	if err != nil {
-		return nil, err
+	var desc *pb.WasmCodeDesc
+	var err error
+
+	if ctxCfg.Module == string(TypeKernel) {
+		desc = &pb.WasmCodeDesc{
+			ContractType: ctxCfg.Module,
+		}
+	} else {
+		// test if contract exists
+		desc, err = newCodeProvider(ctxCfg.State).GetContractCodeDesc(ctxCfg.ContractName)
+		if err != nil {
+			return nil, err
+		}
 	}
 	tp, err := getContractType(desc)
 	if err != nil {
 		return nil, err
 	}
-	vm := v.xbridge.getCreator(tp)
+	vm := v.getCreator(tp)
 	if vm == nil {
 		return nil, fmt.Errorf("vm for contract type %s not supported", tp)
 	}

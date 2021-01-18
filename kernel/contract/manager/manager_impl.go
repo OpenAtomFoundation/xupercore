@@ -16,9 +16,32 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	m := &managerImpl{
 		core: cfg.Core,
 	}
+	xbridge, err := bridge.New(&bridge.XBridgeConfig{
+		VMConfigs: map[bridge.ContractType]bridge.VMConfig{
+			// bridge.TypeWasm: &bridge.WasmConfig{
+			// 	Driver: "ixvm",
+			// },
+			// bridge.TypeNative: &bridge.NativeConfig{
+			// 	Driver: "native",
+			// 	Enable: true,
+			// },
+			// bridge.TypeEvm: &bridge.EVMConfig{
+			// 	Enable: false,
+			// },
+			bridge.TypeKernel: &bridge.XkernelConfig{
+				Driver:   "default",
+				Enable:   true,
+				Registry: &m.kregistry,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	m.xbridge = xbridge
 	registry := &m.kregistry
-	registry.RegisterKernMethod("contract", "deployContract", m.deployContract)
-	registry.RegisterKernMethod("contract", "upgradeContract", m.deployContract)
+	registry.RegisterKernMethod("$contract", "deployContract", m.deployContract)
+	registry.RegisterKernMethod("$contract", "upgradeContract", m.deployContract)
 	return m, nil
 }
 

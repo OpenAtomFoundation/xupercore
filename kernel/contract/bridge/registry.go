@@ -11,6 +11,7 @@ const (
 	TypeWasm   ContractType = "wasm"
 	TypeNative ContractType = "native"
 	TypeEvm    ContractType = "evm"
+	TypeKernel ContractType = "xkernel"
 )
 
 var defaultRegistry = newRegistry()

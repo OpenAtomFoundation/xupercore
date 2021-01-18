@@ -9,8 +9,8 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/xuperchain/xupercore/contractsdk/go/pb"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	xpb "github.com/xuperchain/xupercore/kernel/contract/pb"
 )
 
