@@ -267,7 +267,7 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	if err != nil {
 		return nil, err
 	}
-	ctx.GetLog().Debug("pack block get award tx succ", "txid", awardTx.GetTxid())
+	ctx.GetLog().Debug("pack block get award tx succ", "txid", utils.F(awardTx.GetTxid()))
 
 	txList := make([]*lpb.Transaction, 0)
 	txList = append(txList, awardTx)
@@ -279,8 +279,12 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	}
 
 	// 4.打包区块
+	consInfo, err := t.convertConsData(consData)
+	if err != nil {
+		ctx.GetLog().Warn("convert consensus data failed", "err", err, "consData", string(consData))
+		return nil, fmt.Errorf("convert consensus data failed")
+	}
 	// TODO:需要修复
-	consInfo, _ := t.convertConsData(consData)
 	block, err := t.ctx.Ledger.FormatMinerBlock(txList, []byte(t.ctx.Address.Address),
 		t.ctx.Address.PrivateKey, now.UnixNano(), consInfo.CurTerm, consInfo.CurBlockNum,
 		t.ctx.State.GetLatestBlockid(), consInfo.TargetBits, t.ctx.State.GetTotal(),
@@ -294,11 +298,11 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 }
 
 func (t *Miner) convertConsData(data []byte) (*agent.ConsensusStorage, error) {
-	if data == nil {
-		return nil, fmt.Errorf("param error")
+	var consInfo agent.ConsensusStorage
+	if len(data) < 1 {
+		return &consInfo, nil
 	}
 
-	var consInfo agent.ConsensusStorage
 	err := json.Unmarshal(data, &consInfo)
 	if err != nil {
 		return nil, err

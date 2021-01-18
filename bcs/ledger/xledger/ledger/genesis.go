@@ -17,9 +17,9 @@ const awardCacheSize = 1000
 
 // RootConfig genesis block configure
 type RootConfig struct {
+	Version   string `json:"version"`
 	Crypto    string `json:"crypto"`
 	Kvengine  string `json:"kvengine"`
-	Version   string `json:"version"`
 	Consensus struct {
 		Type  string `json:"type"`
 		Miner string `json:"miner"`
