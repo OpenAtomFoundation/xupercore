@@ -158,7 +158,6 @@ func (t *Meta) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
 	if pbErr != nil {
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
-
 	}
 	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
 	if err == nil {
