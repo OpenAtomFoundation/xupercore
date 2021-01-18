@@ -12,13 +12,13 @@ import (
 
 type ChainReader interface {
 	// 获取链状态 (GetBlockChainStatus)
-	GetChainStatus() (*xpb.ChainStatus, *common.Error)
+	GetChainStatus() (*xpb.ChainStatus, error)
 	// 检查是否是主干Tip Block (ConfirmBlockChainStatus)
-	IsTrunkTipBlock(blkId []byte) (bool, *common.Error)
+	IsTrunkTipBlock(blkId []byte) (bool, error)
 	// 获取系统状态
-	GetSystemStatus() (*xpb.SystemStatus, *common.Error)
+	GetSystemStatus() (*xpb.SystemStatus, error)
 	// 获取节点NetUR
-	GetNetURL() (string, *common.Error)
+	GetNetURL() (string, error)
 }
 
 type chainReader struct {
@@ -41,7 +41,7 @@ func NewChainReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) ChainReade
 	return reader
 }
 
-func (t *chainReader) GetChainStatus() (*xpb.ChainStatus, *common.Error) {
+func (t *chainReader) GetChainStatus() (*xpb.ChainStatus, error) {
 	chainStatus := &xpb.ChainStatus{}
 	chainStatus.LedgerMeta = t.chainCtx.Ledger.GetMeta()
 	chainStatus.UtxoMeta = t.chainCtx.State.GetMeta()
@@ -66,7 +66,7 @@ func (t *chainReader) GetChainStatus() (*xpb.ChainStatus, *common.Error) {
 	return chainStatus, nil
 }
 
-func (t *chainReader) IsTrunkTipBlock(blkId []byte) (bool, *common.Error) {
+func (t *chainReader) IsTrunkTipBlock(blkId []byte) (bool, error) {
 	meta := t.chainCtx.Ledger.GetMeta()
 	if bytes.Equal(meta.TipBlockid, blkId) {
 		return true, nil
@@ -75,7 +75,7 @@ func (t *chainReader) IsTrunkTipBlock(blkId []byte) (bool, *common.Error) {
 	return false, nil
 }
 
-func (t *chainReader) GetSystemStatus() (*xpb.SystemStatus, *common.Error) {
+func (t *chainReader) GetSystemStatus() (*xpb.SystemStatus, error) {
 	systemStatus := &xpb.SystemStatus{}
 
 	chainStatus, err := t.GetChainStatus()
@@ -95,7 +95,7 @@ func (t *chainReader) GetSystemStatus() (*xpb.SystemStatus, *common.Error) {
 	return systemStatus, nil
 }
 
-func (t *chainReader) GetNetURL() (string, *common.Error) {
+func (t *chainReader) GetNetURL() (string, error) {
 	peerInfo := t.chainCtx.EngCtx.Net.PeerInfo()
 	return peerInfo.Address, nil
 }

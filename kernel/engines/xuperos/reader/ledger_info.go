@@ -12,11 +12,11 @@ import (
 
 type LedgerReader interface {
 	// 查询交易信息（QueryTx）
-	QueryTx(txId []byte) (*xpb.TxInfo, *common.Error)
+	QueryTx(txId []byte) (*xpb.TxInfo, error)
 	// 查询区块ID信息（GetBlock）
-	QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, *common.Error)
+	QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, error)
 	// 通过区块高度查询区块信息（GetBlockByHeight）
-	QueryBlockByHeight(height int64, needContent bool) (*xpb.BlockInfo, *common.Error)
+	QueryBlockByHeight(height int64, needContent bool) (*xpb.BlockInfo, error)
 }
 
 type ledgerReader struct {
@@ -39,7 +39,7 @@ func NewLedgerReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) LedgerRea
 	return reader
 }
 
-func (t *ledgerReader) QueryTx(txId []byte) (*xpb.TxInfo, *common.Error) {
+func (t *ledgerReader) QueryTx(txId []byte) (*xpb.TxInfo, error) {
 	out := &xpb.TxInfo{}
 	tx, err := t.chainCtx.Ledger.QueryTransaction(txId)
 	if err != nil {
@@ -82,7 +82,7 @@ func (t *ledgerReader) QueryTx(txId []byte) (*xpb.TxInfo, *common.Error) {
 }
 
 // 注意不需要交易内容的时候不要查询
-func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, *common.Error) {
+func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, error) {
 	out := &xpb.BlockInfo{}
 	block, err := t.chainCtx.Ledger.QueryBlock(blkId)
 	if err != nil {
@@ -109,7 +109,7 @@ func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInf
 }
 
 // 注意不需要交易内容的时候不要查询
-func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*xpb.BlockInfo, *common.Error) {
+func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*xpb.BlockInfo, error) {
 	out := &xpb.BlockInfo{}
 	block, err := t.chainCtx.Ledger.QueryBlockByHeight(height)
 	if err != nil {

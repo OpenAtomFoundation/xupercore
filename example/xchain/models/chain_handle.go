@@ -20,7 +20,7 @@ type ChainHandle struct {
 	chain  ecom.Chain
 }
 
-func NewChainHandle(bcName string, reqCtx sctx.ReqCtx) (*ChainHandle, *ecom.Error) {
+func NewChainHandle(bcName string, reqCtx sctx.ReqCtx) (*ChainHandle, error) {
 	if bcName == "" || reqCtx == nil || reqCtx.GetEngine() == nil {
 		return nil, ecom.ErrParameter
 	}
@@ -39,30 +39,30 @@ func NewChainHandle(bcName string, reqCtx sctx.ReqCtx) (*ChainHandle, *ecom.Erro
 	return obj, nil
 }
 
-func (t *ChainHandle) SubmitTx(tx *lpb.Transaction) *ecom.Error {
+func (t *ChainHandle) SubmitTx(tx *lpb.Transaction) error {
 	return t.chain.SubmitTx(t.genXctx(), tx)
 }
 
 func (t *ChainHandle) PreExec(req []*protos.InvokeRequest,
-	initiator string, authRequires []string) (*protos.InvokeResponse, *ecom.Error) {
+	initiator string, authRequires []string) (*protos.InvokeResponse, error) {
 	return t.chain.PreExec(t.genXctx(), req, initiator, authRequires)
 }
 
-func (t *ChainHandle) QueryTx(txId []byte) (*xpb.TxInfo, *ecom.Error) {
+func (t *ChainHandle) QueryTx(txId []byte) (*xpb.TxInfo, error) {
 	return reader.NewLedgerReader(t.chain.Context(), t.genXctx()).QueryTx(txId)
 }
 
 func (t *ChainHandle) SelectUtxo(account string, need *big.Int,
-	isLock, isExclude bool) (*lpb.UtxoOutput, *ecom.Error) {
+	isLock, isExclude bool) (*lpb.UtxoOutput, error) {
 	return reader.NewUtxoReader(t.chain.Context(), t.genXctx()).SelectUTXO(account, need,
 		isLock, isExclude)
 }
 
-func (t *ChainHandle) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, *ecom.Error) {
+func (t *ChainHandle) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, error) {
 	return reader.NewLedgerReader(t.chain.Context(), t.genXctx()).QueryBlock(blkId, needContent)
 }
 
-func (t *ChainHandle) QueryChainStatus(needBranch bool) (*xpb.ChainStatus, *ecom.Error) {
+func (t *ChainHandle) QueryChainStatus(needBranch bool) (*xpb.ChainStatus, error) {
 	return reader.NewChainReader(t.chain.Context(), t.genXctx()).GetChainStatus()
 }
 

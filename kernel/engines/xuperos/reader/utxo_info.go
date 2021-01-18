@@ -12,17 +12,17 @@ import (
 
 type UtxoReader interface {
 	// 获取账户余额
-	GetBalance(account string) (string, *common.Error)
+	GetBalance(account string) (string, error)
 	// 获取账户冻结余额
-	GetFrozenBalance(account string) (string, *common.Error)
+	GetFrozenBalance(account string) (string, error)
 	// 获取账户余额详情
-	GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, *common.Error)
+	GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, error)
 	// 拉取固定数目的utxo
-	QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, *common.Error)
+	QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, error)
 	// 选择合适金额的utxo
-	SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
+	SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, error)
 	// 按最大交易大小选择utxo
-	SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error)
+	SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, error)
 }
 
 type utxoReader struct {
@@ -41,7 +41,7 @@ func NewUtxoReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) UtxoReader 
 	return reader
 }
 
-func (t *utxoReader) GetBalance(address string) (string, *common.Error) {
+func (t *utxoReader) GetBalance(address string) (string, error) {
 	balance, err := t.chainCtx.State.GetBalance(address)
 	if err != nil {
 		t.log.Warn("get balance error", "err", err)
@@ -51,7 +51,7 @@ func (t *utxoReader) GetBalance(address string) (string, *common.Error) {
 	return balance.String(), nil
 }
 
-func (t *utxoReader) GetFrozenBalance(account string) (string, *common.Error) {
+func (t *utxoReader) GetFrozenBalance(account string) (string, error) {
 	balance, err := t.chainCtx.State.GetFrozenBalance(account)
 	if err != nil {
 		t.log.Warn("get frozen balance error", "err", err)
@@ -61,7 +61,7 @@ func (t *utxoReader) GetFrozenBalance(account string) (string, *common.Error) {
 	return balance.String(), nil
 }
 
-func (t *utxoReader) GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, *common.Error) {
+func (t *utxoReader) GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo, error) {
 	tokenDetails, err := t.chainCtx.State.GetBalanceDetail(account)
 	if err != nil {
 		t.log.Warn("get balance detail error", "err", err)
@@ -71,7 +71,7 @@ func (t *utxoReader) GetBalanceDetail(account string) ([]*lpb.BalanceDetailInfo,
 	return tokenDetails, nil
 }
 
-func (t *utxoReader) QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, *common.Error) {
+func (t *utxoReader) QueryUtxoRecord(account string, count int64) (*lpb.UtxoRecordDetail, error) {
 	utxoRecord, err := t.chainCtx.State.QueryUtxoRecord(account, count)
 	if err != nil {
 		t.log.Warn("get utxo record error", "err", err)
@@ -81,7 +81,9 @@ func (t *utxoReader) QueryUtxoRecord(account string, count int64) (*lpb.UtxoReco
 	return utxoRecord, nil
 }
 
-func (t *utxoReader) SelectUTXO(account string, need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error) {
+func (t *utxoReader) SelectUTXO(account string,
+	need *big.Int, isLock, isExclude bool) (*lpb.UtxoOutput, error) {
+
 	utxos, _, totalSelected, err := t.chainCtx.State.SelectUtxos(account, need, isLock, isExclude)
 	if err != nil {
 		t.log.Warn("failed to select utxo", "err", err)
@@ -106,7 +108,7 @@ func (t *utxoReader) SelectUTXO(account string, need *big.Int, isLock, isExclude
 	return out, nil
 }
 
-func (t *utxoReader) SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, *common.Error) {
+func (t *utxoReader) SelectUTXOBySize(account string, isLock, isExclude bool) (*lpb.UtxoOutput, error) {
 	utxos, _, totalSelected, err := t.chainCtx.State.SelectUtxosBySize(account, isLock, isExclude)
 	if err != nil {
 		t.log.Warn("failed to select utxo", "err", err)

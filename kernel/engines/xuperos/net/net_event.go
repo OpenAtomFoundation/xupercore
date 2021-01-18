@@ -189,7 +189,7 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	go t.engine.Context().Net.SendMessage(ctx, msg)
 }
 
-func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) *common.Error {
+func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
 	if err := validatePostTx(tx); err != nil {
 		ctx.GetLog().Trace("PostTx validate param errror", "error", err)
 		return common.CastError(err)
@@ -276,7 +276,9 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	return nil
 }
 
-func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
+func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
+	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+
 	var input lpb.InternalBlock
 	var output *xpb.BlockInfo
 
@@ -287,7 +289,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessag
 			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
-		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCKIDS_RES, output, opts...)
+		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, output, opts...)
 		return resp, err
 	}
 
@@ -299,7 +301,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessag
 
 	chain, err := t.engine.Get(bcName)
 	if err != nil {
-		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
 		return response(common.ErrChainNotExist)
 	}
 
