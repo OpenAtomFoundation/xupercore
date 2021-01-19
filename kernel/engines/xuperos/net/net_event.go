@@ -87,7 +87,7 @@ func (t *NetEvent) Subscriber() error {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, t.msgChan)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
-			return fmt.Errorf("register subscriber failed", "type", msgType, "error", err)
+			return fmt.Errorf("register subscriber failed")
 		}
 	}
 
@@ -96,7 +96,7 @@ func (t *NetEvent) Subscriber() error {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, handle)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
-			return fmt.Errorf("register subscriber failed", "type", msgType, "error", err)
+			return fmt.Errorf("register subscriber failed")
 		}
 	}
 
@@ -111,7 +111,7 @@ func (t *NetEvent) procMsgLoop() {
 		case request := <-t.msgChan:
 			go t.procAsyncMsg(request)
 		case <-t.exitChan:
-			t.log.Trace("Wait for the processing message loop to end")
+			t.log.Trace("wait for the processing message loop to end")
 			return
 		}
 	}
@@ -140,8 +140,8 @@ func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 }
 
 func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage) {
-	var tx *lpb.Transaction
-	if err := p2p.Unmarshal(request, tx); err != nil {
+	var tx lpb.Transaction
+	if err := p2p.Unmarshal(request, &tx); err != nil {
 		ctx.GetLog().Warn("handlePostTx Unmarshal request error", "error", err)
 		return
 	}
@@ -152,10 +152,9 @@ func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 		return
 	}
 
-	err = t.PostTx(ctx, chain, tx)
+	err = t.PostTx(ctx, chain, &tx)
 	if err == nil {
-		ctx := t.engine.Context()
-		go ctx.Net.SendMessage(ctx, request)
+		go t.engine.Context().Net.SendMessage(ctx, request)
 	}
 }
 
@@ -217,7 +216,6 @@ func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 	}
 
 	if err := t.SendBlock(ctx, chain, &block); err != nil {
-		ctx.GetLog().Warn("proc block error", "error", err)
 		return
 	}
 
@@ -247,7 +245,6 @@ func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 	}
 
 	if err := t.SendBlock(ctx, chain, block); err != nil {
-		ctx.GetLog().Warn("proc block error", "error", err)
 		return
 	}
 
@@ -257,11 +254,11 @@ func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 
 func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
 	if err := validateSendBlock(in); err != nil {
-		ctx.GetLog().Trace("SendBlock validate param errror", "error", err)
+		ctx.GetLog().Trace("SendBlock validate param error", "error", err)
 		return err
 	}
 
-	if err := chain.ProcBlock(t.engine.Context(), in); err != nil {
+	if err := chain.ProcBlock(ctx, in); err != nil {
 		ctx.GetLog().Warn("proc block error", "error", err)
 		return err
 	}
@@ -279,7 +276,7 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 
-	var input lpb.InternalBlock
+	var input xpb.BlockID
 	var output *xpb.BlockInfo
 
 	bcName := request.Header.Bcname
@@ -289,7 +286,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
-		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_RES, output, opts...)
+		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
 		return resp, err
 	}
 
@@ -306,12 +303,14 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	}
 
 	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
-	output, err = ledgerReader.QueryBlock(input.Blockid, true)
+	output, err = ledgerReader.QueryBlock(input.Blockid, input.NeedContent)
 	if err != nil {
 		ctx.GetLog().Error("ledger reader query block error", "error", err)
 		return response(err)
 	}
 
+	ctx.GetLog().SetCommField("blockId", utils.F(input.Blockid))
+	ctx.GetLog().SetCommField("status", output.Status)
 	return response(nil)
 }
 
@@ -325,7 +324,7 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
-		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS_RES, output, opts...)
+		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
 		return resp, err
 	}
 
@@ -356,7 +355,7 @@ func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.X
 			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
-		resp := p2p.NewMessage(protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS_RES, output, opts...)
+		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
 		return resp, err
 	}
 

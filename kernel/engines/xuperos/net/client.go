@@ -31,14 +31,14 @@ func (t *NetEvent) GetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*l
 			continue
 		}
 
-		var block *lpb.InternalBlock
-		err := p2p.Unmarshal(response, block)
+		var block lpb.InternalBlock
+		err := p2p.Unmarshal(response, &block)
 		if err != nil {
 			ctx.GetLog().Warn("GetBlock unmarshal error", "error", err, "from", response.GetHeader().GetFrom())
 			continue
 		}
 
-		return block, nil
+		return &block, nil
 	}
 
 	return nil, common.ErrNetworkNoResponse

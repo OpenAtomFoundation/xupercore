@@ -224,8 +224,8 @@ func (p *P2PServerV2) Start() {
 	p.cancel = cancel
 
 	if err := p.connect(); err != nil {
-		p.log.Error("connect all peer error")
-		panic("connect all peer error")
+		p.log.Error("connect all boot and static peer error")
+		panic("connect all boot and static peer error")
 	}
 
 	key := Key(p.account)
@@ -236,16 +236,16 @@ func (p *P2PServerV2) Start() {
 		panic(ErrStoreAccount)
 	}
 
-	t := time.NewTicker(time.Second * 3)
+	t := time.NewTicker(time.Second * 30)
 	go func() {
 		defer t.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
-				//case <-t.C:
-				// p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
-				//p.kdht.RoutingTable().Print()
+			case <-t.C:
+				p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
+				p.kdht.RoutingTable().Print()
 			}
 		}
 	}()

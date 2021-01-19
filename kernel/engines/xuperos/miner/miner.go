@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -472,14 +473,14 @@ func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, 
 
 	bcStatus := make([]*xpb.ChainStatus, 0, len(responses))
 	for _, response := range responses {
-		var status *xpb.ChainStatus
-		err = p2p.Unmarshal(response, status)
+		var status xpb.ChainStatus
+		err = p2p.Unmarshal(response, &status)
 		if err != nil {
 			ctx.GetLog().Warn("unmarshal block chain status error", "err", err)
 			continue
 		}
 
-		bcStatus = append(bcStatus, status)
+		bcStatus = append(bcStatus, &status)
 	}
 
 	sort.Sort(BCSByHeight(bcStatus))
@@ -548,13 +549,6 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 }
 
 // 从临近节点下载区块保存到临时账本（可以优化为并发下载）
-//
-// case1: A => B => C(tipBlock) => D(beginBlock=targetBlock)
-// case2: A => B => C(tipBlock) => D(beginBlock) => ... => E(targetBlock)
-// case3: A => ... => B => ... => C(tipBlock)
-//                    |
-//                    | => D(beginBlock) => ... => E(targetBlock)
-//
 func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 	targetBlock *lpb.InternalBlock) ([][]byte, error) {
 	// 记录下载到的区块id
@@ -592,6 +586,8 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 		}
 		beginBlock = block
 		blkIds = append(blkIds, block.GetBlockid())
+
+		ctx.GetLog().Trace("download block", "blockId", block.Blockid, "height", block.Height)
 	}
 
 	return blkIds, nil
@@ -604,26 +600,34 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 		NeedContent: true,
 	}
 
-	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, input, p2p.WithBCName(t.ctx.BCName))
-	response, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
+	opts := []p2p.MessageOption {
+		p2p.WithBCName(t.ctx.BCName),
+		p2p.WithLogId(ctx.GetLog().GetLogId()),
+	}
+	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, input, opts...)
+	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
 	if err != nil {
 		ctx.GetLog().Warn("confirm block chain status error", "err", err)
 		return nil, err
 	}
 
-	for _, msg := range response {
-		if msg.GetHeader().GetErrorType() != protos.XuperMessage_SUCCESS {
+	for _, response := range responses {
+		if response.GetHeader().GetErrorType() != protos.XuperMessage_SUCCESS {
 			continue
 		}
 
-		var block *xpb.BlockInfo
-		err = p2p.Unmarshal(msg, block)
+		var block xpb.BlockInfo
+		err = p2p.Unmarshal(response, &block)
 		if err != nil {
-			ctx.GetLog().Warn("get block error", "err", err)
+			ctx.GetLog().Warn("unmarshal block error", "err", err)
 			continue
 		}
 
-		// TODO:这里需要检查区块状态
+		if block.Block == nil {
+			ctx.GetLog().Warn("block is nil", "blockId", utils.F(blockId), "from", response.GetHeader().GetFrom())
+			continue
+		}
+
 		return block.Block, nil
 	}
 
@@ -674,11 +678,11 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 // syncConfirm 向周围节点询问块是否可以被接受
 func (t *Miner) isConfirmed(ctx xctx.XContext, bcs *xpb.ChainStatus) bool {
 	input := &lpb.InternalBlock{Blockid: bcs.Block.Blockid}
-	opt := []p2p.MessageOption{
+	opts := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
-		//p2p.WithLogId(ctx.GetLog().GetLogId()),
+		p2p.WithLogId(ctx.GetLog().GetLogId()),
 	}
-	msg := p2p.NewMessage(protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS, input, opt...)
+	msg := p2p.NewMessage(protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS, input, opts...)
 	response, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
 	if err != nil {
 		ctx.GetLog().Warn("confirm block chain status error", "err", err)
@@ -722,14 +726,18 @@ func countConfirmBlock(messages []*protos.XuperMessage) bool {
 // broadcast block in Full_BroadCast_Mode since it's the original miner
 func (t *Miner) broadcastBlock(ctx xctx.XContext, block *lpb.InternalBlock) {
 	engCtx := t.ctx.EngCtx
+	opts := []p2p.MessageOption{
+		p2p.WithBCName(t.ctx.BCName),
+		p2p.WithLogId(ctx.GetLog().GetLogId()),
+	}
 	var msg *protos.XuperMessage
 	if engCtx.EngCfg.BlockBroadcastMode == common.InteractiveBroadCastMode {
 		blockID := &lpb.InternalBlock{
 			Blockid: block.Blockid,
 		}
-		msg = p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, p2p.WithBCName(t.ctx.BCName))
+		msg = p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, opts...)
 	} else {
-		msg = p2p.NewMessage(protos.XuperMessage_SENDBLOCK, block, p2p.WithBCName(t.ctx.BCName))
+		msg = p2p.NewMessage(protos.XuperMessage_SENDBLOCK, block, opts...)
 	}
 
 	err := engCtx.Net.SendMessage(t.ctx, msg)

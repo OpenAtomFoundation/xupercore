@@ -7,7 +7,9 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/patrickmn/go-cache"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/def"
+	"github.com/xuperchain/xupercore/lib/timer"
 	"log"
 	"net"
 	"time"
@@ -180,8 +182,12 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		}()
 	}
 
-	p.log.Trace("SendP2PMessage", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType())
-	if err = p.dispatcher.Dispatch(p.ctx, msg, stream); err != nil {
+	xlog, _ := logs.NewLogger(msg.Header.Logid, fmt.Sprintf("%s", msg.GetHeader().GetType()))
+	ctx := &xctx.BaseCtx{
+		XLog:  xlog,
+		Timer: timer.NewXTimer(),
+	}
+	if err = p.dispatcher.Dispatch(ctx, msg, stream); err != nil {
 		p.log.Warn("dispatch error", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "error", err)
 		return err
 	}
