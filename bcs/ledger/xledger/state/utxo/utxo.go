@@ -281,8 +281,11 @@ func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta) (*UtxoVM, error) {
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
 func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
 	// new kvdb instance
+	storePath := sctx.EnvCfg.GenDataAbsPath(sctx.EnvCfg.ChainDir)
+	storePath = filepath.Join(storePath, sctx.BCName)
+	stateDBPath := filepath.Join(storePath, def.StateStrgDirName)
 	kvParam := &kvdb.KVParameter{
-		DBPath:                filepath.Join(sctx.LedgerCfg.StorePath, "utxoVM"),
+		DBPath:                stateDBPath,
 		KVEngineType:          sctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          ledger.MemCacheSize,
 		FileHandlersCacheSize: ledger.FileHandlersCacheSize,

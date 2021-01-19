@@ -42,7 +42,7 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, *common.Error) {
+func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	if engCtx == nil || bcName == "" {
 		return nil, common.ErrParameter
 	}
@@ -67,7 +67,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, *common.Error) 
 	// 初始化链运行环境上下文
 	err = chainObj.initChainCtx()
 	if err != nil {
-		log.Error("init chain ctx failed", "bcName", engCtx, "err", err)
+		log.Error("init chain ctx failed", "bcName", bcName, "err", err)
 		return nil, common.ErrNewChainCtxFailed.More("err:%v", err)
 	}
 
@@ -79,7 +79,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, *common.Error) 
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *Chain) SetRelyAgent(agent common.ChainRelyAgent) *common.Error {
+func (t *Chain) SetRelyAgent(agent common.ChainRelyAgent) error {
 	if agent == nil {
 		return common.ErrParameter
 	}
@@ -104,8 +104,7 @@ func (t *Chain) Context() *common.ChainCtx {
 }
 
 // 交易预执行
-
-func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string, authRequires []string) (*protos.InvokeResponse, *common.Error) {
+func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string, authRequires []string) (*protos.InvokeResponse, error) {
 	if ctx == nil || ctx.GetLog() == nil || len(reqs) < 1 {
 		return nil, common.ErrParameter
 	}
@@ -239,7 +238,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 }
 
 // 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)
-func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) *common.Error {
+func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	if tx == nil || ctx == nil || ctx.GetLog() == nil || len(tx.GetTxid()) <= 0 {
 		return common.ErrParameter
 	}
@@ -274,7 +273,7 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) *common.Error {
 }
 
 // 处理P2P网络同步到的区块
-func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) *common.Error {
+func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	if block == nil || ctx == nil || ctx.GetLog() == nil || block.GetBlockid() == nil {
 		return common.ErrParameter
 	}
@@ -299,6 +298,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("open ledger failed")
 	}
 	t.ctx.Ledger = leg
+	t.log.Trace("open ledger succ", "bcName", t.ctx.BCName)
 
 	// 2.实例化加密组件
 	// 从账本查询加密算法类型
@@ -313,6 +313,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("create crypto client failed")
 	}
 	t.ctx.Crypto = crypt
+	t.log.Trace("create crypto client succ", "bcName", t.ctx.BCName, "cryptoType", cryptoType)
 
 	// 3.实例化状态机
 	stat, err := t.relyAgent.CreateState(leg, crypt)
@@ -321,6 +322,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("open state failed")
 	}
 	t.ctx.State = stat
+	t.log.Trace("open state succ", "bcName", t.ctx.BCName)
 
 	// 4.加载节点账户信息
 	keyPath := t.ctx.EngCtx.EnvCfg.GenDataAbsPath(t.ctx.EngCtx.EnvCfg.KeyDir)
@@ -330,6 +332,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("load node addr info error")
 	}
 	t.ctx.Address = addr
+	t.log.Trace("load node addr info succ", "bcName", t.ctx.BCName, "address", addr.Address)
 
 	// 5.合约
 	contractObj, err := t.relyAgent.CreateContract()
@@ -340,6 +343,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Contract = contractObj
 	// 设置合约manager到状态机
 	t.ctx.State.SetContractMG(t.ctx.Contract)
+	t.log.Trace("create contract manager succ", "bcName", t.ctx.BCName)
 
 	// 6.Acl
 	aclObj, err := t.relyAgent.CreateAcl()
@@ -350,6 +354,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Acl = aclObj
 	// 设置acl manager到状态机
 	t.ctx.State.SetAclMG(t.ctx.Acl)
+	t.log.Trace("create acl succ", "bcName", t.ctx.BCName)
 
 	// 7.共识
 	cons, err := t.relyAgent.CreateConsensus()
@@ -358,6 +363,7 @@ func (t *Chain) initChainCtx() error {
 		return fmt.Errorf("create consensus error")
 	}
 	t.ctx.Consensus = cons
+	t.log.Trace("create consensus succ", "bcName", t.ctx.BCName)
 
 	return nil
 }

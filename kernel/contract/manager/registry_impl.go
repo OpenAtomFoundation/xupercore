@@ -26,7 +26,7 @@ func (r *registryImpl) RegisterKernMethod(ctract, method string, handler contrac
 	}
 	_, ok = contractMap[method]
 	if ok {
-		panic(fmt.Sprintf("kernel method %s for %s exists", method, ctract))
+		panic(fmt.Sprintf("kernel method `%s' for `%s' exists", method, ctract))
 	}
 	contractMap[method] = handler
 }
@@ -34,7 +34,7 @@ func (r *registryImpl) RegisterKernMethod(ctract, method string, handler contrac
 func (r *registryImpl) GetKernMethod(ctract, method string) (contract.KernMethod, error) {
 	contractMap, ok := r.methods[ctract]
 	if !ok {
-		return nil, fmt.Errorf("kernel contract %s not found", ctract)
+		return nil, fmt.Errorf("kernel contract `%s' not found", ctract)
 	}
 	contractMethod, ok := contractMap[method]
 	if !ok {

@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/golang/protobuf/proto"
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+
+	"github.com/golang/protobuf/proto"
 )
 
 // KVEngineType KV storage type
@@ -87,11 +88,11 @@ func openDB(dbPath string, logger logs.Logger) (kvdb.Database, error) {
 }
 
 // 快速对写集合排序
-type pdSlice []*xmodel_pb.PureData
+type pdSlice []*kledger.PureData
 
 // newPdSlice new a slice instance for PureData
-func newPdSlice(vpd []*xmodel_pb.PureData) pdSlice {
-	s := make([]*xmodel_pb.PureData, len(vpd))
+func newPdSlice(vpd []*kledger.PureData) pdSlice {
+	s := make([]*kledger.PureData, len(vpd))
 	copy(s, vpd)
 	return s
 }
@@ -118,7 +119,7 @@ func (pds pdSlice) Less(i, j int) bool {
 	return ret < 0
 }
 
-func equal(pd, vpd *xmodel_pb.PureData) bool {
+func equal(pd, vpd *kledger.PureData) bool {
 	rawKeyI := makeRawKey(pd.GetBucket(), pd.GetKey())
 	rawKeyJ := makeRawKey(vpd.GetBucket(), vpd.GetKey())
 	ret := bytes.Compare(rawKeyI, rawKeyJ)
@@ -129,7 +130,7 @@ func equal(pd, vpd *xmodel_pb.PureData) bool {
 }
 
 // Equal check if two PureData object equal
-func Equal(pd, vpd []*xmodel_pb.PureData) bool {
+func Equal(pd, vpd []*kledger.PureData) bool {
 	if len(pd) != len(vpd) {
 		return false
 	}

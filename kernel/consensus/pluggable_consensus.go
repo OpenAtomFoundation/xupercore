@@ -79,7 +79,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 		cfg := def.ConsensusConfig{}
 		err = json.Unmarshal(consensusBuf, &cfg)
 		if err != nil {
-			cCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::parse consensus configuration error!", "error", err.Error())
+			cCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::parse consensus configuration error!", "conf", string(consensusBuf), "error", err.Error())
 			return nil, err
 		}
 		cfg.StartHeight = 1

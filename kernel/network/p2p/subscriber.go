@@ -144,6 +144,9 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 			}
 			Metrics.Packet.With(labels).Add(float64(proto.Size(resp)))
 		}
+
+		s.log.Trace("HandleMessage done", "log_id", msg.GetHeader().GetLogid(),
+			"bc", msg.GetHeader().GetBcname(), "type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
 	}
 
 	if s.channel != nil {

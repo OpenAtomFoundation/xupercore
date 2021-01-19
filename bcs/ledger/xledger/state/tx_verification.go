@@ -10,17 +10,19 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
+	//"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	//"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/protos"
+
+	"github.com/golang/protobuf/proto"
 )
 
 // ImmediateVerifyTx verify tx Immediately
@@ -257,59 +259,62 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 //	3). Contract logic transferring from contract
 func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]bool) (bool, error) {
 	// verify tx input
-	conUtxoInputs, err := xmodel.ParseContractUtxoInputs(tx)
-	if err != nil {
-		t.log.Warn("verifyUTXOPermission error, parseContractUtxo ")
-		return false, ErrParseContractUtxos
-	}
-	conUtxoInputsMap := map[string]bool{}
-	for _, conUtxoInput := range conUtxoInputs {
-		addr := conUtxoInput.GetFromAddr()
-		txid := conUtxoInput.GetRefTxid()
-		offset := conUtxoInput.GetRefOffset()
-		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
-		conUtxoInputsMap[utxoKey] = true
-	}
-
-	for _, txInput := range tx.TxInputs {
-		// if transfer from contract
-		addr := txInput.GetFromAddr()
-		txid := txInput.GetRefTxid()
-		offset := txInput.GetRefOffset()
-		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
-		if conUtxoInputsMap[utxoKey] {
-			// this utxo transfer from contract, will verify in rwset verify
-			continue
+	// TODO:在哪里实现ParseContractUtxoInputs
+	/*
+		conUtxoInputs, err := xmodel.ParseContractUtxoInputs(tx)
+		if err != nil {
+			t.log.Warn("verifyUTXOPermission error, parseContractUtxo ")
+			return false, ErrParseContractUtxos
+		}
+		conUtxoInputsMap := map[string]bool{}
+		for _, conUtxoInput := range conUtxoInputs {
+			addr := conUtxoInput.GetFromAddr()
+			txid := conUtxoInput.GetRefTxid()
+			offset := conUtxoInput.GetRefOffset()
+			utxoKey := utxo.GenUtxoKey(addr, txid, offset)
+			conUtxoInputsMap[utxoKey] = true
 		}
 
-		name := string(txInput.FromAddr)
-		if verifiedID[name] {
-			// this ID(either AK or Account) is verified before
-			continue
-		}
-		akType := aclu.IsAccount(name)
-		if akType == 1 {
-			// Identify account
-			acl, err := t.queryAccountACL(name)
-			if err != nil || acl == nil {
-				// valid account should have ACL info, so this account might not exsit
-				t.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
+		for _, txInput := range tx.TxInputs {
+			// if transfer from contract
+			addr := txInput.GetFromAddr()
+			txid := txInput.GetRefTxid()
+			offset := txInput.GetRefOffset()
+			utxoKey := utxo.GenUtxoKey(addr, txid, offset)
+			if conUtxoInputsMap[utxoKey] {
+				// this utxo transfer from contract, will verify in rwset verify
+				continue
+			}
+
+			name := string(txInput.FromAddr)
+			if verifiedID[name] {
+				// this ID(either AK or Account) is verified before
+				continue
+			}
+			akType := aclu.IsAccount(name)
+			if akType == 1 {
+				// Identify account
+				acl, err := t.queryAccountACL(name)
+				if err != nil || acl == nil {
+					// valid account should have ACL info, so this account might not exsit
+					t.log.Warn("verifyUTXOPermission error, account might not exist", "account", name, "error", err)
+					return false, ErrInvalidAccount
+				}
+				if ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, string(name), tx.AuthRequire); !ok {
+					t.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
+					return false, ErrACLNotEnough
+				}
+			} else if akType == 0 {
+				// Identify address failed, if address not in verifiedID then it must have no signature
+				t.log.Warn("verifyUTXOPermission error, address has no signature", "address", name)
+				return false, ErrInvalidSignature
+			} else {
+				t.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
 				return false, ErrInvalidAccount
 			}
-			if ok, err := aclu.IdentifyAccount(t.sctx.AclMgr, string(name), tx.AuthRequire); !ok {
-				t.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
-				return false, ErrACLNotEnough
-			}
-		} else if akType == 0 {
-			// Identify address failed, if address not in verifiedID then it must have no signature
-			t.log.Warn("verifyUTXOPermission error, address has no signature", "address", name)
-			return false, ErrInvalidSignature
-		} else {
-			t.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
-			return false, ErrInvalidAccount
+			verifiedID[name] = true
 		}
-		verifiedID[name] = true
-	}
+	*/
 	return true, nil
 }
 
@@ -343,9 +348,9 @@ func (t *State) verifyRWSetPermission(tx *pb.Transaction, verifiedID map[string]
 	if req == nil {
 		return true, nil
 	}
-	writeSet := []*xmodel_pb.PureData{}
+	writeSet := []*kledger.PureData{}
 	for _, txOut := range tx.TxOutputsExt {
-		writeSet = append(writeSet, &xmodel_pb.PureData{Bucket: txOut.Bucket, Key: txOut.Key, Value: txOut.Value})
+		writeSet = append(writeSet, &kledger.PureData{Bucket: txOut.Bucket, Key: txOut.Key, Value: txOut.Value})
 	}
 	for _, ele := range writeSet {
 		bucket := ele.GetBucket()
@@ -430,7 +435,6 @@ func getGasLimitFromTx(tx *pb.Transaction) (int64, error) {
 			continue
 		}
 		gasLimit := big.NewInt(0).SetBytes(output.GetAmount()).Int64()
-		// FIXME: gasLimit从大数过来的，处理溢出问题
 		if gasLimit <= 0 {
 			return 0, fmt.Errorf("bad gas limit %d", gasLimit)
 		}
@@ -486,27 +490,32 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		}
 		return true, nil
 	}
-	env, err := t.xmodel.PrepareEnv(tx)
-	// transfer in contract
-	/*transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
+
+	rset, wset, err := t.GenRWSetFromTx(tx)
+	if err != nil {
+		return false, nil
+	}
+	rwSet := &contract.RWSet{
+		RSet: rset,
+		WSet: wset,
+	}
+
+	reader := sandbox.XMReaderFromRWSet(rwSet)
+	sandBoxConfig := &contract.SandboxConfig{
+		XMReader: reader,
+	}
+	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxConfig)
+
+	transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
 	if err != nil {
 		return false, err
 	}
 
-	if err != nil {
-		return false, err
-	}
 	contextConfig := &contract.ContextConfig{
-		XMCache:      env.GetModelCache(),
+		State:        sandBox,
 		Initiator:    tx.GetInitiator(),
 		AuthRequire:  tx.GetAuthRequire(),
 		ContractName: "",
-		Core: contractChainCore{
-			Manager: t.aclMgr,
-			UtxoVM:  uv,
-			Ledger:  t.ledger,
-		},
-		BCName: t.bcname,
 	}
 	gasLimit, err := getGasLimitFromTx(tx)
 	if err != nil {
@@ -517,14 +526,9 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	// get gas rate to utxo
 	//gasPrice := t.meta.Meta.GetGasPrice()
 
-	/*for i, tmpReq := range tx.GetContractRequests() {
-		moduleName := tmpReq.GetModuleName()
-		vm, err := t.vmMgr3.GetVM(moduleName)
-		if err != nil {
-			return false, err
-		}
-
-		limits := contract.FromPbLimits(tmpReq.GetResourceLimits())
+	for i, tmpReq := range tx.GetContractRequests() {
+		//todo where to impl FromPbLimits
+		/*limits := pb.FromPbLimits(tmpReq.GetResourceLimits())
 		if i >= len(reservedRequests) {
 			gasLimit -= limits.TotalGas(gasPrice)
 		}
@@ -533,7 +537,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 				"txid", hex.EncodeToString(tx.Txid))
 			return false, errors.New("out of gas")
 		}
-		//contextConfig.ResourceLimits = limits
+		contextConfig.ResourceLimits = limits*/
 		contextConfig.ContractName = tmpReq.GetContractName()
 		if transContractName == tmpReq.GetContractName() {
 			contextConfig.TransferAmount = transAmount.String()
@@ -541,7 +545,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 			contextConfig.TransferAmount = ""
 		}
 
-		ctx, err := vm.NewContext(contextConfig)
+		ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
 		if err != nil {
 			t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
 			if i < len(reservedRequests) && (err.Error() == "leveldb: not found" || strings.HasSuffix(err.Error(), "not found")) {
@@ -564,22 +568,20 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		}
 
 		ctx.Release()
+	}
+
+	/*err = env.GetModelCache().WriteTransientBucket()
+	if err != nil {
+		return false, err
 	}*/
 
-	err = env.GetModelCache().WriteTransientBucket()
-	if err != nil {
-		return false, err
-	}
-
-	_, writeSet, err := env.GetModelCache().GetRWSets()
-	if err != nil {
-		return false, err
-	}
-	t.log.Trace("verifyTxRWSets", "env.output", env.GetOutputs(), "writeSet", writeSet)
-	ok := xmodel.Equal(env.GetOutputs(), writeSet)
+	RWSet := sandBox.RWSet()
+	t.log.Trace("verifyTxRWSets", "env.output", wset, "writeSet", RWSet.WSet)
+	ok := xmodel.Equal(wset, RWSet.WSet)
 	if !ok {
 		return false, fmt.Errorf("write set not equal")
 	}
+
 	return true, nil
 }
 
@@ -738,8 +740,6 @@ func (t *State) MaxTxSizePerBlock() (int, error) {
 }
 
 func (t *State) GetMaxBlockSize() int64 {
-	t.meta.MutexMeta.Lock()
-	defer t.meta.MutexMeta.Unlock()
 	return t.meta.GetMaxBlockSize()
 }
 
@@ -822,4 +822,39 @@ func (t *State) verifyAutogenTx(tx *pb.Transaction) bool {
 	}
 
 	return true
+}
+
+func (t *State) GenRWSetFromTx(tx *pb.Transaction) ([]*kledger.VersionedData, []*kledger.PureData, error) {
+	inputs := []*kledger.VersionedData{}
+	outputs := []*kledger.PureData{}
+	t.log.Trace("GenRWSetFromTx", "tx.TxInputsExt", tx.TxInputsExt, "tx.TxOutputsExt", tx.TxOutputsExt)
+	for _, txIn := range tx.TxInputsExt {
+		var verData *kledger.VersionedData
+		var err error
+		if len(tx.Blockid) == 0 {
+			verData, err = t.xmodel.Get(txIn.Bucket, txIn.Key)
+		} else {
+			verData, err = t.xmodel.GetFromLedger(txIn)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		t.log.Trace("prepareEnv", "verData", verData, "txIn", txIn)
+		if xmodel.GetVersion(verData) != GetVersion(txIn) {
+			err := fmt.Errorf("prepareEnv fail, key:%s, inputs version is not valid: %s != %s", string(verData.PureData.Key), xmodel.GetVersion(verData), GetVersion(txIn))
+			return nil, nil, err
+		}
+		inputs = append(inputs, verData)
+	}
+	for _, txOut := range tx.TxOutputsExt {
+		outputs = append(outputs, &kledger.PureData{Bucket: txOut.Bucket, Key: txOut.Key, Value: txOut.Value})
+	}
+	return inputs, outputs, nil
+}
+
+func GetVersion(txIn *protos.TxInputExt) string {
+	if txIn.RefTxid == nil {
+		return ""
+	}
+	return fmt.Sprintf("%x_%d", txIn.RefTxid, txIn.RefOffset)
 }

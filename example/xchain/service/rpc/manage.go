@@ -59,10 +59,12 @@ func (t *RpcServMG) Run() error {
 		return errors.New("RpcServMG not init")
 	}
 
+	t.log.Trace("run grpc server")
+
 	// 启动rpc server，阻塞直到退出
 	err := t.runRpcServ()
 	if err != nil {
-		t.log.Error("grpc server abnormal exit.err:%v", err)
+		t.log.Error("grpc server abnormal exit", "err", err)
 		return err
 	}
 
@@ -88,7 +90,7 @@ func (t *RpcServMG) runRpcServ() error {
 	unaryInterceptors = append(unaryInterceptors, t.rpcServ.UnaryInterceptor())
 	rpcOptions = append(rpcOptions,
 		middleware.WithUnaryServerChain(unaryInterceptors...),
-		grpc.MaxMsgSize(t.scfg.MaxMsgSize),
+		grpc.MaxRecvMsgSize(t.scfg.MaxRecvMsgSize),
 		grpc.ReadBufferSize(t.scfg.ReadBufSize),
 		grpc.InitialWindowSize(t.scfg.InitWindowSize),
 		grpc.InitialConnWindowSize(t.scfg.InitConnWindowSize),
@@ -98,7 +100,7 @@ func (t *RpcServMG) runRpcServ() error {
 	t.servHD = grpc.NewServer(rpcOptions...)
 	pb.RegisterXchainServer(t.servHD, t.rpcServ)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf("%d", t.scfg.RpcPort))
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", t.scfg.RpcPort))
 	if err != nil {
 		t.log.Error("failed to listen", "err", err.Error())
 		return fmt.Errorf("failed to listen")

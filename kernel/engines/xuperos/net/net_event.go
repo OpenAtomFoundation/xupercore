@@ -87,6 +87,7 @@ func (t *NetEvent) Subscriber() error {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, t.msgChan)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
+			return fmt.Errorf("register subscriber failed", "type", msgType, "error", err)
 		}
 	}
 
@@ -95,10 +96,12 @@ func (t *NetEvent) Subscriber() error {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, handle)); err != nil {
 			t.log.Error("register subscriber error", "type", msgType, "error", err)
+			return fmt.Errorf("register subscriber failed", "type", msgType, "error", err)
 		}
 	}
 
-	return fmt.Errorf("the interface is not implemented")
+	t.log.Trace("register subscriber succ")
+	return nil
 }
 
 // 阻塞等待chan中消息，直到收到退出信号
@@ -186,7 +189,7 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	go t.engine.Context().Net.SendMessage(ctx, msg)
 }
 
-func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) *common.Error {
+func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
 	if err := validatePostTx(tx); err != nil {
 		ctx.GetLog().Trace("PostTx validate param errror", "error", err)
 		return common.CastError(err)
@@ -273,7 +276,9 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	return nil
 }
 
-func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
+func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
+	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+
 	var input lpb.InternalBlock
 	var output *xpb.BlockInfo
 
@@ -296,7 +301,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessag
 
 	chain, err := t.engine.Get(bcName)
 	if err != nil {
-		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
 		return response(common.ErrChainNotExist)
 	}
 

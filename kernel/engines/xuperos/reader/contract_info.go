@@ -9,17 +9,17 @@ import (
 
 type ContractReader interface {
 	// 查询该链合约统计数据
-	QueryContractStatData() (*protos.ContractStatData, *common.Error)
+	QueryContractStatData() (*protos.ContractStatData, error)
 	// 查询账户下合约状态
-	GetAccountContracts(account string) ([]*protos.ContractStatus, *common.Error)
+	GetAccountContracts(account string) ([]*protos.ContractStatus, error)
 	// 查询地址下合约状态
-	GetAddressContracts(addr string, needContent bool) (map[string][]*protos.ContractStatus, *common.Error)
+	GetAddressContracts(addr string, needContent bool) (map[string][]*protos.ContractStatus, error)
 	// 查询地址下账户
-	GetAccountByAK(addr string) ([]string, *common.Error)
+	GetAccountByAK(addr string) ([]string, error)
 	// 查询合约账户ACL
-	QueryAccountACL(account string) (*protos.Acl, *common.Error)
+	QueryAccountACL(account string) (*protos.Acl, error)
 	// 查询合约方法ACL
-	QueryContractMethodACL(contract, method string) (*protos.Acl, *common.Error)
+	QueryContractMethodACL(contract, method string) (*protos.Acl, error)
 }
 
 type contractReader struct {
@@ -42,7 +42,7 @@ func NewContractReader(chainCtx *common.ChainCtx, baseCtx xctx.XContext) Contrac
 	return reader
 }
 
-func (t *contractReader) QueryContractStatData() (*protos.ContractStatData, *common.Error) {
+func (t *contractReader) QueryContractStatData() (*protos.ContractStatData, error) {
 	contractStatData, err := t.chainCtx.State.QueryContractStatData()
 	if err != nil {
 		return nil, common.CastError(err)
@@ -51,7 +51,7 @@ func (t *contractReader) QueryContractStatData() (*protos.ContractStatData, *com
 	return contractStatData, nil
 }
 
-func (t *contractReader) GetAccountContracts(account string) ([]*protos.ContractStatus, *common.Error) {
+func (t *contractReader) GetAccountContracts(account string) ([]*protos.ContractStatus, error) {
 	contracts, err := t.chainCtx.State.GetAccountContracts(account)
 	if err != nil {
 		return nil, common.CastError(err)
@@ -71,7 +71,9 @@ func (t *contractReader) GetAccountContracts(account string) ([]*protos.Contract
 	return contractStatusList, nil
 }
 
-func (t *contractReader) GetAddressContracts(address string, needContent bool) (map[string][]*protos.ContractStatus, *common.Error) {
+func (t *contractReader) GetAddressContracts(address string,
+	needContent bool) (map[string][]*protos.ContractStatus, error) {
+
 	accounts, err := t.GetAccountByAK(address)
 	if err != nil {
 		return nil, common.CastError(err)
@@ -91,7 +93,7 @@ func (t *contractReader) GetAddressContracts(address string, needContent bool) (
 	return out, nil
 }
 
-func (t *contractReader) GetAccountByAK(address string) ([]string, *common.Error) {
+func (t *contractReader) GetAccountByAK(address string) ([]string, error) {
 	accounts, err := t.chainCtx.State.QueryAccountContainAK(address)
 	if err != nil {
 		return nil, common.CastError(err)
@@ -100,7 +102,7 @@ func (t *contractReader) GetAccountByAK(address string) ([]string, *common.Error
 	return accounts, nil
 }
 
-func (t *contractReader) QueryAccountACL(account string) (*protos.Acl, *common.Error) {
+func (t *contractReader) QueryAccountACL(account string) (*protos.Acl, error) {
 	acl, err := t.chainCtx.State.QueryAccountACL(account)
 	if err != nil {
 		return nil, common.CastError(err)
@@ -109,7 +111,7 @@ func (t *contractReader) QueryAccountACL(account string) (*protos.Acl, *common.E
 	return acl, nil
 }
 
-func (t *contractReader) QueryContractMethodACL(contract, method string) (*protos.Acl, *common.Error) {
+func (t *contractReader) QueryContractMethodACL(contract, method string) (*protos.Acl, error) {
 	acl, err := t.chainCtx.State.QueryContractMethodACL(contract, method)
 	if err != nil {
 		return nil, common.CastError(err)

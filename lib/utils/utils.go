@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"os"
@@ -85,4 +86,25 @@ func GetHostName() string {
 // Print byte slice data as hex string
 func F(b []byte) string {
 	return fmt.Sprintf("%x", b)
+}
+
+// decode string id to bytes
+func DecodeId(str string) []byte {
+	raw, err := hex.DecodeString(str)
+	if err != nil {
+		return nil
+	}
+
+	return raw
+}
+
+func PathExists(path string) bool {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	return false
 }

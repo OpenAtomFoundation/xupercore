@@ -1,8 +1,8 @@
 package xmodel
 
 import (
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
@@ -15,7 +15,7 @@ type XMIterator struct {
 }
 
 // Data get data pointer to VersionedData for XMIterator
-func (di *XMIterator) Data() *xmodel_pb.VersionedData {
+func (di *XMIterator) Value() *kledger.VersionedData {
 	version := di.iter.Value()
 	verData, err := di.model.fetchVersionedData(di.bucket, string(version))
 	di.err = err
@@ -49,6 +49,6 @@ func (di *XMIterator) Error() error {
 }
 
 // Release release XMIterator
-func (di *XMIterator) Release() {
+func (di *XMIterator) Close() {
 	di.iter.Release()
 }

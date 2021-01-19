@@ -3,8 +3,6 @@ package xpoa
 import (
 	"encoding/json"
 	"time"
-
-	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 )
 
 // xpoaStatus 实现了ConsensusStatus接口
@@ -43,9 +41,9 @@ func (x *XpoaStatus) GetCurrentTerm() int64 {
 
 // 获取当前矿工信息
 func (x *XpoaStatus) GetCurrentValidatorsInfo() []byte {
-	var v []*chainedBft.ProposerInfo
+	var v []*ProposerInfo
 	for _, a := range x.election.validators {
-		v = append(v, &chainedBft.ProposerInfo{
+		v = append(v, &ProposerInfo{
 			Address: a,
 			Neturl:  x.election.addrToNet[a],
 		})
@@ -58,5 +56,5 @@ func (x *XpoaStatus) GetCurrentValidatorsInfo() []byte {
 }
 
 type ValidatorsInfo struct {
-	Validators []*chainedBft.ProposerInfo `json:"validators"`
+	Validators []*ProposerInfo `json:"validators"`
 }

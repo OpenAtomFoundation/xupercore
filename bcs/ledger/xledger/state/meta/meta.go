@@ -51,14 +51,22 @@ func genArgs(req []*protos.InvokeRequest) *reservedArgs {
 }
 
 func NewMeta(sctx *context.StateCtx, stateDB kvdb.Database) (*Meta, error) {
-	return &Meta{
+	obj := &Meta{
 		log:       sctx.XLog,
 		Ledger:    sctx.Ledger,
 		Meta:      &pb.UtxoMeta{},
 		MetaTmp:   &pb.UtxoMeta{},
 		MutexMeta: &sync.Mutex{},
 		MetaTable: kvdb.NewTable(stateDB, pb.MetaTablePrefix),
-	}, nil
+	}
+
+	MaxBlockSize, loadErr := obj.LoadMaxBlockSize()
+	if loadErr != nil {
+		return nil, loadErr
+	}
+	obj.Meta.MaxBlockSize = MaxBlockSize
+
+	return obj, nil
 }
 
 // GetNewAccountResourceAmount get account for creating an account
@@ -150,7 +158,6 @@ func (t *Meta) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
 	if pbErr != nil {
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
-
 	}
 	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
 	if err == nil {

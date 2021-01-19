@@ -1,6 +1,7 @@
 # Project specific files
 plugins/
 output/
+test/
 xvm/compile/wabt/build/
 contractsdk/cpp/build
 event_client

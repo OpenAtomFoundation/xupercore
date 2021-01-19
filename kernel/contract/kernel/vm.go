@@ -1,9 +1,9 @@
 package kernel
 
 import (
-	"github.com/xuperchain/xupercore/contractsdk/go/pb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 )
 
 type kernvm struct {
@@ -11,37 +11,40 @@ type kernvm struct {
 }
 
 func newKernvm(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
-	return &kernvm{}, nil
+	return &kernvm{
+		registry: config.VMConfig.(*bridge.XkernelConfig).Registry,
+	}, nil
 }
 
 // CreateInstance instances a wasm virtual machine instance which can run a single contract call
 func (k *kernvm) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {
-	method, err := k.registry.GetKernMethod(ctx.ContractName, ctx.Method)
-	if err != nil {
-		return nil, err
-	}
-	return newKernInstance(ctx, method), nil
+	return newKernInstance(ctx, k.registry), nil
 }
 
 func (k *kernvm) RemoveCache(name string) {
 }
 
 type kernInstance struct {
-	ctx    *bridge.Context
-	kctx   *kcontextImpl
-	method contract.KernMethod
+	ctx      *bridge.Context
+	kctx     *kcontextImpl
+	registry contract.KernRegistry
 }
 
-func newKernInstance(ctx *bridge.Context, method contract.KernMethod) *kernInstance {
+func newKernInstance(ctx *bridge.Context, registry contract.KernRegistry) *kernInstance {
 	return &kernInstance{
-		ctx:    ctx,
-		kctx:   newKContext(ctx),
-		method: method,
+		ctx:      ctx,
+		kctx:     newKContext(ctx),
+		registry: registry,
 	}
 }
 
 func (k *kernInstance) Exec() error {
-	resp, err := k.method(k.kctx)
+	method, err := k.registry.GetKernMethod(k.ctx.ContractName, k.ctx.Method)
+	if err != nil {
+		return err
+	}
+
+	resp, err := method(k.kctx)
 	if err != nil {
 		return err
 	}

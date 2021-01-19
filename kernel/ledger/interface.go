@@ -1,6 +1,20 @@
 // 账本约束数据结构定义
 package ledger
 
+// 区块基础操作
+type BlockHandle interface {
+	GetProposer() []byte
+	GetHeight() int64
+	GetBlockid() []byte
+	GetConsensusStorage() ([]byte, error)
+	GetTimestamp() int64
+	SetItem(item string, value interface{}) error
+	MakeBlockId() ([]byte, error)
+	GetPreHash() []byte
+	GetPublicKey() string
+	GetSign() []byte
+}
+
 type XMSnapshotReader interface {
 	Get(bucket string, key []byte) ([]byte, error)
 }
@@ -28,22 +42,50 @@ type PureData struct {
 	Value  []byte
 }
 
+func (t *PureData) GetBucket() string {
+	if t == nil {
+		return ""
+	}
+	return t.Bucket
+}
+
+func (t *PureData) GetKey() []byte {
+	if t == nil {
+		return nil
+	}
+	return t.Key
+}
+
+func (t *PureData) GetValue() []byte {
+	if t == nil {
+		return nil
+	}
+	return t.Value
+}
+
 type VersionedData struct {
 	PureData  *PureData
 	RefTxid   []byte
 	RefOffset int32
 }
 
-// 区块基础操作
-type BlockHandle interface {
-	GetProposer() []byte
-	GetHeight() int64
-	GetBlockid() []byte
-	GetConsensusStorage() ([]byte, error)
-	GetTimestamp() int64
-	SetItem(item string, value interface{}) error
-	MakeBlockId() ([]byte, error)
-	GetPreHash() []byte
-	GetPublicKey() string
-	GetSign() []byte
+func (t *VersionedData) GetPureData() *PureData {
+	if t == nil {
+		return nil
+	}
+	return t.PureData
+}
+
+func (t *VersionedData) GetRefTxid() []byte {
+	if t == nil {
+		return nil
+	}
+	return t.RefTxid
+}
+
+func (t *VersionedData) GetRefOffset() int32 {
+	if t == nil {
+		return 0
+	}
+	return t.RefOffset
 }

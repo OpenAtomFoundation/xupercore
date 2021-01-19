@@ -21,6 +21,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -90,8 +91,11 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 	}
 
 	var err error
+	storePath := sctx.EnvCfg.GenDataAbsPath(sctx.EnvCfg.ChainDir)
+	storePath = filepath.Join(storePath, sctx.BCName)
+	stateDBPath := filepath.Join(storePath, def.StateStrgDirName)
 	kvParam := &kvdb.KVParameter{
-		DBPath:                filepath.Join(sctx.LedgerCfg.StorePath, "state"),
+		DBPath:                stateDBPath,
 		KVEngineType:          sctx.LedgerCfg.KVEngineType,
 		MemCacheSize:          ledger.MemCacheSize,
 		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
@@ -136,6 +140,8 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 	if loadErr != nil {
 		return nil, loadErr
 	}
+
+	obj.heightNotifier = NewBlockHeightNotifier()
 
 	return obj, nil
 }
@@ -198,6 +204,10 @@ func (t *State) QueryContractMethodACL(contractName string, methodName string) (
 
 func (t *State) QueryAccountContainAK(address string) ([]string, error) {
 	return t.utxo.QueryAccountContainAK(address)
+}
+
+func (t *State) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
+	return t.utxo.GetReservedContractRequests(req, isPreExec)
 }
 
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供
@@ -307,10 +317,29 @@ func (t *State) DoTx(tx *pb.Transaction) error {
 	return t.doTxSync(tx)
 }
 
-// 创建快照
-func (t *State) GetSnapShotWithBlock(blockId []byte) (xmodel.XMReader, error) {
-	reader, err := t.xmodel.CreateSnapshot(blockId)
-	return reader, err
+// 创建获取最新状态数据XMReader
+func (t *State) CreateXMReader() (kledger.XMReader, error) {
+	return t.xmodel, nil
+}
+
+// 根据指定blockid创建快照（Select方法不可用）
+func (t *State) CreateSnapshot(blkId []byte) (kledger.XMReader, error) {
+	return t.xmodel.CreateSnapshot(blkId)
+}
+
+// 获取最新确认高度快照（Select方法不可用）
+func (t *State) GetTipSnapshot() (kledger.XMReader, error) {
+	return t.CreateSnapshot(t.latestBlockid)
+}
+
+// 根据指定blockid创建快照（相比XMReader，只有Get方法，直接返回[]byte）
+func (t *State) CreateXMSnapshotReader(blkId []byte) (kledger.XMSnapshotReader, error) {
+	return t.xmodel.CreateXMSnapshotReader(blkId)
+}
+
+// 获取状态机最新确认高度快照（相比XMReader，只有Get方法，直接返回[]byte）
+func (t *State) GetTipXMSnapshotReader() (kledger.XMSnapshotReader, error) {
+	return t.CreateXMSnapshotReader(t.latestBlockid)
 }
 
 func (t *State) BucketCacheDelete(bucket, version string) {
@@ -1169,6 +1198,10 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		}()
 	}
 	return unconfirmToConfirm, undoDone, nil
+}
+
+func (t *State) Close() {
+	t.ldb.Close()
 }
 
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {

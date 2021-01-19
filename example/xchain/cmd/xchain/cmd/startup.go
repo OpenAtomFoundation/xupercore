@@ -13,7 +13,14 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
 	// import要使用的内核核心组件驱动
+	_ "github.com/xuperchain/xupercore/bcs/consensus/pow"
+	_ "github.com/xuperchain/xupercore/bcs/consensus/single"
+	_ "github.com/xuperchain/xupercore/bcs/consensus/tdpos"
+	_ "github.com/xuperchain/xupercore/bcs/consensus/xpoa"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
+	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
+	_ "github.com/xuperchain/xupercore/lib/crypto/client"
+	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
 
 	"github.com/spf13/cobra"
 )
@@ -82,11 +89,11 @@ func StartupXchain(envCfgPath string) error {
 		for {
 			select {
 			case <-engChan:
+				wg.Done()
 				serv.Exit()
-				wg.Done()
 			case <-servChan:
-				engine.Exit()
 				wg.Done()
+				engine.Exit()
 			case <-sigChan:
 				serv.Exit()
 				engine.Exit()

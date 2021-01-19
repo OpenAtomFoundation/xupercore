@@ -1,6 +1,7 @@
 package xpoa
 
 import (
+	"sync"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -19,6 +20,8 @@ type xpoaSchedule struct {
 	validators []string
 	// address到neturl的映射
 	addrToNet map[string]string
+	// 该锁的作用是保证addrToNet并发安全
+	mutex sync.Mutex
 
 	ledger    cctx.LedgerRely
 	enableBFT bool
@@ -30,9 +33,9 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 	termTime := s.period * int64(length) * s.blockNum
 	// 每个矿工轮值时间
 	posTime := s.period * s.blockNum
-	term = (timestamp/1e6)/termTime + 1
+	term = (timestamp/int64(time.Millisecond))/termTime + 1
 	//10640483 180000
-	resTime := timestamp/1e6 - (term-1)*termTime
+	resTime := timestamp/int64(time.Millisecond) - (term-1)*termTime
 	pos = resTime / posTime
 	resTime = resTime - (resTime/posTime)*posTime
 	blockPos = resTime/s.period + 1
@@ -56,11 +59,11 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 		return ""
 	}
 	// 计算round对应的timestamp大致区间
-	time := time.Now().UnixNano()
+	nTime := time.Now().UnixNano()
 	if round > tipHeight {
-		time += s.period * 1e6
+		nTime += s.period * int64(time.Millisecond)
 	}
-	_, pos, _ := s.minerScheduling(time, len(v))
+	_, pos, _ := s.minerScheduling(nTime, len(v))
 	return v[pos]
 }
 
@@ -68,12 +71,8 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
 	// xpoa.lg.Info("ConfirmBlock Propcess update validates")
 	// ATTENTION: 获取候选人信息时，时刻注意拿取的是check目的round的前三个块，候选人变更是在3个块之后生效，即round-3
-	b, err := s.ledger.QueryBlockByHeight(round - 3)
-	if err != nil {
-		return ""
-	}
-	localValidators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if err != nil {
+	localValidators := s.GetValidators(round)
+	if localValidators == nil {
 		return ""
 	}
 	_, pos, _ := s.minerScheduling(timestamp, len(localValidators))
@@ -92,7 +91,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		// 即合约还未被调用，未有变量更新
 		return s.validators, nil
 	}
-	validators, err := common.LoadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet)
+	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet, &s.mutex)
 	if err != nil {
 		return nil, err
 	}
@@ -105,11 +104,6 @@ func (s *xpoaSchedule) GetValidators(round int64) []string {
 		return s.validators
 	}
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
-	tipBlock := s.ledger.GetTipBlock()
-	// round区间在(tipBlock()-3, tipBlock()]之间时，validators不会发生改变
-	if tipBlock.GetHeight() <= round && round > tipBlock.GetHeight()-3 {
-		return s.validators
-	}
 	b, err := s.ledger.QueryBlockByHeight(round - 3)
 	if err != nil {
 		// err包含当前高度小于3，s.validators此时是initValidators
@@ -134,20 +128,21 @@ func (s *xpoaSchedule) GetValidatorsMsgAddr() []string {
 	return urls
 }
 
-func (s *xpoaSchedule) UpdateValidator() {
-	tipBlock := s.ledger.GetTipBlock()
-	if tipBlock.GetHeight() <= 3 {
-		return
+func (s *xpoaSchedule) UpdateValidator(height int64) bool {
+	if height <= 3 {
+		return false
 	}
-	b, err := s.ledger.QueryBlockByHeight(tipBlock.GetHeight() - 3)
+	b, err := s.ledger.QueryBlockByHeight(height - 3)
 	if err != nil {
-		return
+		return false
 	}
 	validators, err := s.getValidatesByBlockId(b.GetBlockid())
-	if err != nil {
-		return
+	if err != nil || len(validators) == 0 {
+		return false
 	}
 	if !common.AddressEqual(validators, s.validators) {
 		s.validators = validators
+		return true
 	}
+	return false
 }

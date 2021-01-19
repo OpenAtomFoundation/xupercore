@@ -31,7 +31,7 @@ type NetConf struct {
 	// Port the p2p network listened for p2pv1
 	Port int32 `yaml:"port,omitempty"`
 	// Address multiaddr string, /ip4/127.0.0.1/tcp/8080
-	Address string `yaml:"Address,omitempty"`
+	Address string `yaml:"address,omitempty"`
 	// keyPath is the node private key path, xuper will gen a random one if is nil
 	KeyPath string `yaml:"keyPath,omitempty"`
 	// isNat config whether the node use NAT manager

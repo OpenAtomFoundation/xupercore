@@ -4,8 +4,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/syndtr/goleveldb/leveldb/memdb"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -35,7 +35,7 @@ type XMCache struct {
 	// Key: bucket_key; Value: PureData
 	outputsCache *MemXModel
 
-	model contract.XMReader
+	model ledger.XMReader
 
 	// utxoCache       *UtxoCache
 	// crossQueryCache *CrossQueryCache
@@ -43,7 +43,7 @@ type XMCache struct {
 }
 
 // NewXModelCache new an instance of XModel Cache
-func NewXModelCache(model contract.XMReader) (*XMCache, error) {
+func NewXModelCache(model ledger.XMReader) (*XMCache, error) {
 	return &XMCache{
 		model:        model,
 		inputsCache:  NewMemXModel(),
@@ -76,7 +76,7 @@ func NewXModelCache(model contract.XMReader) (*XMCache, error) {
 func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
 	// Level1: get from outputsCache
 	data, err := xc.getFromOuputsCache(bucket, key)
-	if err != nil && err != memdb.ErrNotFound {
+	if err != nil && err != ErrNotFound {
 		return nil, err
 	}
 
@@ -99,7 +99,7 @@ func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
 }
 
 // Level1 读取，从outputsCache中读取
-func (xc *XMCache) getFromOuputsCache(bucket string, key []byte) (*contract.VersionedData, error) {
+func (xc *XMCache) getFromOuputsCache(bucket string, key []byte) (*ledger.VersionedData, error) {
 	data, err := xc.outputsCache.Get(bucket, key)
 	if err != nil {
 		return nil, err
@@ -112,16 +112,16 @@ func (xc *XMCache) getFromOuputsCache(bucket string, key []byte) (*contract.Vers
 }
 
 // Level2 读取，从inputsCache中读取, 读取不到的情况下，如果isPenetrate为true，会更深一层次从model里读取，并且会将内容填充到readSets中
-func (xc *XMCache) getAndSetFromInputsCache(bucket string, key []byte) (*contract.VersionedData, error) {
+func (xc *XMCache) getAndSetFromInputsCache(bucket string, key []byte) (*ledger.VersionedData, error) {
 	data, err := xc.inputsCache.Get(bucket, key)
 	if err == nil {
 		return data, nil
 	}
-	if err != nil && err != memdb.ErrNotFound {
+	if err != nil && err != ErrNotFound {
 		return nil, err
 	}
 
-	if err == memdb.ErrNotFound {
+	if err == ErrNotFound {
 		data, err = xc.model.Get(bucket, key)
 		if err != nil {
 			return nil, err
@@ -134,12 +134,12 @@ func (xc *XMCache) getAndSetFromInputsCache(bucket string, key []byte) (*contrac
 // Put put a pair of <key, value> into XModel Cache
 func (xc *XMCache) Put(bucket string, key []byte, value []byte) error {
 	_, err := xc.getFromOuputsCache(bucket, key)
-	if err != nil && err != memdb.ErrNotFound && err != ErrHasDel {
+	if err != nil && err != ErrNotFound && err != ErrHasDel {
 		return err
 	}
 
-	val := &contract.VersionedData{
-		PureData: &contract.PureData{
+	val := &ledger.VersionedData{
+		PureData: &ledger.PureData{
 			Key:    key,
 			Value:  value,
 			Bucket: bucket,
@@ -183,44 +183,42 @@ func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey
 }
 
 // GetRWSets get read/write sets
-func (xc *XMCache) GetRWSets() ([]*contract.VersionedData, []*contract.PureData, error) {
-	readSets, err := xc.getReadSets()
-	if err != nil {
-		return nil, nil, err
+func (xc *XMCache) RWSet() *contract.RWSet {
+	readSet := xc.getReadSets()
+	writeSet := xc.getWriteSets()
+
+	return &contract.RWSet{
+		RSet: readSet,
+		WSet: writeSet,
 	}
-	writeSets, err := xc.getWriteSets()
-	if err != nil {
-		return nil, nil, err
-	}
-	return readSets, writeSets, nil
 }
 
-func (xc *XMCache) getReadSets() ([]*contract.VersionedData, error) {
-	var readSets []*contract.VersionedData
+func (xc *XMCache) getReadSets() []*ledger.VersionedData {
+	var readSets []*ledger.VersionedData
 	iter, err := xc.inputsCache.NewIterator(nil, nil)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
 		readSets = append(readSets, val)
 	}
-	return readSets, nil
+	return readSets
 }
 
-func (xc *XMCache) getWriteSets() ([]*contract.PureData, error) {
-	var writeSets []*contract.PureData
-	iter, err := xc.inputsCache.NewIterator(nil, nil)
+func (xc *XMCache) getWriteSets() []*ledger.PureData {
+	var writeSets []*ledger.PureData
+	iter, err := xc.outputsCache.NewIterator(nil, nil)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
 		writeSets = append(writeSets, val.PureData)
 	}
-	return writeSets, nil
+	return writeSets
 }
 
 // // Transfer transfer tokens using utxo

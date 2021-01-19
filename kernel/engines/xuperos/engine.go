@@ -23,7 +23,7 @@ type Engine struct {
 	// 日志
 	log logs.Logger
 	// 链实例
-	chains *sync.Map
+	chains sync.Map
 	// p2p网络事件处理
 	netEvent *xnet.NetEvent
 	// 依赖代理组件
@@ -43,7 +43,7 @@ func NewEngine() engines.BCEngine {
 
 // 转换引擎句柄类型
 // 对外提供类型转义方法，以接口形式对外暴露
-func EngineConvert(engine engines.BCEngine) (common.Engine, *common.Error) {
+func EngineConvert(engine engines.BCEngine) (common.Engine, error) {
 	if engine == nil {
 		return nil, common.ErrParameter
 	}
@@ -74,7 +74,6 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文
-	t.chains = new(sync.Map)
 	err = t.loadChains()
 	if err != nil {
 		t.log.Error("load chain failed", "err", err)
@@ -96,7 +95,7 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 }
 
 // 供单测时设置rely agent为mock agent，非并发安全
-func (t *Engine) SetRelyAgent(agent common.EngineRelyAgent) *common.Error {
+func (t *Engine) SetRelyAgent(agent common.EngineRelyAgent) error {
 	if agent == nil {
 		return common.ErrParameter
 	}
@@ -128,9 +127,10 @@ func (t *Engine) Run() {
 		go func() {
 			defer wg.Done()
 
-			t.log.Trace("chain " + k.(string) + "started")
+			t.log.Trace("run chain " + k.(string))
 			// 启动链
 			chainHD.Start()
+			t.log.Trace("chain " + k.(string) + " exit")
 		}()
 
 		return true
@@ -147,7 +147,7 @@ func (t *Engine) Exit() {
 	})
 }
 
-func (t *Engine) Get(name string) (common.Chain, *common.Error) {
+func (t *Engine) Get(name string) (common.Chain, error) {
 	if chain, ok := t.chains.Load(name); ok {
 		return chain.(common.Chain), nil
 	}
@@ -199,6 +199,7 @@ func (t *Engine) loadChains() error {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
 			return fmt.Errorf("load chain failed")
 		}
+		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
 
 		// 记录链实例
 		t.chains.Store(fInfo.Name(), chain)
@@ -236,7 +237,7 @@ func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*common.EngineCtx, error) 
 	engCtx.EngCfg = engCfg
 
 	// 实例化p2p网络
-	engCtx.Net, err = t.relyAgent.CreateNetwork()
+	engCtx.Net, err = t.relyAgent.CreateNetwork(envCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create network failed.err:%v", err)
 	}
@@ -249,15 +250,13 @@ func (t *Engine) exit() {
 	wg := &sync.WaitGroup{}
 	t.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(common.Chain)
+
 		t.log.Trace("stop chain " + k.(string))
 		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			// 关闭链
-			chainHD.Stop()
-			t.log.Trace("chain " + k.(string) + "closed")
-		}()
+		// 关闭链
+		chainHD.Stop()
+		wg.Done()
+		t.log.Trace("chain " + k.(string) + " closed")
 
 		return true
 	})

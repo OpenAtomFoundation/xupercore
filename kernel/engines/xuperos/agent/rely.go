@@ -8,6 +8,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	statctx "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	cdef "github.com/xuperchain/xupercore/kernel/consensus/def"
@@ -32,8 +33,8 @@ func NewEngineRelyAgent(engine common.Engine) *EngineRelyAgentImpl {
 }
 
 // 创建并启动p2p网络
-func (t *EngineRelyAgentImpl) CreateNetwork() (network.Network, error) {
-	ctx, err := nctx.NewNetCtx(t.engine.Context().EnvCfg)
+func (t *EngineRelyAgentImpl) CreateNetwork(envCfg *xconf.EnvConf) (network.Network, error) {
+	ctx, err := nctx.NewNetCtx(envCfg)
 	if err != nil {
 		return nil, fmt.Errorf("create network context failed.err:%v", err)
 	}
@@ -58,7 +59,7 @@ func NewChainRelyAgent(chain common.Chain) *ChainRelyAgentImpl {
 // 创建账本
 func (t *ChainRelyAgentImpl) CreateLedger() (*ledger.Ledger, error) {
 	ctx := t.chain.Context()
-	legCtx, err := ledger.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName, ctx.Crypto)
+	legCtx, err := ledger.NewLedgerCtx(ctx.EngCtx.EnvCfg, ctx.BCName)
 	if err != nil {
 		return nil, fmt.Errorf("new ledger ctx failed.err:%v", err)
 	}

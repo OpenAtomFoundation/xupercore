@@ -197,6 +197,8 @@ func getContractType(desc *pb.WasmCodeDesc) (ContractType, error) {
 		return TypeNative, nil
 	case "evm":
 		return TypeEvm, nil
+	case "xkernel":
+		return TypeKernel, nil
 	default:
 		return "", fmt.Errorf("unknown contract type:%s", desc.ContractType)
 	}

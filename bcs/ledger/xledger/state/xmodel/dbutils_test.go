@@ -3,36 +3,36 @@ package xmodel
 import (
 	"testing"
 
-	xmodel_pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel/pb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 func TestEqual(t *testing.T) {
 	testCases := map[string]struct {
-		pd     []*xmodel_pb.PureData
-		vpd    []*xmodel_pb.PureData
+		pd     []*kledger.PureData
+		vpd    []*kledger.PureData
 		expect bool
 	}{
 		"testEqual": {
 			expect: true,
-			pd: []*xmodel_pb.PureData{
-				&xmodel_pb.PureData{
+			pd: []*kledger.PureData{
+				&kledger.PureData{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&xmodel_pb.PureData{
+				&kledger.PureData{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
 				},
 			},
-			vpd: []*xmodel_pb.PureData{
-				&xmodel_pb.PureData{
+			vpd: []*kledger.PureData{
+				&kledger.PureData{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&xmodel_pb.PureData{
+				&kledger.PureData{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
@@ -41,25 +41,25 @@ func TestEqual(t *testing.T) {
 		},
 		"testNotEqual": {
 			expect: false,
-			pd: []*xmodel_pb.PureData{
-				&xmodel_pb.PureData{
+			pd: []*kledger.PureData{
+				&kledger.PureData{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&xmodel_pb.PureData{
+				&kledger.PureData{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
 				},
 			},
-			vpd: []*xmodel_pb.PureData{
-				&xmodel_pb.PureData{
+			vpd: []*kledger.PureData{
+				&kledger.PureData{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&xmodel_pb.PureData{
+				&kledger.PureData{
 					Bucket: "bucket3",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
@@ -68,25 +68,25 @@ func TestEqual(t *testing.T) {
 		},
 		"testNotEqual2": {
 			expect: false,
-			pd: []*xmodel_pb.PureData{
-				&xmodel_pb.PureData{
+			pd: []*kledger.PureData{
+				&kledger.PureData{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&xmodel_pb.PureData{
+				&kledger.PureData{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
 				},
 			},
-			vpd: []*xmodel_pb.PureData{
-				&xmodel_pb.PureData{
+			vpd: []*kledger.PureData{
+				&kledger.PureData{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&xmodel_pb.PureData{
+				&kledger.PureData{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value3"),
