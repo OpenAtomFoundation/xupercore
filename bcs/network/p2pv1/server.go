@@ -182,7 +182,7 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		}()
 	}
 
-	xlog, _ := logs.NewLogger(msg.Header.Logid, fmt.Sprintf("%s", msg.GetHeader().GetType()))
+	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2pv1")
 	ctx := &xctx.BaseCtx{
 		XLog:  xlog,
 		Timer: timer.NewXTimer(),

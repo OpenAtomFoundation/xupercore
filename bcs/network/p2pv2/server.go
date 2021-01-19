@@ -245,7 +245,7 @@ func (p *P2PServerV2) Start() {
 				return
 			case <-t.C:
 				p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
-				p.kdht.RoutingTable().Print()
+				// p.kdht.RoutingTable().Print()
 			}
 		}
 	}()

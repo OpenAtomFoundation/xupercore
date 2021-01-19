@@ -587,7 +587,7 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 		beginBlock = block
 		blkIds = append(blkIds, block.GetBlockid())
 
-		ctx.GetLog().Trace("download block", "blockId", block.Blockid, "height", block.Height)
+		ctx.GetLog().Trace("download block", "blockId", utils.F(block.Blockid), "height", block.Height)
 	}
 
 	return blkIds, nil

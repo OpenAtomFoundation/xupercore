@@ -4,17 +4,16 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/lib/timer"
 	"io"
 	"sync"
 	"time"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	ggio "github.com/gogo/protobuf/io"
@@ -159,7 +158,7 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 		return nil
 	}
 
-	xlog, _ := logs.NewLogger(msg.Header.Logid, fmt.Sprintf("%s", msg.GetHeader().GetType()))
+	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2pv2")
 	ctx := &xctx.BaseCtx{
 		XLog:  xlog,
 		Timer: timer.NewXTimer(),
