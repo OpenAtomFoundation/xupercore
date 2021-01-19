@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	//chaincmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/chain"
+	chaincmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/chain"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
 
 	"github.com/spf13/cobra"
@@ -16,14 +16,14 @@ func GetChainCmd() *ChainCmd {
 
 	chainCmdIns.Cmd = &cobra.Command{
 		Use:           "chain",
-		Short:         "Chain info query operation.",
+		Short:         "query chain info.",
 		Example:       "xchain-cli chain status",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 
 	// query chain status
-	//chainCmdIns.AddCommand(chaincmd.GetStatusCmd().GetCmd())
+	chainCmdIns.Cmd.AddCommand(chaincmd.GetChainStatusCmd().GetCmd())
 
 	return chainCmdIns
 }
