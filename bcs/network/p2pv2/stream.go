@@ -8,10 +8,12 @@ import (
 	"sync"
 	"time"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	ggio "github.com/gogo/protobuf/io"
@@ -156,10 +158,13 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 		return nil
 	}
 
-	s.log.Trace("HandlerNewMessage", "log_id", msg.GetHeader().GetLogid(),
-		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
-	if err := s.srv.dispatcher.Dispatch(s.ctx, msg, s); err != nil {
-		s.log.Warn("Dispatcher", "log_id", msg.GetHeader().GetLogid(),
+	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2pv2")
+	ctx := &xctx.BaseCtx{
+		XLog:  xlog,
+		Timer: timer.NewXTimer(),
+	}
+	if err := s.srv.dispatcher.Dispatch(ctx, msg, s); err != nil {
+		s.log.Warn("handle new message dispatch error", "log_id", msg.GetHeader().GetLogid(),
 			"type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
 		return nil // not return err
 	}

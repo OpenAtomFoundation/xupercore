@@ -119,20 +119,21 @@ func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 
 func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
 	if s.handler != nil {
+		ctx.GetLog().Trace("hello world")
 		resp, err := s.handler(ctx, msg)
 		if err != nil {
-			s.log.Error("subscriber: call user handler error", "log_id", msg.GetHeader().GetLogid(), "err", err)
+			ctx.GetLog().Error("subscriber: call user handler error", "err", err)
 			return ErrHandlerError
 		}
 
 		if resp == nil {
-			s.log.Error("subscriber: handler response is nil", "log_id", msg.GetHeader().GetLogid())
+			ctx.GetLog().Error("subscriber: handler response is nil", "log_id", msg.GetHeader().GetLogid())
 			return ErrResponseNil
 		}
 
 		resp.Header.Logid = msg.Header.Logid
 		if err := stream.Send(resp); err != nil {
-			s.log.Error("subscriber: send response error", "log_id", msg.GetHeader().GetLogid(), "err", err)
+			ctx.GetLog().Error("subscriber: send response error", "err", err)
 			return ErrStreamSendError
 		}
 
@@ -152,13 +153,14 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 
 		select {
 		case <-timeout.Done():
-			s.log.Error("subscriber: discard message due to channel block.",
-				"log_id", msg.GetHeader().GetLogid(), "err", timeout.Err())
+			ctx.GetLog().Error("subscriber: discard message due to channel block.", "err", timeout.Err())
 			return ErrChannelBlock
 		case s.channel <- msg:
 		default:
 		}
 	}
 
+	ctx.GetLog().Trace("handle new message done", "bc", msg.GetHeader().GetBcname(),
+		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
 	return nil
 }
