@@ -17,6 +17,7 @@ import (
 	_ "github.com/xuperchain/xupercore/bcs/consensus/single"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/xpoa"
+	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"

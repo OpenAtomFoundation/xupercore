@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // XBridge 用于注册用户虚拟机以及向Xchain Core注册可被识别的vm.VirtualMachine
@@ -115,11 +115,11 @@ func (v *XBridge) getCreator(tp ContractType) InstanceCreator {
 }
 
 func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, error) {
-	var desc *pb.WasmCodeDesc
+	var desc *protos.WasmCodeDesc
 	var err error
 
 	if ctxCfg.Module == string(TypeKernel) {
-		desc = &pb.WasmCodeDesc{
+		desc = &protos.WasmCodeDesc{
 			ContractType: ctxCfg.Module,
 		}
 	} else {
