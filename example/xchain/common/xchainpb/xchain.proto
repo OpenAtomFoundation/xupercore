@@ -59,9 +59,7 @@ message SelectUtxoReq {
     string  bcname = 2;
     string address = 3;
     string totalNeed = 5;
-    string publickey = 4;
-    bytes userSign = 7;
-    bool needLock = 8;
+    bool needLock = 6;
 }
 
 message SelectUtxoResp {

@@ -1,12 +1,19 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	Version   = ""
+	BuildTime = ""
+	CommitID  = ""
 )
 
 func main() {
@@ -31,7 +38,7 @@ func NewClientCommand() (*cobra.Command, error) {
 	}
 
 	// cmd version
-	rootCmd.AddCommand(cmd.GetVersionCmd().GetCmd())
+	rootCmd.AddCommand(GetVersionCmd().GetCmd())
 	// contract client
 	rootCmd.AddCommand(cmd.GetContractCmd().GetCmd())
 	// tx client
@@ -42,11 +49,36 @@ func NewClientCommand() (*cobra.Command, error) {
 	rootCmd.AddCommand(cmd.GetChainCmd().GetCmd())
 
 	// 添加全局Flags
-	rootCmd.PersistentFlags().StringVarP(&global.GFlagConf, "conf", "c", "client.yaml", "client config")
-	rootCmd.PersistentFlags().StringVarP(&global.GFlagCrypto, "crypto", "", "default", "crypto type")
-	rootCmd.PersistentFlags().StringVarP(&global.GFlagHost, "host", "H", "127.0.0.1:36101", "node host")
-	rootCmd.PersistentFlags().StringVarP(&global.GFlagKeys, "keys", "", "keys", "account address")
-	rootCmd.PersistentFlags().StringVarP(&global.GFlagBCName, "name", "", "xuper", "chain name")
+	rootFlag := rootCmd.PersistentFlags()
+	rootFlag.StringVarP(&global.GFlagConf, "conf", "c", "./conf/client.yaml", "client config")
+	rootFlag.StringVarP(&global.GFlagCrypto, "crypto", "", "default", "crypto type")
+	rootFlag.StringVarP(&global.GFlagHost, "host", "H", "127.0.0.1:36101", "node host")
+	rootFlag.StringVarP(&global.GFlagKeys, "keys", "", "./data/keys", "account address")
+	rootFlag.StringVarP(&global.GFlagBCName, "name", "", "xuper", "chain name")
 
 	return rootCmd, nil
+}
+
+type versionCmd struct {
+	global.BaseCmd
+}
+
+func GetVersionCmd() *versionCmd {
+	versionCmdIns := new(versionCmd)
+
+	subCmd := &cobra.Command{
+		Use:     "version",
+		Short:   "view process version information.",
+		Example: "xchain version",
+		Run: func(cmd *cobra.Command, args []string) {
+			versionCmdIns.PrintVersion()
+		},
+	}
+	versionCmdIns.SetCmd(subCmd)
+
+	return versionCmdIns
+}
+
+func (t *versionCmd) PrintVersion() {
+	fmt.Printf("%s-%s %s\n", Version, CommitID, BuildTime)
 }

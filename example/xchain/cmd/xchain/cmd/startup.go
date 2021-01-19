@@ -18,6 +18,7 @@ import (
 	_ "github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/xpoa"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
+	_ "github.com/xuperchain/xupercore/bcs/network/p2pv1"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
@@ -37,7 +38,7 @@ func GetStartupCmd() *StartupCmd {
 	// 定义命令行参数变量
 	var envCfgPath string
 
-	startupCmdIns.cmd = &cobra.Command{
+	startupCmdIns.Cmd = &cobra.Command{
 		Use:           "startup",
 		Short:         "Start up the blockchain node service.",
 		Example:       "xchain startup --conf /home/rd/xuperos/conf/env.yaml",
@@ -49,7 +50,7 @@ func GetStartupCmd() *StartupCmd {
 	}
 
 	// 设置命令行参数并绑定变量
-	startupCmdIns.cmd.Flags().StringVarP(&envCfgPath, "conf", "c", "",
+	startupCmdIns.Cmd.Flags().StringVarP(&envCfgPath, "conf", "c", "",
 		"engine environment config file path")
 
 	return startupCmdIns
