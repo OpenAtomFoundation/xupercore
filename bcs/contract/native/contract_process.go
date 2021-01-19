@@ -13,7 +13,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pbrpc"
-	xpb "github.com/xuperchain/xupercore/kernel/contract/pb"
+	"github.com/xuperchain/xupercore/protos"
 
 	"google.golang.org/grpc"
 )
@@ -25,7 +25,7 @@ type contractProcess struct {
 	basedir   string
 	binpath   string
 	chainAddr string
-	desc      *xpb.WasmCodeDesc
+	desc      *protos.WasmCodeDesc
 
 	process       Process
 	monitorStopch chan struct{}
@@ -38,7 +38,7 @@ type contractProcess struct {
 	rpcClient pbrpc.NativeCodeClient
 }
 
-func newContractProcess(cfg *bridge.NativeConfig, name, basedir, chainAddr string, desc *xpb.WasmCodeDesc) (*contractProcess, error) {
+func newContractProcess(cfg *bridge.NativeConfig, name, basedir, chainAddr string, desc *protos.WasmCodeDesc) (*contractProcess, error) {
 	process := &contractProcess{
 		cfg:           cfg,
 		name:          name,
@@ -207,7 +207,7 @@ func (c *contractProcess) Stop() {
 	}
 }
 
-func (c *contractProcess) GetDesc() *xpb.WasmCodeDesc {
+func (c *contractProcess) GetDesc() *protos.WasmCodeDesc {
 	return c.desc
 }
 

@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/crypto/core/hash"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/contract/pb"
+	"github.com/xuperchain/xupercore/protos"
+
+	"github.com/golang/protobuf/proto"
 )
 
 type contractManager struct {
@@ -45,7 +46,7 @@ func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Resp
 	}
 
 	descbuf := args["contract_desc"]
-	var desc pb.WasmCodeDesc
+	var desc protos.WasmCodeDesc
 	err = proto.Unmarshal(descbuf, &desc)
 	if err != nil {
 		return nil, contract.Limits{}, err
@@ -189,7 +190,7 @@ func contractAbiKey(contractName string) []byte {
 	return []byte(contractName + "." + "abi")
 }
 
-func getContractType(desc *pb.WasmCodeDesc) (ContractType, error) {
+func getContractType(desc *protos.WasmCodeDesc) (ContractType, error) {
 	switch desc.ContractType {
 	case "", "wasm":
 		return TypeWasm, nil
