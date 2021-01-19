@@ -284,7 +284,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext, request *protos.XuperMessag
 			p2p.WithErrorType(ErrorType(err)),
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
-		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCKIDS_RES, output, opts...)
+		resp := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_RES, output, opts...)
 		return resp, err
 	}
 
