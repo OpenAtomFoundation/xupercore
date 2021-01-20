@@ -13,7 +13,6 @@ import (
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	ggio "github.com/gogo/protobuf/io"
@@ -158,12 +157,7 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 		return nil
 	}
 
-	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2pv2")
-	ctx := &xctx.BaseCtx{
-		XLog:  xlog,
-		Timer: timer.NewXTimer(),
-	}
-	if err := s.srv.dispatcher.Dispatch(ctx, msg, s); err != nil {
+	if err := s.srv.dispatcher.Dispatch(msg, s); err != nil {
 		s.log.Warn("handle new message dispatch error", "log_id", msg.GetHeader().GetLogid(),
 			"type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
 		return nil // not return err

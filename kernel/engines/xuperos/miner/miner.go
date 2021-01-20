@@ -441,17 +441,16 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	// 4.状态机walk，确保状态机和账本一致
 	ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 	stateTipId := t.ctx.State.GetLatestBlockid()
-
-	ledgerHeight := t.ctx.Ledger.GetMeta().GetTrunkHeight()
-	ctx.GetLog().Debug("miner state walk", "height", ledgerHeight, "ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
-	//if !bytes.Equal(ledgerTipId, stateTipId) {
-	//	err = t.ctx.State.Walk(ledgerTipId, false)
-	//	if err != nil {
-	//		ctx.GetLog().Warn("try sync block walk failed", "error", err,
-	//			"ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
-	//		return fmt.Errorf("try sync block walk failed")
-	//	}
-	//}
+	if !bytes.Equal(ledgerTipId, stateTipId) {
+		ledgerHeight := t.ctx.Ledger.GetMeta().GetTrunkHeight()
+		ctx.GetLog().Debug("miner state walk", "height", ledgerHeight, "ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
+		err = t.ctx.State.Walk(ledgerTipId, false)
+		if err != nil {
+			ctx.GetLog().Warn("try sync block walk failed", "error", err,
+				"ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
+			return fmt.Errorf("try sync block walk failed")
+		}
+	}
 
 	// 5.启动同步区块到目标高度
 	err = t.syncBlock(ctx, targetBlock)
@@ -544,7 +543,6 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 					"stateTipId", utils.F(stateTipId), "err", err)
 				return
 			}
-			ctx.GetLog().Trace("sync block succ", "targetBlockId", utils.F(targetBlock.GetBlockid()))
 		}
 	}()
 

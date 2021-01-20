@@ -15,14 +15,12 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/def"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
@@ -182,12 +180,7 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		}()
 	}
 
-	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2pv1")
-	ctx := &xctx.BaseCtx{
-		XLog:  xlog,
-		Timer: timer.NewXTimer(),
-	}
-	if err = p.dispatcher.Dispatch(ctx, msg, stream); err != nil {
+	if err = p.dispatcher.Dispatch(msg, stream); err != nil {
 		p.log.Warn("dispatch error", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "error", err)
 		return err
 	}

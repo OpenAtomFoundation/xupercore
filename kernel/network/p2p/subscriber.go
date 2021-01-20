@@ -9,6 +9,7 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
@@ -110,7 +111,7 @@ func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 
 	if s.bcName != "" && s.bcName != msg.GetHeader().GetBcname() {
 		s.log.Trace("subscriber: subscriber bcName not match",
-			"log_id", msg.GetHeader().GetLogid(), "bcName", s.bcName, "req.from", msg.GetHeader().GetBcname(), "type", msg.GetHeader().GetType())
+			"log_id", msg.GetHeader().GetLogid(), "bc", s.bcName, "req.from", msg.GetHeader().GetBcname(), "type", msg.GetHeader().GetType())
 		return false
 	}
 
@@ -118,9 +119,15 @@ func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 }
 
 func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
+	ctx = &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+	defer func() {
+		ctx.GetLog().Debug("HandleMessage", "bc", msg.GetHeader().GetBcname(),
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "timer", ctx.GetTimer().Print())
+	}()
+	
 	if s.handler != nil {
 		resp, err := s.handler(ctx, msg)
-		ctx.GetTimer().Mark("handler")
+		ctx.GetTimer().Mark("handle")
 		if err != nil {
 			ctx.GetLog().Error("subscriber: call user handler error", "err", err)
 			return ErrHandlerError
@@ -132,11 +139,12 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 		}
 
 		resp.Header.Logid = msg.Header.Logid
-		if err := stream.Send(resp); err != nil {
+		err = stream.Send(resp)
+		ctx.GetTimer().Mark("send")
+		if err != nil {
 			ctx.GetLog().Error("subscriber: send response error", "err", err)
 			return ErrStreamSendError
 		}
-		ctx.GetTimer().Mark("send")
 
 		if s.ctx.EnvCfg.MetricSwitch {
 			labels := prom.Labels{
@@ -154,14 +162,13 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 
 		select {
 		case <-timeout.Done():
-			ctx.GetLog().Error("subscriber: discard message due to channel block.", "err", timeout.Err())
+			ctx.GetLog().Error("subscriber: discard message because channel block", "err", timeout.Err())
 			return ErrChannelBlock
 		case s.channel <- msg:
+			ctx.GetTimer().Mark("channel")
 		default:
 		}
 	}
 
-	ctx.GetLog().Trace("handle new message done", "bc", msg.GetHeader().GetBcname(),
-		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "timer", ctx.GetTimer().Print())
 	return nil
 }

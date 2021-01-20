@@ -278,14 +278,13 @@ func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 		return common.ErrParameter
 	}
 
-	ctx.GetLog().Debug("chain proc block")
 	err := t.miner.ProcBlock(ctx, block)
 	if err != nil {
 		ctx.GetLog().Warn("miner process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
 		return common.ErrProcBlockFailed.More("err:%v", err)
 	}
 
-	ctx.GetLog().Info("miner process block succ", "blockid", utils.F(block.GetBlockid()))
+	ctx.GetLog().Info("miner process block succ", "height", block.GetHeight(), "blockid", utils.F(block.GetBlockid()))
 	return nil
 }
 
