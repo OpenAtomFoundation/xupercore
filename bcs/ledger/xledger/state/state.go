@@ -330,8 +330,8 @@ func (t *State) DoTx(tx *pb.Transaction) error {
 }
 
 // 创建获取最新状态数据XMReader
-func (t *State) CreateXMReader() (kledger.XMReader, error) {
-	return t.xmodel, nil
+func (t *State) CreateXMReader() kledger.XMReader {
+	return t.xmodel
 }
 
 // 根据指定blockid创建快照（Select方法不可用）
@@ -1229,7 +1229,7 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 		},
 	}
 
-	xmReader, _ := t.CreateXMReader()
+	xmReader := t.CreateXMReader()
 	sandBoxCfg := &contract.SandboxConfig{
 		XMReader: xmReader,
 	}

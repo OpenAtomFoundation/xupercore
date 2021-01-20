@@ -3,8 +3,8 @@ package main
 import (
 	"strconv"
 
-	"github.com/xuperchain/xupercore/contractsdk/go/code"
-	"github.com/xuperchain/xupercore/contractsdk/go/driver"
+	"github.com/xuperchain/contract-sdk-go/code"
+	"github.com/xuperchain/contract-sdk-go/driver"
 )
 
 type counter struct{}
@@ -18,7 +18,7 @@ func (c *counter) Initialize(ctx code.Context) code.Response {
 	if err != nil {
 		return code.Error(err)
 	}
-	return code.OK(nil)
+	return code.OK([]byte("ok"))
 }
 
 func (c *counter) Increase(ctx code.Context) code.Response {

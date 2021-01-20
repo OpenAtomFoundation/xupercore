@@ -17,10 +17,6 @@ func NewChainCoreAgent(chainCtx *common.ChainCtx) *ChainCoreAgent {
 	}
 }
 
-func (t *ChainCoreAgent) BCName() string {
-	return t.chainCtx.BCName
-}
-
 // 查询合约acl
 func (t *ChainCoreAgent) GetAccountAddresses(accountName string) ([]string, error) {
 	return t.chainCtx.Acl.GetAccountAddresses(accountName)

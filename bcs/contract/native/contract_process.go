@@ -47,6 +47,7 @@ func newContractProcess(cfg *bridge.NativeConfig, name, basedir, chainAddr strin
 		chainAddr:     chainAddr,
 		desc:          desc,
 		monitorStopch: make(chan struct{}),
+		logger:        log15.New(),
 		//logger:        log.DefaultLogger.New("contract", name),
 	}
 	return process, nil
