@@ -18,6 +18,7 @@ const (
 
 var (
 	proposerNotEnoughErr = errors.New("Term publish proposer num less than config.")
+	heightTooLow         = errors.New("The target height is lower than 4.")
 )
 
 // tdposSchedule 实现了ProposerElectionInterface接口，接口定义了proposers操作
@@ -37,7 +38,7 @@ type tdposSchedule struct {
 	// 起始时间
 	initTimestamp int64
 	// 是否开启chained-bft
-	enableBFT bool
+	enableChainedBFT bool
 
 	// 当前validators的address
 	proposers []string
@@ -50,6 +51,46 @@ type tdposSchedule struct {
 
 	log    logs.Logger
 	ledger cctx.LedgerRely
+}
+
+// NewSchedule 新建schedule实例
+func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) *tdposSchedule {
+	schedule := &tdposSchedule{
+		period:            xconfig.Period,
+		blockNum:          xconfig.BlockNum,
+		proposerNum:       xconfig.ProposerNum,
+		alternateInterval: xconfig.AlternateInterval,
+		termInterval:      xconfig.TermInterval,
+		initTimestamp:     xconfig.InitTimestamp,
+		proposers:         (xconfig.InitProposer)["1"],
+		netUrlMap:         make(map[string]string),
+		log:               log,
+		ledger:            ledger,
+	}
+	index := 0
+	netUrls := (xconfig.InitProposerNeturl)["1"]
+	for index < len(schedule.proposers) {
+		key := schedule.proposers[index]
+		value := netUrls[index]
+		schedule.netUrlMap[key] = value
+		index++
+	}
+
+	// 重启时需要使用最新的validator数据，而不是initValidators数据
+	tipHeight := schedule.ledger.GetTipBlock().GetHeight()
+	refresh, err := schedule.calculateProposers(tipHeight)
+	if err != nil && err != heightTooLow {
+		schedule.log.Error("Tdpos::NewSchedule error", "err", err)
+		return nil
+	}
+
+	if !common.AddressEqual(schedule.proposers, refresh) && len(refresh) != 0 {
+		schedule.proposers = refresh
+	}
+	if xconfig.EnableBFT != nil {
+		schedule.enableChainedBFT = true
+	}
+	return schedule
 }
 
 // miner 调度算法, 依据时间进行矿工节点调度
@@ -98,6 +139,9 @@ func (s *tdposSchedule) GetLeader(round int64) string {
 
 // getSnapshotKey 获取当前tip高度的前三个区块高度的对应key的快照
 func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) ([]byte, error) {
+	if height <= 3 {
+		return nil, heightTooLow
+	}
 	// 获取指定tipId的前三个区块
 	block, err := s.ledger.QueryBlockByHeight(height - 3)
 	if err != nil {
@@ -156,9 +200,13 @@ func (s *tdposSchedule) GetIntAddress(address string) string {
 
 // calculateProposers 根据vote选票信息计算最新的topK proposer, 调用方需检查height > 3
 func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
+	if height <= 3 {
+		return nil, heightTooLow
+	}
 	// 获取候选人信息
 	res, err := s.getSnapshotKey(height, contractBucket, []byte(nominateKey))
 	if err != nil {
+		s.log.Error("tdpos::calculateProposers::getSnapshotKey err.", "err", err)
 		return nil, err
 	}
 	nominateValue := NewNominateValue()
@@ -241,7 +289,7 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 
 // notifyTermChanged 改变底层smr的候选人
 func (s *tdposSchedule) notifyTermChanged(height int64) error {
-	if !s.enableBFT {
+	if !s.enableChainedBFT {
 		// BFT not enabled, continue
 		return nil
 	}

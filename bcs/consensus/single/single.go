@@ -23,11 +23,11 @@ func init() {
 	consensus.Register("single", NewSingleConsensus)
 }
 
-type SingleConfig struct {
-	Miner string `json:"miner"`
-	// 单位为毫秒
-	Period  int64 `json:"period"`
-	Version int64 `json:"version"`
+// SingleConsensus single为单点出块的共识逻辑
+type SingleConsensus struct {
+	ctx    cctx.ConsensusCtx
+	status *SingleStatus
+	config *SingleConfig
 }
 
 // NewSingleConsensus 初始化实例
@@ -68,61 +68,6 @@ func NewSingleConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 		status: status,
 	}
 	return single
-}
-
-type MinerInfo struct {
-	Miner string `json:"miner"`
-}
-
-// SingleConsensus single为单点出块的共识逻辑
-type SingleConsensus struct {
-	ctx    cctx.ConsensusCtx
-	status *SingleStatus
-	config *SingleConfig
-}
-
-type SingleStatus struct {
-	startHeight int64
-	mutex       sync.RWMutex
-	newHeight   int64
-	index       int
-	config      *SingleConfig
-}
-
-// GetVersion 返回pow所在共识version
-func (s *SingleStatus) GetVersion() int64 {
-	return s.config.Version
-}
-
-// GetConsensusBeginInfo 返回该实例初始高度
-func (s *SingleStatus) GetConsensusBeginInfo() int64 {
-	return s.startHeight
-}
-
-// GetStepConsensusIndex 获取共识item所在consensus slice中的index
-func (s *SingleStatus) GetStepConsensusIndex() int {
-	return s.index
-}
-
-// GetConsensusName 获取共识类型
-func (s *SingleStatus) GetConsensusName() string {
-	return "single"
-}
-
-// GetCurrentTerm 获取当前状态机term
-func (s *SingleStatus) GetCurrentTerm() int64 {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.newHeight
-}
-
-// GetCurrentValidatorsInfo 获取当前矿工信息
-func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
-	miner := MinerInfo{
-		Miner: s.config.Miner,
-	}
-	m, _ := json.Marshal(miner)
-	return m
 }
 
 // CompeteMaster 返回是否为矿工以及是否需要进行SyncBlock
@@ -219,4 +164,59 @@ func (s *SingleConsensus) Start() error {
 // Single共识没有用到区块存储信息, 故返回空
 func (s *SingleConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
 	return nil, nil
+}
+
+type SingleConfig struct {
+	Miner string `json:"miner"`
+	// 单位为毫秒
+	Period  int64 `json:"period"`
+	Version int64 `json:"version"`
+}
+
+type SingleStatus struct {
+	startHeight int64
+	mutex       sync.RWMutex
+	newHeight   int64
+	index       int
+	config      *SingleConfig
+}
+
+// GetVersion 返回pow所在共识version
+func (s *SingleStatus) GetVersion() int64 {
+	return s.config.Version
+}
+
+// GetConsensusBeginInfo 返回该实例初始高度
+func (s *SingleStatus) GetConsensusBeginInfo() int64 {
+	return s.startHeight
+}
+
+// GetStepConsensusIndex 获取共识item所在consensus slice中的index
+func (s *SingleStatus) GetStepConsensusIndex() int {
+	return s.index
+}
+
+// GetConsensusName 获取共识类型
+func (s *SingleStatus) GetConsensusName() string {
+	return "single"
+}
+
+// GetCurrentTerm 获取当前状态机term
+func (s *SingleStatus) GetCurrentTerm() int64 {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.newHeight
+}
+
+// GetCurrentValidatorsInfo 获取当前矿工信息
+func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
+	miner := MinerInfo{
+		Miner: s.config.Miner,
+	}
+	m, _ := json.Marshal(miner)
+	return m
+}
+
+type MinerInfo struct {
+	Miner string `json:"miner"`
 }

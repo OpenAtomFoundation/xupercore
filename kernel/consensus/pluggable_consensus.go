@@ -51,6 +51,9 @@ type PluggableConsensus struct {
 
 // NewPluggableConsensus 初次创建PluggableConsensus实例，初始化cons列表
 func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
+	if cCtx.BcName == "" {
+		cCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::bcName is empty.")
+	}
 	pc := &PluggableConsensus{
 		ctx: cCtx,
 		stepConsensus: &stepConsensus{
@@ -92,6 +95,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 		pc.stepConsensus.put(genesisConsensus)
 		// 启动实例
 		genesisConsensus.Start()
+		cCtx.XLog.Debug("Pluggable Consensus::NewPluggableConsensus::create a instance for the first time.")
 		return pc, nil
 	}
 	// 原合约存储存在，即该链重启，重新恢复pluggable consensus
@@ -114,6 +118,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 		if i == len(c)-1 {
 			oldConsensus.Start()
 		}
+		cCtx.XLog.Debug("Pluggable Consensus::NewPluggableConsensus::create a instance with history reader.", "StepConsensus", pc.stepConsensus)
 	}
 	return pc, nil
 }
@@ -130,6 +135,11 @@ func (pc *PluggableConsensus) makeConsensusItem(cCtx cctx.ConsensusCtx, cCfg def
 		cCtx.XLog.Error("Pluggable Consensus::NewPluginConsensus error", "error", err)
 		return nil, err
 	}
+	if specificCon == nil {
+		cCtx.XLog.Error("Pluggable Consensus::NewPluginConsensus::empty error", "error", BuildConsensusError)
+		return nil, BuildConsensusError
+	}
+	cCtx.XLog.Debug("Pluggable Consensus::makeConsensusItem::create a consensus item.", "type", cCfg.ConsensusName)
 	return specificCon, nil
 }
 
@@ -190,6 +200,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
 		return nil, BuildConsensusError
 	}
+	pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::make a new consensus item successfully during updating process.")
 
 	// 更新合约存储, 注意, 此次更新需要检查是否是初次升级情况，此时需要把genesisConf也写进map中
 	pluggableConfig, err := contractCtx.Get(contractBucket, []byte(consensusKey))
@@ -237,6 +248,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 	}
 	// 此时再将当前待升级的共识实例start起来
 	consensusItem.Start()
+	pc.ctx.XLog.Debug("Pluggable Consensus::updateConsensus::key has been modified.", "ConsensusMap", c)
 	return nil, nil
 }
 
@@ -266,6 +278,7 @@ func (pc *PluggableConsensus) CompeteMaster(height int64) (bool, bool, error) {
 func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::CheckMinerMatch::tail consensus item is empty", "err", EmptyConsensusListErr)
 		return false, EmptyConsensusListErr
 	}
 	return con.CheckMinerMatch(ctx, block)
@@ -275,6 +288,7 @@ func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.
 func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::ProcessBeforeMiner::tail consensus item is empty", "err", EmptyConsensusListErr)
 		return false, nil, EmptyConsensusListErr
 	}
 	return con.ProcessBeforeMiner(timestamp)
@@ -284,6 +298,7 @@ func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte,
 func (pc *PluggableConsensus) CalculateBlock(block cctx.BlockInterface) error {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::CalculateBlock::tail consensus item is empty", "err", EmptyConsensusListErr)
 		return EmptyConsensusListErr
 	}
 	return con.CalculateBlock(block)
@@ -293,6 +308,7 @@ func (pc *PluggableConsensus) CalculateBlock(block cctx.BlockInterface) error {
 func (pc *PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::ProcessConfirmBlock::tail consensus item is empty", "err", EmptyConsensusListErr)
 		return EmptyConsensusListErr
 	}
 	return con.ProcessConfirmBlock(block)
@@ -302,6 +318,7 @@ func (pc *PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) err
 func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::GetConsensusStatus::tail consensus item is empty", "err", EmptyConsensusListErr)
 		return nil, EmptyConsensusListErr
 	}
 	return con.GetConsensusStatus()
