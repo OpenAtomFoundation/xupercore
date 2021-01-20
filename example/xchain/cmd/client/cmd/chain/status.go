@@ -1,4 +1,4 @@
-package tx
+package chain
 
 import (
 	"encoding/json"

@@ -236,7 +236,7 @@ func (p *P2PServerV2) Start() {
 		panic(ErrStoreAccount)
 	}
 
-	t := time.NewTicker(time.Second * 30)
+	t := time.NewTicker(time.Second * 180)
 	go func() {
 		defer t.Stop()
 		for {

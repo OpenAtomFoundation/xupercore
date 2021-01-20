@@ -24,6 +24,8 @@ func GetChainCmd() *ChainCmd {
 
 	// query chain status
 	chainCmdIns.Cmd.AddCommand(chaincmd.GetChainStatusCmd().GetCmd())
+	// create chain
+	chainCmdIns.Cmd.AddCommand(chaincmd.GetCreateChainCmd().GetCmd())
 
 	return chainCmdIns
 }

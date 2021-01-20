@@ -126,7 +126,7 @@ func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 	}
 
 	// 处理任务
-	log, _ := logs.NewLogger(request.Header.Logid, "net_event")
+	log, _ := logs.NewLogger(request.Header.Logid, common.BCEngineName)
 	ctx := &xctx.BaseCtx{
 		XLog:  log,
 		Timer: timer.NewXTimer(),
