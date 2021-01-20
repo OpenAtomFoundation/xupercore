@@ -7,10 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
-	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
-	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 const MAXMAPSIZE = 1000
@@ -38,41 +35,6 @@ type tdposConfig struct {
 	// json支持两种格式的解析形式
 	NeedNetURL bool            `json:"need_neturl"`
 	EnableBFT  map[string]bool `json:"bft_config,omitempty"`
-}
-
-// NewSchedule 新建schedule实例
-func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) *tdposSchedule {
-	schedule := &tdposSchedule{
-		period:            xconfig.Period,
-		blockNum:          xconfig.BlockNum,
-		proposerNum:       xconfig.ProposerNum,
-		alternateInterval: xconfig.AlternateInterval,
-		termInterval:      xconfig.TermInterval,
-		initTimestamp:     xconfig.InitTimestamp,
-		proposers:         (xconfig.InitProposer)["1"],
-		netUrlMap:         make(map[string]string),
-		log:               log,
-		ledger:            ledger,
-	}
-	index := 0
-	netUrls := (xconfig.InitProposerNeturl)["1"]
-	for index < len(schedule.proposers) {
-		schedule.netUrlMap[schedule.proposers[index]] = netUrls[index]
-	}
-	// 重启时需要使用最新的validator数据，而不是initValidators数据
-	tipHeight := schedule.ledger.GetTipBlock().GetHeight()
-	refresh, err := schedule.calculateProposers(tipHeight)
-	if err != nil {
-		schedule.log.Error("Tdpos::NewSchedule", "err", err)
-		return nil
-	}
-	if !common.AddressEqual(schedule.proposers, refresh) {
-		schedule.proposers = refresh
-	}
-	if xconfig.EnableBFT != nil {
-		schedule.enableBFT = true
-	}
-	return schedule
 }
 
 // 目前未定义pb结构
