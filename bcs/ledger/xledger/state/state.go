@@ -21,6 +21,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -43,13 +44,11 @@ var (
 	ErrInvalidSignature     = errors.New("the signature is invalid or not match the address")
 
 	ErrGasNotEnough   = errors.New("Gas not enough")
-	ErrInvalidAccount = errors.New("Invalid account")
 	ErrVersionInvalid = errors.New("Invalid tx version")
 	ErrInvalidTxExt   = errors.New("Invalid tx ext")
 	ErrTxTooLarge     = errors.New("Tx size is too large")
 
-	ErrParseContractUtxos = errors.New("Parse contract utxos error")
-	ErrContractTxAmout    = errors.New("Contract transfer amount error")
+	ErrContractTxAmout = errors.New("Contract transfer amount error")
 )
 
 const (
@@ -185,9 +184,26 @@ func (t *State) GetAccountContracts(account string) ([]string, error) {
 }
 
 // 查询合约状态
-// TODO:需要实现
 func (t *State) GetContractStatus(contractName string) (*protos.ContractStatus, error) {
-	return nil, fmt.Errorf("not impl")
+	res := &protos.ContractStatus{}
+	res.ContractName = contractName
+	verdata, err := t.xmodel.Get("contract", bridge.ContractCodeDescKey(contractName))
+	if err != nil {
+		t.log.Warn("GetContractStatus get version data error", "error", err.Error())
+		return nil, err
+	}
+	txid := verdata.GetRefTxid()
+	res.Txid = fmt.Sprintf("%x", txid)
+	tx, _, err := t.xmodel.QueryTx(txid)
+	if err != nil {
+		t.log.Warn("GetContractStatus query tx error", "error", err.Error())
+		return nil, err
+	}
+	res.Desc = tx.GetDesc()
+	res.Timestamp = tx.GetReceivedTimestamp()
+	// query if contract is bannded
+	res.IsBanned, err = t.queryContractBannedStatus(contractName)
+	return res, nil
 }
 
 func (t *State) QueryAccountACL(accountName string) (*protos.Acl, error) {
@@ -507,9 +523,10 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 		return nil, nil, writeErr
 	}
 
-	// 回滚完成从未确认交易表删除
-	for txid := range undoDone {
-		t.tx.UnconfirmTxInMem.Delete(txid)
+	// 由于这里操作不是原子操作，需要保持按回滚顺序delete
+	for _, tx := range undoList {
+		t.tx.UnconfirmTxInMem.Delete(tx.Txid)
+		t.log.Trace("delete from unconfirm tx memory", "txid", utils.F(tx.Txid))
 	}
 	return undoDone, undoList, nil
 }
@@ -837,7 +854,6 @@ func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
 
 		// 将batch赋值到合约机的上下文
 		batch := t.ldb.NewBatch()
-
 		// 倒序回滚交易
 		for i := len(undoBlk.Transactions) - 1; i >= 0; i-- {
 			tx = undoBlk.Transactions[i]
@@ -877,10 +893,10 @@ func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
 		}
 
 		// 每回滚完一个块，内存级别更新UtxoMeta信息
-		t.utxo.MutexMeta.Lock()
-		newMeta := proto.Clone(t.utxo.MetaTmp).(*pb.UtxoMeta)
-		t.utxo.Meta = newMeta
-		t.utxo.MutexMeta.Unlock()
+		t.meta.MutexMeta.Lock()
+		newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
+		t.meta.Meta = newMeta
+		t.meta.MutexMeta.Unlock()
 
 		t.log.Info("finish undo this block", "blockid", showBlkId)
 	}
@@ -964,6 +980,7 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 			if err != nil {
 				return fmt.Errorf("pay fee fail.txid:%s,err:%v", showTxId, err)
 			}
+			idx++
 		}
 
 		t.log.Debug("Begin to Finalize", "blockid", showBlkId)
@@ -984,7 +1001,7 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 
 		// 完成一个区块后，内存级别更新UtxoMeta信息
 		t.meta.MutexMeta.Lock()
-		newMeta := proto.Clone(t.utxo.MetaTmp).(*pb.UtxoMeta)
+		newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 		t.meta.Meta = newMeta
 		t.meta.MutexMeta.Unlock()
 
@@ -1198,6 +1215,45 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 
 func (t *State) Close() {
 	t.ldb.Close()
+}
+
+func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
+	request := &protos.InvokeRequest{
+		ModuleName:   "wasm",
+		ContractName: "unified_check",
+		MethodName:   "banned_check",
+		Args: map[string][]byte{
+			"contract": []byte(contractName),
+		},
+	}
+
+	xmReader, _ := t.CreateXMReader()
+	sandBoxCfg := &contract.SandboxConfig{
+		XMReader: xmReader,
+	}
+	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxCfg)
+	if err != nil {
+		return false, err
+	}
+
+	contextConfig := &contract.ContextConfig{
+		State:          sandBox,
+		ResourceLimits: contract.MaxLimits,
+		ContractName:   request.GetContractName(),
+	}
+	ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
+	if err != nil {
+		t.log.Warn("queryContractBannedStatus new context error", "error", err)
+		return false, err
+	}
+	_, err = ctx.Invoke(request.GetMethodName(), request.GetArgs())
+	if err != nil && err.Error() == "contract has been banned" {
+		ctx.Release()
+		t.log.Warn("queryContractBannedStatus error", "error", err)
+		return true, err
+	}
+	ctx.Release()
+	return false, nil
 }
 
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
