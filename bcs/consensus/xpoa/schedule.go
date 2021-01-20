@@ -34,7 +34,6 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 	// 每个矿工轮值时间
 	posTime := s.period * s.blockNum
 	term = (timestamp/int64(time.Millisecond))/termTime + 1
-	//10640483 180000
 	resTime := timestamp/int64(time.Millisecond) - (term-1)*termTime
 	pos = resTime / posTime
 	resTime = resTime - (resTime/posTime)*posTime

@@ -7,8 +7,73 @@ import (
 	"strconv"
 	"time"
 
+	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
+	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/lib/logs"
 )
+
+const MAXMAPSIZE = 1000
+
+// tdpos 共识机制的配置
+type tdposConfig struct {
+	Version int64 `json:"version,omitempty"`
+	// 每轮选出的候选人个数
+	ProposerNum int64 `json:"proposer_num"`
+	// 出块间隔
+	Period int64 `json:"period"`
+	// 更换候选人时间间隔
+	AlternateInterval int64 `json:"alternate_interval"`
+	// 更换轮时间间隔
+	TermInterval int64 `json:"term_interval"`
+	// 每轮每个候选人最多出多少块
+	BlockNum int64 `json:"block_num"`
+	// 投票单价
+	VoteUnitPrice *big.Int `json:"vote_unit_price"`
+	// 初始时间
+	InitTimestamp int64 `json:"timestamp"`
+	// 系统指定的前两轮的候选人名单
+	InitProposer       map[string][]string `json:"init_proposer"`
+	InitProposerNeturl map[string][]string `json:"init_proposer_neturl"`
+	// json支持两种格式的解析形式
+	NeedNetURL bool            `json:"need_neturl"`
+	EnableBFT  map[string]bool `json:"bft_config,omitempty"`
+}
+
+// NewSchedule 新建schedule实例
+func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) *tdposSchedule {
+	schedule := &tdposSchedule{
+		period:            xconfig.Period,
+		blockNum:          xconfig.BlockNum,
+		proposerNum:       xconfig.ProposerNum,
+		alternateInterval: xconfig.AlternateInterval,
+		termInterval:      xconfig.TermInterval,
+		initTimestamp:     xconfig.InitTimestamp,
+		proposers:         (xconfig.InitProposer)["1"],
+		netUrlMap:         make(map[string]string),
+		log:               log,
+		ledger:            ledger,
+	}
+	index := 0
+	netUrls := (xconfig.InitProposerNeturl)["1"]
+	for index < len(schedule.proposers) {
+		schedule.netUrlMap[schedule.proposers[index]] = netUrls[index]
+	}
+	// 重启时需要使用最新的validator数据，而不是initValidators数据
+	tipHeight := schedule.ledger.GetTipBlock().GetHeight()
+	refresh, err := schedule.calculateProposers(tipHeight)
+	if err != nil {
+		schedule.log.Error("Tdpos::NewSchedule", "err", err)
+		return nil
+	}
+	if !common.AddressEqual(schedule.proposers, refresh) {
+		schedule.proposers = refresh
+	}
+	if xconfig.EnableBFT != nil {
+		schedule.enableBFT = true
+	}
+	return schedule
+}
 
 // 目前未定义pb结构
 // TdposStorage tdpos占用block中consensusStorage json串的格式
@@ -127,15 +192,12 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 	return tdposCfg, nil
 }
 
-func cleanProduceMap(isProduce map[int64]bool, period int64, enableBFT bool) {
-	if !enableBFT {
-		return
-	}
+func cleanProduceMap(isProduce map[int64]bool, period int64) {
 	// 删除已经落盘的所有key
 	t := time.Now().UnixNano()
 	key := t / period
 	for k, _ := range isProduce {
-		if k < key-3 {
+		if k < key-MAXMAPSIZE {
 			delete(isProduce, k)
 		}
 	}
