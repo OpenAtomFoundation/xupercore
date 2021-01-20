@@ -1,6 +1,9 @@
 package manager
 
 import (
+	"errors"
+	"path/filepath"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
@@ -13,18 +16,32 @@ type managerImpl struct {
 }
 
 func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
+	if cfg.Basedir == "" || !filepath.IsAbs(cfg.Basedir) {
+		return nil, errors.New("base dir of contract manager must be absolute")
+	}
+	if cfg.BCName == "" {
+		return nil, errors.New("empty chain name when init contract manager")
+	}
+	if cfg.Core == nil {
+		return nil, errors.New("nil chain core when init contract manager")
+	}
+	if cfg.XMReader == nil {
+		return nil, errors.New("nil xmodel reader when init contract manager")
+	}
+
 	m := &managerImpl{
 		core: cfg.Core,
 	}
 	xbridge, err := bridge.New(&bridge.XBridgeConfig{
+		Basedir: cfg.Basedir,
 		VMConfigs: map[bridge.ContractType]bridge.VMConfig{
 			// bridge.TypeWasm: &bridge.WasmConfig{
 			// 	Driver: "ixvm",
 			// },
-			// bridge.TypeNative: &bridge.NativeConfig{
-			// 	Driver: "native",
-			// 	Enable: true,
-			// },
+			bridge.TypeNative: &bridge.NativeConfig{
+				Driver: "native",
+				Enable: true,
+			},
 			// bridge.TypeEvm: &bridge.EVMConfig{
 			// 	Enable: false,
 			// },
@@ -34,6 +51,8 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 				Registry: &m.kregistry,
 			},
 		},
+		XModel: cfg.XMReader,
+		Core:   cfg.Core,
 	})
 	if err != nil {
 		return nil, err

@@ -9,6 +9,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
@@ -51,7 +52,7 @@ type EngineRelyAgent interface {
 type ChainRelyAgent interface {
 	CreateLedger() (*ledger.Ledger, error)
 	CreateState(*ledger.Ledger, cryptoBase.CryptoClient) (*state.State, error)
-	CreateContract() (contract.Manager, error)
+	CreateContract(kledger.XMReader) (contract.Manager, error)
 	CreateConsensus() (consensus.ConsensusInterface, error)
 	CreateCrypto(cryptoType string) (cryptoBase.CryptoClient, error)
 	CreateAcl() (aclBase.AclManager, error)

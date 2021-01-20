@@ -106,6 +106,6 @@ func (t *LedgerAgent) GetTipSnapshot() (kledger.XMReader, error) {
 }
 
 // 获取最新状态数据
-func (t *LedgerAgent) CreateXMReader() (kledger.XMReader, error) {
+func (t *LedgerAgent) CreateXMReader() kledger.XMReader {
 	return t.chainCtx.State.CreateXMReader()
 }

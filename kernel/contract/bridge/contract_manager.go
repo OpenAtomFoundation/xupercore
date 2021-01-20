@@ -84,10 +84,19 @@ func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Resp
 	}
 	instance.Release()
 
-	initConfig := contract.ContextConfig{}
+	initConfig := contract.ContextConfig{
+		ResourceLimits:        kctx.ResourceLimit(),
+		State:                 kctx,
+		Initiator:             kctx.Initiator(),
+		AuthRequire:           kctx.AuthRequire(),
+		ContractName:          contractName,
+		CanInitialize:         true,
+		ContractCodeFromCache: true,
+	}
 	initConfig.ContractName = contractName
 	initConfig.CanInitialize = true
 	initConfig.ContractCodeFromCache = true
+	initConfig.State = kctx
 	out, resourceUsed, err := c.initContract(contractType, &initConfig, initArgs)
 	if err != nil {
 		if _, ok := err.(*ContractError); !ok {

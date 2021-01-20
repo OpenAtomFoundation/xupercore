@@ -2,6 +2,8 @@ package agent
 
 import (
 	"fmt"
+	"path/filepath"
+
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 
@@ -14,6 +16,7 @@ import (
 	cdef "github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
@@ -119,10 +122,17 @@ func (t *ChainRelyAgentImpl) CreateAcl() (aclBase.AclManager, error) {
 }
 
 // 创建合约实例
-func (t *ChainRelyAgentImpl) CreateContract() (contract.Manager, error) {
+func (t *ChainRelyAgentImpl) CreateContract(xmreader kledger.XMReader) (contract.Manager, error) {
 	ctx := t.chain.Context()
+	envcfg := ctx.EngCtx.EnvCfg
+	basedir := filepath.Join(envcfg.GenDirAbsPath(envcfg.ChainDir), ctx.BCName)
+
 	mgCfg := &contract.ManagerConfig{
-		Core: NewChainCoreAgent(ctx),
+		BCName:   ctx.BCName,
+		Basedir:  basedir,
+		EnvConf:  envcfg,
+		Core:     NewChainCoreAgent(ctx),
+		XMReader: xmreader,
 	}
 	contractObj, err := contract.CreateManager("default", mgCfg)
 	if err != nil {

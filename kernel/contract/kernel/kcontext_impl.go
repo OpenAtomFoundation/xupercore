@@ -14,6 +14,7 @@ type kcontextImpl struct {
 func newKContext(ctx *bridge.Context) *kcontextImpl {
 	return &kcontextImpl{
 		ctx:          ctx,
+		limit:        ctx.ResourceLimits,
 		StateSandbox: ctx.State,
 	}
 }
