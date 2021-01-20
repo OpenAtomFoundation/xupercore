@@ -8,13 +8,17 @@ import (
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 )
 
+const MAXMAPSIZE = 1000
+
 type xpoaConfig struct {
-	InitProposer []ProposerInfo `json:"init_proposer"`
-	BlockNum     int64          `json:"block_num"`
+	Version int64 `json:"version,omitempty"`
+	// 每个候选人每轮出块个数
+	BlockNum int64 `json:"block_num"`
 	// 单位为毫秒
-	Period    int64            `json:"period"`
-	Version   int64            `json:"version"`
-	EnableBFT *map[string]bool `json:"bft_config,omitempty"`
+	Period       int64          `json:"period"`
+	InitProposer []ProposerInfo `json:"init_proposer"`
+
+	EnableBFT map[string]bool `json:"bft_config,omitempty"`
 }
 
 // XpoaStorage xpoa占用block中consensusStorage json串的格式
@@ -27,15 +31,15 @@ func cleanProduceMap(isProduce map[int64]bool, period int64) {
 	t := time.Now().UnixNano()
 	key := t / period
 	for k, _ := range isProduce {
-		if k < key-3 {
+		if k < key-MAXMAPSIZE {
 			delete(isProduce, k)
 		}
 	}
 }
 
 type ProposerInfo struct {
-	Address string
-	Neturl  string
+	Address string `json:"address"`
+	Neturl  string `json:"peerAddr"`
 }
 
 // LoadValidatorsMultiInfo

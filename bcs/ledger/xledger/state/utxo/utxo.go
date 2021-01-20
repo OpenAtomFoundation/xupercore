@@ -11,7 +11,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -19,11 +18,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
@@ -70,9 +68,6 @@ const (
 type TxLists []*pb.Transaction
 
 type UtxoVM struct {
-	Meta                 *pb.UtxoMeta // utxo meta
-	MetaTmp              *pb.UtxoMeta // tmp utxo meta
-	MutexMeta            *sync.Mutex  // access control for meta
 	metaHandle           *meta.Meta
 	ldb                  kvdb.Database
 	Mutex                *sync.RWMutex // utxo leveldb表读写锁
@@ -299,9 +294,6 @@ func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmpl
 
 	utxoMutex := &sync.RWMutex{}
 	utxoVM := &UtxoVM{
-		Meta:                 &pb.UtxoMeta{},
-		MetaTmp:              &pb.UtxoMeta{},
-		MutexMeta:            &sync.Mutex{},
 		metaHandle:           metaHandle,
 		ldb:                  baseDB,
 		Mutex:                utxoMutex,
@@ -340,9 +332,6 @@ func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmpl
 		}
 		utxoVM.utxoTotal = big.NewInt(0)
 	}
-	// cp not reference
-	newMeta := proto.Clone(utxoVM.Meta).(*pb.UtxoMeta)
-	utxoVM.MetaTmp = newMeta
 	return utxoVM, nil
 }
 
