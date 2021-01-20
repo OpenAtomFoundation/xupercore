@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
-	"github.com/xuperchain/xupercore/kernel/contract/pb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type processManager struct {
@@ -28,7 +28,7 @@ func newProcessManager(cfg *bridge.NativeConfig, basedir string, chainAddr strin
 	}, nil
 }
 
-func (p *processManager) makeProcess(name string, desc *pb.WasmCodeDesc, code []byte) (*contractProcess, error) {
+func (p *processManager) makeProcess(name string, desc *protos.WasmCodeDesc, code []byte) (*contractProcess, error) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -65,7 +65,7 @@ func (p *processManager) makeProcess(name string, desc *pb.WasmCodeDesc, code []
 	return process, nil
 }
 
-func (p *processManager) lookupProcess(name string, desc *pb.WasmCodeDesc) (*contractProcess, bool) {
+func (p *processManager) lookupProcess(name string, desc *protos.WasmCodeDesc) (*contractProcess, bool) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 	hash := nativeCodeHash(name, desc)
@@ -99,11 +99,11 @@ func (p *processManager) GetProcess(name string, cp bridge.ContractCodeProvider)
 	return process, nil
 }
 
-func nativeCodeHash(name string, desc *pb.WasmCodeDesc) string {
+func nativeCodeHash(name string, desc *protos.WasmCodeDesc) string {
 	return name + hex.EncodeToString(desc.GetDigest())
 }
 
-func nativeCodeFileName(desc *pb.WasmCodeDesc) string {
+func nativeCodeFileName(desc *protos.WasmCodeDesc) string {
 	var suffix string
 	switch desc.GetRuntime() {
 	case "java":

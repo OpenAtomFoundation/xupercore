@@ -11,7 +11,7 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
-	xpb "github.com/xuperchain/xupercore/kernel/contract/pb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -382,7 +382,7 @@ func (c *SyscallService) EmitEvent(ctx context.Context, in *pb.EmitEventRequest)
 	if !ok {
 		return nil, fmt.Errorf("bad ctx id:%d", in.GetHeader().GetCtxid())
 	}
-	event := &xpb.ContractEvent{
+	event := &protos.ContractEvent{
 		Contract: nctx.ContractName,
 		Name:     in.GetName(),
 		Body:     in.GetBody(),

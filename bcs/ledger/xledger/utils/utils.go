@@ -26,7 +26,12 @@ var (
 )
 
 // 通过创世块配置创建全新账本
-func CreateLedger(bcName, genesisConf, dataDir string, envCfg *xconf.EnvConf) error {
+func CreateLedger(bcName, genesisConf string, envCfg *xconf.EnvConf) error {
+	if bcName == "" || genesisConf == "" || envCfg == nil {
+		return fmt.Errorf("param set error")
+	}
+
+	dataDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
 	fullpath := filepath.Join(dataDir, bcName)
 	if utils.PathExists(fullpath) {
 		return ErrBlockChainExist
@@ -49,7 +54,7 @@ func CreateLedger(bcName, genesisConf, dataDir string, envCfg *xconf.EnvConf) er
 	if err != nil {
 		return err
 	}
-	xledger, err := ledger.NewLedger(lctx)
+	xledger, err := ledger.CreateLedger(lctx, data)
 	if err != nil {
 		os.RemoveAll(fullpath)
 		return err

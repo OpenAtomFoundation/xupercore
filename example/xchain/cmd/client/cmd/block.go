@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	//blkcmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/block"
+	blkcmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/block"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
 
 	"github.com/spf13/cobra"
@@ -23,9 +23,9 @@ func GetBlockCmd() *BlockCmd {
 	}
 
 	// query block info
-	//blockCmdIns.AddCommand(blkcmd.GetQueryCmd().GetCmd())
+	blockCmdIns.Cmd.AddCommand(blkcmd.GetQueryBlockCmd().GetCmd())
 	// query block info
-	//blockCmdIns.AddCommand(blkcmd.GetQueryByHeight().GetCmd())
+	//blockCmdIns.Cmd.AddCommand(blkcmd.GetQueryByHeight().GetCmd())
 
 	return blockCmdIns
 }

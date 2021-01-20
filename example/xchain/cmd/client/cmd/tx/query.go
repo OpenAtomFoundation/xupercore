@@ -48,7 +48,18 @@ func (t *QueryTxCmd) printTxInfo() error {
 		return fmt.Errorf("query tx failed")
 	}
 
-	output, err := json.MarshalIndent(resp, "", "  ")
+	type outTxStruct struct {
+		Tx       *client.Transaction `json:"tx"`
+		Status   int                 `json:"status"`
+		Distance int64               `json:"distance"`
+	}
+	txInfo := &outTxStruct{
+		Tx:       client.FromPBTx(resp.GetTx()),
+		Status:   int(resp.GetStatus()),
+		Distance: int64(resp.GetDistance()),
+	}
+
+	output, err := json.MarshalIndent(txInfo, "", "  ")
 	if err != nil {
 		fmt.Sprintf("json marshal tx failed.err:%v", err)
 		return fmt.Errorf("json marshal tx failed")

@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/xuperchain/xupercore/kernel/contract/pb"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -76,7 +76,7 @@ func (c *codeProvider) GetContractAbi(name string) ([]byte, error) {
 	return abiBuf, nil
 }
 
-func (c *codeProvider) GetContractCodeDesc(name string) (*pb.WasmCodeDesc, error) {
+func (c *codeProvider) GetContractCodeDesc(name string) (*protos.WasmCodeDesc, error) {
 	value, err := c.xstore.Get("contract", ContractCodeDescKey(name))
 	if err != nil {
 		return nil, fmt.Errorf("get contract desc for '%s' error:%s", name, err)
@@ -86,7 +86,7 @@ func (c *codeProvider) GetContractCodeDesc(name string) (*pb.WasmCodeDesc, error
 	if len(descbuf) == 0 {
 		return nil, errors.New("empty wasm code desc")
 	}
-	var desc pb.WasmCodeDesc
+	var desc protos.WasmCodeDesc
 	err = proto.Unmarshal(descbuf, &desc)
 	if err != nil {
 		return nil, err
@@ -96,16 +96,16 @@ func (c *codeProvider) GetContractCodeDesc(name string) (*pb.WasmCodeDesc, error
 
 type descProvider struct {
 	ContractCodeProvider
-	desc *pb.WasmCodeDesc
+	desc *protos.WasmCodeDesc
 }
 
-func newDescProvider(cp ContractCodeProvider, desc *pb.WasmCodeDesc) ContractCodeProvider {
+func newDescProvider(cp ContractCodeProvider, desc *protos.WasmCodeDesc) ContractCodeProvider {
 	return &descProvider{
 		ContractCodeProvider: cp,
 		desc:                 desc,
 	}
 }
 
-func (d *descProvider) GetContractCodeDesc(name string) (*pb.WasmCodeDesc, error) {
+func (d *descProvider) GetContractCodeDesc(name string) (*protos.WasmCodeDesc, error) {
 	return d.desc, nil
 }

@@ -122,7 +122,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	if schedule.enableBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
+		qcTree := common.InitQCTree(cCtx.Ledger, cCtx.XLog)
 		if qcTree == nil {
 			cCtx.XLog.Error("Xpoa::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
 			return nil
@@ -175,6 +175,11 @@ Again:
 	x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", false, "height", height)
 	// TODO: 后续调试时，确定此处是否需要sync
 	return false, false, nil
+}
+
+// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
+func (x *xpoaConsensus) CalculateBlock(block cctx.BlockInterface) error {
+	return nil
 }
 
 // CheckMinerMatch 查看block是否合法
@@ -285,20 +290,16 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error
 	return false, bytes, nil
 }
 
-// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
-func (x *xpoaConsensus) CalculateBlock(block cctx.BlockInterface) error {
-	return nil
-}
-
 // ProcessConfirmBlock 用于确认块后进行相应的处理
 func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
-	// confirm的第一步：不管是否为当前Leader，都需要更新本地voteQC树，保证当前block的justify votes被写入本地账本
-	// 获取block中共识专有存储, 检查justify是否符合要求
 	if !x.election.enableBFT {
 		return nil
 	}
+	// confirm的第一步：不管是否为当前Leader，都需要更新本地voteQC树，保证当前block的justify votes被写入本地账本
+	// 获取block中共识专有存储, 检查justify是否符合要求
 	justifyBytes, err := block.GetConsensusStorage()
 	if err != nil && block.GetHeight() != x.status.StartHeight {
+		x.bctx.GetLog().Warn("Xpoa::CheckMinerMatch::parse storage error", "err", err)
 		return err
 	}
 	if justifyBytes != nil {
@@ -318,15 +319,15 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 			ips = append(ips, x.election.addrToNet[v])
 		}
 		if err := x.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), ips); err != nil {
-			x.bctx.GetLog().Warn("smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
+			x.bctx.GetLog().Warn("Xpoa::ProcessConfirmBlock::bft next proposal failed", "error", err)
 			return err
 		}
-		x.bctx.GetLog().Info("smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
+		x.bctx.GetLog().Info("Xpoa::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
 	}
 	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
 	pNode := x.smr.BlockToProposalNode(block)
 	err = x.smr.UpdateQcStatus(pNode)
-	x.bctx.GetLog().Info("smr::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err)
+	x.bctx.GetLog().Info("Xpoa::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err)
 	return nil
 }
 

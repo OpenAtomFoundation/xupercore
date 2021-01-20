@@ -6,13 +6,13 @@ import (
 
 type BaseCmd struct {
 	// cobra command
-	cmd *cobra.Command
+	Cmd *cobra.Command
 }
 
 func (t *BaseCmd) SetCmd(cmd *cobra.Command) {
-	t.cmd = cmd
+	t.Cmd = cmd
 }
 
 func (t *BaseCmd) GetCmd() *cobra.Command {
-	return t.cmd
+	return t.Cmd
 }

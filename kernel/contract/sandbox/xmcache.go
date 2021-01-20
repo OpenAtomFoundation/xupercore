@@ -39,7 +39,7 @@ type XMCache struct {
 
 	// utxoCache       *UtxoCache
 	// crossQueryCache *CrossQueryCache
-	// events          []*pb.ContractEvent
+	// events          []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache

@@ -1,11 +1,18 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/xchain/cmd"
 
 	"github.com/spf13/cobra"
+)
+
+var (
+	Version   = ""
+	BuildTime = ""
+	CommitID  = ""
 )
 
 func main() {
@@ -32,7 +39,31 @@ func NewServiceCommand() (*cobra.Command, error) {
 	// cmd service
 	rootCmd.AddCommand(cmd.GetStartupCmd().GetCmd())
 	// cmd version
-	rootCmd.AddCommand(cmd.GetVersionCmd().GetCmd())
+	rootCmd.AddCommand(GetVersionCmd().GetCmd())
 
 	return rootCmd, nil
+}
+
+type versionCmd struct {
+	cmd.BaseCmd
+}
+
+func GetVersionCmd() *versionCmd {
+	versionCmdIns := new(versionCmd)
+
+	subCmd := &cobra.Command{
+		Use:     "version",
+		Short:   "view process version information.",
+		Example: "xchain version",
+		Run: func(cmd *cobra.Command, args []string) {
+			versionCmdIns.PrintVersion()
+		},
+	}
+	versionCmdIns.SetCmd(subCmd)
+
+	return versionCmdIns
+}
+
+func (t *versionCmd) PrintVersion() {
+	fmt.Printf("%s-%s %s\n", Version, CommitID, BuildTime)
 }
