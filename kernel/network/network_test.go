@@ -1,8 +1,8 @@
 package network
 
 import (
-	"context"
 	"fmt"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"testing"
 
 	"github.com/xuperchain/xupercore/kernel/mock"
@@ -44,11 +44,11 @@ func (t *MockP2PServ) UnRegister(p2p.Subscriber) error {
 	return fmt.Errorf("mock interface")
 }
 
-func (t *MockP2PServ) SendMessage(context.Context, *pb.XuperMessage, ...p2p.OptionFunc) error {
+func (t *MockP2PServ) SendMessage(xctx.XContext, *pb.XuperMessage, ...p2p.OptionFunc) error {
 	return fmt.Errorf("mock interface")
 }
 
-func (t *MockP2PServ) SendMessageWithResponse(context.Context,
+func (t *MockP2PServ) SendMessageWithResponse(xctx.XContext,
 	*pb.XuperMessage, ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
 
 	return nil, fmt.Errorf("mock interface")
@@ -56,10 +56,6 @@ func (t *MockP2PServ) SendMessageWithResponse(context.Context,
 
 func (t *MockP2PServ) Context() *nctx.NetCtx {
 	return t.ctx
-}
-
-func (t *MockP2PServ) P2PState() *p2p.State {
-	return nil
 }
 
 func (t *MockP2PServ) PeerInfo() pb.PeerInfo {

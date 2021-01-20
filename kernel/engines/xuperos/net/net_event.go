@@ -205,7 +205,7 @@ func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transac
 func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessage) {
 	var block lpb.InternalBlock
 	if err := p2p.Unmarshal(request, &block); err != nil {
-		ctx.GetLog().Warn("handlePostTx Unmarshal request error", "error", err)
+		ctx.GetLog().Warn("handleSendBlock Unmarshal request error", "error", err)
 		return
 	}
 
@@ -258,6 +258,7 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 		return err
 	}
 
+	ctx.GetLog().Debug("net event proc block")
 	if err := chain.ProcBlock(ctx, in); err != nil {
 		ctx.GetLog().Warn("proc block error", "error", err)
 		return err
@@ -275,7 +276,6 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 
 func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
-
 	var input xpb.BlockID
 	var output *xpb.BlockInfo
 
@@ -309,7 +309,8 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 		return response(err)
 	}
 
-	ctx.GetLog().SetCommField("blockId", utils.F(input.Blockid))
+	ctx.GetLog().SetCommField("height", output.Block.Height)
+	ctx.GetLog().SetCommField("blockId", utils.F(output.Block.Blockid))
 	ctx.GetLog().SetCommField("status", output.Status)
 	return response(nil)
 }

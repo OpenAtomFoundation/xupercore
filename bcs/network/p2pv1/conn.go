@@ -1,8 +1,8 @@
 package p2pv1
 
 import (
-	"context"
 	"errors"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"io"
 	"sync"
 
@@ -80,7 +80,7 @@ func (c *Conn) newConn() error {
 }
 
 // SendMessage send message to a peer
-func (c *Conn) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
+func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 	client, err := c.newClient()
 	if err != nil {
 		c.log.Error("SendMessage new client error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
@@ -111,7 +111,7 @@ func (c *Conn) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 }
 
 // SendMessageWithResponse send message to a peer with responce
-func (c *Conn) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+func (c *Conn) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
 	client, err := c.newClient()
 	if err != nil {
 		c.log.Error("SendMessageWithResponse new client error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)

@@ -103,6 +103,7 @@ func (d *dispatcher) Dispatch(ctx xctx.XContext, msg *pb.XuperMessage, stream St
 		return ErrMessageEmpty
 	}
 
+	ctx.GetTimer().Mark("dispatch")
 	ctx.GetLog().Trace("dispatch new message", "bc", msg.Header.Bcname,
 		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
 

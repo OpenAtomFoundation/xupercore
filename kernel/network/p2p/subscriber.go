@@ -119,8 +119,8 @@ func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 
 func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
 	if s.handler != nil {
-		ctx.GetLog().Trace("hello world")
 		resp, err := s.handler(ctx, msg)
+		ctx.GetTimer().Mark("handler")
 		if err != nil {
 			ctx.GetLog().Error("subscriber: call user handler error", "err", err)
 			return ErrHandlerError
@@ -136,6 +136,7 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 			ctx.GetLog().Error("subscriber: send response error", "err", err)
 			return ErrStreamSendError
 		}
+		ctx.GetTimer().Mark("send")
 
 		if s.ctx.EnvCfg.MetricSwitch {
 			labels := prom.Labels{
@@ -161,6 +162,6 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 	}
 
 	ctx.GetLog().Trace("handle new message done", "bc", msg.GetHeader().GetBcname(),
-		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
+		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "timer", ctx.GetTimer().Print())
 	return nil
 }

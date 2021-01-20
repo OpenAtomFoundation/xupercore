@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/lib/timer"
 	"sync"
 	"time"
 
@@ -21,8 +23,14 @@ var (
 )
 
 // SendMessage send message to peers using given filter strategy
-func (p *P2PServerV2) SendMessage(ctx context.Context, msg *pb.XuperMessage,
+func (p *P2PServerV2) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage,
 	optFunc ...p2p.OptionFunc) error {
+	ctx = &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+	defer func() {
+		ctx.GetLog().Info("SendMessage", "log_id", msg.GetHeader().GetLogid(),
+			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
+			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
+	}()
 
 	if p.ctx.EnvCfg.MetricSwitch {
 		tm := time.Now()
@@ -42,6 +50,7 @@ func (p *P2PServerV2) SendMessage(ctx context.Context, msg *pb.XuperMessage,
 	opt := p2p.Apply(optFunc)
 	filter := p.getFilter(msg, opt)
 	peers, _ := filter.Filter()
+	ctx.GetTimer().Mark("filter")
 
 	var peerIDs []peer.ID
 	whiteList := opt.WhiteList
@@ -61,28 +70,33 @@ func (p *P2PServerV2) SendMessage(ctx context.Context, msg *pb.XuperMessage,
 		return ErrEmptyPeer
 	}
 
-	p.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
-		"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
-		"checksum", msg.GetHeader().GetDataCheckSum(), "peers", peerIDs)
+	ctx.GetLog().SetInfoField("peerCount", len(peerIDs))
 	return p.sendMessage(ctx, msg, peerIDs)
 }
 
-func (p *P2PServerV2) sendMessage(ctx context.Context, msg *pb.XuperMessage, peerIDs []peer.ID) error {
+func (p *P2PServerV2) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerIDs []peer.ID) error {
 	var wg sync.WaitGroup
 	for _, peerID := range peerIDs {
 		wg.Add(1)
 
 		go func(peerID peer.ID) {
-			defer wg.Done()
+			streamCtx :=  &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+			defer func() {
+				wg.Done()
+				streamCtx.GetLog().Debug("SendMessage", "log_id", msg.GetHeader().GetLogid(),
+					"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(),
+					"peer", peerID, "timer", streamCtx.GetTimer().Print())
+			}()
 
 			stream, err := p.streamPool.Get(peerID)
+			streamCtx.GetTimer().Mark("connect")
 			if err != nil {
 				p.log.Warn("p2p: get stream error", "log_id", msg.GetHeader().GetLogid(),
-					"msgType", msg.GetHeader().GetType(), "error", err.Error())
+					"msgType", msg.GetHeader().GetType(), "error", err)
 				return
 			}
 
-			if err := stream.SendMessage(ctx, msg); err != nil {
+			if err := stream.SendMessage(streamCtx, msg); err != nil {
 				p.log.Error("SendMessage error", "log_id", msg.GetHeader().GetLogid(),
 					"msgType", msg.GetHeader().GetType(), "error", err)
 				return
@@ -90,14 +104,20 @@ func (p *P2PServerV2) sendMessage(ctx context.Context, msg *pb.XuperMessage, pee
 		}(peerID)
 	}
 	wg.Wait()
-
+	ctx.GetTimer().Mark("send")
 	return nil
 }
 
 // SendMessageWithResponse send message to peers using given filter strategy, expect response from peers
 // 客户端再使用该方法请求带返回的消息时，最好带上log_id, 否则会导致收消息时收到不匹配的消息而影响后续的处理
-func (p *P2PServerV2) SendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage,
+func (p *P2PServerV2) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage,
 	optFunc ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
+	ctx = &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+	defer func() {
+		ctx.GetLog().Info("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
+			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
+			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
+	}()
 
 	if p.ctx.EnvCfg.MetricSwitch {
 		tm := time.Now()
@@ -130,6 +150,7 @@ func (p *P2PServerV2) SendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 	} else {
 		peerIDs = peers
 	}
+	ctx.GetTimer().Mark("filter")
 
 	if len(peerIDs) <= 0 {
 		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
@@ -137,39 +158,46 @@ func (p *P2PServerV2) SendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 		return nil, ErrEmptyPeer
 	}
 
-	p.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
-		"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
-		"checksum", msg.GetHeader().GetDataCheckSum(), "peers", peerIDs)
+	ctx.GetLog().SetInfoField("peerCount", len(peerIDs))
 	return p.sendMessageWithResponse(ctx, msg, peerIDs, opt)
 }
 
-func (p *P2PServerV2) sendMessageWithResponse(ctx context.Context, msg *pb.XuperMessage,
+func (p *P2PServerV2) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage,
 	peerIDs []peer.ID, opt *p2p.Option) ([]*pb.XuperMessage, error) {
 
 	respCh := make(chan *pb.XuperMessage, len(peerIDs))
 	var wg sync.WaitGroup
 	for _, peerID := range peerIDs {
-		stream, err := p.streamPool.Get(peerID)
-		if err != nil {
-			p.log.Warn("p2p: get stream error", "log_id", msg.GetHeader().GetLogid(),
-				"msgType", msg.GetHeader().GetType(), "error", err.Error())
-			continue
-		}
-
 		wg.Add(1)
-		go func(stream *Stream) {
-			defer wg.Done()
-			resp, err := stream.SendMessageWithResponse(ctx, msg)
+		go func(peerID peer.ID) {
+			streamCtx :=  &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+			defer func() {
+				wg.Done()
+				streamCtx.GetLog().Debug("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
+					"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(),
+					"peer", peerID, "timer", streamCtx.GetTimer().Print())
+			}()
+
+			stream, err := p.streamPool.Get(peerID)
+			streamCtx.GetTimer().Mark("connect")
+			if err != nil {
+				p.log.Warn("p2p: get stream error", "log_id", msg.GetHeader().GetLogid(),
+					"msgType", msg.GetHeader().GetType(), "error", err)
+				return
+			}
+
+			resp, err := stream.SendMessageWithResponse(streamCtx, msg)
 			if err != nil {
 				p.log.Warn("p2p: SendMessageWithResponse error", "log_id", msg.GetHeader().GetLogid(),
-					"msgType", msg.GetHeader().GetType(), "error", err.Error())
+					"msgType", msg.GetHeader().GetType(), "error", err)
 				return
 			}
 
 			respCh <- resp
-		}(stream)
+		}(peerID)
 	}
 	wg.Wait()
+	ctx.GetTimer().Mark("send")
 
 	if len(respCh) <= 0 {
 		p.log.Warn("p2p: no response", "log_id", msg.GetHeader().GetLogid(),
@@ -192,6 +220,7 @@ func (p *P2PServerV2) sendMessageWithResponse(ctx context.Context, msg *pb.Xuper
 		}
 	}
 
+	ctx.GetTimer().Mark("recv")
 	return response, nil
 }
 

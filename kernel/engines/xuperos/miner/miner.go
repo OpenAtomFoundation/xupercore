@@ -83,6 +83,8 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 		}
 	}
 
+	ctx.GetLog().Debug("miner proc block", "height", block.Height, "blockId", utils.F(block.Blockid),
+		"targetHeight", inSyncTargetHeight, "targetBlockId", utils.F(inSyncTargetBlockId))
 	// 尝试同步到该高度，如果小于账本高度会被直接忽略
 	return t.trySyncBlock(ctx, block)
 }
@@ -204,7 +206,6 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 			"blockId", utils.F(block.GetBlockid()))
 		return err
 	}
-	ctx.GetLog().Debug("confirm block for miner succ", "blockId", utils.F(block.GetBlockid()))
 
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
@@ -420,7 +421,9 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 		}
 		// 释放矿工锁
 		t.minerMutex.Unlock()
+		ctx.GetLog().Debug("miner mutex unlocked")
 	}()
+	ctx.GetLog().Debug("miner mutex locked")
 
 	// 3.检查同步目标，忽略目标高度小于正在同步高度的任务
 	if targetBlock.GetHeight() < t.inSyncTargetHeight ||
@@ -438,14 +441,17 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	// 4.状态机walk，确保状态机和账本一致
 	ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 	stateTipId := t.ctx.State.GetLatestBlockid()
-	if !bytes.Equal(ledgerTipId, stateTipId) {
-		err = t.ctx.State.Walk(ledgerTipId, false)
-		if err != nil {
-			ctx.GetLog().Warn("try sync block walk failed", "error", err,
-				"ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
-			return fmt.Errorf("try sync block walk failed")
-		}
-	}
+
+	ledgerHeight := t.ctx.Ledger.GetMeta().GetTrunkHeight()
+	ctx.GetLog().Debug("miner state walk", "height", ledgerHeight, "ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
+	//if !bytes.Equal(ledgerTipId, stateTipId) {
+	//	err = t.ctx.State.Walk(ledgerTipId, false)
+	//	if err != nil {
+	//		ctx.GetLog().Warn("try sync block walk failed", "error", err,
+	//			"ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
+	//		return fmt.Errorf("try sync block walk failed")
+	//	}
+	//}
 
 	// 5.启动同步区块到目标高度
 	err = t.syncBlock(ctx, targetBlock)
@@ -525,6 +531,10 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 	defer func() {
 		ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 		stateTipId := t.ctx.State.GetLatestBlockid()
+
+		ledgerHeight := t.ctx.Ledger.GetMeta().GetTrunkHeight()
+		ctx.GetLog().Debug("miner state walk", "height", ledgerHeight, "ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
+
 		if !bytes.Equal(ledgerTipId, stateTipId) {
 			ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
 			// Walk相比PalyAndReport代价更高，后面可以优化下
@@ -539,6 +549,7 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 	}()
 
 	// 3.将拉取到的区块加入账本
+	ctx.GetLog().Debug("batch confirm block", "blockCount", len(blkIds))
 	err = t.batchConfirmBlock(ctx, blkIds)
 	if err != nil {
 		ctx.GetLog().Warn("batch confirm block to ledger failed", "err", err, "blockCount", len(blkIds))
@@ -586,8 +597,6 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 		}
 		beginBlock = block
 		blkIds = append(blkIds, block.GetBlockid())
-
-		ctx.GetLog().Trace("download block", "blockId", utils.F(block.Blockid), "height", block.Height)
 	}
 
 	return blkIds, nil
@@ -628,6 +637,7 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 			continue
 		}
 
+		ctx.GetLog().Trace("download block", "height", block.Block.Height, "blockId", utils.F(block.Block.Blockid))
 		return block.Block, nil
 	}
 
