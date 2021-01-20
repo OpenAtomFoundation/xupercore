@@ -19,11 +19,13 @@ var (
 func main() {
 	rootCmd, err := NewClientCommand()
 	if err != nil {
-		log.Fatalf("new client command failed.err:%v", err)
+		log.Printf("new client command failed.err:%v", err)
+		return
 	}
 
 	if err = rootCmd.Execute(); err != nil {
-		log.Fatalf("command exec failed.err:%v", err)
+		log.Printf("command exec failed.err:%v", err)
+		return
 	}
 }
 

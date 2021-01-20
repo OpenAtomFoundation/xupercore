@@ -98,16 +98,16 @@ type ConfirmStatus struct {
 }
 
 // NewLedger create an empty ledger, if it already exists, open it directly
-func NewLedger(lctx *LedgerCtx) (*Ledger, error) {
-	return newLedger(lctx, true)
+func CreateLedger(lctx *LedgerCtx, genesisCfg []byte) (*Ledger, error) {
+	return newLedger(lctx, true, genesisCfg)
 }
 
 // OpenLedger open ledger which already exists
 func OpenLedger(lctx *LedgerCtx) (*Ledger, error) {
-	return newLedger(lctx, false)
+	return newLedger(lctx, false, nil)
 }
 
-func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
+func newLedger(lctx *LedgerCtx, createIfMissing bool, genesisCfg []byte) (*Ledger, error) {
 	ledger := &Ledger{}
 	ledger.mutex = &sync.RWMutex{}
 
@@ -142,7 +142,8 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	ledger.confirmBatch = baseDB.NewBatch()
 	metaBuf, metaErr := ledger.metaTable.Get([]byte(""))
 	emptyLedger := false
-	if metaErr != nil && def.NormalizedKVError(metaErr) == def.ErrKVNotFound && createIfMissing { //说明是新创建的账本
+	if metaErr != nil && def.NormalizedKVError(metaErr) == def.ErrKVNotFound && createIfMissing {
+		//说明是新创建的账本
 		metaBuf, pbErr := proto.Marshal(ledger.meta)
 		if pbErr != nil {
 			lctx.XLog.Warn("marshal meta fail", "pb_err", pbErr)
@@ -166,12 +167,12 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool) (*Ledger, error) {
 	}
 	lctx.XLog.Info("ledger meta", "genesis_block", utils.F(ledger.meta.RootBlockid), "tip_block",
 		utils.F(ledger.meta.TipBlockid), "trunk_height", ledger.meta.TrunkHeight)
-	if !emptyLedger {
-		gErr := ledger.loadGenesisBlock()
-		if gErr != nil {
-			lctx.XLog.Warn("failed to load genesis block", "g_err", gErr)
-			return nil, gErr
-		}
+
+	// 加载genesis config
+	gErr := ledger.loadGenesisBlock(emptyLedger, genesisCfg)
+	if gErr != nil {
+		lctx.XLog.Warn("failed to load genesis block", "g_err", gErr)
+		return nil, gErr
 	}
 
 	// 根据创世块牌照加密类型实例化加密组件
@@ -201,18 +202,36 @@ func (l *Ledger) GetLDB() kvdb.Database {
 	return l.baseDB
 }
 
-func (l *Ledger) loadGenesisBlock() error {
-	if len(l.meta.RootBlockid) == 0 {
-		return ErrBlockNotExist
+func (l *Ledger) loadGenesisBlock(isEmptyLedger bool, genesisCfg []byte) error {
+	if !isEmptyLedger {
+		// 非空账本，从创世块加载
+		if len(l.meta.RootBlockid) == 0 {
+			return ErrBlockNotExist
+		}
+		rootIb, err := l.queryBlock(l.meta.RootBlockid, true)
+		if err != nil {
+			return err
+		}
+
+		var coinbaseTx *pb.Transaction
+		for _, tx := range rootIb.Transactions {
+			if tx.Coinbase {
+				coinbaseTx = tx
+				break
+			}
+		}
+		if coinbaseTx == nil {
+			return fmt.Errorf("find coinbase tx failed from root block")
+		}
+
+		genesisCfg = coinbaseTx.GetDesc()
 	}
-	rootIb, err := l.queryBlock(l.meta.RootBlockid, true)
-	if err != nil {
-		return err
-	}
-	gb, gErr := NewGenesisBlock(rootIb)
+
+	gb, gErr := NewGenesisBlock(genesisCfg)
 	if gErr != nil {
 		return gErr
 	}
+
 	l.GenesisBlock = gb
 	return nil
 }
@@ -736,8 +755,9 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		l.meta = newMeta
 	}
 	block.Transactions = realTransactions
-	if isRoot { //首次confirm 创始块的时候
-		lErr := l.loadGenesisBlock()
+	if isRoot {
+		//首次confirm 创始块的时候
+		lErr := l.loadGenesisBlock(false, nil)
 		if lErr != nil {
 			confirmStatus.Succ = false
 			confirmStatus.Error = lErr
@@ -1032,20 +1052,6 @@ func (l *Ledger) GetPendingBlock(blockID []byte) (*pb.InternalBlock, error) {
 		return nil, unMarshalErr
 	}
 	return block, nil
-}
-
-// GetEstimatedTotal estimate total assets of chain
-func (l *Ledger) GetEstimatedTotal() *big.Int {
-	total := big.NewInt(0)
-	if l.GenesisBlock == nil {
-		return total
-	}
-	total = total.Add(total, l.GenesisBlock.GetInternalBlock().GetCoinbaseTotal())
-	var i int64
-	for i = 1; i <= l.meta.TrunkHeight; i++ {
-		total = total.Add(total, l.GenesisBlock.CalcAward(i))
-	}
-	return total
 }
 
 // QueryBlockByHeight query block by height

@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"strconv"
 
-	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/protos"
 )
@@ -151,32 +150,19 @@ func (rc *RootConfig) GetReservedWhitelistAccount() string {
 
 // GenesisBlock genesis block data structure
 type GenesisBlock struct {
-	ib         *pb.InternalBlock
 	config     *RootConfig
 	awardCache *cache.LRUCache
 }
 
-func getRootTx(ib *pb.InternalBlock) *pb.Transaction {
-	for _, tx := range ib.Transactions {
-		if tx.Coinbase {
-			return tx
-		}
-	}
-	return nil
-}
-
 // NewGenesisBlock new a genesis block
-func NewGenesisBlock(ib *pb.InternalBlock) (*GenesisBlock, error) {
-	gb := &GenesisBlock{
-		awardCache: cache.NewLRUCache(awardCacheSize),
+func NewGenesisBlock(genesisCfg []byte) (*GenesisBlock, error) {
+	if len(genesisCfg) < 1 {
+		return nil, fmt.Errorf("genesis config is empty")
 	}
-	gb.ib = ib
+
+	// 加载配置
 	config := &RootConfig{}
-	rootTx := getRootTx(ib)
-	if rootTx == nil {
-		return nil, fmt.Errorf("genesis tx can not be found in the block: %x", ib.Blockid)
-	}
-	jsErr := json.Unmarshal(rootTx.Desc, config)
+	jsErr := json.Unmarshal(genesisCfg, config)
 	if jsErr != nil {
 		return nil, jsErr
 	}
@@ -192,13 +178,13 @@ func NewGenesisBlock(ib *pb.InternalBlock) (*GenesisBlock, error) {
 		config.GasPrice.MemRate = 0
 		config.GasPrice.XfeeRate = 0
 	}
-	gb.config = config
-	return gb, nil
-}
 
-// GetInternalBlock returns internal block of genesis block
-func (gb *GenesisBlock) GetInternalBlock() *pb.InternalBlock {
-	return gb.ib
+	gb := &GenesisBlock{
+		awardCache: cache.NewLRUCache(awardCacheSize),
+		config:     config,
+	}
+
+	return gb, nil
 }
 
 // GetConfig get config of genesis block

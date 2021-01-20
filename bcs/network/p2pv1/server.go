@@ -3,26 +3,26 @@ package p2pv1
 import (
 	"errors"
 	"fmt"
-	"github.com/multiformats/go-multiaddr"
-	manet "github.com/multiformats/go-multiaddr/net"
-	"github.com/patrickmn/go-cache"
-	"github.com/xuperchain/xupercore/kernel/common/xaddress"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/network/def"
-	"github.com/xuperchain/xupercore/lib/timer"
 	"log"
 	"net"
 	"time"
 
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
+	"github.com/patrickmn/go-cache"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
+	"github.com/xuperchain/xupercore/kernel/common/xaddress"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/config"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/def"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 )
 

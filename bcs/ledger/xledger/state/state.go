@@ -424,16 +424,15 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 		return err
 	}
 
-	idx, length := 0, len(block.Transactions)
-
 	// parallel verify
 	verifyErr := t.verifyBlockTxs(block, isRootTx, unconfirmToConfirm)
 	if verifyErr != nil {
 		t.log.Warn("verifyBlockTx error ", "err", verifyErr)
 		return verifyErr
 	}
+	t.log.Debug("play and repost verify block tx succ")
 
-	for idx < length {
+	for idx := 0; idx < len(block.Transactions); idx++ {
 		tx := block.Transactions[idx]
 		txid := string(tx.Txid)
 		if unconfirmToConfirm[txid] == false { // 本地没预执行过的Tx, 从block中收到的，需要Play执行
@@ -470,11 +469,16 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	for txid := range undoDone {
 		t.tx.UnconfirmTxInMem.Delete(txid)
 	}
+	t.log.Debug("write to state succ")
+
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
-	defer t.meta.MutexMeta.Unlock()
 	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 	t.meta.Meta = newMeta
+	t.meta.MutexMeta.Unlock()
+
+	t.log.Debug("paly and repost succ", "blockId", utils.F(block.Blockid))
+
 	return nil
 }
 
@@ -1078,14 +1082,12 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	txidsInBlock := map[string]bool{}    // block里面所有的txid
 	UTXOKeysInBlock := map[string]bool{} // block里面所有的交易需要用掉的utxo
 	keysVersionInBlock := map[string]string{}
-	t.utxo.Mutex.Unlock()
 	for _, tx := range block.Transactions {
 		txidsInBlock[string(tx.Txid)] = true
 		for _, txInput := range tx.TxInputs {
 			utxoKey := utxo.GenUtxoKey(txInput.FromAddr, txInput.RefTxid, txInput.RefOffset)
 			if UTXOKeysInBlock[utxoKey] { //检查块内的utxo双花情况
 				t.log.Warn("found duplicated utxo in same block", "utxoKey", utxoKey, "txid", utils.F(tx.Txid))
-				t.utxo.Mutex.Lock()
 				return nil, nil, ErrUTXODuplicated
 			}
 			UTXOKeysInBlock[utxoKey] = true
@@ -1096,13 +1098,13 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 			keysVersionInBlock[string(bucketAndKey)] = valueVersion
 		}
 	}
-	t.utxo.Mutex.Lock()
+
 	// 下面开始处理unconfirmed的交易
 	unconfirmTxMap, unconfirmTxGraph, delayedTxMap, loadErr := t.tx.SortUnconfirmedTx()
 	if loadErr != nil {
 		return nil, nil, loadErr
 	}
-	t.log.Info("unconfirm table size", "unconfirmTxMap", t.tx.UnconfirmTxAmount)
+	t.log.Info("unconfirm table size", "unconfirmTxCount", t.tx.UnconfirmTxAmount)
 	undoDone := map[string]bool{}
 	unconfirmToConfirm := map[string]bool{}
 	for txid, unconfirmTx := range unconfirmTxMap {
