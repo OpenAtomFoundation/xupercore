@@ -60,11 +60,53 @@ func NewMeta(sctx *context.StateCtx, stateDB kvdb.Database) (*Meta, error) {
 		MetaTable: kvdb.NewTable(stateDB, pb.MetaTablePrefix),
 	}
 
-	MaxBlockSize, loadErr := obj.LoadMaxBlockSize()
+	var loadErr error
+	// load consensus parameters
+	obj.Meta.MaxBlockSize, loadErr = obj.LoadMaxBlockSize()
 	if loadErr != nil {
+		sctx.XLog.Warn("failed to load maxBlockSize from disk", "loadErr", loadErr)
 		return nil, loadErr
 	}
-	obj.Meta.MaxBlockSize = MaxBlockSize
+	obj.Meta.ForbiddenContract, loadErr = obj.LoadForbiddenContract()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load forbiddenContract from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	obj.Meta.ReservedContracts, loadErr = obj.LoadReservedContracts()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load reservedContracts from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	obj.Meta.NewAccountResourceAmount, loadErr = obj.LoadNewAccountResourceAmount()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load newAccountResourceAmount from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	// load irreversible block height & slide window parameters
+	obj.Meta.IrreversibleBlockHeight, loadErr = obj.LoadIrreversibleBlockHeight()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load irreversible block height from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	obj.Meta.IrreversibleSlideWindow, loadErr = obj.LoadIrreversibleSlideWindow()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load irreversibleSlide window from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	// load gas price
+	obj.Meta.GasPrice, loadErr = obj.LoadGasPrice()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load gas price from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	// load group chain
+	obj.Meta.GroupChainContract, loadErr = obj.LoadGroupChainContract()
+	if loadErr != nil {
+		sctx.XLog.Warn("failed to load groupchain from disk", "loadErr", loadErr)
+		return nil, loadErr
+	}
+	newMeta := proto.Clone(obj.Meta).(*pb.UtxoMeta)
+	obj.MetaTmp = newMeta
 
 	return obj, nil
 }
