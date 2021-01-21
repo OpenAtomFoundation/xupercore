@@ -4,6 +4,7 @@ Pwd=`pwd`
 Usage="sh ./control.sh {stop|start|restart|forcestop}"
 Self="control.sh"
 AppName="xchain"
+ClientName="xchain-cli"
 
 # 默认启动环境
 LogDir="$Pwd/logs"
@@ -12,6 +13,7 @@ TmpDir="$Pwd/tmp"
 AppPidFile="$TmpDir/$AppName.pid"
 ConfDir="$Pwd/conf"
 AppConf="env.yaml"
+RootChainDir="$Pwd/data/blockchain/xuper"
 
 # check param
 [ -f "$ConfDir/$AppConf" ] || { echo "env.yaml not exist!"; exit 1; }
@@ -28,8 +30,10 @@ fi
 
 # file check
 BinPath="$Pwd/bin/$AppName"
+ClientPath="$Pwd/bin/$ClientName"
 ConfPath="$ConfDir/$AppConf"
 [ -f "$BinPath" ] || { echo "app bin not exist!"; exit; }
+[ -f "$ClientPath" ] || { echo "client bin not exist!"; exit; }
 [ -f "$ConfPath" ] || { echo "config not exist!"; exit; }
 echo $BinPath
 echo $ConfPath
@@ -41,6 +45,14 @@ start() {
     if [ "$pid" != "" ]; then
         echo "process exist, app is running? pid:$pid"
         exit 1
+    fi
+
+    if [ ! -d "$RootChainDir" ]; then
+        $ClientPath chain create
+        if [ $? -ne 0 ]; then
+            echo "create root chain failed!"
+            exit 1
+        fi
     fi
 
     if [ ! -d "$LogDir" ];then
@@ -70,19 +82,36 @@ start() {
     echo "start finish.pid:$pid"
 }
 
-forceStop() {
+forcestop() {
     echo "force stop $AppName."
-    echo "killall $BinPath"
-    `killall -e -q -w -u "$USER" $BinPath`
-    echo "force stop done"
+    killProc -9
+    if [ "$?" != "0" ]; then
+        echo "force stop failed"
+        exit 1
+    fi
+    
+    echo "force stop succ"
 }
 
 stop() {
     echo "stop $AppName."
+    killProc -15
+    if [ "$?" != "0" ]; then
+        echo "stop failed"
+        exit 1
+    fi
+    
+    echo "stop succ"
+}
+
+killProc() {
+    signal=$1
+
     pid=$(getpid)
     if [ "$pid" != "" ]; then
-        echo "kill $BinPath: $pid"
-        kill -15 "$pid"
+        echo "$BinPath"
+        echo "kill $signal $pid"
+        kill "$signal" "$pid"
 
         # 等待进程退出
         waitExit "$pid" "$BinPath"
@@ -177,9 +206,7 @@ case "$1" in
         echo "Done!"
         ;;
     forcestop)
-        forceStop
-        sleep 1s
-        stop
+        forcestop
         echo "Done!"
         ;;
     restart)

@@ -46,6 +46,8 @@ buildpkg xchain-cli "$HOMEDIR/example/xchain/cmd/client/main.go"
 
 # build output
 cp -r "$HOMEDIR/example/xchain/conf" "$OUTDIR"
-cp -r "$HOMEDIR/example/xchain/data" "$OUTDIR"
 cp "$HOMEDIR/example/xchain/auto/control.sh" "$OUTDIR"
+mkdir -p "$OUTDIR/data"
+cp -r "$HOMEDIR/example/xchain/data/genesis" "$OUTDIR/data"
 
+echo "compile done!"
