@@ -12,6 +12,7 @@ import (
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
@@ -122,7 +123,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	if schedule.enableBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-		qcTree := common.InitQCTree(cCtx.Ledger, cCtx.XLog)
+		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 		if qcTree == nil {
 			cCtx.XLog.Error("Xpoa::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
 			return nil
@@ -135,7 +136,12 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 			QcTree: qcTree,
 			Log:    cCtx.XLog,
 		}
-		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
+		// 重启状态下需重做tipBlock，此时需重装载justify签名
+		var justifySigns []*chainedBftPb.QuorumCertSign
+		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+			justifySigns = xpoa.GetJustifySigns(cCtx.Ledger.GetTipBlock())
+		}
+		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree, justifySigns)
 		go smr.Start()
 		xpoa.smr = smr
 	}
@@ -340,11 +346,11 @@ func (x *xpoaConsensus) Start() error {
 
 // 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
 func (x *xpoaConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
-	store := XpoaStorage{}
 	b, err := block.GetConsensusStorage()
 	if err != nil {
 		return nil, err
 	}
+	store := XpoaStorage{}
 	err = json.Unmarshal(b, &store)
 	if err != nil {
 		x.bctx.GetLog().Error("Xpoa::ParseConsensusStorage invalid consensus storage", "err", err)
@@ -355,4 +361,20 @@ func (x *xpoaConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interf
 
 func (x *xpoaConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	return x.status, nil
+}
+
+func (x *xpoaConsensus) GetJustifySigns(block cctx.BlockInterface) []*chainedBftPb.QuorumCertSign {
+	b, err := block.GetConsensusStorage()
+	if err != nil {
+		return nil
+	}
+	store := XpoaStorage{}
+	err = json.Unmarshal(b, &store)
+	if err != nil {
+		return nil
+	}
+	if store.Justify == nil {
+		return nil
+	}
+	return store.Justify.GetSignsInfo()
 }

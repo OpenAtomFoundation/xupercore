@@ -72,7 +72,7 @@ type Smr struct {
 }
 
 func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus, cryptoClient *cCrypto.CBFTCrypto, pacemaker PacemakerInterface,
-	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree) *Smr {
+	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree, justifySigns []*chainedBftPb.QuorumCertSign) *Smr {
 	s := &Smr{
 		bcName:        bcName,
 		log:           log,
@@ -95,7 +95,9 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 		ProposalView: qcTree.Root.In.GetProposalView(),
 		ProposalId:   qcTree.Root.In.GetProposalId(),
 	}
-	s.qcVoteMsgs.Store(utils.F(v.ProposalId), []*chainedBftPb.QuorumCertSign{})
+	if justifySigns != nil {
+		s.qcVoteMsgs.Store(utils.F(v.ProposalId), justifySigns)
+	}
 	return s
 }
 

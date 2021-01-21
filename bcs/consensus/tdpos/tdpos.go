@@ -13,6 +13,7 @@ import (
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/lib/utils"
 
@@ -113,7 +114,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	if schedule.enableChainedBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-		qcTree := common.InitQCTree(cCtx.Ledger, cCtx.XLog)
+		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 		if qcTree == nil {
 			cCtx.XLog.Error("Tdpos::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
 			return nil
@@ -126,7 +127,12 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 			QcTree: qcTree,
 			Log:    cCtx.XLog,
 		}
-		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
+		// 重启状态下需重做tipBlock，此时需重装载justify签名
+		var justifySigns []*chainedBftPb.QuorumCertSign
+		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+			justifySigns = tdpos.GetJustifySigns(cCtx.Ledger.GetTipBlock())
+		}
+		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree, justifySigns)
 		go smr.Start()
 		tdpos.smr = smr
 		cCtx.XLog.Debug("Tdpos::NewSingleConsensus::load chained-bft successfully.")
@@ -419,11 +425,11 @@ func (tp *tdposConsensus) Start() error {
 
 // 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
 func (tp *tdposConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
-	store := TdposStorage{}
 	b, err := block.GetConsensusStorage()
 	if err != nil {
 		return nil, err
 	}
+	store := TdposStorage{}
 	err = json.Unmarshal(b, &store)
 	if err != nil {
 		tp.log.Error("Tdpos::ParseConsensusStorage invalid consensus storage", "err", err)
@@ -434,4 +440,20 @@ func (tp *tdposConsensus) ParseConsensusStorage(block cctx.BlockInterface) (inte
 
 func (tp *tdposConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
 	return tp.status, nil
+}
+
+func (tp *tdposConsensus) GetJustifySigns(block cctx.BlockInterface) []*chainedBftPb.QuorumCertSign {
+	b, err := block.GetConsensusStorage()
+	if err != nil {
+		return nil
+	}
+	store := TdposStorage{}
+	err = json.Unmarshal(b, &store)
+	if err != nil {
+		return nil
+	}
+	if store.Justify == nil {
+		return nil
+	}
+	return store.Justify.GetSignsInfo()
 }
