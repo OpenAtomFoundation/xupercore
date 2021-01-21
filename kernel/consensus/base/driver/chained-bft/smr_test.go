@@ -190,7 +190,7 @@ func NewSMR(node string, log logs.Logger, p2p network.Network, t *testing.T) *Sm
 	election := &ElectionA{
 		addrs: []string{NodeA, NodeB, NodeC},
 	}
-	s := NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q)
+	s := NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q, nil)
 	if s == nil {
 		t.Error("NewSmr1 error")
 		return nil

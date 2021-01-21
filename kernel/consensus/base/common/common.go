@@ -27,9 +27,41 @@ func AddressEqual(a []string, b []string) bool {
 }
 
 // initQCTree 创建了smr需要的QC树存储，该Tree存储了目前待commit的QC信息
-func InitQCTree(ledger cctx.LedgerRely, log logs.Logger) *chainedBft.QCPendingTree {
-	// 初始状态，应该是start高度的前一个区块为genesisQC, 或者是重启后的tip作为rootQC
+func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *chainedBft.QCPendingTree {
+	// 初始状态应该是start高度的前一个区块为genesisQC，即tipBlock
+	// 由于重启后对于smr的内存存储(如qcVoteMap)将会清空，因此只能拿tipBlock获取tipHeight - 1高度的签名，重做tipBlock
+	g, err := ledger.QueryBlockByHeight(startHeight - 1)
+	if err != nil {
+		return nil
+	}
+	gQC := &chainedBft.QuorumCert{
+		VoteInfo: &chainedBft.VoteInfo{
+			ProposalId:   g.GetBlockid(),
+			ProposalView: g.GetHeight(),
+		},
+		LedgerCommitInfo: &chainedBft.LedgerCommitInfo{
+			CommitStateId: g.GetBlockid(),
+		},
+	}
+	gNode := &chainedBft.ProposalNode{
+		In: gQC,
+	}
 	r := ledger.GetTipBlock()
+	// 当前为初始状态
+	if r.GetHeight() == startHeight-1 {
+		return &chainedBft.QCPendingTree{
+			Genesis:  gNode,
+			Root:     gNode,
+			HighQC:   gNode,
+			CommitQC: gNode,
+			Log:      log,
+		}
+	}
+	// 重启状态时将tipBlock-1装载到HighQC中
+	r, err = ledger.QueryBlock(r.GetPreHash())
+	if err != nil {
+		return nil
+	}
 	rQC := &chainedBft.QuorumCert{
 		VoteInfo: &chainedBft.VoteInfo{
 			ProposalId:   r.GetBlockid(),
@@ -43,7 +75,7 @@ func InitQCTree(ledger cctx.LedgerRely, log logs.Logger) *chainedBft.QCPendingTr
 		In: rQC,
 	}
 	return &chainedBft.QCPendingTree{
-		Genesis:  rNode,
+		Genesis:  gNode,
 		Root:     rNode,
 		HighQC:   rNode,
 		CommitQC: rNode,
