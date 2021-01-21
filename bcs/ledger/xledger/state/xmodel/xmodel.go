@@ -1,6 +1,7 @@
 package xmodel
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -21,6 +22,11 @@ const (
 	// TransientBucket is the name of bucket that only appears in tx output set
 	// but does't persists in xmodel
 	TransientBucket = "$transient"
+)
+
+var (
+	contractUtxoInputKey  = []byte("ContractUtxo.Inputs")
+	contractUtxoOutputKey = []byte("ContractUtxo.Outputs")
 )
 
 // XModel xmodel data structure
@@ -359,4 +365,27 @@ func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
 	key := txOutputExt.GetKey()
 	baseWriteSetKey := bucket + fmt.Sprintf("%s", key)
 	return pb.ExtUtxoTablePrefix + baseWriteSetKey
+}
+
+// ParseContractUtxoInputs parse contract utxo inputs from tx write sets
+func ParseContractUtxoInputs(tx *pb.Transaction) ([]*protos.TxInput, error) {
+	var (
+		utxoInputs []*protos.TxInput
+		extInput   []byte
+	)
+	for _, out := range tx.GetTxOutputsExt() {
+		if out.GetBucket() != TransientBucket {
+			continue
+		}
+		if bytes.Equal(out.GetKey(), contractUtxoInputKey) {
+			extInput = out.GetValue()
+		}
+	}
+	if extInput != nil {
+		err := UnmsarshalMessages(extInput, &utxoInputs)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return utxoInputs, nil
 }

@@ -22,7 +22,7 @@ type CryptoCore interface {
 	VerifyECDSA(k *ecdsa.PublicKey, signature, msg []byte) (valid bool, err error)
 
 	// 统一签名验签接口，支持普通签名、多重签名、环签名的验签
-	//XuperVerify(keys []*ecdsa.PublicKey, signature, message []byte) (bool, error)
+	VerifyXuperSignature(publicKeys []*ecdsa.PublicKey, sig []byte, message []byte) (valid bool, err error)
 
 	// 使用ECIES加密
 	EncryptByEcdsaKey(publicKey *ecdsa.PublicKey, msg []byte) (cypherText []byte, err error)
