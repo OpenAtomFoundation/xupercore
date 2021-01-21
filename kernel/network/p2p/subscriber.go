@@ -104,14 +104,14 @@ func (s *subscriber) GetMessageType() pb.XuperMessage_MessageType {
 
 func (s *subscriber) Match(msg *pb.XuperMessage) bool {
 	if s.from != "" && s.from != msg.GetHeader().GetFrom() {
-		s.log.Trace("subscriber: subscriber from not match",
-			"log_id", msg.GetHeader().GetLogid(), "from", s.from, "req.from", msg.GetHeader().GetFrom(), "type", msg.GetHeader().GetType())
+		s.log.Debug("subscriber: subscriber from not match", "log_id", msg.GetHeader().GetLogid(),
+			"from", s.from, "req.from", msg.GetHeader().GetFrom(), "type", msg.GetHeader().GetType())
 		return false
 	}
 
 	if s.bcName != "" && s.bcName != msg.GetHeader().GetBcname() {
-		s.log.Trace("subscriber: subscriber bcName not match",
-			"log_id", msg.GetHeader().GetLogid(), "bc", s.bcName, "req.from", msg.GetHeader().GetBcname(), "type", msg.GetHeader().GetType())
+		s.log.Debug("subscriber: subscriber bcName not match", "log_id", msg.GetHeader().GetLogid(),
+			"bc", s.bcName, "req.from", msg.GetHeader().GetBcname(), "type", msg.GetHeader().GetType())
 		return false
 	}
 

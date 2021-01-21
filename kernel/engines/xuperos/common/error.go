@@ -83,8 +83,10 @@ var (
 	ErrRootChainNotExist = &Error{ErrStatusRefused, 40006, "root chain not exist"}
 	ErrLoadChainFailed   = &Error{ErrStatusInternalErr, 50004, "load chain failed"}
 
+	// contract
 	ErrContractNewCtxFailed = &Error{ErrStatusInternalErr, 50004, "contract new context failed"}
 	ErrContractInvokeFailed = &Error{ErrStatusInternalErr, 50004, "contract invoke failed"}
+	ErrContractNewSandboxFailed = &Error{ErrStatusInternalErr, 40011, "contract new sandbox failed"}
 
 	// tx
 	ErrTxVerifyFailed = &Error{ErrStatusInternalErr, 40011, "verify tx failed"}

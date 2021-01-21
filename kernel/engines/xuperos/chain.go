@@ -2,14 +2,18 @@ package xuperos
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/patrickmn/go-cache"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
@@ -108,133 +112,117 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	if ctx == nil || ctx.GetLog() == nil || len(reqs) < 1 {
 		return nil, common.ErrParameter
 	}
-	/*
-		reservedRequests, err := t.ctx.State.GetReservedContractRequests(reqs, true)
+
+	reservedRequests, err := t.ctx.State.GetReservedContractRequests(reqs, true)
+	if err != nil {
+		t.log.Error("PreExec get reserved contract request error", "error", err)
+		return nil, common.ErrParameter.More("%v", err)
+	}
+
+	transContractName, transAmount, err := tx.ParseContractTransferRequest(reqs)
+	if err != nil {
+		return nil, common.ErrParameter.More("%v", err)
+	}
+
+	reqs = append(reservedRequests, reqs...)
+	if len(reqs) <= 0 {
+		return &protos.InvokeResponse{}, nil
+	}
+
+	stateConfig := &contract.SandboxConfig{
+		XMReader: t.ctx.State.CreateXMReader(),
+	}
+	sandbox, err := t.ctx.Contract.NewStateSandbox(stateConfig)
+	if err != nil {
+		t.log.Error("PreExec new state sandbox error", "error", err)
+		return nil, common.ErrContractNewSandboxFailed
+	}
+
+	contextConfig := &contract.ContextConfig{
+		State:     		sandbox,
+		Initiator:  	initiator,
+		AuthRequire:	authRequires,
+		ResourceLimits:	contract.MaxLimits,
+	}
+
+	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
+	gasUsed := int64(0)
+	responseBodes := make([][]byte, 0, len(reqs))
+	requests := make([]*protos.InvokeRequest, 0, len(reqs))
+	responses := make([]*protos.ContractResponse, 0, len(reqs))
+	for i, req := range reqs {
+		if req == nil || req.ModuleName == "" || req.ContractName == "" || req.MethodName == "" {
+			ctx.GetLog().Warn("PreExec req empty", "req", req)
+			continue
+		}
+
+		contextConfig.Module = req.ModuleName
+		contextConfig.ContractName = req.ContractName
+		if transContractName == req.ContractName {
+			contextConfig.TransferAmount = transAmount.String()
+		} else {
+			contextConfig.TransferAmount = ""
+		}
+
+		context, err := t.ctx.Contract.NewContext(contextConfig)
 		if err != nil {
-			t.log.Error("PreExec get reserved contract request error", "error", err)
-			return nil, common.ErrParameter.More("%v", err)
-		}
-
-		transContractName, transAmount, err := tx.ParseContractTransferRequest(reqs)
-		if err != nil {
-			return nil, common.ErrParameter.More("%v", err)
-		}
-
-		reqs = append(reservedRequests, reqs)
-		if len(reqs) <= 0 {
-			return &protos.InvokeResponse{}, nil
-		}
-
-		xmReader := t.ctx.State.GetXMReader()
-		stateConfig := &contract.SandboxConfig{XMReader: xmReader}
-		sandbox, err := t.ctx.Contract.NewStateSandbox(stateConfig)
-		contextConfig := &contract.ContextConfig{
-			State:     		sandbox,
-			Initiator:  	initiator,
-			AuthRequire:	authRequires,
-			ResourceLimits:	contract.MaxLimits,
-		}
-
-		gasPrice := t.ctx.State.GetMeta().GasPrice
-		gasUsed := int64(0)
-		responseBodes := make([][]byte, 0, len(reqs))
-		requests := make([]*protos.InvokeRequest, 0, len(reqs))
-		responses := make([]*protos.ContractResponse, 0, len(reqs))
-		for i, req := range reqs {
-			if req == nil || req.ModuleName == "" || req.ContractName == "" || req.MethodName == "" {
+			ctx.GetLog().Error("PreExec NewContext error", "error", err, "contractName", req.ContractName)
+			if i < len(reservedRequests) && strings.HasSuffix(err.Error(), "not found") {
+				requests = append(requests, req)
 				continue
 			}
+			return nil, common.ErrContractNewCtxFailed.More("%v", err)
+		}
 
-			contextConfig.Module = req.ModuleName
-			contextConfig.ContractName = req.ContractName
-			if transContractName == req.ContractName {
-				contextConfig.TransferAmount = transAmount.String()
-			} else {
-				contextConfig.TransferAmount = ""
-			}
-
-			context, err := t.ctx.Contract.NewContext(contextConfig)
-			if err != nil {
-				ctx.GetLog().Error("PreExec NewContext error", "error", err, "contractName", req.ContractName)
-				if i < len(reservedRequests) && strings.HasSuffix(err.Error(), "not found") {
-					requests = append(requests, req)
-					continue
-				}
-				return nil, common.ErrContractNewCtxFailed.More("%v", err)
-			}
-
-			resp, err := context.Invoke(req.MethodName, req.Args)
-			if err != nil {
-				context.Release()
-				ctx.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
-				return nil, common.ErrContractInvokeFailed.More("%v", err)
-			}
-
-			if resp.Status >= 400 && i < len(reservedRequests) {
-				context.Release()
-				ctx.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
-				return nil, common.ErrContractInvokeFailed.More("%v", resp.Message)
-			}
-
-			resourceUsed := context.ResourceUsed()
-			if i >= len(reservedRequests) {
-				gasUsed += resourceUsed.TotalGas(gasPrice)
-			}
-
-			// request
-			request := *req
-			request.ResourceLimits = []*protos.ResourceLimit{
-				{Type: protos.ResourceType_CPU, Limit: resourceUsed.Cpu},
-				{Type: protos.ResourceType_MEMORY, Limit: resourceUsed.Memory},
-				{Type: protos.ResourceType_DISK, Limit: resourceUsed.Disk},
-				{Type: protos.ResourceType_XFEE, Limit: resourceUsed.XFee},
-			}
-			requests = append(requests, &request)
-
-			// response
-			response := &protos.ContractResponse{
-				Status:  int32(resp.Status),
-				Message: resp.Message,
-				Body:    resp.Body,
-			}
-			responses = append(responses, response)
-			responseBodes = append(responseBodes, resp.Body)
-
+		resp, err := context.Invoke(req.MethodName, req.Args)
+		if err != nil {
 			context.Release()
+			ctx.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
+			return nil, common.ErrContractInvokeFailed.More("%v", err)
 		}
 
-		utxoInputs, utxoOutputs := sandbox.GetUtxoRWSets()
-		err = sandbox.PutUtxos(utxoInputs, utxoOutputs)
-		if err != nil {
-			return nil, err
+		if resp.Status >= 400 && i < len(reservedRequests) {
+			context.Release()
+			ctx.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
+			return nil, common.ErrContractInvokeFailed.More("%v", resp.Message)
 		}
 
-		crossQuery := sandbox.GetCrossQueryRWSets()
-		err = sandbox.PutCrossQueries(crossQuery)
-		if err != nil {
-			return nil, err
+		resourceUsed := context.ResourceUsed()
+		if i >= len(reservedRequests) {
+			gasUsed += resourceUsed.TotalGas(gasPrice)
 		}
 
-		inputs, outputs, err := sandbox.GetRWSets()
-		if err != nil {
-			return nil, err
+		// request
+		request := *req
+		request.ResourceLimits = contract.ToPbLimits(resourceUsed)
+		requests = append(requests, &request)
+
+		// response
+		response := &protos.ContractResponse{
+			Status:  int32(resp.Status),
+			Message: resp.Message,
+			Body:    resp.Body,
 		}
+		responses = append(responses, response)
+		responseBodes = append(responseBodes, resp.Body)
 
-		invokeResponse := &protos.InvokeResponse{
-			GasUsed:     gasUsed,
-			Response:    responseBodes,
-			Inputs:      xmodel.GetTxInputs(inputs),
-			Outputs:     xmodel.GetTxOutputs(outputs),
-			Requests:    requests,
-			Responses:   responses,
-			UtxoInputs:  utxoInputs,
-			UtxoOutputs: utxoOutputs,
-		}
+		context.Release()
+	}
 
-		return invokeResponse, nil
+	rwSet := sandbox.RWSet()
+	invokeResponse := &protos.InvokeResponse{
+		GasUsed:     gasUsed,
+		Response:    responseBodes,
+		Inputs:      xmodel.GetTxInputs(rwSet.RSet),
+		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
+		Requests:    requests,
+		Responses:   responses,
+		// TODO: 合约内转账未实现，空值
+		//UtxoInputs:  utxoInputs,
+		//UtxoOutputs: utxoOutputs,
+	}
 
-		/**/
-	return nil, nil
+	return invokeResponse, nil
 }
 
 // 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)

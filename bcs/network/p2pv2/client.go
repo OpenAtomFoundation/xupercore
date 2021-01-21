@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/lib/timer"
 	"sync"
 	"time"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
@@ -88,7 +88,7 @@ func (p *P2PServerV2) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerI
 					"peer", peerID, "timer", streamCtx.GetTimer().Print())
 			}()
 
-			stream, err := p.streamPool.Get(peerID)
+			stream, err := p.streamPool.Get(ctx, peerID)
 			streamCtx.GetTimer().Mark("connect")
 			if err != nil {
 				p.log.Warn("p2p: get stream error", "log_id", msg.GetHeader().GetLogid(),
@@ -178,7 +178,7 @@ func (p *P2PServerV2) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 					"peer", peerID, "timer", streamCtx.GetTimer().Print())
 			}()
 
-			stream, err := p.streamPool.Get(peerID)
+			stream, err := p.streamPool.Get(ctx, peerID)
 			streamCtx.GetTimer().Mark("connect")
 			if err != nil {
 				p.log.Warn("p2p: get stream error", "log_id", msg.GetHeader().GetLogid(),

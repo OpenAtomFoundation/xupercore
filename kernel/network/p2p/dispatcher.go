@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"sync"
@@ -8,8 +9,10 @@ import (
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/lib/crypto/hash"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/lib/utils"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/patrickmn/go-cache"
@@ -108,12 +111,14 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 	ctx := &xctx.BaseCtx{XLog:  xlog, Timer: timer.NewXTimer()}
 	defer func() {
 		ctx.GetLog().Info("Dispatch", "bc", msg.GetHeader().GetBcname(),
-			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "timer", ctx.GetTimer().Print())
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(),
+			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
 	}()
 
 	if d.IsHandled(msg) {
 		ctx.GetLog().SetInfoField("handled", true)
-		return ErrMessageHandled
+		// return ErrMessageHandled
+		return nil
 	}
 
 	if stream == nil {
@@ -160,7 +165,14 @@ func MessageKey(msg *pb.XuperMessage) string {
 		return ""
 	}
 
-	return fmt.Sprintf("%s_%d", msg.GetHeader().GetLogid(), msg.GetHeader().GetDataCheckSum())
+	header := msg.GetHeader()
+	buf := new(bytes.Buffer)
+	buf.WriteString(header.GetType().String())
+	buf.WriteString(header.GetBcname())
+	buf.WriteString(header.GetFrom())
+	buf.WriteString(header.GetLogid())
+	buf.WriteString(fmt.Sprintf("%d", header.GetDataCheckSum()))
+	return utils.F(hash.DoubleSha256(buf.Bytes()))
 }
 
 // filter handled message
