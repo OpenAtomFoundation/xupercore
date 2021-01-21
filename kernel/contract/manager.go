@@ -3,6 +3,9 @@ package contract
 import (
 	"fmt"
 	"sync"
+
+	"github.com/xuperchain/xupercore/kernel/common/xconfig"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 var (
@@ -19,12 +22,15 @@ type Manager interface {
 }
 
 type ManagerConfig struct {
-	Core ChainCore
+	Basedir  string
+	BCName   string
+	EnvConf  *xconfig.EnvConf
+	Core     ChainCore
+	XMReader ledger.XMReader
 }
 
 // ChainCore is the interface of chain service
 type ChainCore interface {
-	BCName() string
 	// GetAccountAddress get addresses associated with account name
 	GetAccountAddresses(accountName string) ([]string, error)
 	// VerifyContractPermission verify permission of calling contract

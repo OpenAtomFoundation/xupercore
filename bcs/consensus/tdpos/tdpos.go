@@ -91,7 +91,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	// 新建schedule实例，该实例包含smr中election的接口实现
 	schedule := NewSchedule(xconfig, cCtx.XLog, cCtx.Ledger)
 	if schedule == nil {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::new schedule err")
+		cCtx.XLog.Error("Tdpos::NewSingleConsensus::new schedule err.")
 		return nil
 	}
 	schedule.address = cCtx.Network.PeerInfo().Address
@@ -110,7 +110,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		log:                            cCtx.XLog,
 		curTermProposerProduceNumCache: make(map[int64]map[string]map[string]bool),
 	}
-	if schedule.enableBFT {
+	if schedule.enableChainedBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
 		qcTree := common.InitQCTree(cCtx.Ledger, cCtx.XLog)
@@ -129,7 +129,10 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
 		go smr.Start()
 		tdpos.smr = smr
+		cCtx.XLog.Debug("Tdpos::NewSingleConsensus::load chained-bft successfully.")
 	}
+	cCtx.XLog.Debug("Tdpos::NewSingleConsensus::create a tdpos instance successfully.", "tdpos", tdpos)
+
 	// 注册合约方法
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractNominateCandidate, tdpos.runNominateCandidate)
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractRevokeCandidata, tdpos.runRevokeCandidate)
@@ -212,7 +215,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		return false, err
 	}
 	// 1 验证bft相关信息
-	if tp.election.enableBFT {
+	if tp.election.enableChainedBFT {
 		pNode := tp.smr.BlockToProposalNode(block)
 		err := tp.smr.GetSaftyRules().CheckProposal(pNode.In, tdposStorage.Justify, tp.election.GetValidators(block.GetHeight()))
 		if err != nil {
@@ -242,7 +245,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	term, pos, _ := tp.election.minerScheduling(block.GetTimestamp())
 	curHeight := block.GetHeight()
 	var wantProposers []string
-	if curHeight < 3 {
+	if curHeight <= 3 {
 		// 使用初始值
 		wantProposers = tp.election.proposers
 	} else {
@@ -303,7 +306,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, err
 	}
 
 	// check bft status
-	if tp.election.enableBFT {
+	if tp.election.enableChainedBFT {
 		// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 		if !bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tp.election.ledger.GetTipBlock().GetBlockid()) {
 			// 单个节点不存在投票验证的hotstuff流程，因此返回true
@@ -368,7 +371,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, err
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
 func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
-	if !tp.election.enableBFT {
+	if !tp.election.enableChainedBFT {
 		return nil
 	}
 	// confirm的第一步：不管是否为当前Leader，都需要更新本地voteQC树，保证当前block的justify votes被写入本地账本
@@ -409,7 +412,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 
 // 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 func (tp *tdposConsensus) Stop() error {
-	if tp.election.enableBFT {
+	if tp.election.enableChainedBFT {
 		tp.smr.Stop()
 	}
 	return nil
@@ -417,7 +420,7 @@ func (tp *tdposConsensus) Stop() error {
 
 // 共识实例的启动逻辑
 func (tp *tdposConsensus) Start() error {
-	if tp.election.enableBFT {
+	if tp.election.enableChainedBFT {
 		tp.smr.Start()
 	}
 	return nil

@@ -28,5 +28,5 @@ func TestUnmarshalConfig(t *testing.T) {
 	if err != nil {
 		t.Error("Config unmarshal err", "err", err)
 	}
-	t.Error("Config unmarshal", "v", xconfig)
+	t.Log("Config unmarshal", "v", xconfig)
 }
