@@ -159,7 +159,7 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 
 	if err := s.srv.dispatcher.Dispatch(msg, s); err != nil {
 		s.log.Warn("handle new message dispatch error", "log_id", msg.GetHeader().GetLogid(),
-			"type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "error", err)
 		return nil // not return err
 	}
 

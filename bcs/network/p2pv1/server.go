@@ -181,7 +181,8 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 	}
 
 	if err = p.dispatcher.Dispatch(msg, stream); err != nil {
-		p.log.Warn("dispatch error", "log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(), "error", err)
+		p.log.Warn("handle new message dispatch error", "log_id", msg.GetHeader().GetLogid(),
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "error", err)
 		return err
 	}
 	return nil

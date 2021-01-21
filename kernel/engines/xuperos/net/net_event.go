@@ -308,9 +308,9 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 		return response(err)
 	}
 
-	ctx.GetLog().SetCommField("height", output.Block.Height)
-	ctx.GetLog().SetCommField("blockId", utils.F(output.Block.Blockid))
-	ctx.GetLog().SetCommField("status", output.Status)
+	ctx.GetLog().SetInfoField("height", output.Block.Height)
+	ctx.GetLog().SetInfoField("blockId", utils.F(output.Block.Blockid))
+	ctx.GetLog().SetInfoField("status", output.Status)
 	return response(nil)
 }
 

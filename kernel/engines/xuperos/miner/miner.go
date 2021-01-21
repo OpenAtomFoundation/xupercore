@@ -66,13 +66,11 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 		return fmt.Errorf("refused proc block")
 	}
 
-	inSyncTargetHeight := t.inSyncTargetHeight
-	inSyncTargetBlockId := t.inSyncTargetBlockId
-	if block.GetHeight() < inSyncTargetHeight || bytes.Equal(block.GetBlockid(), inSyncTargetBlockId) {
-		ctx.GetLog().Trace("ignore block because recv block height lower than in sync height",
-			"recvHeight", block.GetHeight(), "inSyncTargetHeight", inSyncTargetHeight,
-			"inSyncTargetBlockId", utils.F(inSyncTargetBlockId))
-		return nil
+	if block.GetHeight() < t.inSyncTargetHeight || bytes.Equal(block.GetBlockid(), t.inSyncTargetBlockId) {
+		ctx.GetLog().Warn("ignore block because recv block height lower than in sync height",
+			"recvHeight", block.GetHeight(), "recvBlockId", utils.F(block.GetBlockid()),
+			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
+		return fmt.Errorf("refused proc block")
 	}
 
 	for id, tx := range block.Transactions {
@@ -83,8 +81,9 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 		}
 	}
 
-	ctx.GetLog().Debug("miner proc block", "height", block.Height, "blockId", utils.F(block.Blockid),
-		"targetHeight", inSyncTargetHeight, "targetBlockId", utils.F(inSyncTargetBlockId))
+	ctx.GetLog().Debug("miner proc block",
+		"recvHeight", block.Height, "recvBlockId", utils.F(block.Blockid),
+		"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
 	// 尝试同步到该高度，如果小于账本高度会被直接忽略
 	return t.trySyncBlock(ctx, block)
 }
@@ -209,6 +208,10 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
+
+	// 7.更新同步状态
+	t.inSyncTargetHeight = t.ctx.Ledger.GetMeta().GetTrunkHeight()
+	t.inSyncTargetBlockId = t.ctx.Ledger.GetMeta().GetTipBlockid()
 
 	ctx.GetLog().Trace("complete new block generation", "blockId", utils.F(block.GetBlockid()),
 		"height", height, "costs", ctx.GetTimer().Print())
@@ -428,10 +431,10 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	// 3.检查同步目标，忽略目标高度小于正在同步高度的任务
 	if targetBlock.GetHeight() < t.inSyncTargetHeight ||
 		bytes.Equal(targetBlock.GetBlockid(), t.inSyncTargetBlockId) {
-		ctx.GetLog().Trace("try sync block height lower than in sync height,ignore", "targetHeight",
-			targetBlock.GetHeight(), "inSyncHeight", t.inSyncHeight, "inSyncTargetHeight",
-			utils.F(t.inSyncTargetBlockId))
-		return nil
+		ctx.GetLog().Warn("ignore block because recv block height lower than in sync height",
+			"recvHeight", targetBlock.GetHeight(), "recvBlockId", utils.F(targetBlock.GetBlockid()),
+			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
+		return fmt.Errorf("refused proc block")
 	}
 
 	// 4.更新同步中区块高度
