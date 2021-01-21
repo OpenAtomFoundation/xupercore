@@ -177,6 +177,9 @@ func (t *QCPendingTree) enforceUpdateHighQC(inProposalId []byte) error {
 	}
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
 	t.HighQC = node
+	t.GenericQC = nil
+	t.LockedQC = nil
+	t.CommitQC = nil
 	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
 	if node.Parent == nil {
 		return nil

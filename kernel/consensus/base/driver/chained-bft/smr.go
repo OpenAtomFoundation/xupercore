@@ -60,6 +60,10 @@ type Smr struct {
 	saftyrules saftyRulesInterface
 	Election   ProposerElectionInterface
 	qcTree     *QCPendingTree
+	// smr本地存储和外界账本存储的唯一关联，该字段标识了账本状态，
+	// 但此处并不直接使用ledger handler作为变量，旨在结偶smr存储和本地账本存储
+	// smr存储应该仅仅是账本区块头存储的很小的子集
+	ledgerState int64
 
 	// map[proposalId]bool
 	localProposal *sync.Map
@@ -171,9 +175,14 @@ func (s *Smr) UpdateJustifyQcStatus(justify *QuorumCert) {
 	s.qcTree.updateHighQC(justify.GetProposalId())
 }
 
+// UpdateQcStatus 除了更新本地smr的QC之外，还更新了smr的和账本相关的状态，以此区别于smr receive proposal时的updateQcStatus
 func (s *Smr) UpdateQcStatus(node *ProposalNode) error {
 	if node == nil {
 		return EmptyTarget
+	}
+	// 更新ledgerStatus
+	if node.In.GetProposalView() > s.ledgerState {
+		s.ledgerState = node.In.GetProposalView()
 	}
 	return s.qcTree.updateQcStatus(node)
 }
@@ -260,9 +269,6 @@ func (s *Smr) reloadJustifyQC() (*QuorumCert, error) {
 	if bytes.Equal(s.qcTree.Genesis.In.GetProposalId(), highQC.In.GetProposalId()) {
 		return &QuorumCert{VoteInfo: v}, nil
 	}
-	// 此时highQC一定有parent， TODO：边界错误
-	v.ParentView = highQC.Parent.In.GetProposalView()
-	v.ParentId = highQC.Parent.In.GetProposalId()
 	// 查看qcTree是否包含当前可以commit的Id
 	var commitId []byte
 	if s.qcTree.GetCommitQC() != nil {
@@ -289,12 +295,14 @@ func (s *Smr) reloadJustifyQC() (*QuorumCert, error) {
 
 // handleReceivedProposal 该阶段在收到一个ProposalMsg后触发，与LibraBFT的process_proposal阶段类似
 // 该阶段分两个角色，一个是认为自己是currentRound的Leader，一个是Replica
-// 1. 比较本地pacemaker是否需要AdvanceRound
-// 2. 查看ProposalMsg消息的合法性，检查qcTree是否需要更新CommitQC
-// 3. 检查本地计算Leader和该新QC的Leader是否相等
-// 4. 验证Leader和本地计算的Leader是否相等
-// 5.向本地PendingTree插入该QC，即更新QC
-// 6.发送一个vote消息给下一个Leader
+// 0. 查看ProposalMsg消息的合法性
+// 1. 检查新的view是否符合账本状态要求
+// 2. 比较本地pacemaker是否需要AdvanceRound
+// 3. 检查qcTree是否需要更新CommitQC
+// 4. 查看收到的view是否符合要求
+// 5. 向本地PendingTree插入该QC，即更新QC
+// 6. 发送一个vote消息给下一个Leader
+// 注意：该过程删除了当前round的leader是否符合计算，将该步骤后置到上层共识CheckMinerMatch，原因：需要支持上层基于时间调度而不是基于round调度，减小耦合
 func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	newProposalMsg := &chainedBftPb.ProposalMsg{}
 	if err := p2p.Unmarshal(msg, newProposalMsg); err != nil {
@@ -321,7 +329,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		ParentView:   parentQC.GetProposalView(),
 	}
 	isFirstJustify := bytes.Equal(s.qcTree.Genesis.In.GetProposalId(), parentQC.GetProposalId())
-	// 若为初始状态，则无需检查justify，否则需要检查qc有效性
+	// 0.若为初始状态，则无需检查justify，否则需要检查qc有效性
 	if !isFirstJustify {
 		if err := s.saftyrules.CheckProposal(&QuorumCert{
 			VoteInfo:  newVote,
@@ -331,7 +339,12 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			return
 		}
 	}
-	// 本地pacemaker试图更新currentView, 并返回一个是否需要将新消息通知该轮Leader, 是该轮不是下轮！主要解决P2PIP端口不能通知Loop的问题
+	// 1.检查账本状态和收到新round是否符合要求
+	if s.ledgerState+3 < newVote.ProposalView {
+		s.log.Error("smr::handleReceivedProposal::local ledger hasn't been updated.", "LedgerState", s.ledgerState, "ProposalView", newVote.ProposalView)
+		return
+	}
+	// 2.本地pacemaker试图更新currentView, 并返回一个是否需要将新消息通知该轮Leader, 是该轮不是下轮！主要解决P2PIP端口不能通知Loop的问题
 	sendMsg, _ := s.pacemaker.AdvanceView(parentQC)
 	s.log.Info("smr::handleReceivedProposal::pacemaker update", "view", s.pacemaker.GetCurrentView())
 	// 通知current Leader
@@ -346,14 +359,18 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 
 	// 获取parentQC对应的本地节点, 新qc至少要在本地qcTree挂上, 那么justify的节点需要在本地
 	parentNode := s.qcTree.DFSQueryNode(parentQC.GetProposalId())
-	// 本地safetyrules更新, 如有可以commit的QC，执行commit操作并更新本地rootQC
-	valid := s.saftyrules.UpdatePreferredRound(parentQC)
+	if parentNode == nil {
+		s.log.Error("smr::handleReceivedProposal::cannot find parent node.", "parentQC Height", parentQC.GetProposalView(), "parentQC id", parentQC.GetProposalId())
+		return
+	}
+	// 3.本地safetyrules更新, 如有可以commit的QC，执行commit操作并更新本地rootQC
+	valid := s.saftyrules.UpdatePreferredRound(parentQC.GetProposalView())
 	if parentQC.LedgerCommitInfo != nil && parentQC.LedgerCommitInfo.CommitStateId != nil && valid && parentNode != nil {
 		if parentNode.Parent != nil && parentNode.Parent.Parent != nil {
 			s.qcTree.updateCommit(parentNode.Parent.Parent.In)
 		}
 	}
-	// 查看收到的view是否符合要求
+	// 4.查看收到的view是否符合要求
 	if !s.saftyrules.CheckPacemaker(newProposalMsg.GetProposalView(), s.pacemaker.GetCurrentView()) {
 		s.log.Error("smr::handleReceivedProposal::error", "error", TooLowNewProposal, "local want", s.pacemaker.GetCurrentView(),
 			"proposal have", newProposalMsg.GetProposalView())
@@ -376,20 +393,15 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			VoteInfo:         newVote,
 			LedgerCommitInfo: newLedgerInfo,
 		},
+		Parent: parentNode,
 	}
-	if parentNode != nil {
-		newNode.Parent = parentNode
-	}
-	// 与proposal.ParentId相比，更新本地qcTree，insert新节点, 包括更新CommitQC等等
+	// 5.与proposal.ParentId相比，更新本地qcTree，insert新节点, 包括更新CommitQC等等
 	if err := s.qcTree.updateQcStatus(newNode); err != nil {
 		s.log.Error("smr::handleReceivedProposal::updateQcStatus error", "err", err)
 		return
 	}
-	// 此时更新node的commitStateId
-	if s.qcTree.GetCommitQC() != nil {
-		newLedgerInfo.CommitStateId = s.qcTree.GetCommitQC().In.GetProposalId()
-	}
 	s.log.Info("smr::handleReceivedProposal::pacemaker changed", "round", s.pacemaker.GetCurrentView())
+	// 6.发送一个vote消息给下一个Leader
 	nextLeader := s.Election.GetLeader(s.pacemaker.GetCurrentView() + 1)
 	if nextLeader == "" {
 		s.log.Info("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)

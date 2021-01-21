@@ -316,17 +316,8 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, err
 			truncate, err := func() (bool, error) {
 				// 1. 比对HighQC与ledger高度
 				b, err := tp.election.ledger.QueryBlock(tp.smr.GetHighQC().GetProposalId())
-				if err != nil {
-					// 不存在时需要把本地HighQC回滚到ledger
-					if err := tp.smr.EnforceUpdateHighQC(tp.election.ledger.GetTipBlock().GetBlockid()); err != nil {
-						// 本地HighQC回滚错误直接退出
-						return false, err
-					}
-					return false, nil
-				}
-				// HighQC高度高于或等于账本高度，本地HighQC回滚到ledger
-				if b.GetHeight() > tp.election.ledger.GetTipBlock().GetHeight() {
-					// 不存在时需要把本地HighQC回滚到ledger
+				if err != nil || b.GetHeight() > tp.election.ledger.GetTipBlock().GetHeight() {
+					// 不存在时需要把本地HighQC回滚到ledger; HighQC高度高于账本高度，本地HighQC回滚到ledger
 					if err := tp.smr.EnforceUpdateHighQC(tp.election.ledger.GetTipBlock().GetBlockid()); err != nil {
 						// 本地HighQC回滚错误直接退出
 						return false, err
