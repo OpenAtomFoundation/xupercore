@@ -3,6 +3,8 @@ package p2pv2
 import (
 	"errors"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"sync"
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -23,6 +25,7 @@ type StreamPool struct {
 	log            logs.Logger
 	srv            *P2PServerV2
 	limit          *StreamLimit
+	mutex          sync.Mutex
 	streams        *cache.LRUCache // key: peer id, value: Stream
 	maxStreamLimit int32
 }
@@ -38,44 +41,58 @@ func NewStreamPool(ctx *nctx.NetCtx, srv *P2PServerV2) (*StreamPool, error) {
 
 		srv:            srv,
 		limit:          limit,
+		mutex:          sync.Mutex{},
 		streams:        cache.NewLRUCache(int(cfg.MaxStreamLimits)),
 		maxStreamLimit: cfg.MaxStreamLimits,
 	}, nil
 }
 
 // Get will probe and return a stream
-func (sp *StreamPool) Get(peerId peer.ID) (*Stream, error) {
+func (sp *StreamPool) Get(ctx xctx.XContext, peerId peer.ID) (*Stream, error) {
 	if v, ok := sp.streams.Get(peerId.Pretty()); ok {
 		if stream, ok := v.(*Stream); ok {
 			if stream.Valid() {
 				return stream, nil
 			} else {
 				sp.DelStream(stream)
-				sp.log.Warn("stream not valid, create new stream", "peerId", peerId)
+				ctx.GetLog().Warn("stream not valid, create new stream", "peerId", peerId)
+			}
+		}
+	}
+
+	sp.mutex.Lock()
+	defer sp.mutex.Unlock()
+	if v, ok := sp.streams.Get(peerId.Pretty()); ok {
+		if stream, ok := v.(*Stream); ok {
+			if stream.Valid() {
+				return stream, nil
+			} else {
+				sp.DelStream(stream)
+				ctx.GetLog().Warn("stream not valid, create new stream", "peerId", peerId)
 			}
 		}
 	}
 
 	netStream, err := sp.srv.host.NewStream(sp.ctx, peerId, protocol.ID(protocolID))
 	if err != nil {
-		sp.log.Warn("new net stream error", "peerId", peerId, "error", err)
+		ctx.GetLog().Warn("new net stream error", "peerId", peerId, "error", err)
 		return nil, ErrNewStream
 	}
 
-	return sp.NewStream(netStream)
+	return sp.NewStream(ctx, netStream)
 }
 
 // Add used to add a new net stream into pool
-func (sp *StreamPool) NewStream(netStream network.Stream) (*Stream, error) {
+func (sp *StreamPool) NewStream(ctx xctx.XContext, netStream network.Stream) (*Stream, error) {
 	stream, err := NewStream(sp.ctx, sp.srv, netStream)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := sp.AddStream(stream); err != nil {
+	if err := sp.AddStream(ctx, stream); err != nil {
 		stream.Close()
 		sp.srv.kdht.RoutingTable().RemovePeer(stream.PeerID())
-		sp.log.Warn("New stream is deleted", "error", err)
+		ctx.GetLog().Warn("New stream is deleted", "error", err)
 		return nil, ErrNewStream
 	}
 
@@ -83,17 +100,17 @@ func (sp *StreamPool) NewStream(netStream network.Stream) (*Stream, error) {
 }
 
 // AddStream used to add a new P2P stream into pool
-func (sp *StreamPool) AddStream(stream *Stream) error {
+func (sp *StreamPool) AddStream(ctx xctx.XContext, stream *Stream) error {
 	peerID := stream.PeerID()
 	multiAddr := stream.MultiAddr()
 	ok := sp.limit.AddStream(multiAddr.String(), peerID)
 	if !ok || int32(sp.streams.Len()) > sp.maxStreamLimit {
-		sp.log.Warn("add stream limit error", "peerID", peerID, "multiAddr", multiAddr, "error", "over limit")
+		ctx.GetLog().Warn("add stream limit error", "peerID", peerID, "multiAddr", multiAddr, "error", "over limit")
 		return ErrStreamPoolFull
 	}
 
 	if v, ok := sp.streams.Get(stream.id.Pretty()); ok {
-		sp.log.Warn("replace stream", "peerID", peerID, "multiAddr", multiAddr)
+		ctx.GetLog().Warn("replace stream", "peerID", peerID, "multiAddr", multiAddr)
 		if s, ok := v.(*Stream); ok {
 			sp.DelStream(s)
 		}

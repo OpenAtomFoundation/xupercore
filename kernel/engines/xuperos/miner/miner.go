@@ -612,10 +612,10 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 
 	opts := []p2p.MessageOption {
 		p2p.WithBCName(t.ctx.BCName),
-		p2p.WithLogId(ctx.GetLog().GetLogId()),
+		// p2p.WithLogId(ctx.GetLog().GetLogId()),
 	}
 	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, input, opts...)
-	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
+	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg)
 	if err != nil {
 		ctx.GetLog().Warn("confirm block chain status error", "err", err)
 		return nil, err
@@ -638,7 +638,7 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 			continue
 		}
 
-		ctx.GetLog().Trace("download block", "height", block.Block.Height, "blockId", utils.F(block.Block.Blockid))
+		ctx.GetLog().Trace("download block", "height", block.Block.Height, "blockId", utils.F(block.Block.Blockid), "msg_log_id", msg.Header.Logid)
 		return block.Block, nil
 	}
 

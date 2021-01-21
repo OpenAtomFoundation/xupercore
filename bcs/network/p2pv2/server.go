@@ -268,7 +268,7 @@ func (p *P2PServerV2) connect() error {
 }
 
 func (p *P2PServerV2) streamHandler(netStream network.Stream) {
-	if _, err := p.streamPool.NewStream(netStream); err != nil {
+	if _, err := p.streamPool.NewStream(p.ctx, netStream); err != nil {
 		p.log.Warn("new stream error")
 	}
 }
