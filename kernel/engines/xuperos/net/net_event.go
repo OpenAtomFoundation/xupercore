@@ -266,16 +266,15 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	ledgerMeta := chain.Context().Ledger.GetMeta()
 	stateMeta := chain.Context().State.GetMeta()
 	ctx.GetLog().Info("SendBlock",
-		"genesis", utils.F(ledgerMeta.RootBlockid),
-		"last", utils.F(ledgerMeta.TipBlockid),
 		"height", ledgerMeta.TrunkHeight,
-		"utxo", utils.F(stateMeta.GetLatestBlockid()))
+		"last", utils.F(ledgerMeta.TipBlockid),
+		"utxo", utils.F(stateMeta.GetLatestBlockid()),
+		"genesis", utils.F(ledgerMeta.RootBlockid))
 	return nil
 }
 
 func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
-
 	var input xpb.BlockID
 	var output *xpb.BlockInfo
 
@@ -309,8 +308,9 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 		return response(err)
 	}
 
-	ctx.GetLog().SetCommField("blockId", utils.F(input.Blockid))
-	ctx.GetLog().SetCommField("status", output.Status)
+	ctx.GetLog().SetInfoField("height", output.Block.Height)
+	ctx.GetLog().SetInfoField("blockId", utils.F(output.Block.Blockid))
+	ctx.GetLog().SetInfoField("status", output.Status)
 	return response(nil)
 }
 

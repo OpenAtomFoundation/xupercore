@@ -9,6 +9,7 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/patrickmn/go-cache"
@@ -29,7 +30,7 @@ type Dispatcher interface {
 	UnRegister(sub Subscriber) error
 
 	// Dispatch dispatch message to registered subscriber
-	Dispatch(xctx.XContext, *pb.XuperMessage, Stream) error
+	Dispatch(*pb.XuperMessage, Stream) error
 }
 
 // dispatcher implement interface Dispatcher
@@ -98,15 +99,20 @@ func (d *dispatcher) UnRegister(sub Subscriber) error {
 	return nil
 }
 
-func (d *dispatcher) Dispatch(ctx xctx.XContext, msg *pb.XuperMessage, stream Stream) error {
+func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 	if msg == nil || msg.GetHeader() == nil || msg.GetData() == nil {
 		return ErrMessageEmpty
 	}
 
-	ctx.GetLog().Trace("dispatch new message", "bc", msg.Header.Bcname,
-		"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom())
+	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2p")
+	ctx := &xctx.BaseCtx{XLog:  xlog, Timer: timer.NewXTimer()}
+	defer func() {
+		ctx.GetLog().Info("Dispatch", "bc", msg.GetHeader().GetBcname(),
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "timer", ctx.GetTimer().Print())
+	}()
 
 	if d.IsHandled(msg) {
+		ctx.GetLog().SetInfoField("handled", true)
 		return ErrMessageHandled
 	}
 
@@ -119,8 +125,9 @@ func (d *dispatcher) Dispatch(ctx xctx.XContext, msg *pb.XuperMessage, stream St
 	}
 
 	d.mu.RLock()
-	defer d.mu.RUnlock()
+	ctx.GetTimer().Mark("lock")
 	if _, ok := d.mc[msg.GetHeader().GetType()]; !ok {
+		d.mu.RUnlock()
 		return ErrNotRegister
 	}
 
@@ -135,18 +142,15 @@ func (d *dispatcher) Dispatch(ctx xctx.XContext, msg *pb.XuperMessage, stream St
 		go func(sub Subscriber) {
 			defer wg.Done()
 
-			err := sub.HandleMessage(ctx, msg, stream)
-			if err != nil {
-				d.log.Trace("dispatch handle message error",
-					"log_id", msg.GetHeader().GetLogid(), "type", msg.GetHeader().GetType(),
-					"resp.from", msg.GetHeader().GetFrom(), "error", err)
-			}
-
+			sub.HandleMessage(ctx, msg, stream)
 			<-d.parallel
 		}(sub)
 	}
+	d.mu.RUnlock()
+	ctx.GetTimer().Mark("unlock")
 	wg.Wait()
 
+	ctx.GetTimer().Mark("dispatch")
 	d.MaskHandled(msg)
 	return nil
 }
