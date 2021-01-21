@@ -2,13 +2,13 @@ package p2pv2
 
 import (
 	"errors"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/protocol"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"

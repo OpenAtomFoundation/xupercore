@@ -130,7 +130,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	}
 
 	stateConfig := &contract.SandboxConfig{
-		XMReader: t.ctx.State.GetXMReader(),
+		XMReader: t.ctx.State.CreateXMReader(),
 	}
 	sandbox, err := t.ctx.Contract.NewStateSandbox(stateConfig)
 	if err != nil {
