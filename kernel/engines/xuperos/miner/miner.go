@@ -54,31 +54,31 @@ func NewMiner(ctx *common.ChainCtx) *Miner {
 // 处理P2P网络中接收到的区块
 func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	if ctx == nil || block == nil {
-		return fmt.Errorf("param error")
+		return common.ErrParameter
 	}
 
 	// 1.检查区块有效性和高度，忽略无效或者比当前同步高度低的区块
 	blockSize := int64(proto.Size(block))
 	maxBlockSize := t.ctx.State.GetMaxBlockSize()
 	if blockSize > maxBlockSize {
-		ctx.GetLog().Warn("refused proc block because block is too large",
+		ctx.GetLog().Warn("forbidden proc block because block is too large",
 			"blockSize", blockSize, "maxBlockSize", maxBlockSize)
-		return fmt.Errorf("refused proc block")
+		return common.ErrForbidden.More("block is too large")
 	}
 
 	if block.GetHeight() < t.inSyncTargetHeight || bytes.Equal(block.GetBlockid(), t.inSyncTargetBlockId) {
-		ctx.GetLog().Warn("ignore block because recv block height lower than in sync height",
+		ctx.GetLog().Warn("forbidden proc block because recv block height lower than in sync height",
 			"recvHeight", block.GetHeight(), "recvBlockId", utils.F(block.GetBlockid()),
 			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId",
 			utils.F(t.inSyncTargetBlockId))
-		return fmt.Errorf("refused proc block")
+		return common.ErrForbidden.More("%s", "recv block height lower than in sync height")
 	}
 
 	for id, tx := range block.Transactions {
 		if !t.ctx.Ledger.IsValidTx(id, tx, block) {
-			ctx.GetLog().Warn("invalid tx got from the block", "txid", utils.F(tx.Txid),
-				"blockId", utils.F(block.Blockid))
-			return fmt.Errorf("invalid tx got from the block")
+			ctx.GetLog().Warn("forbidden proc block because invalid tx got from the block",
+				"txid", utils.F(tx.Txid), "blockId", utils.F(block.Blockid))
+			return common.ErrForbidden.More("%s", "invalid tx got from the block")
 		}
 	}
 
@@ -431,13 +431,13 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 			"targetBlockHeight", targetBlock.GetHeight(), "targetBlockBlockId",
 			utils.F(targetBlock.GetBlockid()), "inSyncTargetHeight", t.inSyncTargetHeight,
 			"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
-		return fmt.Errorf("refused proc block")
+		return common.ErrForbidden.More("%s", "target block height lower than in sync height")
 	}
 	// 检查同步目标是否已经在账本中，忽略已经在账本中任务
 	if t.ctx.Ledger.ExistBlock(targetBlock.GetBlockid()) {
 		ctx.GetLog().Trace("ignore block because target block has in ledger", "targetBlockId",
 			utils.F(targetBlock.GetBlockid()))
-		return fmt.Errorf("refused proc block")
+		return common.ErrForbidden.More("%s", "target block has in ledger")
 	}
 
 	// 4.更新同步中区块高度
