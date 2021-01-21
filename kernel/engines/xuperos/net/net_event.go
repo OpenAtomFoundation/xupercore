@@ -259,7 +259,17 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	}
 
 	if err := chain.ProcBlock(ctx, in); err != nil {
-		ctx.GetLog().Warn("proc block error", "error", err)
+		if common.CastError(err).Equal(common.ErrForbidden) {
+			ctx.GetLog().Trace("forbidden process block", "err", err)
+			return err
+		}
+
+		if common.CastError(err).Equal(common.ErrParameter) {
+			ctx.GetLog().Trace("process block param error", "err", err)
+			return err
+		}
+
+		ctx.GetLog().Warn("process block error", "error", err)
 		return err
 	}
 

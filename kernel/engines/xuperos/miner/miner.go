@@ -54,36 +54,38 @@ func NewMiner(ctx *common.ChainCtx) *Miner {
 // 处理P2P网络中接收到的区块
 func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	if ctx == nil || block == nil {
-		return fmt.Errorf("param error")
+		return common.ErrParameter
 	}
 
 	// 1.检查区块有效性和高度，忽略无效或者比当前同步高度低的区块
 	blockSize := int64(proto.Size(block))
 	maxBlockSize := t.ctx.State.GetMaxBlockSize()
 	if blockSize > maxBlockSize {
-		ctx.GetLog().Warn("refused proc block because block is too large",
+		ctx.GetLog().Warn("forbidden proc block because block is too large",
 			"blockSize", blockSize, "maxBlockSize", maxBlockSize)
-		return fmt.Errorf("refused proc block")
+		return common.ErrForbidden.More("block is too large")
 	}
 
 	if block.GetHeight() < t.inSyncTargetHeight || bytes.Equal(block.GetBlockid(), t.inSyncTargetBlockId) {
-		ctx.GetLog().Warn("ignore block because recv block height lower than in sync height",
+		ctx.GetLog().Warn("forbidden proc block because recv block height lower than in sync height",
 			"recvHeight", block.GetHeight(), "recvBlockId", utils.F(block.GetBlockid()),
-			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
-		return fmt.Errorf("refused proc block")
+			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId",
+			utils.F(t.inSyncTargetBlockId))
+		return common.ErrForbidden.More("%s", "recv block height lower than in sync height")
 	}
 
 	for id, tx := range block.Transactions {
 		if !t.ctx.Ledger.IsValidTx(id, tx, block) {
-			ctx.GetLog().Warn("invalid tx got from the block", "txid", utils.F(tx.Txid),
-				"blockId", utils.F(block.Blockid))
-			return fmt.Errorf("invalid tx got from the block")
+			ctx.GetLog().Warn("forbidden proc block because invalid tx got from the block",
+				"txid", utils.F(tx.Txid), "blockId", utils.F(block.Blockid))
+			return common.ErrForbidden.More("%s", "invalid tx got from the block")
 		}
 	}
 
-	ctx.GetLog().Debug("miner proc block",
-		"recvHeight", block.Height, "recvBlockId", utils.F(block.Blockid),
-		"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
+	ctx.GetLog().Debug("recv new block,try sync block", "recvHeight", block.Height,
+		"recvBlockId", utils.F(block.Blockid), "inSyncTargetHeight", t.inSyncTargetHeight,
+		"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
+
 	// 尝试同步到该高度，如果小于账本高度会被直接忽略
 	return t.trySyncBlock(ctx, block)
 }
@@ -208,10 +210,6 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
-
-	// 7.更新同步状态
-	t.inSyncTargetHeight = t.ctx.Ledger.GetMeta().GetTrunkHeight()
-	t.inSyncTargetBlockId = t.ctx.Ledger.GetMeta().GetTipBlockid()
 
 	ctx.GetLog().Trace("complete new block generation", "blockId", utils.F(block.GetBlockid()),
 		"height", height, "costs", ctx.GetTimer().Print())
@@ -424,17 +422,22 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 		}
 		// 释放矿工锁
 		t.minerMutex.Unlock()
-		ctx.GetLog().Debug("miner mutex unlocked")
 	}()
-	ctx.GetLog().Debug("miner mutex locked")
 
 	// 3.检查同步目标，忽略目标高度小于正在同步高度的任务
 	if targetBlock.GetHeight() < t.inSyncTargetHeight ||
 		bytes.Equal(targetBlock.GetBlockid(), t.inSyncTargetBlockId) {
-		ctx.GetLog().Warn("ignore block because recv block height lower than in sync height",
-			"recvHeight", targetBlock.GetHeight(), "recvBlockId", utils.F(targetBlock.GetBlockid()),
-			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
-		return fmt.Errorf("refused proc block")
+		ctx.GetLog().Trace("ignore block because target block height lower than in sync height",
+			"targetBlockHeight", targetBlock.GetHeight(), "targetBlockBlockId",
+			utils.F(targetBlock.GetBlockid()), "inSyncTargetHeight", t.inSyncTargetHeight,
+			"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
+		return common.ErrForbidden.More("%s", "target block height lower than in sync height")
+	}
+	// 检查同步目标是否已经在账本中，忽略已经在账本中任务
+	if t.ctx.Ledger.ExistBlock(targetBlock.GetBlockid()) {
+		ctx.GetLog().Trace("ignore block because target block has in ledger", "targetBlockId",
+			utils.F(targetBlock.GetBlockid()))
+		return common.ErrForbidden.More("%s", "target block has in ledger")
 	}
 
 	// 4.更新同步中区块高度
@@ -445,8 +448,6 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 	stateTipId := t.ctx.State.GetLatestBlockid()
 	if !bytes.Equal(ledgerTipId, stateTipId) {
-		ledgerHeight := t.ctx.Ledger.GetMeta().GetTrunkHeight()
-		ctx.GetLog().Debug("miner state walk", "height", ledgerHeight, "ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
 		err = t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
 			ctx.GetLog().Warn("try sync block walk failed", "error", err,
@@ -458,59 +459,13 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 	// 5.启动同步区块到目标高度
 	err = t.syncBlock(ctx, targetBlock)
 	if err != nil {
-		ctx.GetLog().Warn("try sync block failed", "err", err,
-			"targetBlock", utils.F(targetBlock.GetBlockid()))
+		ctx.GetLog().Warn("try sync block failed", "err", err, "targetBlock",
+			utils.F(targetBlock.GetBlockid()))
 		return fmt.Errorf("try sync block failed")
 	}
 
 	ctx.GetLog().Trace("try sync block succ", "targetBlock", utils.F(targetBlock.GetBlockid()))
 	return nil
-}
-
-func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, error) {
-	opt := []p2p.MessageOption{
-		p2p.WithBCName(t.ctx.BCName),
-		p2p.WithLogId(ctx.GetLog().GetLogId()),
-	}
-	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS, nil, opt...)
-	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
-	if err != nil {
-		ctx.GetLog().Warn("get block chain status error", "err", err)
-		return nil, err
-	}
-
-	bcStatus := make([]*xpb.ChainStatus, 0, len(responses))
-	for _, response := range responses {
-		var status xpb.ChainStatus
-		err = p2p.Unmarshal(response, &status)
-		if err != nil {
-			ctx.GetLog().Warn("unmarshal block chain status error", "err", err)
-			continue
-		}
-
-		bcStatus = append(bcStatus, &status)
-	}
-
-	sort.Sort(BCSByHeight(bcStatus))
-	for _, bcs := range bcStatus {
-		if t.isConfirmed(ctx, bcs) {
-			return bcs.Block, nil
-		}
-	}
-
-	return nil, errors.New("not found longest block")
-}
-
-type BCSByHeight []*xpb.ChainStatus
-
-func (s BCSByHeight) Len() int {
-	return len(s)
-}
-func (s BCSByHeight) Less(i, j int) bool {
-	return s[i].LedgerMeta.TrunkHeight > s[j].LedgerMeta.TrunkHeight
-}
-func (s BCSByHeight) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
 }
 
 // 同步本地账本到指定的目标高度
@@ -533,10 +488,6 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 	defer func() {
 		ledgerTipId := t.ctx.Ledger.GetMeta().GetTipBlockid()
 		stateTipId := t.ctx.State.GetLatestBlockid()
-
-		ledgerHeight := t.ctx.Ledger.GetMeta().GetTrunkHeight()
-		ctx.GetLog().Debug("miner state walk", "height", ledgerHeight, "ledgerTipId", utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
-
 		if !bytes.Equal(ledgerTipId, stateTipId) {
 			ledgerTipId := t.ctx.Ledger.GetMeta().TipBlockid
 			// Walk相比PalyAndReport代价更高，后面可以优化下
@@ -610,7 +561,7 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 		NeedContent: true,
 	}
 
-	opts := []p2p.MessageOption {
+	opts := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
 		// p2p.WithLogId(ctx.GetLog().GetLogId()),
 	}
@@ -634,11 +585,13 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 		}
 
 		if block.Block == nil {
-			ctx.GetLog().Warn("block is nil", "blockId", utils.F(blockId), "from", response.GetHeader().GetFrom())
+			ctx.GetLog().Warn("block is nil", "blockId", utils.F(blockId),
+				"from", response.GetHeader().GetFrom())
 			continue
 		}
 
-		ctx.GetLog().Trace("download block", "height", block.Block.Height, "blockId", utils.F(block.Block.Blockid), "msg_log_id", msg.Header.Logid)
+		ctx.GetLog().Trace("download block succ", "height", block.Block.Height,
+			"blockId", utils.F(block.Block.Blockid), "msg_log_id", msg.Header.Logid)
 		return block.Block, nil
 	}
 
@@ -761,4 +714,50 @@ func (t *Miner) broadcastBlock(ctx xctx.XContext, block *lpb.InternalBlock) {
 	ctx.GetLog().Trace("broadcast block succ", "p2pLogId", msg.GetHeader().GetLogid(),
 		"blockId", utils.F(block.GetBlockid()))
 	return
+}
+
+func (t *Miner) getWholeNetLongestBlock(ctx xctx.XContext) (*lpb.InternalBlock, error) {
+	opt := []p2p.MessageOption{
+		p2p.WithBCName(t.ctx.BCName),
+		p2p.WithLogId(ctx.GetLog().GetLogId()),
+	}
+	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS, nil, opt...)
+	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg)
+	if err != nil {
+		ctx.GetLog().Warn("get block chain status error", "err", err)
+		return nil, err
+	}
+
+	bcStatus := make([]*xpb.ChainStatus, 0, len(responses))
+	for _, response := range responses {
+		var status xpb.ChainStatus
+		err = p2p.Unmarshal(response, &status)
+		if err != nil {
+			ctx.GetLog().Warn("unmarshal block chain status error", "err", err)
+			continue
+		}
+
+		bcStatus = append(bcStatus, &status)
+	}
+
+	sort.Sort(BCSByHeight(bcStatus))
+	for _, bcs := range bcStatus {
+		if t.isConfirmed(ctx, bcs) {
+			return bcs.Block, nil
+		}
+	}
+
+	return nil, errors.New("not found longest block")
+}
+
+type BCSByHeight []*xpb.ChainStatus
+
+func (s BCSByHeight) Len() int {
+	return len(s)
+}
+func (s BCSByHeight) Less(i, j int) bool {
+	return s[i].LedgerMeta.TrunkHeight > s[j].LedgerMeta.TrunkHeight
+}
+func (s BCSByHeight) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }

@@ -266,13 +266,24 @@ func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 		return common.ErrParameter
 	}
 
+	log := ctx.GetLog()
 	err := t.miner.ProcBlock(ctx, block)
 	if err != nil {
-		ctx.GetLog().Warn("miner process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
+		if common.CastError(err).Equal(common.ErrForbidden) {
+			log.Trace("forbidden process block", "blockid", utils.F(block.GetBlockid()), "err", err)
+			return common.ErrForbidden
+		}
+
+		if common.CastError(err).Equal(common.ErrParameter) {
+			log.Trace("param error")
+			return common.ErrParameter
+		}
+
+		ctx.GetLog().Warn("process block failed", "blockid", utils.F(block.GetBlockid()), "err", err)
 		return common.ErrProcBlockFailed.More("err:%v", err)
 	}
 
-	ctx.GetLog().Info("miner process block succ", "height", block.GetHeight(), "blockid", utils.F(block.GetBlockid()))
+	log.Info("process block succ", "height", block.GetHeight(), "blockid", utils.F(block.GetBlockid()))
 	return nil
 }
 
