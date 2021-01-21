@@ -21,7 +21,7 @@ var (
 )
 
 type saftyRulesInterface interface {
-	UpdatePreferredRound(qc QuorumCertInterface) bool
+	UpdatePreferredRound(round int64) bool
 	VoteProposal(proposalId []byte, proposalRound int64, parentQc QuorumCertInterface) bool
 	CheckVote(qc QuorumCertInterface, logid string, validators []string) error
 	CalVotesThreshold(input, sum int) bool
@@ -42,9 +42,9 @@ type DefaultSaftyRules struct {
 	Log logs.Logger
 }
 
-func (s *DefaultSaftyRules) UpdatePreferredRound(qc QuorumCertInterface) bool {
-	if qc.GetParentView() > s.preferredRound {
-		s.preferredRound = qc.GetParentView()
+func (s *DefaultSaftyRules) UpdatePreferredRound(round int64) bool {
+	if round-1 > s.preferredRound {
+		s.preferredRound = round - 1
 	}
 	// TODO: 检查LedgerInfo是否一致
 	return true
