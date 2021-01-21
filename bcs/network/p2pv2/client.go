@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/lib/timer"
 	"sync"
 	"time"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
