@@ -335,20 +335,6 @@ func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmpl
 	return utxoVM, nil
 }
 
-// ClearCache 清空cache, 写盘失败的时候
-func (uv *UtxoVM) ClearCache() {
-	uv.UtxoCache = NewUtxoCache(uv.CacheSize)
-	uv.PrevFoundKeyCache = cache.NewLRUCache(uv.CacheSize)
-	uv.clearBalanceCache()
-	uv.log.Warn("clear utxo cache")
-}
-
-func (uv *UtxoVM) clearBalanceCache() {
-	uv.log.Warn("clear balance cache")
-	uv.BalanceCache = cache.NewLRUCache(uv.CacheSize) //清空balanceCache
-	uv.BalanceViewDirty = map[string]int{}            //清空cache dirty flag表
-}
-
 func (uv *UtxoVM) UpdateUtxoTotal(delta *big.Int, batch kvdb.Batch, inc bool) {
 	if inc {
 		uv.utxoTotal = uv.utxoTotal.Add(uv.utxoTotal, delta)

@@ -45,10 +45,12 @@ var (
 
 	ErrGasNotEnough   = errors.New("Gas not enough")
 	ErrVersionInvalid = errors.New("Invalid tx version")
+	ErrInvalidAccount = errors.New("Invalid account")
 	ErrInvalidTxExt   = errors.New("Invalid tx ext")
 	ErrTxTooLarge     = errors.New("Tx size is too large")
 
-	ErrContractTxAmout = errors.New("Contract transfer amount error")
+	ErrParseContractUtxos = errors.New("Parse contract utxos error")
+	ErrContractTxAmout    = errors.New("Contract transfer amount error")
 )
 
 const (
@@ -660,7 +662,7 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", utils.F(tx.Txid))
 	writeErr := batch.Write()
 	if writeErr != nil {
-		t.utxo.ClearCache()
+		t.ClearCache()
 		t.log.Warn("fail to save to ldb", "writeErr", writeErr)
 		return writeErr
 	}
@@ -734,11 +736,11 @@ func (t *State) ClearCache() {
 	t.utxo.PrevFoundKeyCache = cache.NewLRUCache(t.utxo.CacheSize)
 	t.clearBalanceCache()
 	t.xmodel.CleanCache()
-	t.log.Warn("clear utxo cache")
+	t.log.Info("clear utxo cache")
 }
 
 func (t *State) clearBalanceCache() {
-	t.log.Warn("clear balance cache")
+	t.log.Info("clear balance cache")
 	t.utxo.BalanceCache = cache.NewLRUCache(t.utxo.CacheSize) //清空balanceCache
 	t.utxo.BalanceViewDirty = map[string]int{}                //清空cache dirty flag表
 	t.xmodel.CleanCache()
