@@ -21,25 +21,10 @@
     },
     "new_account_resource_amount": 1000,
     "genesis_consensus": {
-        "name": "tdpos",
+        "name": "single",
         "config": {
-            "timestamp": "1588998296000000000",
-            "proposer_num": "1",
-            "period": "3000",
-            "alternate_interval": "3000",
-            "term_interval": "6000",
-            "block_num": "20",
-            "vote_unit_price": "1",
-            "init_proposer": {
-                "1": [
-                    "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
-                ]
-            },
-            "init_proposer_neturl": {
-                "1": [
-                    "/ip4/127.0.0.1/tcp/38101/p2p/QmVxeNubpg1ZQjQT8W5yZC9fD7ZB1ViArwvyGUB53sqf8e"
-                ]
-            }
+            "miner": "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+            "period": 3000 
         }
     }
 }

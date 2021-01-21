@@ -1,6 +1,7 @@
 # init project PATH
 HOMEDIR := $(shell pwd)
 OUTDIR  := $(HOMEDIR)/output
+TESTNETDIR := $(HOMEDIR)/testnet
 
 # init command params
 export GO111MODULE=on
@@ -22,6 +23,14 @@ test:
 # make clean
 clean:
 	rm -rf $(OUTDIR)
+
+# make clean testnet dir
+cleantest:
+	rm -rf $(TESTNETDIR)
+
+# deploy test network
+testnet:
+	bash $(HOMEDIR)/example/xchain/auto/deploy_testnet.sh
 
 # avoid filename conflict and speed up build
 .PHONY: all compile test clean

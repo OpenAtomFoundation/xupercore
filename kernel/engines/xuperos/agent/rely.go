@@ -125,7 +125,7 @@ func (t *ChainRelyAgentImpl) CreateAcl() (aclBase.AclManager, error) {
 func (t *ChainRelyAgentImpl) CreateContract(xmreader kledger.XMReader) (contract.Manager, error) {
 	ctx := t.chain.Context()
 	envcfg := ctx.EngCtx.EnvCfg
-	basedir := filepath.Join(envcfg.GenDirAbsPath(envcfg.ChainDir), ctx.BCName)
+	basedir := filepath.Join(envcfg.GenDataAbsPath(envcfg.ChainDir), ctx.BCName)
 
 	mgCfg := &contract.ManagerConfig{
 		BCName:   ctx.BCName,

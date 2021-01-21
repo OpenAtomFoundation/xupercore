@@ -2,6 +2,7 @@
 plugins/
 output/
 test/
+testnet/
 xvm/compile/wabt/build/
 contractsdk/cpp/build
 event_client
