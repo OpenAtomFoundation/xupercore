@@ -1,5 +1,7 @@
 package contract
 
+import "github.com/xuperchain/xupercore/protos"
+
 const (
 	maxResourceLimit = 0xFFFFFFFF
 )
@@ -13,13 +15,13 @@ type Limits struct {
 }
 
 // // TotalGas converts resource to gas
-// func (l *Limits) TotalGas(gasPrice *pb.GasPrice) int64 {
-// 	cpuGas := roundup(l.Cpu, gasPrice.GetCpuRate())
-// 	memGas := roundup(l.Memory, gasPrice.GetMemRate())
-// 	diskGas := roundup(l.Disk, gasPrice.GetDiskRate())
-// 	feeGas := roundup(l.XFee, gasPrice.GetXfeeRate())
-// 	return cpuGas + memGas + diskGas + feeGas
-// }
+func (l *Limits) TotalGas(gasPrice *protos.GasPrice) int64 {
+	cpuGas := roundup(l.Cpu, gasPrice.GetCpuRate())
+	memGas := roundup(l.Memory, gasPrice.GetMemRate())
+	diskGas := roundup(l.Disk, gasPrice.GetDiskRate())
+	feeGas := roundup(l.XFee, gasPrice.GetXfeeRate())
+	return cpuGas + memGas + diskGas + feeGas
+}
 
 // Add accumulates resource limits, returns self.
 func (l *Limits) Add(l1 Limits) *Limits {
@@ -56,32 +58,32 @@ var MaxLimits = Limits{
 }
 
 // // FromPbLimits converts []*pb.ResourceLimit to Limits
-// func FromPbLimits(rlimits []*pb.ResourceLimit) Limits {
-// 	limits := Limits{}
-// 	for _, l := range rlimits {
-// 		switch l.GetType() {
-// 		case pb.ResourceType_CPU:
-// 			limits.Cpu = l.GetLimit()
-// 		case pb.ResourceType_MEMORY:
-// 			limits.Memory = l.GetLimit()
-// 		case pb.ResourceType_DISK:
-// 			limits.Disk = l.GetLimit()
-// 		case pb.ResourceType_XFEE:
-// 			limits.XFee = l.GetLimit()
-// 		}
-// 	}
-// 	return limits
-// }
+func FromPbLimits(rlimits []*protos.ResourceLimit) Limits {
+	limits := Limits{}
+	for _, l := range rlimits {
+		switch l.GetType() {
+		case protos.ResourceType_CPU:
+			limits.Cpu = l.GetLimit()
+		case protos.ResourceType_MEMORY:
+			limits.Memory = l.GetLimit()
+		case protos.ResourceType_DISK:
+			limits.Disk = l.GetLimit()
+		case protos.ResourceType_XFEE:
+			limits.XFee = l.GetLimit()
+		}
+	}
+	return limits
+}
 
 // // FromPbLimits converts Limits to []*pb.ResourceLimit
-// func ToPbLimits(limits Limits) []*pb.ResourceLimit {
-// 	return []*pb.ResourceLimit{
-// 		{Type: pb.ResourceType_CPU, Limit: limits.Cpu},
-// 		{Type: pb.ResourceType_MEMORY, Limit: limits.Memory},
-// 		{Type: pb.ResourceType_DISK, Limit: limits.Disk},
-// 		{Type: pb.ResourceType_XFEE, Limit: limits.XFee},
-// 	}
-// }
+func ToPbLimits(limits Limits) []*protos.ResourceLimit {
+	return []*protos.ResourceLimit{
+		{Type: protos.ResourceType_CPU, Limit: limits.Cpu},
+		{Type: protos.ResourceType_MEMORY, Limit: limits.Memory},
+		{Type: protos.ResourceType_DISK, Limit: limits.Disk},
+		{Type: protos.ResourceType_XFEE, Limit: limits.XFee},
+	}
+}
 
 func roundup(n, scale int64) int64 {
 	if scale == 0 {

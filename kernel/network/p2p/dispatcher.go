@@ -113,7 +113,8 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 
 	if d.IsHandled(msg) {
 		ctx.GetLog().SetInfoField("handled", true)
-		return ErrMessageHandled
+		// return ErrMessageHandled
+		return nil
 	}
 
 	if stream == nil {
