@@ -59,12 +59,12 @@ func Unmarshal(msg *pb.XuperMessage, message proto.Message) error {
 		return ErrMessageChecksum
 	}
 
-	err := Decompress(msg)
+	data, err := Decompress(msg)
 	if err != nil {
 		return ErrMessageDecompress
 	}
 
-	err = proto.Unmarshal(msg.Data.MsgInfo, message)
+	err = proto.Unmarshal(data, message)
 	if err != nil {
 		return ErrMessageUnmarshal
 	}
@@ -124,27 +124,16 @@ func Compress(msg *pb.XuperMessage) *pb.XuperMessage {
 }
 
 // Decompress decompress msg
-func Decompress(msg *pb.XuperMessage) error {
-	if len(msg.GetData().GetMsgInfo()) == 0 {
-		return nil
+func Decompress(msg *pb.XuperMessage) ([]byte, error) {
+	if msg == nil || msg.Header == nil || msg.Data == nil || msg.Data.MsgInfo == nil {
+		return []byte{}, errors.New("param error")
 	}
 
-	originalMsg := msg.GetData().GetMsgInfo()
-	var uncompressedMsg []byte
-	var decodeErr error
-	msgHeader := msg.GetHeader()
-	if msgHeader != nil && msgHeader.GetEnableCompress() {
-		uncompressedMsg, decodeErr = snappy.Decode(nil, originalMsg)
-		if decodeErr != nil {
-			return decodeErr
-		}
-	} else {
-		uncompressedMsg = originalMsg
+	if !msg.Header.GetEnableCompress() {
+		return msg.Data.MsgInfo, nil
 	}
 
-	msg.Header.EnableCompress = false
-	msg.Data.MsgInfo = uncompressedMsg
-	return nil
+	return snappy.Decode(nil, msg.Data.MsgInfo)
 }
 
 // VerifyMessageType 用于带返回的请求场景下验证收到的消息是否为预期的消息

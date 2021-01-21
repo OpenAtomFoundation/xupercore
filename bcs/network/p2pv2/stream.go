@@ -13,7 +13,6 @@ import (
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
 
 	ggio "github.com/gogo/protobuf/io"
@@ -158,14 +157,9 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 		return nil
 	}
 
-	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2pv2")
-	ctx := &xctx.BaseCtx{
-		XLog:  xlog,
-		Timer: timer.NewXTimer(),
-	}
-	if err := s.srv.dispatcher.Dispatch(ctx, msg, s); err != nil {
+	if err := s.srv.dispatcher.Dispatch(msg, s); err != nil {
 		s.log.Warn("handle new message dispatch error", "log_id", msg.GetHeader().GetLogid(),
-			"type", msg.GetHeader().GetType(), "error", err, "from", msg.GetHeader().GetFrom())
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "error", err)
 		return nil // not return err
 	}
 
@@ -173,10 +167,9 @@ func (s *Stream) handlerNewMessage(msg *pb.XuperMessage) error {
 }
 
 // SendMessage will send a message to a peer
-func (s *Stream) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
-	s.log.Trace("Stream SendMessage", "log_id", msg.GetHeader().GetLogid(), "msgType",
-		msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
+func (s *Stream) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 	err := s.Send(msg)
+	ctx.GetTimer().Mark("write")
 	if err != nil {
 		s.Close()
 		s.log.Error("Stream SendMessage error", "log_id", msg.GetHeader().GetLogid(),
@@ -188,9 +181,8 @@ func (s *Stream) SendMessage(ctx context.Context, msg *pb.XuperMessage) error {
 }
 
 // SendMessageWithResponse will send a message to a peer and wait for response
-func (s *Stream) SendMessageWithResponse(ctx context.Context,
+func (s *Stream) SendMessageWithResponse(ctx xctx.XContext,
 	msg *pb.XuperMessage) (*pb.XuperMessage, error) {
-
 	respType := p2p.GetRespMessageType(msg.GetHeader().GetType())
 	if respType == pb.XuperMessage_MSG_TYPE_NONE {
 		return nil, ErrNoneMessageType
@@ -218,9 +210,9 @@ func (s *Stream) SendMessageWithResponse(ctx context.Context,
 	}()
 
 	// 开始写消息
-	s.log.Trace("Stream SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(), "msgType",
-		msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "to", s.id.Pretty())
-	if err := s.Send(msg); err != nil {
+	err = s.Send(msg)
+	ctx.GetTimer().Mark("write")
+	if err != nil {
 		s.Close()
 		s.log.Warn("SendMessageWithResponse Send error", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "err", err)
@@ -230,7 +222,6 @@ func (s *Stream) SendMessageWithResponse(ctx context.Context,
 	// 等待返回
 	select {
 	case resp := <-respCh:
-		s.log.Trace("SendMessageWithResponse return", "log_id", resp.GetHeader().GetLogid())
 		return resp, nil
 	case err := <-errCh:
 		return nil, err
@@ -238,27 +229,27 @@ func (s *Stream) SendMessageWithResponse(ctx context.Context,
 }
 
 // waitResponse wait resp with timeout
-func (s *Stream) waitResponse(ctx context.Context, msg *pb.XuperMessage,
+func (s *Stream) waitResponse(ctx xctx.XContext, msg *pb.XuperMessage,
 	observerCh chan *pb.XuperMessage) (*pb.XuperMessage, error) {
 
 	timeout := s.config.Timeout
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 	defer cancel()
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-timeoutCtx.Done():
 			s.log.Warn("waitResponse ctx done", "log_id", msg.GetHeader().GetLogid(),
-				"type", msg.GetHeader().GetType(), "pid", s.id.Pretty(), "error", ctx.Err())
-			return nil, ctx.Err()
+				"type", msg.GetHeader().GetType(), "pid", s.id.Pretty(), "error", timeoutCtx.Err())
+			ctx.GetTimer().Mark("wait")
+			return nil, timeoutCtx.Err()
 		case resp := <-observerCh:
 			if p2p.VerifyMessageType(msg, resp, s.id.Pretty()) {
-				s.log.Trace("waitResponse get resp done", "log_id", resp.GetHeader().GetLogid(),
-					"type", resp.GetHeader().GetType(), "checksum", resp.GetHeader().GetDataCheckSum(),
-					"resp.from", resp.GetHeader().GetFrom())
+				ctx.GetTimer().Mark("read")
 				return resp, nil
 			}
-			s.log.Trace("waitResponse get resp continue", "log_id", resp.GetHeader().GetLogid(),
+
+			s.log.Debug("waitResponse get resp continue", "log_id", resp.GetHeader().GetLogid(),
 				"type", resp.GetHeader().GetType(), "checksum", resp.GetHeader().GetDataCheckSum(),
 				"resp.from", resp.GetHeader().GetFrom())
 			continue

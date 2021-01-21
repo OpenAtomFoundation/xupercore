@@ -1,8 +1,7 @@
 package p2p
 
 import (
-	"context"
-
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	pb "github.com/xuperchain/xupercore/protos"
 )
@@ -17,15 +16,10 @@ type Server interface {
 	Register(Subscriber) error
 	UnRegister(Subscriber) error
 
-	SendMessage(context.Context, *pb.XuperMessage, ...OptionFunc) error
-	SendMessageWithResponse(context.Context, *pb.XuperMessage, ...OptionFunc) ([]*pb.XuperMessage, error)
+	SendMessage(xctx.XContext, *pb.XuperMessage, ...OptionFunc) error
+	SendMessageWithResponse(xctx.XContext, *pb.XuperMessage, ...OptionFunc) ([]*pb.XuperMessage, error)
 
 	Context() *nctx.NetCtx
 
 	PeerInfo() pb.PeerInfo
-}
-
-type State struct {
-	Local  pb.PeerInfo
-	Remote []pb.PeerInfo
 }

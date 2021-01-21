@@ -7,7 +7,8 @@ import (
 
 var errorType = map[error]protos.XuperMessage_ErrorType{
 	nil:                     protos.XuperMessage_SUCCESS,
-	common.ErrBlockNotExist: protos.XuperMessage_BLOCKCHAIN_NOTEXIST,
+	common.ErrChainNotExist: protos.XuperMessage_BLOCKCHAIN_NOTEXIST,
+	common.ErrBlockNotExist: protos.XuperMessage_GET_BLOCK_ERROR,
 	common.ErrParameter:     protos.XuperMessage_UNMARSHAL_MSG_BODY_ERROR,
 }
 

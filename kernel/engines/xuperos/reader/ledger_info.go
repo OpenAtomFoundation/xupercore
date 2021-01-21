@@ -88,7 +88,7 @@ func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInf
 	if err != nil {
 		if err == ledger.ErrBlockNotExist {
 			out.Status = lpb.BlockStatus_BLOCK_NOEXIST
-			return out, nil
+			return out, common.ErrBlockNotExist
 		}
 
 		t.log.Warn("query block error", "err", err)
