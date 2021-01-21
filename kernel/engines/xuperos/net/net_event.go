@@ -205,7 +205,7 @@ func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transac
 func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessage) {
 	var block lpb.InternalBlock
 	if err := p2p.Unmarshal(request, &block); err != nil {
-		ctx.GetLog().Warn("handlePostTx Unmarshal request error", "error", err)
+		ctx.GetLog().Warn("handleSendBlock Unmarshal request error", "error", err)
 		return
 	}
 
