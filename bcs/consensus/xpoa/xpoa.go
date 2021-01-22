@@ -81,7 +81,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	// create xpoaSchedule
 	schedule := &xpoaSchedule{
-		address:   cCtx.Network.PeerInfo().Address,
+		address:   cCtx.Network.PeerInfo().Account,
 		period:    xconfig.Period,
 		blockNum:  xconfig.BlockNum,
 		addrToNet: make(map[string]string),

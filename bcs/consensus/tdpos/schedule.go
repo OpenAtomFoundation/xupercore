@@ -95,17 +95,20 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) 
 
 // miner 调度算法, 依据时间进行矿工节点调度
 func (s *tdposSchedule) minerScheduling(timestamp int64) (term int64, pos int64, blockPos int64) {
+	// timstamp单位为unixnano, 配置文件中均为毫秒
 	if timestamp < s.initTimestamp {
 		return
 	}
+	T := timestamp / int64(time.Millisecond)
+	initT := s.initTimestamp / int64(time.Millisecond)
 	// 每一轮的时间
 	// |<-termInterval->|<-(blockNum - 1) * period->|<-alternateInterval->|
 	// |................|NODE1......................|.....................|NODE2.....
-	termTime := s.termInterval + (s.proposerNum-1)*s.alternateInterval + s.proposerNum*s.period*(s.blockNum-1)
+	termTime := s.termInterval + (s.blockNum-1)*s.proposerNum*s.period + (s.proposerNum-1)*s.alternateInterval
 	// 每个矿工轮值时间
 	posTime := s.alternateInterval + s.period*(s.blockNum-1)
-	term = (timestamp-s.initTimestamp)/int64(time.Millisecond)/termTime + 1
-	resTime := ((timestamp - s.initTimestamp) - (term-1)*termTime) / int64(time.Millisecond)
+	term = (T-initT)/termTime + 1
+	resTime := (T - initT) - (term-1)*termTime
 	pos = resTime / posTime
 	resTime = resTime - (resTime/posTime)*posTime
 	blockPos = resTime/s.period + 1

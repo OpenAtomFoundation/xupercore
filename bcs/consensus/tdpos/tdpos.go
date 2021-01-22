@@ -95,7 +95,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		cCtx.XLog.Error("Tdpos::NewSingleConsensus::new schedule err.")
 		return nil
 	}
-	schedule.address = cCtx.Network.PeerInfo().Address
+	schedule.address = cCtx.Network.PeerInfo().Account
 
 	status := &TdposStatus{
 		Version:     xconfig.Version,
@@ -167,9 +167,7 @@ Again:
 	}
 
 	// 查当前时间的term 和 pos
-	t2 := time.Now()
-	un2 := t2.UnixNano()
-	term, pos, blockPos := tp.election.minerScheduling(un2)
+	term, pos, blockPos := tp.election.minerScheduling(time.Now().UnixNano())
 	proposerChangedFlag := false
 	// 根据term更新当前validators
 	if term > tp.election.curTerm {
@@ -188,16 +186,13 @@ Again:
 			tp.log.Warn("Tdpos::CompeteMaster::proposer or term change, bft Update Validators failed", "error", err)
 		}
 	}
-
 	// master check
 	if tp.election.proposers[pos] == tp.election.address {
-		tp.log.Trace("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "un2", un2,
-			"master", true)
+		tp.log.Trace("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.GetTipBlock().GetHeight())
 		s := tp.needSync()
 		return true, s, nil
 	}
-	tp.log.Trace("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "un2", un2,
-		"master", false)
+	tp.log.Trace("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", false, "height", tp.election.ledger.GetTipBlock().GetHeight())
 	return false, false, nil
 }
 
@@ -209,6 +204,7 @@ func (tp *tdposConsensus) CalculateBlock(block cctx.BlockInterface) error {
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
 func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
+	tp.log.Debug("Tdpos::CheckMinerMatch::start.")
 	// 获取当前共识存储
 	bv, err := tp.ParseConsensusStorage(block)
 	if err != nil {
@@ -220,6 +216,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Warn("Tdpos::CheckMinerMatch::storage transfer error", "err", err)
 		return false, err
 	}
+	tp.log.Debug("Tdpos::CheckMinerMatch", "tdposStorage", tdposStorage)
 	// 1 验证bft相关信息
 	if tp.election.enableChainedBFT {
 		pNode := tp.smr.BlockToProposalNode(block)
@@ -299,6 +296,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
 func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
+	tp.log.Debug("Tdpos::ProcessBeforeMiner::start.")
 	term, pos, blockPos := tp.election.minerScheduling(timestamp)
 	if term != tp.election.curTerm || blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
 		return false, nil, timeoutBlockErr
@@ -368,6 +366,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, err
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
 func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
+	tp.log.Debug("Tdpos::ProcessConfirmBlock::start.")
 	if !tp.election.enableChainedBFT {
 		return nil
 	}
