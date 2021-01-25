@@ -142,14 +142,16 @@ func (s *Smr) UnRegisterToNetwork() {
 // Start used to start smr instance and process msg
 func (s *Smr) Start() {
 	s.RegisterToNetwork()
-	for {
-		select {
-		case msg := <-s.p2pMsgChan:
-			s.handleReceivedMsg(msg)
-		case <-s.QuitCh:
-			return
+	go func() {
+		for {
+			select {
+			case msg := <-s.p2pMsgChan:
+				s.handleReceivedMsg(msg)
+			case <-s.QuitCh:
+				return
+			}
 		}
-	}
+	}()
 }
 
 // stop used to stop smr instance

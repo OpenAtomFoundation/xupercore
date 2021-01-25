@@ -156,6 +156,9 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 
 func cleanProduceMap(isProduce map[int64]bool, period int64) {
 	// 删除已经落盘的所有key
+	if len(isProduce) <= MAXMAPSIZE {
+		return
+	}
 	t := time.Now().UnixNano()
 	key := t / period
 	for k, _ := range isProduce {

@@ -6,6 +6,7 @@ import (
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/lib/logs"
 )
 
 // xpoaSchedule 实现了ProposerElectionInterface接口，接口定义了validators操作
@@ -25,6 +26,8 @@ type xpoaSchedule struct {
 
 	ledger    cctx.LedgerRely
 	enableBFT bool
+
+	log logs.Logger
 }
 
 // minerScheduling 按照时间调度计算目标候选人轮换数term, 目标候选人index和候选人生成block的index
@@ -68,7 +71,6 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 
 // GetLocalLeader 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
 func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
-	// xpoa.lg.Info("ConfirmBlock Propcess update validates")
 	// ATTENTION: 获取候选人信息时，时刻注意拿取的是check目的round的前三个块，候选人变更是在3个块之后生效，即round-3
 	localValidators := s.GetValidators(round)
 	if localValidators == nil {
@@ -82,16 +84,21 @@ func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
 func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 	reader, err := s.ledger.CreateSnapshot(blockId)
 	if err != nil {
-		// xpoa.lg.Error("Xpoa updateValidates getCurrentValidates error", "CreateSnapshot err:", err)
+		s.log.Error("Xpoa::getValidatesByBlockId::createSnapshot error.", "err", err)
 		return nil, err
 	}
 	res, err := reader.Get(XPOABUCKET, []byte(XPOAKEY))
-	if res == nil {
+	if res == nil || res.PureData.Value == nil {
 		// 即合约还未被调用，未有变量更新
 		return s.validators, nil
 	}
+	if err != nil {
+		s.log.Error("Xpoa::getValidatesByBlockId::reader Get error.", "err", err)
+		return nil, err
+	}
 	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet, &s.mutex)
 	if err != nil {
+		s.log.Error("Xpoa::getValidatesByBlockId::loadValidatorsMultiInfo error.", "err", err)
 		return nil, err
 	}
 	return validators, nil
@@ -105,11 +112,12 @@ func (s *xpoaSchedule) GetValidators(round int64) []string {
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
 	b, err := s.ledger.QueryBlockByHeight(round - 3)
 	if err != nil {
-		// err包含当前高度小于3，s.validators此时是initValidators
-		return s.validators
+		s.log.Error("Xpoa::GetValidators::QueryBlockByHeight error.", "err", err, "height", round-3)
+		return nil
 	}
 	validators, err := s.getValidatesByBlockId(b.GetBlockid())
 	if err != nil {
+		s.log.Error("Xpoa::GetValidators::getValidatesByBlockId error.", "err", err)
 		return nil
 	}
 	return validators
@@ -140,6 +148,7 @@ func (s *xpoaSchedule) UpdateValidator(height int64) bool {
 		return false
 	}
 	if !common.AddressEqual(validators, s.validators) {
+		s.log.Debug("Xpoa::UpdateValidator", "new validators", validators, "s.validators", s.validators)
 		s.validators = validators
 		return true
 	}
