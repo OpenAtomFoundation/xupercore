@@ -1,4 +1,4 @@
-package utxo
+package state
 
 import (
 	"bytes"
@@ -7,17 +7,27 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"io/ioutil"
+	"log"
+	"math/big"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
 	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
+	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/crypto/hash"
+	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
+	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 // common test data
@@ -54,122 +64,103 @@ var Users = map[string]struct {
 	},
 }
 
-/*
-func TestUtxoNew(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
-	if dirErr != nil {
-		t.Fatal(dirErr)
-	}
-	os.RemoveAll(workspace)
-	defer os.RemoveAll(workspace)
-	ledger, err := ledger_pkg.NewLedger(workspace, nil, nil, DefaultKVEngine, crypto_client.CryptoTypeDefault)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(ledger)
-	utxoVM, _ := NewUtxoVM("xuper", ledger, workspace, minerPrivateKey, minerPublicKey, []byte(minerAddress),
-		nil, false, DefaultKVEngine, crypto_client.CryptoTypeDefault)
-	// test for QueryTx
-	_, err1 := utxoVM.QueryTx([]byte("123"))
-	if err1 != nil {
-		t.Log("query tx[123] error ", err1.Error())
-	}
-}
-*/
-
-func transfer(from string, to string, t *testing.T, utxoVM *UtxoVM, ledger *ledger_pkg.Ledger, amount string, preHash []byte, desc string, frozenHeight int64) ([]byte, error) {
+func transfer(from string, to string, t *testing.T, stateHandle *State, ledger *ledger_pkg.Ledger, amount string, preHash []byte, desc string, frozenHeight int64) ([]byte, error) {
 	t.Logf("preHash of this block: %x", preHash)
-	txReq := &pb.TxData{}
-	txReq.Bcname = "xuper-chain"
-	txReq.FromAddr = Users[from].Address
-	txReq.FromPubkey = Users[from].Pubkey
-	txReq.FromScrkey = Users[from].PrivateKey
-	txReq.Nonce = "nonce"
-	txReq.Timestamp = time.Now().UnixNano()
-	txReq.Desc = []byte(desc)
-	txReq.Account = []*pb.TxDataAccount{
-		{Address: Users[to].Address, Amount: amount, FrozenHeight: frozenHeight},
-	}
-	timer := global.NewXTimer()
-	tx, err := utxoVM.GenerateTx(txReq)
-	if err != nil {
-		return nil, err
-	}
-	t.Log("version: ", tx.Version)
-	// test for amount as negative value
-	txReq.Account = []*pb.TxDataAccount{
-		{Address: Users[to].Address, Amount: "-1", FrozenHeight: int64(0)},
-	}
-	var negativeErr error
-	_, negativeErr = utxoVM.GenerateTx(txReq)
-	if negativeErr != nil {
-		t.Log("Generate negative value error ", negativeErr.Error())
-	}
-	// test for very big amount
-	txReq.Account = []*pb.TxDataAccount{
-		{Address: Users[to].Address, Amount: "100000", FrozenHeight: int64(0)},
-	}
-	_, bigErr := utxoVM.GenerateTx(txReq)
-	if bigErr != nil {
-		t.Log("Generate very big value error ", bigErr.Error())
-	}
 
-	cryptoClient, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
-	if err != nil {
-		return nil, err
+	timer := timer.NewXTimer()
+	tx := &pb.Transaction{}
+	tx.Nonce = "nonce"
+	tx.Timestamp = time.Now().UnixNano()
+	tx.Desc = []byte(desc)
+	tx.Version = 1
+	tx.AuthRequire = append(tx.AuthRequire, Users[from].Address)
+	tx.Initiator = Users[from].Address
+	tx.Coinbase = false
+	totalNeed := big.NewInt(0) // 需要支付的总额
+	amountBig := big.NewInt(0)
+	amountBig.SetString(amount, 10) // 10进制转换大整数
+	if amountBig.Cmp(big.NewInt(0)) < 0 {
+		return nil, fmt.Errorf("amount less than 0")
 	}
-	utxoVM.cryptoClient = cryptoClient
+	totalNeed.Add(totalNeed, amountBig)
+	txOutput := &protos.TxOutput{}
+	txOutput.ToAddr = []byte(Users[to].Address)
+	txOutput.Amount = amountBig.Bytes()
+	txOutput.FrozenHeight = frozenHeight
+	tx.TxOutputs = append(tx.TxOutputs, txOutput)
+	// 一般的交易
+	txInputs, _, utxoTotal, selectErr := stateHandle.SelectUtxos(Users[from].Address, totalNeed, true, false)
+	if selectErr != nil {
+		t.Fatal(selectErr)
+	}
+	tx.TxInputs = txInputs
+	// 多出来的utxo需要再转给自己
+	if utxoTotal.Cmp(totalNeed) > 0 {
+		delta := utxoTotal.Sub(utxoTotal, totalNeed)
+		txOutput := &protos.TxOutput{}
+		txOutput.ToAddr = []byte(Users[from].Address) // 收款人就是汇款人自己
+		txOutput.Amount = delta.Bytes()
+		tx.TxOutputs = append(tx.TxOutputs, txOutput)
+	}
+	signTx, signErr := txhash.ProcessSignTx(stateHandle.sctx.Crypt, tx, []byte(Users[from].PrivateKey))
+	if signErr != nil {
+		return nil, signErr
+	}
+	signInfo := &protos.SignatureInfo{
+		PublicKey: Users[from].Pubkey,
+		Sign:      signTx,
+	}
+	tx.InitiatorSigns = append(tx.InitiatorSigns, signInfo)
+	tx.AuthRequireSigns = tx.InitiatorSigns
+	tx.Txid, _ = txhash.MakeTransactionID(tx)
+
 	timer.Mark("GenerateTx")
-	verifyOK, vErr := utxoVM.ImmediateVerifyTx(tx, false)
+	verifyOK, vErr := stateHandle.ImmediateVerifyTx(tx, false)
 	t.Log("VerifyTX", timer.Print())
 	if !verifyOK || vErr != nil {
 		t.Log("verify tx fail, ignore in unit test here", vErr)
 	}
 	// do query tx before do tx
-	_, err = utxoVM.QueryTx(tx.Txid)
+	_, _, err := stateHandle.QueryTx(tx.Txid)
 	if err != nil {
 		t.Log("query tx ", tx.Txid, "error ", err.Error())
 	}
 
-	// test for asyncMode
-	utxoVM.StartAsyncWriter()
-	utxoVM.asyncMode = true
-	errDo := utxoVM.DoTx(tx)
+	errDo := stateHandle.DoTx(tx)
 	timer.Mark("DoTx")
 	if errDo != nil {
 		t.Fatal(errDo)
 		return nil, errDo
 	}
-	utxoVM.asyncMode = false
-	utxoVM.DoTx(tx)
+	stateHandle.DoTx(tx)
 
 	// do query tx after do tx
-	_, err = utxoVM.QueryTx(tx.Txid)
+	_, _, err = stateHandle.QueryTx(tx.Txid)
 	if err != nil {
 		t.Log("query tx ", tx.Txid, "error ", err.Error())
 	}
 
-	txlist, packErr := utxoVM.GetUnconfirmedTx(true)
+	txlist, packErr := stateHandle.GetUnconfirmedTx(true)
 	timer.Mark("GetUnconfirmedTx")
 	if packErr != nil {
 		return nil, packErr
 	}
 	//奖励矿工
-	awardTx, minerErr := utxoVM.GenerateAwardTx([]byte("miner-1"), "1000", []byte("award,onyeah!"))
+	awardTx, minerErr := txn.GenerateAwardTx("miner-1", "1000", []byte("award,onyeah!"))
 	timer.Mark("GenerateAwardTx")
 	if minerErr != nil {
 		return nil, minerErr
 	}
 
 	// case: award_amount is negative
-	_, negativeErr = utxoVM.GenerateAwardTx([]byte("miner-1"), "-2", []byte("negative award!"))
+	_, negativeErr := txn.GenerateAwardTx("miner-1", "-2", []byte("negative award!"))
 	if negativeErr != nil {
 		t.Log("GenerateAwardTx error ", negativeErr.Error())
 	}
 	txlist = append(txlist, awardTx)
 	ecdsaPk, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	timer.Mark("GenerateKey")
-	block, _ := ledger.FormatBlock(txlist, []byte("miner-1"), ecdsaPk, 123456789, 0, 0, preHash, utxoVM.GetTotal())
+	block, _ := ledger.FormatBlock(txlist, []byte("miner-1"), ecdsaPk, 123456789, 0, 0, preHash, stateHandle.GetTotal())
 	timer.Mark("FormatBlock")
 	confirmStatus := ledger.ConfirmBlock(block, false)
 	timer.Mark("ConfirmBlock")
@@ -181,20 +172,33 @@ func transfer(from string, to string, t *testing.T, utxoVM *UtxoVM, ledger *ledg
 	return block.Blockid, nil
 }
 
-func TestUtxoWorkWithLedgerBasic(t *testing.T) {
+func TestStateWorkWithLedger(t *testing.T) {
 	workspace, dirErr := ioutil.TempDir("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}
 	os.RemoveAll(workspace)
 	defer os.RemoveAll(workspace)
-	ledger, err := ledger_pkg.NewLedger(workspace, nil, nil, DefaultKVEngine, crypto_client.CryptoTypeDefault)
+	envConf := "../../../../kernel/common/xconfig/conf/env.yaml"
+	econf, err := xconfig.LoadEnvConf(envConf)
+	if err != nil {
+		log.Printf("load env config failed.env_conf:%s err:%v\n", envConf, err)
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+
+	lctx, err := ledger_pkg.NewLedgerCtx(econf, "xuper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lctx.EnvCfg.ChainDir = workspace
+	ledger, err := ledger_pkg.OpenLedger(lctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(ledger)
 	//创建链的时候分配财富
-	tx, err := GenerateRootTx([]byte(`
+	tx, err := txn.GenerateRootTx([]byte(`
        {
         "version" : "1"
         , "consensus" : {
@@ -227,35 +231,40 @@ func TestUtxoWorkWithLedgerBasic(t *testing.T) {
 		t.Fatal("confirm block fail")
 	}
 
-	utxoVM, _ := NewUtxoVM("xuper", ledger, workspace, minerPrivateKey, minerPublicKey, []byte(minerAddress),
-		nil, false, DefaultKVEngine, crypto_client.CryptoTypeDefault)
-	_, err = utxoVM.QueryTx([]byte("123"))
-	if err != ErrTxNotFound {
+	crypt, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sctx, err := context.NewStateCtx(econf, "xuper", ledger, crypt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx.EnvCfg.ChainDir = workspace
+	stateHandle, _ := NewState(sctx)
+	_, _, err = stateHandle.QueryTx([]byte("123"))
+	if err != txn.ErrTxNotFound {
 		t.Fatal("unexpected err", err)
 	}
 	// test for HasTx
-	exist, _ := utxoVM.HasTx(tx.Txid)
+	exist, _ := stateHandle.HasTx(tx.Txid)
 	t.Log("Has tx ", tx.Txid, exist)
-	err = utxoVM.DoTx(tx)
+	err = stateHandle.DoTx(tx)
 	if err != nil {
 		t.Log("coinbase do tx error ", err.Error())
 	}
 
-	// test for isConfirmed
-	status := utxoVM.isConfirmed(tx)
-	t.Log("award tx ", tx.Txid, "is confirmed ? ", status)
-
-	playErr := utxoVM.Play(block.Blockid)
+	playErr := stateHandle.Play(block.Blockid)
 	if playErr != nil {
 		t.Fatal(playErr)
 	}
 	// test for GetLatestBlockid
-	tipBlock := utxoVM.GetLatestBlockid()
+	tipBlock := stateHandle.GetLatestBlockid()
 	t.Log("current tip block ", tipBlock)
 	t.Log("last tip block ", block.Blockid)
 
-	bobBalance, _ := utxoVM.GetBalance(BobAddress)
-	aliceBalance, _ := utxoVM.GetBalance(AliceAddress)
+	bobBalance, _ := stateHandle.GetBalance(BobAddress)
+	aliceBalance, _ := stateHandle.GetBalance(AliceAddress)
 	if bobBalance.String() != "100" || aliceBalance.String() != "200" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
@@ -263,26 +272,26 @@ func TestUtxoWorkWithLedgerBasic(t *testing.T) {
 	rootBlockid := block.Blockid
 	t.Logf("rootBlockid: %x", rootBlockid)
 	//bob再给alice转5
-	nextBlockid, blockErr := transfer("bob", "alice", t, utxoVM, ledger, "5", rootBlockid, "", 0)
+	nextBlockid, blockErr := transfer("bob", "alice", t, stateHandle, ledger, "5", rootBlockid, "", 0)
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	} else {
 		t.Logf("next block id: %x", nextBlockid)
 	}
-	utxoVM.Play(nextBlockid)
-	bobBalance, _ = utxoVM.GetBalance(BobAddress)
-	aliceBalance, _ = utxoVM.GetBalance(AliceAddress)
+	stateHandle.Play(nextBlockid)
+	bobBalance, _ = stateHandle.GetBalance(BobAddress)
+	aliceBalance, _ = stateHandle.GetBalance(AliceAddress)
 	t.Logf("bob balance: %s, alice balance: %s", bobBalance.String(), aliceBalance.String())
 	//bob再给alice转6
-	nextBlockid, blockErr = transfer("bob", "alice", t, utxoVM, ledger, "6", nextBlockid, "", 0)
+	nextBlockid, blockErr = transfer("bob", "alice", t, stateHandle, ledger, "6", nextBlockid, "", 0)
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	} else {
 		t.Logf("next block id: %x", nextBlockid)
 	}
-	utxoVM.Play(nextBlockid)
-	bobBalance, _ = utxoVM.GetBalance(BobAddress)
-	aliceBalance, _ = utxoVM.GetBalance(AliceAddress)
+	stateHandle.Play(nextBlockid)
+	bobBalance, _ = stateHandle.GetBalance(BobAddress)
+	aliceBalance, _ = stateHandle.GetBalance(AliceAddress)
 	t.Logf("bob balance: %s, alice balance: %s", bobBalance.String(), aliceBalance.String())
 
 	//再创建一个新账本，从前面一个账本复制数据
@@ -292,8 +301,8 @@ func TestUtxoWorkWithLedgerBasic(t *testing.T) {
 	}
 	os.RemoveAll(workspace2)
 	defer os.RemoveAll(workspace2)
-	ledger2, lErr := ledger_pkg.NewLedger(workspace2, nil, nil, DefaultKVEngine,
-		crypto_client.CryptoTypeDefault)
+	lctx.EnvCfg.ChainDir = workspace2
+	ledger2, lErr := ledger_pkg.OpenLedger(lctx)
 	if lErr != nil {
 		t.Fatal(lErr)
 	}
@@ -311,43 +320,43 @@ func TestUtxoWorkWithLedgerBasic(t *testing.T) {
 		}
 		pBlockid = pBlock.NextHash
 	}
-	utxoVM2, _ := NewUtxoVM("xuper", ledger2, workspace2, minerPrivateKey, minerPublicKey, []byte(minerAddress),
-		nil, false, DefaultKVEngine, crypto_client.CryptoTypeDefault)
-	utxoVM2.Play(ledger2.GetMeta().RootBlockid) //先做一下根节点
-	dummyBlockid, dummyErr := transfer("bob", "alice", t, utxoVM2, ledger2, "7", ledger2.GetMeta().RootBlockid, "", 0)
+	sctx.EnvCfg.ChainDir = workspace2
+	stateHandle2, _ := NewState(sctx)
+	stateHandle2.Play(ledger2.GetMeta().RootBlockid) //先做一下根节点
+	dummyBlockid, dummyErr := transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().RootBlockid, "", 0)
 	if dummyErr != nil {
 		t.Fatal(dummyErr)
 	}
-	utxoVM2.Play(dummyBlockid)
-	utxoVM2.Walk(ledger2.GetMeta().TipBlockid, false) //再游走到末端 ,预期会导致dummmy block回滚
-	bobBalance, _ = utxoVM2.GetBalance(BobAddress)
-	aliceBalance, _ = utxoVM2.GetBalance(AliceAddress)
-	minerBalance, _ := utxoVM2.GetBalance("miner-1")
+	stateHandle2.Play(dummyBlockid)
+	stateHandle2.Walk(ledger2.GetMeta().TipBlockid, false) //再游走到末端 ,预期会导致dummmy block回滚
+	bobBalance, _ = stateHandle2.GetBalance(BobAddress)
+	aliceBalance, _ = stateHandle2.GetBalance(AliceAddress)
+	minerBalance, _ := stateHandle2.GetBalance("miner-1")
 	t.Logf("bob balance: %s, alice balance: %s, miner-1: %s", bobBalance.String(), aliceBalance.String(), minerBalance.String())
 	if bobBalance.String() != "89" || aliceBalance.String() != "211" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
-	transfer("bob", "alice", t, utxoVM2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
-	transfer("bob", "alice", t, utxoVM2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
-	utxoVM2.Walk(ledger2.GetMeta().TipBlockid, false)
-	bobBalance, _ = utxoVM2.GetBalance(BobAddress)
-	aliceBalance, _ = utxoVM2.GetBalance(AliceAddress)
-	minerBalance, _ = utxoVM2.GetBalance("miner-1")
+	transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
+	transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
+	stateHandle2.Walk(ledger2.GetMeta().TipBlockid, false)
+	bobBalance, _ = stateHandle2.GetBalance(BobAddress)
+	aliceBalance, _ = stateHandle2.GetBalance(AliceAddress)
+	minerBalance, _ = stateHandle2.GetBalance("miner-1")
 	t.Logf("bob balance: %s, alice balance: %s, miner-1: %s", bobBalance.String(), aliceBalance.String(), minerBalance.String())
 	if bobBalance.String() != "75" || aliceBalance.String() != "225" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
 	t.Log(ledger.Dump())
 
-	aliceBalance2, _ := utxoVM.GetBalance(AliceAddress)
+	aliceBalance2, _ := stateHandle.GetBalance(AliceAddress)
 	t.Log("get alice balance ", aliceBalance2)
 
 	// test for RemoveUtxoCache
-	utxoVM.RemoveUtxoCache("bob", "123")
+	stateHandle.utxo.RemoveUtxoCache("bob", "123")
 	// test for GetTotal
-	total := utxoVM.GetTotal()
+	total := stateHandle.GetTotal()
 	t.Log("total ", total)
-	iter := utxoVM.ScanWithPrefix([]byte("UWNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT_"))
+	iter := stateHandle.utxo.ScanWithPrefix([]byte("UWNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT_"))
 	for iter.Next() {
 		t.Log("ScanWithPrefix  ", iter.Key())
 	}
@@ -356,11 +365,11 @@ func TestUtxoWorkWithLedgerBasic(t *testing.T) {
 }
 
 func TestCheckCylic(t *testing.T) {
-	g := TxGraph{}
+	g := txn.TxGraph{}
 	g["tx3"] = []string{"tx1", "tx2"}
 	g["tx2"] = []string{"tx1", "tx0"}
 	g["tx1"] = []string{"tx0", "tx2"}
-	output, cylic, _ := TopSortDFS(g)
+	output, cylic, _ := txn.TopSortDFS(g)
 	if output != nil {
 		t.Fatal("sort fail1")
 	}
@@ -378,13 +387,25 @@ func TestFrozenHeight(t *testing.T) {
 	}
 	os.RemoveAll(workspace)
 	defer os.RemoveAll(workspace)
-	ledger, err := ledger_pkg.NewLedger(workspace, nil, nil, DefaultKVEngine, crypto_client.CryptoTypeDefault)
+	envConf := "../../../../kernel/common/xconfig/conf/env.yaml"
+	econf, err := xconfig.LoadEnvConf(envConf)
+	if err != nil {
+		log.Printf("load env config failed.env_conf:%s err:%v\n", envConf, err)
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	lctx, err := ledger_pkg.NewLedgerCtx(econf, "xuper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lctx.EnvCfg.ChainDir = workspace
+	ledger, err := ledger_pkg.OpenLedger(lctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(ledger)
 	//创建链的时候分配, bob:100, alice:200
-	tx, err := GenerateRootTx([]byte(`
+	tx, err := txn.GenerateRootTx([]byte(`
        {
         "version" : "1"
         , "consensus" : {
@@ -415,43 +436,52 @@ func TestFrozenHeight(t *testing.T) {
 	if !confirmStatus.Succ {
 		t.Fatal("confirm block fail")
 	}
-	utxoVM, _ := NewUtxoVM("xuper", ledger, workspace, minerPrivateKey, minerPublicKey, []byte(minerAddress),
-		nil, false, DefaultKVEngine, crypto_client.CryptoTypeDefault)
-	playErr := utxoVM.Play(block.Blockid)
+	crypt, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sctx, err := context.NewStateCtx(econf, "xuper", ledger, crypt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx.EnvCfg.ChainDir = workspace
+	stateHandle, _ := NewState(sctx)
+	playErr := stateHandle.Play(block.Blockid)
 	if playErr != nil {
 		t.Fatal(playErr)
 	}
-	bobBalance, _ := utxoVM.GetBalance(BobAddress)
-	aliceBalance, _ := utxoVM.GetBalance(AliceAddress)
+	bobBalance, _ := stateHandle.GetBalance(BobAddress)
+	aliceBalance, _ := stateHandle.GetBalance(AliceAddress)
 	if bobBalance.String() != "100" || aliceBalance.String() != "200" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
 	//bob 给alice转100，账本高度=2的时候才能解冻
-	nextBlockid, blockErr := transfer("bob", "alice", t, utxoVM, ledger, "100", ledger.GetMeta().TipBlockid, "", 2)
+	nextBlockid, blockErr := transfer("bob", "alice", t, stateHandle, ledger, "100", ledger.GetMeta().TipBlockid, "", 2)
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	} else {
 		t.Logf("next block id: %x", nextBlockid)
 	}
 	// test for GetFrozenBalance
-	frozenBalance, frozenBalanceErr := utxoVM.GetFrozenBalance(AliceAddress)
+	frozenBalance, frozenBalanceErr := stateHandle.GetFrozenBalance(AliceAddress)
 	if frozenBalanceErr != nil {
 		t.Log("get frozen balance error ", frozenBalanceErr.Error())
 	} else {
 		t.Log("alice frozen balance ", frozenBalance)
 	}
 	//alice给bob转300, 预期失败，因为无法使用被冻住的utxo
-	nextBlockid, blockErr = transfer("alice", "bob", t, utxoVM, ledger, "300", ledger.GetMeta().TipBlockid, "", 0)
-	if blockErr != ErrNoEnoughUTXO {
+	nextBlockid, blockErr = transfer("alice", "bob", t, stateHandle, ledger, "300", ledger.GetMeta().TipBlockid, "", 0)
+	if blockErr != utxo.ErrNoEnoughUTXO {
 		t.Fatal("unexpected ", blockErr)
 	}
 	//alice先给自己转1块钱，让块高度增加
-	nextBlockid, blockErr = transfer("alice", "alice", t, utxoVM, ledger, "1", ledger.GetMeta().TipBlockid, "", 0)
+	nextBlockid, blockErr = transfer("alice", "alice", t, stateHandle, ledger, "1", ledger.GetMeta().TipBlockid, "", 0)
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	}
 	//然后alice再次尝试给bob转300,预期utxo解冻可用了
-	nextBlockid, blockErr = transfer("alice", "bob", t, utxoVM, ledger, "300", ledger.GetMeta().TipBlockid, "", 0)
+	nextBlockid, blockErr = transfer("alice", "bob", t, stateHandle, ledger, "300", ledger.GetMeta().TipBlockid, "", 0)
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	}
@@ -464,12 +494,24 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	}
 	os.RemoveAll(workspace)
 	defer os.RemoveAll(workspace)
-	ledger, err := ledger_pkg.NewLedger(workspace, nil, nil, DefaultKVEngine, crypto_client.CryptoTypeDefault)
+	envConf := "../../../../kernel/common/xconfig/conf/env.yaml"
+	econf, err := xconfig.LoadEnvConf(envConf)
+	if err != nil {
+		log.Printf("load env config failed.env_conf:%s err:%v\n", envConf, err)
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	lctx, err := ledger_pkg.NewLedgerCtx(econf, "xuper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lctx.EnvCfg.ChainDir = workspace
+	ledger, err := ledger_pkg.OpenLedger(lctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(ledger)
-	tx, err := GenerateRootTx([]byte(`
+	tx, err := txn.GenerateRootTx([]byte(`
        {
         "version" : "1"
         , "consensus" : {
@@ -500,59 +542,25 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	if !confirmStatus.Succ {
 		t.Fatal("confirm block fail")
 	}
-	utxoVM, _ := NewUtxoVM("xuper", ledger, workspace, minerPrivateKey, minerPublicKey, []byte(minerAddress),
-		nil, false, DefaultKVEngine, crypto_client.CryptoTypeDefault)
-	playErr := utxoVM.Play(block.Blockid)
+	crypt, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sctx, err := context.NewStateCtx(econf, "xuper", ledger, crypt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx.EnvCfg.ChainDir = workspace
+	stateHandle, _ := NewState(sctx)
+	playErr := stateHandle.Play(block.Blockid)
 	if playErr != nil {
 		t.Fatal(playErr)
 	}
-	_, err = utxoVM.GetSnapShotWithBlock(block.GetBlockid())
+	_, err = stateHandle.CreateSnapshot(block.GetBlockid())
 	if err != nil {
-		t.Fatal("GetSnapShotWithBlock fail")
+		t.Fatal("CreateSnapshot fail")
 	}
-}
-
-type testInterface struct{}
-
-func (ti *testInterface) Run(desc *contract.TxDesc) error {
-	return nil
-}
-
-func (ti *testInterface) Rollback(desc *contract.TxDesc) error {
-	return nil
-}
-
-func (ti *testInterface) ReadOutput(desc *contract.TxDesc) (contract.ContractOutputInterface, error) {
-	return nil, nil
-}
-
-func (ti *testInterface) Finalize(blockid []byte) error {
-	return nil
-}
-
-func (ti *testInterface) SetContext(context *contract.TxContext) error {
-	return nil
-}
-
-func (ti *testInterface) Stop() {
-
-}
-
-func (ti *testInterface) CreateChainBlock() {
-
-}
-
-type testVat struct{}
-
-func (tv *testVat) GetVerifiableAutogenTx(blockHeight int64, maxCount int, timestamp int64) ([]*pb.Transaction, error) {
-	return nil, nil
-}
-
-func (tv *testVat) GetVATWhiteList() map[string]bool {
-	whiteList := map[string]bool{
-		"update_consensus": true,
-	}
-	return whiteList
 }
 
 type testOutput struct {
