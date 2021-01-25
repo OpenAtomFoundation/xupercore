@@ -204,13 +204,17 @@ func (s *tdposSchedule) GetIntAddress(address string) string {
 // calculateProposers 根据vote选票信息计算最新的topK proposer, 调用方需检查height > 3
 func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 	if height <= 3 {
-		return nil, heightTooLow
+		return s.proposers, nil
 	}
 	// 获取候选人信息
 	res, err := s.getSnapshotKey(height, contractBucket, []byte(nominateKey))
 	if err != nil {
 		s.log.Error("tdpos::calculateProposers::getSnapshotKey err.", "err", err)
 		return nil, err
+	}
+	// 未读到值时直接返回初始化值
+	if res == nil {
+		return s.proposers, nil
 	}
 	nominateValue := NewNominateValue()
 	if err := json.Unmarshal(res, &nominateValue); err != nil {
@@ -228,6 +232,9 @@ func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 		if err != nil {
 			s.log.Error("tdpos::calculateProposers::load vote read set err.")
 			return nil, err
+		}
+		if res == nil {
+			return s.proposers, nil
 		}
 		voteValue := NewvoteValue()
 		if err := json.Unmarshal(res, &voteValue); err != nil {
@@ -274,6 +281,9 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 		res, err := s.getSnapshotKey(height, contractBucket, []byte(urlmapKey))
 		if err != nil {
 			s.log.Error("tdpos::updateProposers::getSnapshotKey error", "err", err)
+			return false
+		}
+		if res == nil {
 			return false
 		}
 		netURLValue := NewNetURLMap()

@@ -204,7 +204,7 @@ func (tp *tdposConsensus) CalculateBlock(block cctx.BlockInterface) error {
 // CheckMinerMatch 查看block是否合法
 // ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
 func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
-	tp.log.Debug("Tdpos::CheckMinerMatch::start.")
+	tp.log.Debug("Tdpos::CheckMinerMatch::start.", "height", block.GetHeight(), "blockId", utils.F(block.GetBlockid()), "proposer", string(block.GetProposer()))
 	// 获取当前共识存储
 	bv, err := tp.ParseConsensusStorage(block)
 	if err != nil {
@@ -248,12 +248,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	term, pos, _ := tp.election.minerScheduling(block.GetTimestamp())
 	curHeight := block.GetHeight()
 	var wantProposers []string
-	if curHeight <= 3 {
-		// 使用初始值
-		wantProposers = tp.election.proposers
-	} else {
-		wantProposers, err = tp.election.calculateProposers(curHeight)
-	}
+	wantProposers, err = tp.election.calculateProposers(curHeight)
 	if err != nil {
 		tp.log.Warn("Tdpos::CheckMinerMatch::calculateProposers error", "err", err)
 		return false, err
@@ -264,14 +259,14 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	}
 	// 当不是第一轮时需要和前面的
 	if tdposStorage.CurTerm > 0 {
-		if tdposStorage.CurBlockNum != term {
-			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, invalid term.", "want", term, "have", tdposStorage.CurBlockNum)
+		if tdposStorage.CurTerm != term {
+			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, invalid term.", "want", term, "have", tdposStorage.CurTerm)
 			return false, invalidTermErr
 		}
 		// 减少矿工50%概率恶意地输入时间
-		if preTdposStorage.CurTerm > tdposStorage.CurTerm {
+		if preTdposStorage.CurTerm > term {
 			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, preBlock.CurTerm is bigger than the new received.",
-				"preBlock", preTdposStorage.CurTerm, "now", tdposStorage.CurTerm)
+				"preBlock", preTdposStorage.CurTerm, "have", term)
 			return false, invalidTermErr
 		}
 	}
