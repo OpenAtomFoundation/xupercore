@@ -59,15 +59,15 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	// TODO:cCtx.BcName需要注册表吗？
 	if cCtx.Crypto == nil || cCtx.Address == nil {
-		cCtx.XLog.Error("Xpoa::NewSingleConsensus::CryptoClient in context is nil")
+		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::CryptoClient in context is nil")
 		return nil
 	}
 	if cCtx.Ledger == nil {
-		cCtx.XLog.Error("Xpoa::NewSingleConsensus::Ledger in context is nil")
+		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::Ledger in context is nil")
 		return nil
 	}
 	if cCfg.ConsensusName != "xpoa" {
-		cCtx.XLog.Error("Xpoa::NewSingleConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
+		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
 		return nil
 	}
 
@@ -76,7 +76,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	xconfig := &xpoaConfig{}
 	err := json.Unmarshal([]byte(cCfg.Config), xconfig)
 	if err != nil {
-		cCtx.XLog.Error("Xpoa::NewSingleConsensus::xpoa struct unmarshal error", "error", err)
+		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::xpoa struct unmarshal error", "error", err)
 		return nil
 	}
 	// create xpoaSchedule
@@ -86,6 +86,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		blockNum:  xconfig.BlockNum,
 		addrToNet: make(map[string]string),
 		ledger:    cCtx.Ledger,
+		log:       cCtx.XLog,
 	}
 	if xconfig.EnableBFT != nil {
 		schedule.enableBFT = true
@@ -125,7 +126,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
 		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 		if qcTree == nil {
-			cCtx.XLog.Error("Xpoa::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
+			cCtx.XLog.Error("Xpoa::NewXpoaConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
 			return nil
 		}
 		pacemaker := &chainedBft.DefaultPaceMaker{
@@ -144,7 +145,9 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree, justifySigns)
 		go smr.Start()
 		xpoa.smr = smr
+		cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::load chained-bft successfully.")
 	}
+	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a xpoa instance successfully.", "xpoa", xpoa)
 	return xpoa
 }
 
@@ -169,16 +172,16 @@ Again:
 
 	// update validates
 	if x.election.UpdateValidator(height) {
-		x.bctx.GetLog().Info("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
+		x.bctx.GetLog().Debug("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
 	}
 	leader := x.election.GetLocalLeader(time.Now().UnixNano(), height)
 	if leader == x.election.address {
-		x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", true, "height", height)
+		x.bctx.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", true, "height", height)
 		// TODO: 首次切换为矿工时SyncBlcok, Bug: 可能会导致第一次出块失败
 		needSync := x.election.ledger.GetTipBlock().GetHeight() == 0 || string(x.election.ledger.GetTipBlock().GetProposer()) != leader
 		return true, needSync, nil
 	}
-	x.bctx.GetLog().Info("Xpoa::CompeteMaster", "isMiner", false, "height", height)
+	x.bctx.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", false, "height", height)
 	// TODO: 后续调试时，确定此处是否需要sync
 	return false, false, nil
 }
@@ -319,12 +322,12 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 			x.bctx.GetLog().Warn("Xpoa::ProcessConfirmBlock::bft next proposal failed", "error", err)
 			return err
 		}
-		x.bctx.GetLog().Info("Xpoa::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
+		x.bctx.GetLog().Debug("Xpoa::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView())
 	}
 	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
 	pNode := x.smr.BlockToProposalNode(block)
 	err = x.smr.UpdateQcStatus(pNode)
-	x.bctx.GetLog().Info("Xpoa::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err)
+	x.bctx.GetLog().Debug("Xpoa::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err)
 	return nil
 }
 

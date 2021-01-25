@@ -28,6 +28,9 @@ type XpoaStorage struct {
 
 func cleanProduceMap(isProduce map[int64]bool, period int64) {
 	// 删除已经落盘的所有key
+	if len(isProduce) <= MAXMAPSIZE {
+		return
+	}
 	t := time.Now().UnixNano()
 	key := t / period
 	for k, _ := range isProduce {
@@ -39,7 +42,7 @@ func cleanProduceMap(isProduce map[int64]bool, period int64) {
 
 type ProposerInfo struct {
 	Address string `json:"address"`
-	Neturl  string `json:"peerAddr"`
+	Neturl  string `json:"neturl"`
 }
 
 // LoadValidatorsMultiInfo
