@@ -121,7 +121,7 @@ func (t *Miner) Start() {
 		// 2.通过共识检查矿工身份
 		if err == nil {
 			isMiner, isSync, err = t.ctx.Consensus.CompeteMaster(ledgerTipHeight + 1)
-			ctx.GetLog().Trace("compete master result", "isMiner", isMiner, "isSync", isSync, "err", err)
+			ctx.GetLog().Trace("compete master result", "height", ledgerTipHeight+1, "isMiner", isMiner, "isSync", isSync, "err", err)
 		}
 		// 3.如需要同步，尝试同步网络最新区块
 		if err == nil && isMiner && isSync {
@@ -161,6 +161,7 @@ func (t *Miner) IsExit() bool {
 
 // 挖矿生产区块
 func (t *Miner) mining(ctx xctx.XContext) error {
+	ctx.GetLog().Debug("mining start.")
 	// 1.获取矿工互斥锁，矿工行为完全串行
 	t.minerMutex.Lock()
 	defer t.minerMutex.Unlock()
@@ -411,6 +412,8 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 			return fmt.Errorf("try sync block get whole network longest block failed")
 		}
 	}
+	ctx.GetLog().Debug("Miner::trySyncBlock", "targetBlockId", utils.F(targetBlock.GetBlockid()), "targetHeight", targetBlock.GetHeight(),
+		"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId), "inSyncTargetHeight", t.inSyncTargetHeight)
 
 	// 2.获取矿工互斥锁，矿工行为完全串行
 	t.minerMutex.Lock()
@@ -431,13 +434,13 @@ func (t *Miner) trySyncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) 
 			"targetBlockHeight", targetBlock.GetHeight(), "targetBlockBlockId",
 			utils.F(targetBlock.GetBlockid()), "inSyncTargetHeight", t.inSyncTargetHeight,
 			"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
-		return common.ErrForbidden.More("%s", "target block height lower than in sync height")
+		return nil
 	}
 	// 检查同步目标是否已经在账本中，忽略已经在账本中任务
 	if t.ctx.Ledger.ExistBlock(targetBlock.GetBlockid()) {
 		ctx.GetLog().Trace("ignore block because target block has in ledger", "targetBlockId",
 			utils.F(targetBlock.GetBlockid()))
-		return common.ErrForbidden.More("%s", "target block has in ledger")
+		return nil
 	}
 
 	// 4.更新同步中区块高度

@@ -127,7 +127,7 @@ func TestCheckMinerMatch(t *testing.T) {
 		t.Error("NewBlock error", "error", err)
 		return
 	}
-	ok, err := i.CheckMinerMatch(cCtx.BaseCtx, f)
+	ok, err := i.CheckMinerMatch(&cCtx.BaseCtx, f)
 	if !ok || err != nil {
 		t.Error("TestCheckMinerMatch error", "error", err, cCtx.Address.PrivateKey)
 	}

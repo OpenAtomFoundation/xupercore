@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
@@ -28,14 +27,6 @@ func init() {
 	consensus.Register("pow", NewPoWConsensus)
 }
 
-// 目前未定义pb结构
-// PoWStorage pow占用block中consensusStorage json串的格式
-type PoWStorage struct {
-	// TargetBits 以一个uint32类型解析，16进制格式为0xFFFFFFFF
-	// 真正difficulty按照Bitcoin标准转化，将TargetBits转换为一个uint256 bits的大数
-	TargetBits uint32 `json:"targetBits,omitempty"`
-}
-
 // PoWConsensus pow具体结构
 type PoWConsensus struct {
 	// Pluggable Consensus传递的上下文, PoW并不使用P2p interface
@@ -43,71 +34,75 @@ type PoWConsensus struct {
 	status *PoWStatus
 	config *PoWConfig
 
-	targetBits        uint32
-	sigc              chan bool
-	defaultDifficulty *big.Int
-	maxDifficulty     *big.Int
+	targetBits    uint32
+	sigc          chan bool
+	maxDifficulty *big.Int
 }
 
-// PoWConfig pow需要解析的创始块解析格式
-//  Bitcoin推荐
-//    AdjustHeightGap: 2016,
-//	  MaxTarget: 0x1d00FFFF,
-type PoWConfig struct {
-	DefaultTarget        uint32 `json:"defaultTarget"`
-	AdjustHeightGap      int32  `json:"adjustHeightGap"`
-	ExpectedPeriodMilSec int32  `json:"expectedPeriod"`
-	MaxTarget            uint32 `json:"maxTarget"`
-}
-
-// PoWStatus 实现了ConsensusStatus接口
-type PoWStatus struct {
-	startHeight int64
-	mutex       sync.Mutex
-	newHeight   int64
-	index       int
-	miner       MinerInfo
-}
-
-// MinerInfo 针对GetCurrentValidatorsInfo json串解析
-type MinerInfo struct {
-	Address string `json:"address"`
-}
-
-// GetVersion 返回pow所在共识version
-func (s *PoWStatus) GetVersion() int64 {
-	return 0
-}
-
-// GetConsensusBeginInfo 返回该实例初始高度
-func (s *PoWStatus) GetConsensusBeginInfo() int64 {
-	return s.startHeight
-}
-
-// GetStepConsensusIndex 获取共识item所在consensus slice中的index
-func (s *PoWStatus) GetStepConsensusIndex() int {
-	return s.index
-}
-
-// GetConsensusName 获取共识类型
-func (s *PoWStatus) GetConsensusName() string {
-	return "pow"
-}
-
-// GetCurrentTerm 获取当前状态机term
-func (s *PoWStatus) GetCurrentTerm() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	return s.newHeight
-}
-
-// GetCurrentValidatorsInfo 获取当前矿工信息
-func (s *PoWStatus) GetCurrentValidatorsInfo() []byte {
-	info, err := json.Marshal(s.miner)
-	if err != nil {
+// NewPoWConsensus 初始化实例
+func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+	// 解析config中需要的字段
+	if cCtx.XLog == nil {
 		return nil
 	}
-	return info
+	// TODO:cCtx.BcName需要注册表吗？
+	if cCtx.Crypto == nil || cCtx.Address == nil {
+		cCtx.XLog.Error("PoW::NewPoWConsensus::CryptoClient in context is nil")
+		return nil
+	}
+	if cCtx.Ledger == nil {
+		cCtx.XLog.Error("PoW::NewPoWConsensus::Ledger in context is nil")
+		return nil
+	}
+	if cCfg.ConsensusName != "pow" {
+		cCtx.XLog.Error("PoW::NewPoWConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
+		return nil
+	}
+	config, err := unmarshalPowConfig([]byte(cCfg.Config))
+	if err != nil {
+		cCtx.XLog.Error("PoW::NewPoWConsensus::pow struct unmarshal error", "error", err)
+		return nil
+	}
+	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
+	pow := &PoWConsensus{
+		ctx:    cCtx,
+		config: config,
+		status: &PoWStatus{
+			startHeight: cCfg.StartHeight,
+			newHeight:   cCfg.StartHeight - 1,
+			index:       cCfg.Index,
+			miner: MinerInfo{
+				Address: cCtx.Address.Address,
+			},
+		},
+		sigc: make(chan bool, 1),
+	}
+	target := config.DefaultTarget
+	// 重启时需要重新更新目标target
+	if cCtx.Ledger.GetTipBlock().GetHeight() > cCfg.StartHeight {
+		bits, err := pow.refreshDifficulty(cCtx.Ledger.GetTipBlock().GetBlockid(), cCtx.Ledger.GetTipBlock().GetHeight()+1)
+		if err != nil {
+			cCtx.XLog.Error("PoW::NewPoWConsensus::refreshDifficulty err", "error", err)
+			return nil
+		}
+		target = bits
+		cCtx.XLog.Debug("PoW::NewPoWConsensus::refreshDifficulty after restart.")
+	}
+	// 通过MaxTarget和DefaultTarget解析maxDifficulty和DefaultDifficulty
+	md, fNegative, fOverflow := SetCompact(config.MaxTarget)
+	if fNegative || fOverflow {
+		cCtx.XLog.Error("PoW::NewPoWConsensus::pow set MaxTarget error", "fNegative", fNegative, "fOverflow", fOverflow)
+		return nil
+	}
+	_, fNegative, fOverflow = SetCompact(target)
+	if fNegative || fOverflow {
+		cCtx.XLog.Error("PoW::NewPoWConsensus::pow set Default error", "fNegative", fNegative, "fOverflow", fOverflow)
+		return nil
+	}
+	pow.targetBits = target
+	pow.maxDifficulty = md
+	cCtx.XLog.Debug("Pow::NewPoWConsensus::create a pow instance successfully.", "pow", pow)
+	return pow
 }
 
 // ParseConsensusStorage PoW parse专有存储的逻辑，即targetBits
@@ -130,140 +125,86 @@ func (pow *PoWConsensus) CalculateBlock(block context.BlockInterface) error {
 	return pow.mining(block)
 }
 
-// NewPoWConsensus 初始化实例
-func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
-	// 解析config中需要的字段
-	if cCtx.XLog == nil {
-		return nil
-	}
-	// TODO:cCtx.BcName需要注册表吗？
-	if cCtx.Crypto == nil || cCtx.Address == nil {
-		cCtx.XLog.Error("PoW::NewPoWConsensus::CryptoClient in context is nil")
-		return nil
-	}
-	if cCtx.Ledger == nil {
-		cCtx.XLog.Error("PoW::NewPoWConsensus::Ledger in context is nil")
-		return nil
-	}
-	if cCfg.ConsensusName != "pow" {
-		cCtx.XLog.Error("PoW::NewPoWConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
-		return nil
-	}
-	config := &PoWConfig{}
-	err := json.Unmarshal([]byte(cCfg.Config), config)
-	if err != nil {
-		cCtx.XLog.Error("PoW::NewPoWConsensus::pow struct unmarshal error", "error", err)
-		return nil
-	}
-	// 通过MaxTarget和DefaultTarget解析maxDifficulty和DefaultDifficulty
-	md, fNegative, fOverflow := SetCompact(config.MaxTarget)
-	if fNegative || fOverflow {
-		cCtx.XLog.Error("PoW::NewPoWConsensus::pow set MaxTarget error", "fNegative", fNegative, "fOverflow", fOverflow)
-		return nil
-	}
-	dd, fNegative, fOverflow := SetCompact(config.DefaultTarget)
-	if fNegative || fOverflow {
-		cCtx.XLog.Error("PoW::NewPoWConsensus::pow set Default error", "fNegative", fNegative, "fOverflow", fOverflow)
-		return nil
-	}
-	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
-	pow := &PoWConsensus{
-		ctx:    cCtx,
-		config: config,
-		status: &PoWStatus{
-			startHeight: cCfg.StartHeight,
-			newHeight:   cCfg.StartHeight - 1,
-			index:       cCfg.Index,
-			miner: MinerInfo{
-				Address: cCtx.Address.Address,
-			},
-		},
-		sigc:              make(chan bool, 1),
-		maxDifficulty:     md,
-		defaultDifficulty: dd,
-	}
-	return pow
-}
-
 // CompeteMaster PoW单一节点都为矿工，故返回为true
 func (pow *PoWConsensus) CompeteMaster(height int64) (bool, bool, error) {
+	pow.ctx.XLog.Debug("PoW::CompeteMaster", "targetBits", pow.targetBits)
 	return true, true, nil
 }
 
 // CheckMinerMatch 验证区块，包括merkel根和hash
 // ATTENTION: TODO: 上层需要先检查VerifyMerkle(block)
 func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.BlockInterface) (bool, error) {
-	// TODO: 报错统一打出矿工地址
 	// 检查区块是否有targetBits字段
 	in, err := pow.ParseConsensusStorage(block)
 	if err != nil {
 		ctx.GetLog().Warn("PoW::CheckMinerMatch::ParseConsensusStorage err", "err", err,
-			"blockId", block.GetBlockid())
+			"blockId", block.GetBlockid(), "miner", string(block.GetProposer()))
 		return false, err
 	}
 	s, ok := in.(PoWStorage)
 	if !ok {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::transfer PoWStorage err", "blockId", block.GetBlockid())
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::transfer PoWStorage err", "blockId", block.GetBlockid(), "miner", string(block.GetProposer()))
 		return false, err
 	}
 	// 检查区块的区块头是否和和区块中的targetBits字段匹配
 	if !pow.IsProofed(block.GetBlockid(), s.TargetBits) {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::the actual difficulty of block received doesn't match its' blockid", "blockid", fmt.Sprintf("%x", block.GetBlockid()))
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::the actual difficulty of block received doesn't match its' blockid",
+			"blockid", fmt.Sprintf("%x", block.GetBlockid()), "miner", string(block.GetProposer()))
 		return false, err
 	}
 	// 检查区块的区块头是否hash正确
 	id, err := block.MakeBlockId()
 	if err != nil {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::make blockid error", "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::make blockid error", "error", err, "miner", string(block.GetProposer()))
 		return false, err
 	}
 	if !bytes.Equal(id, block.GetBlockid()) {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::equal blockid error")
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::equal blockid error", "miner", string(block.GetProposer()))
 		return false, err
 	}
 	// 验证difficulty是否正确
 	targetBits, err := pow.refreshDifficulty(block.GetPreHash(), block.GetHeight())
 	if err != nil {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::refreshDifficulty err", "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::refreshDifficulty err", "error", err, "miner", string(block.GetProposer()))
 		return false, err
 	}
 	if targetBits != s.TargetBits {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::unexpected target bits", "expect", targetBits, "got", s.TargetBits)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::unexpected target bits", "expect", targetBits, "got", s.TargetBits, "miner", string(block.GetProposer()))
 		return false, err
 	}
 	// 验证时间戳是否正确
 	preBlock, err := pow.ctx.Ledger.QueryBlock(block.GetPreHash())
 	if err != nil {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::get preblock error")
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::get preblock error", "miner", string(block.GetProposer()))
 		return false, err
 	}
 	if block.GetTimestamp() < preBlock.GetTimestamp() {
 		ctx.GetLog().Warn("PoW::CheckMinerMatch::unexpected block timestamp",
-			"pre", preBlock.GetTimestamp(), "next", block.GetTimestamp())
+			"pre", preBlock.GetTimestamp(), "next", block.GetTimestamp(), "miner", string(block.GetProposer()))
 		return false, err
 	}
 	// 验证前导0
 	if !pow.IsProofed(block.GetBlockid(), targetBits) {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::blockid IsProofed error")
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::blockid IsProofed error", "miner", string(block.GetProposer()))
 		return false, err
 	}
-	//验证签名
-	//1 验证一下签名和公钥是不是能对上
+	// 验证签名
+	// 1 验证一下签名和公钥是不是能对上
 	k, err := pow.ctx.Crypto.GetEcdsaPublicKeyFromJsonStr(block.GetPublicKey())
 	if err != nil {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::get ecdsa from block error", "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::get ecdsa from block error", "error", err, "miner", string(block.GetProposer()))
 		return false, err
 	}
-	//Todo 跟address比较
+	// 跟address比较
 	chkResult, _ := pow.ctx.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
 	if chkResult == false {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::address is not match publickey")
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::address is not match publickey", "miner", string(block.GetProposer()))
 		return false, err
 	}
-	//2 验证一下签名是否正确
+	// 2 验证一下签名是否正确
 	valid, err := pow.ctx.Crypto.VerifyECDSA(k, block.GetSign(), block.GetBlockid())
 	if err != nil {
-		ctx.GetLog().Warn("PoW::CheckMinerMatch::verifyECDSA error", "error", err)
+		ctx.GetLog().Warn("PoW::CheckMinerMatch::verifyECDSA error", "error", err, "miner", string(block.GetProposer()))
 	}
 	return valid, err
 }
@@ -283,7 +224,14 @@ func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, erro
 		pow.Stop()
 	}
 	pow.targetBits = bits
-	return false, nil, nil
+	store := &PoWStorage{
+		TargetBits: bits,
+	}
+	by, err := json.Marshal(store)
+	if err != nil {
+		return false, nil, err
+	}
+	return false, by, nil
 }
 
 // ProcessConfirmBlock 此处更新最新的block高度
@@ -298,7 +246,6 @@ func (pow *PoWConsensus) ProcessConfirmBlock(block context.BlockInterface) error
 
 // GetConsensusStatus 获取pow实例状态
 func (pow *PoWConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
-	// TODO:精简接口，这块不需要返回一个err
 	return pow.status, nil
 }
 
@@ -365,7 +312,7 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (ui
 	difficulty, _, _ := SetCompact(prevTargetBits) // prevTargetBits一定在之前检查过
 	difficulty.Mul(difficulty, big.NewInt(int64(actualTimeSpan)))
 	difficulty.Div(difficulty, big.NewInt(int64(expectedTimeSpan)))
-	if difficulty.Cmp(pow.maxDifficulty) == 1 {
+	if difficulty.Cmp(pow.maxDifficulty) == -1 {
 		pow.ctx.XLog.Debug("PoW::refreshDifficulty::retarget", "newTargetBits", pow.config.MaxTarget)
 		return pow.config.MaxTarget, nil
 	}
@@ -374,14 +321,14 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (ui
 		pow.ctx.XLog.Error("PoW::refreshDifficulty::difficulty GetCompact err")
 		return prevTargetBits, nil
 	}
-	pow.ctx.XLog.Info("PoW::refreshDifficulty::adjust targetBits", "height", nextHeight, "targetBits", newTargetBits, "prevTargetBits", prevTargetBits)
+	pow.ctx.XLog.Debug("PoW::refreshDifficulty::adjust targetBits", "height", nextHeight, "targetBits", newTargetBits, "prevTargetBits", prevTargetBits)
 	return newTargetBits, nil
 }
 
 //IsProofed check workload proof
 func (pow *PoWConsensus) IsProofed(blockID []byte, targetBits uint32) bool {
 	d, fNegative, fOverflow := SetCompact(targetBits)
-	if fNegative || fOverflow || d.Cmp(pow.maxDifficulty) == 1 { // d > maxDifficulty
+	if fNegative || fOverflow || d.Cmp(pow.maxDifficulty) == -1 { // d > maxDifficulty
 		return false
 	}
 	hash := new(big.Int)
@@ -392,60 +339,6 @@ func (pow *PoWConsensus) IsProofed(blockID []byte, targetBits uint32) bool {
 	return true
 }
 
-// SetCompact 将一个uint32的target转换为一个difficulty
-func SetCompact(nCompact uint32) (*big.Int, bool, bool) {
-	nSize := nCompact >> 24
-	nWord := new(big.Int)
-	u := new(big.Int)
-	nCompactInt := big.NewInt(int64(nCompact))
-	// 0x00800000是一个符号位，故nWord仅为后23位
-	lowBits := big.NewInt(0x007fffff)
-	nWord.And(nCompactInt, lowBits)
-	if nSize <= 3 {
-		nWord.Rsh(nWord, uint(8*(3-nSize)))
-		u = nWord
-	} else {
-		u = nWord
-		u.Lsh(u, uint(8*(nSize-3)))
-	}
-	pfNegative := nWord.Cmp(big.NewInt(0)) != 0 && (nCompact&0x00800000) != 0
-	pfOverflow := nWord.Cmp(big.NewInt(0)) != 0 && ((nSize > 34) ||
-		(nWord.Cmp(big.NewInt(0xff)) == 1 && nSize > 33) ||
-		(nWord.Cmp(big.NewInt(0xffff)) == 1 && nSize > 32))
-	return u, pfNegative, pfOverflow
-}
-
-// GetCompact 将一个256bits的大数转换为一个target
-func GetCompact(number *big.Int) (uint32, bool) {
-	nSize := (number.BitLen() + 7) / 8
-	nCompact := uint32(0)
-	low64Int := new(big.Int)
-	low64Int.SetUint64(0xFFFFFFFFFFFFFFFF)
-	low64Int.And(low64Int, number)
-	low64 := low64Int.Uint64()
-	if nSize <= 3 {
-		nCompact = uint32(low64 << uint64(8*(3-nSize)))
-	} else {
-		bn := new(big.Int)
-		bn.Rsh(number, uint(8*(nSize-3)))
-		low64Int.SetUint64(0xFFFFFFFFFFFFFFFF)
-		low64Int.And(low64Int, bn)
-		low64 := low64Int.Uint64()
-		nCompact = uint32(low64)
-	}
-	// The 0x00800000 bit denotes the sign.
-	// Thus, if it is already set, divide the mantissa by 256 and increase the exponent.
-	if nCompact&0x00800000 > 0 {
-		nCompact >>= 8
-		nSize++
-	}
-	if (nCompact&0xFF800000) != 0 || nSize > 256 {
-		return 0, false
-	}
-	nCompact |= uint32(nSize) << 24
-	return nCompact, true
-}
-
 // mining 为带副作用的函数，将直接对block进行操作，更改其原始值
 func (pow *PoWConsensus) mining(block context.BlockInterface) error {
 	gussNonce := int32(0)
@@ -453,7 +346,7 @@ func (pow *PoWConsensus) mining(block context.BlockInterface) error {
 	for {
 		select {
 		case <-pow.sigc:
-			pow.ctx.XLog.Info("PoW::mining::be killed by new consensus or internal error")
+			pow.ctx.XLog.Debug("PoW::mining::be killed by new consensus or internal error")
 			return OODMineErr
 		default:
 		}

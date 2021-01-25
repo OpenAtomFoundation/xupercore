@@ -69,30 +69,30 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		return nil
 	}
 	if cCtx.Crypto == nil || cCtx.Address == nil {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::CryptoClient in context is nil")
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::CryptoClient in context is nil")
 		return nil
 	}
 	if cCtx.Ledger == nil {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::Ledger in context is nil")
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::Ledger in context is nil")
 		return nil
 	}
 	if cCfg.ConsensusName != "tdpos" {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
 		return nil
 	}
 	xconfig, err := unmarshalTdposConfig([]byte(cCfg.Config))
 	if err != nil {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::tdpos struct unmarshal error", "error", err)
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::tdpos struct unmarshal error", "error", err)
 		return nil
 	}
 	if len((xconfig.InitProposer)["1"]) != len((xconfig.InitProposerNeturl)["1"]) {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::initProposer should be mapped into initProposerNeturl", "error", InitProposerNeturlErr)
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::initProposer should be mapped into initProposerNeturl", "error", InitProposerNeturlErr)
 		return nil
 	}
 	// 新建schedule实例，该实例包含smr中election的接口实现
 	schedule := NewSchedule(xconfig, cCtx.XLog, cCtx.Ledger)
 	if schedule == nil {
-		cCtx.XLog.Error("Tdpos::NewSingleConsensus::new schedule err.")
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::new schedule err.")
 		return nil
 	}
 	schedule.address = cCtx.Network.PeerInfo().Account
@@ -116,7 +116,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
 		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 		if qcTree == nil {
-			cCtx.XLog.Error("Tdpos::NewSingleConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
+			cCtx.XLog.Error("Tdpos::NewTdposConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
 			return nil
 		}
 		pacemaker := &chainedBft.DefaultPaceMaker{
@@ -135,9 +135,9 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree, justifySigns)
 		go smr.Start()
 		tdpos.smr = smr
-		cCtx.XLog.Debug("Tdpos::NewSingleConsensus::load chained-bft successfully.")
+		cCtx.XLog.Debug("Tdpos::NewTdposConsensus::load chained-bft successfully.")
 	}
-	cCtx.XLog.Debug("Tdpos::NewSingleConsensus::create a tdpos instance successfully.", "tdpos", tdpos)
+	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.", "tdpos", tdpos)
 
 	// 注册合约方法
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractNominateCandidate, tdpos.runNominateCandidate)
@@ -397,12 +397,12 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 			tp.log.Warn("Tdpos::smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
 			return err
 		}
-		tp.log.Info("Tdpos::smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", tp.election.ledger.GetTipBlock().GetHeight(), "viewNum", tp.smr.GetCurrentView())
+		tp.log.Debug("Tdpos::smr::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", tp.election.ledger.GetTipBlock().GetHeight(), "viewNum", tp.smr.GetCurrentView())
 	}
 	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
 	pNode := tp.smr.BlockToProposalNode(block)
 	err = tp.smr.UpdateQcStatus(pNode)
-	tp.log.Info("Tdpos::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(tp.smr.GetHighQC().GetProposalId()), "err", err)
+	tp.log.Debug("Tdpos::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(tp.smr.GetHighQC().GetProposalId()), "err", err)
 	return nil
 }
 

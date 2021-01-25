@@ -13,19 +13,18 @@ import (
 )
 
 var (
-	target uint32 = 0x1903a30c
-	// [[0111]fffff0000000000 0*16 0*16 0*16] 仅1个0
+	// 0x1903a30c
+	target int64 = 419668748
+	// [[0111]fffff0000000000 0*16 0*16 0*16] 仅1个0, 10进制545259519
 	minTarget uint32 = 0x207FFFFF
-	//Bitcoin值 mTarget   uint32 = 0x1d00FFFF
-	mTarget uint32 = 0x207FFFFF
 )
 
 func getPoWConsensusConf() []byte {
-	c := PoWConfig{
-		DefaultTarget:        target,
-		AdjustHeightGap:      1,
-		ExpectedPeriodMilSec: 3000,
-		MaxTarget:            mTarget,
+	c := map[string]interface{}{
+		"defaultTarget":   "419668748",
+		"adjustHeightGap": "1",
+		"expectedPeriod":  "3000",
+		"maxTarget":       "0",
 	}
 	j, _ := json.Marshal(c)
 	return j
@@ -65,7 +64,7 @@ func TestNewPoWConsensus(t *testing.T) {
 	conf := getConsensusConf()
 	i := NewPoWConsensus(*cCtx, conf)
 	if i == nil {
-		t.Error("NewPoWConsensus error")
+		t.Error("NewPoWConsensus error", "conf", conf)
 		return
 	}
 	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf()); i != nil {
@@ -112,7 +111,7 @@ func TestGetConsensusStatus(t *testing.T) {
 
 func TestParseConsensusStorage(t *testing.T) {
 	ps := PoWStorage{
-		TargetBits: target,
+		TargetBits: uint32(target),
 	}
 	b, err := json.Marshal(ps)
 	if err != nil {
@@ -142,13 +141,13 @@ func TestParseConsensusStorage(t *testing.T) {
 		t.Error("ParseConsensusStorage transfer error")
 		return
 	}
-	if s.TargetBits != target {
+	if s.TargetBits != uint32(target) {
 		t.Error("ParseConsensusStorage transfer error", "target", target)
 	}
 }
 
 func TestSetCompact(t *testing.T) {
-	bigint, pfNegative, pfOverflow := SetCompact(target)
+	bigint, pfNegative, pfOverflow := SetCompact(uint32(target))
 	if pfNegative || pfOverflow {
 		t.Error("TestSetCompact overflow or negative")
 		return
@@ -197,12 +196,13 @@ func TestIsProofed(t *testing.T) {
 	b := big.NewInt(0x0000000000000003A30C00000000)
 	b.Lsh(b, 144)
 	blockid := b.Bytes()
-	if !pow.IsProofed(blockid, pow.config.MaxTarget) {
+	if !pow.IsProofed(blockid, pow.config.DefaultTarget) {
 		t.Error("TestIsProofed error")
 	}
 }
 
 func TestMining(t *testing.T) {
+	t.Log("NewBlockWithStorage error")
 	cCtx, err := prepare()
 	if err != nil {
 		t.Error("prepare error", err)
