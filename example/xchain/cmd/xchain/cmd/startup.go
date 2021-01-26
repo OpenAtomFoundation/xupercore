@@ -12,12 +12,14 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
+
 	// import要使用的内核核心组件驱动
 	_ "github.com/xuperchain/xupercore/bcs/consensus/pow"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/single"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	_ "github.com/xuperchain/xupercore/bcs/consensus/xpoa"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
+	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv1"
 	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
