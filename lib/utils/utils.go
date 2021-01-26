@@ -47,6 +47,10 @@ func GenLogId() string {
 	return fmt.Sprintf("%d_%d", time.Now().Unix(), GenPseudoUniqId())
 }
 
+func GenNonce() string {
+	return fmt.Sprintf("%d%8d", time.Now().Unix(), GenPseudoUniqId())
+}
+
 // Get call method by runtime.Caller
 func GetFuncCall(callDepth int) (string, string) {
 	pc, file, line, ok := runtime.Caller(callDepth)
