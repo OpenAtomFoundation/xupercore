@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package chainedBftPb;
 
-option go_package = "github.com/xuperchain/xupercore/kernel/consensus/chainedBftPb;chainedBftPb";
-
 // QuorumCertSign 是一个(Addr, Pk, 签名)三元组
 message QuorumCertSign {
   string Address = 1;
