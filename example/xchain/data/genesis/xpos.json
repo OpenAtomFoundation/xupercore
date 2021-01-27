@@ -36,7 +36,8 @@
             },
             "init_proposer_neturl": {
                 "1": ["/ip4/127.0.0.1/tcp/38101/p2p/Qmf2HeHe4sspGkfRCTq6257Vm3UHzvh2TeQJHHvHzzuFw6e", "/ip4/127.0.0.1/tcp/38102/p2p/QmQKp8pLWSgV4JiGjuULKV1JsdpxUtnDEUMP8sGaaUbwVL"]
-            }
+            },
+	    "bft_config": {}
         }
     }
 }
