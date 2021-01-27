@@ -6,8 +6,6 @@ import (
 	"math/big"
 	"strconv"
 	"time"
-
-	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 )
 
 const MAXMAPSIZE = 1000
@@ -35,14 +33,6 @@ type tdposConfig struct {
 	// json支持两种格式的解析形式
 	NeedNetURL bool            `json:"need_neturl"`
 	EnableBFT  map[string]bool `json:"bft_config,omitempty"`
-}
-
-// 目前未定义pb结构
-// TdposStorage tdpos占用block中consensusStorage json串的格式
-type TdposStorage struct {
-	CurTerm     int64                  `json:"curTerm,omitempty"`
-	CurBlockNum int64                  `json:"curBlockNum,omitempty"`
-	Justify     *chainedBft.QuorumCert `json:"Justify,omitempty"`
 }
 
 type ProposerInfo struct {
