@@ -210,14 +210,14 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 }
 
 // ProcessBeforeMiner 更新下一次pow挖矿时的targetBits
-func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
+func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
 	pow.status.mutex.Lock()
 	tipHeight := pow.status.newHeight
 	pow.status.mutex.Unlock()
 	preBlock, err := pow.ctx.Ledger.QueryBlockByHeight(tipHeight)
 	if err != nil {
 		pow.ctx.XLog.Error("PoW::ProcessBeforeMiner::cannnot find preBlock", "logid", pow.ctx.XLog.GetLogId())
-		return false, nil, InternalErr
+		return nil, nil, InternalErr
 	}
 	bits, err := pow.refreshDifficulty(preBlock.GetBlockid(), tipHeight+1)
 	if err != nil {
@@ -229,9 +229,9 @@ func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, erro
 	}
 	by, err := json.Marshal(store)
 	if err != nil {
-		return false, nil, err
+		return nil, nil, err
 	}
-	return false, by, nil
+	return nil, by, nil
 }
 
 // ProcessConfirmBlock 此处更新最新的block高度

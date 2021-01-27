@@ -12,8 +12,8 @@ type ConsensusInterface interface {
 	CompeteMaster(height int64) (bool, bool, error)
 	// CheckMinerMatch 当前block是否合法
 	CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error)
-	// ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
-	ProcessBeforeMiner(timestamp int64) (bool, []byte, error)
+	// ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回truncate目标(如需裁剪), 返回写consensusStorage, 返回err
+	ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error)
 	// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
 	CalculateBlock(block cctx.BlockInterface) error
 	// ProcessConfirmBlock 用于确认块后进行相应的处理

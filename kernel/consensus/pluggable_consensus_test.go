@@ -95,8 +95,8 @@ func (con *FakeConsensusImp) CheckMinerMatch(ctx xcontext.XContext, block cctx.B
 	return true, nil
 }
 
-func (con *FakeConsensusImp) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
-	return true, nil, nil
+func (con *FakeConsensusImp) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+	return nil, nil, nil
 }
 
 func (con *FakeConsensusImp) ProcessConfirmBlock(block cctx.BlockInterface) error {
@@ -147,8 +147,8 @@ func (con *AnotherConsensusImp) CheckMinerMatch(ctx xcontext.XContext, block cct
 	return true, nil
 }
 
-func (con *AnotherConsensusImp) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
-	return true, nil, nil
+func (con *AnotherConsensusImp) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+	return nil, nil, nil
 }
 
 func (con *AnotherConsensusImp) CalculateBlock(block cctx.BlockInterface) error {

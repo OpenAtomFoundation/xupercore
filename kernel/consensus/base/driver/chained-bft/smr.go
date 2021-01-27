@@ -173,6 +173,9 @@ func (s *Smr) UpdateJustifyQcStatus(justify *QuorumCert) {
 		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
 	}
 	justifySigns := justify.SignInfos
+	if justifySigns == nil {
+		return
+	}
 	signs = appendSigns(signs, justifySigns)
 	s.qcVoteMsgs.Store(utils.F(justify.GetProposalId()), signs)
 	// 根据justify check情况更新本地HighQC, 注意：由于CheckMinerMatch已经检查justify签名
@@ -194,11 +197,9 @@ func (s *Smr) UpdateQcStatus(node *ProposalNode) error {
 // handleReceivedMsg used to process msg received from network
 func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) error {
 	// filter msg from other chain
-	/*
-		if msg.GetHeader().GetBcname() != s.bcName {
-			return nil
-		}
-	*/
+	if msg.GetHeader().GetBcname() != s.bcName {
+		return nil
+	}
 	switch msg.GetHeader().GetType() {
 	case xuperp2p.XuperMessage_CHAINED_BFT_NEW_PROPOSAL_MSG:
 		go s.handleReceivedProposal(msg)
@@ -258,8 +259,8 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return P2PInternalErr
 	}
-	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses(validatesIpInfo))
-	s.log.Info("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID))
+	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(validatesIpInfo))
+	s.log.Debug("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID))
 	return nil
 }
 
@@ -317,7 +318,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		return
 	}
 
-	s.log.Info("smr::handleReceivedProposal::received a proposal", "logid", msg.GetHeader().GetLogid(),
+	s.log.Debug("smr::handleReceivedProposal::received a proposal", "logid", msg.GetHeader().GetLogid(),
 		"newView", newProposalMsg.GetProposalView(), "newProposalId", utils.F(newProposalMsg.GetProposalId()))
 	parentQCBytes := newProposalMsg.GetJustifyQC()
 	parentQC := &QuorumCert{}
@@ -350,14 +351,14 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	}
 	// 2.本地pacemaker试图更新currentView, 并返回一个是否需要将新消息通知该轮Leader, 是该轮不是下轮！主要解决P2PIP端口不能通知Loop的问题
 	sendMsg, _ := s.pacemaker.AdvanceView(parentQC)
-	s.log.Info("smr::handleReceivedProposal::pacemaker update", "view", s.pacemaker.GetCurrentView())
+	s.log.Debug("smr::handleReceivedProposal::pacemaker update", "view", s.pacemaker.GetCurrentView())
 	// 通知current Leader
 	if sendMsg {
 		netMsg := p2p.NewMessage(xuperp2p.XuperMessage_CHAINED_BFT_NEW_PROPOSAL_MSG, newProposalMsg, p2p.WithBCName(s.bcName))
 		leader := newProposalMsg.GetSign().GetAddress()
 		// 此处如果失败，仍会执行下层逻辑，因为是多个节点通知该轮Leader，因此若发不出去仍可继续运行
 		if leader != "" && netMsg != nil && leader != s.address {
-			go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(leader)}))
+			go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{leader}))
 		}
 	}
 
@@ -404,11 +405,11 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		s.log.Error("smr::handleReceivedProposal::updateQcStatus error", "err", err)
 		return
 	}
-	s.log.Info("smr::handleReceivedProposal::pacemaker changed", "round", s.pacemaker.GetCurrentView())
+	s.log.Debug("smr::handleReceivedProposal::pacemaker changed", "round", s.pacemaker.GetCurrentView())
 	// 6.发送一个vote消息给下一个Leader
 	nextLeader := s.Election.GetLeader(s.pacemaker.GetCurrentView() + 1)
 	if nextLeader == "" {
-		s.log.Info("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
+		s.log.Debug("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
 		return
 	}
 	s.voteProposal(newProposalMsg.GetProposalId(), newVote, newLedgerInfo, nextLeader)
@@ -448,8 +449,8 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return
 	}
-	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAddresses([]string{s.Election.GetIntAddress(voteTo)}))
-	s.log.Info("smr::voteProposal::vote", "vote to next leader", voteTo, "vote view number", vote.ProposalView)
+	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{voteTo}))
+	s.log.Debug("smr::voteProposal::vote", "vote to next leader", voteTo, "vote view number", vote.ProposalView)
 	return
 }
 
@@ -472,15 +473,15 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 		s.log.Error("smr::handleReceivedVoteMsg CheckVote error", "error", err, "msg", utils.F(voteQC.GetProposalId()))
 		return err
 	}
-	s.log.Info("smr::handleReceivedVoteMsg::receive vote", "voteId", utils.F(voteQC.GetProposalId()), "voteView", voteQC.GetProposalView(), "from", voteQC.SignInfos[0].Address)
+	s.log.Debug("smr::handleReceivedVoteMsg::receive vote", "voteId", utils.F(voteQC.GetProposalId()), "voteView", voteQC.GetProposalView(), "from", voteQC.SignInfos[0].Address)
 
 	// 若vote先于proposal到达，则直接丢弃票数
 	if _, ok := s.localProposal.Load(utils.F(voteQC.GetProposalId())); !ok {
-		s.log.Info("smr::handleReceivedVoteMsg::haven't received the related proposal msg, drop it.")
+		s.log.Debug("smr::handleReceivedVoteMsg::haven't received the related proposal msg, drop it.")
 		return EmptyTarget
 	}
 	if node := s.qcTree.DFSQueryNode(voteQC.GetProposalId()); node == nil {
-		s.log.Info("smr::handleReceivedVoteMsg::haven't finish proposal process, drop it.")
+		s.log.Debug("smr::handleReceivedVoteMsg::haven't finish proposal process, drop it.")
 		return EmptyTarget
 	}
 
@@ -512,7 +513,7 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 
 	// 更新本地pacemaker AdvanceRound
 	s.pacemaker.AdvanceView(voteQC)
-	s.log.Info("smr::handleReceivedVoteMsg::FULL VOTES!", "pacemaker view", s.pacemaker.GetCurrentView())
+	s.log.Debug("smr::handleReceivedVoteMsg::FULL VOTES!", "pacemaker view", s.pacemaker.GetCurrentView())
 	// 更新HighQC
 	s.qcTree.updateHighQC(voteQC.GetProposalId())
 	return nil

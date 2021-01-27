@@ -42,7 +42,6 @@ var (
 	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
 	EmptyValidors    = errors.New("Current validators is empty.")
 	NotValidContract = errors.New("Cannot get valid res with contract.")
-	NotEnoughVotes   = errors.New("Cannot get enough votes of last view from replicas.")
 	InvalidQC        = errors.New("QC struct is invalid.")
 )
 
@@ -188,11 +187,11 @@ Again:
 	}
 	// master check
 	if tp.election.proposers[pos] == tp.election.address {
-		tp.log.Trace("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.GetTipBlock().GetHeight())
+		tp.log.Debug("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.GetTipBlock().GetHeight())
 		s := tp.needSync()
 		return true, s, nil
 	}
-	tp.log.Trace("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", false, "height", tp.election.ledger.GetTipBlock().GetHeight())
+	tp.log.Debug("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", false, "height", tp.election.ledger.GetTipBlock().GetHeight())
 	return false, false, nil
 }
 
@@ -290,73 +289,72 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 }
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
-func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
+func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
 	tp.log.Debug("Tdpos::ProcessBeforeMiner::start.")
 	term, pos, blockPos := tp.election.minerScheduling(timestamp)
 	if term != tp.election.curTerm || blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
-		return false, nil, timeoutBlockErr
+		return nil, nil, timeoutBlockErr
 	}
 	if tp.election.proposers[pos] != tp.election.address {
-		return false, nil, timeoutBlockErr
+		return nil, nil, timeoutBlockErr
 	}
 	storage := TdposStorage{
 		CurTerm:     tp.election.curTerm,
 		CurBlockNum: blockPos,
 	}
-
+	var truncateT []byte
+	var err error
 	// check bft status
 	if tp.election.enableChainedBFT {
 		// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 		if !bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tp.election.ledger.GetTipBlock().GetBlockid()) {
 			// 单个节点不存在投票验证的hotstuff流程，因此返回true
 			if len(tp.election.proposers) == 1 {
-				return false, nil, nil
+				return nil, nil, nil
 			}
-			truncate, err := func() (bool, error) {
+			truncateT, err = func() ([]byte, error) {
 				// 1. 比对HighQC与ledger高度
 				b, err := tp.election.ledger.QueryBlock(tp.smr.GetHighQC().GetProposalId())
 				if err != nil || b.GetHeight() > tp.election.ledger.GetTipBlock().GetHeight() {
 					// 不存在时需要把本地HighQC回滚到ledger; HighQC高度高于账本高度，本地HighQC回滚到ledger
 					if err := tp.smr.EnforceUpdateHighQC(tp.election.ledger.GetTipBlock().GetBlockid()); err != nil {
 						// 本地HighQC回滚错误直接退出
-						return false, err
+						return nil, err
 					}
-					return false, nil
+					return nil, nil
 				}
 				// 高度相等时，应统一回滚到上一高度，此时genericQC一定存在
 				if b.GetHeight() == tp.election.ledger.GetTipBlock().GetHeight() {
 					if err := tp.smr.EnforceUpdateHighQC(tp.smr.GetGenericQC().GetProposalId()); err != nil {
 						// 本地HighQC回滚错误直接退出
-						return false, err
+						return nil, err
 					}
-					return true, nil
+					return tp.smr.GetGenericQC().GetProposalId(), nil
 				}
 				// 2. 账本高度更高时，裁剪账本
-				return true, nil
+				return tp.smr.GetHighQC().GetProposalId(), nil
 			}()
-			if truncate {
-				tp.log.Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "ledger", tp.election.ledger.GetTipBlock().GetHeight(),
-					"HighQC", tp.smr.GetHighQC().GetProposalView())
-				// ATTENTION：若返回true后，需miner再次调用ProcessBeforeMiner， 原因：若后续继续走CompeteMaster循环，会导致刚刚truncate掉的区块再次同步回来
-				return true, nil, NotEnoughVotes
-			}
 			if err != nil {
-				return false, nil, err
+				return nil, nil, err
 			}
 		}
 		qc := tp.smr.GetCompleteHighQC()
 		qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
 		if !ok {
-			return true, nil, InvalidQC
+			return nil, nil, InvalidQC
 		}
 		storage.Justify = qcQuorumCert
 	}
 	storageBytes, err := json.Marshal(storage)
 	if err != nil {
-		return false, nil, err
+		return nil, nil, err
 	}
-	tp.log.Trace("Tdpos::ProcessBeforeMiner", "res", storage)
-	return false, storageBytes, nil
+	tp.log.Debug("Tdpos::ProcessBeforeMiner", "res", storage)
+	if truncateT != nil {
+		tp.log.Warn("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
+			"ledger", tp.election.ledger.GetTipBlock().GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
+	}
+	return truncateT, storageBytes, nil
 }
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
