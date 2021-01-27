@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"sync"
 	"time"
-
-	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 )
 
 const MAXMAPSIZE = 1000
@@ -19,11 +17,6 @@ type xpoaConfig struct {
 	InitProposer []ProposerInfo `json:"init_proposer"`
 
 	EnableBFT map[string]bool `json:"bft_config,omitempty"`
-}
-
-// XpoaStorage xpoa占用block中consensusStorage json串的格式
-type XpoaStorage struct {
-	Justify *chainedBft.QuorumCert `json:"Justify,omitempty"`
 }
 
 func cleanProduceMap(isProduce map[int64]bool, period int64) {

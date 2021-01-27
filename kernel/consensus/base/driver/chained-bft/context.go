@@ -121,7 +121,7 @@ func (t *QCPendingTree) GetLockedQC() *ProposalNode {
 // 更新本地qcTree, insert新节点, 将新节点parentQC和本地HighQC对比，如有必要进行更新
 func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
 	if t.DFSQueryNode(node.In.GetProposalId()) != nil {
-		t.Log.Warn("QCPendingTree::updateQcStatus::has been inserted", "search", utils.F(node.In.GetProposalId()))
+		t.Log.Debug("QCPendingTree::updateQcStatus::has been inserted", "search", utils.F(node.In.GetProposalId()))
 		return nil
 	}
 	if err := t.insert(node); err != nil {
@@ -131,7 +131,7 @@ func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
 	if node.Parent != nil {
 		t.updateHighQC(node.Parent.In.GetProposalId())
 	}
-	t.Log.Info("QCPendingTree::updateQcStatus", "insert new", utils.F(node.In.GetProposalId()), "height", node.In.GetProposalView(), "highQC", utils.F(t.GetHighQC().In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateQcStatus", "insert new", utils.F(node.In.GetProposalId()), "height", node.In.GetProposalView(), "highQC", utils.F(t.GetHighQC().In.GetProposalId()))
 	return nil
 }
 
@@ -148,31 +148,31 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	}
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
 	t.HighQC = node
-	t.Log.Info("QCPendingTree::updateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
 	if node.Parent == nil {
 		return
 	}
 	t.GenericQC = node.Parent
-	t.Log.Info("QCPendingTree::updateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
 	// 找grand节点，标为LockedQC
 	if node.Parent.Parent == nil {
 		return
 	}
 	t.LockedQC = node.Parent.Parent
-	t.Log.Info("QCPendingTree::updateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
 	// 找grandgrand节点，标为CommitQC
 	if node.Parent.Parent.Parent == nil {
 		return
 	}
 	t.CommitQC = node.Parent.Parent.Parent
-	t.Log.Info("QCPendingTree::updateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
 }
 
 // enforceUpdateHighQC 强制更改HighQC指针，用于错误时回滚，注意: 本实现没有timeoutQC因此需要此方法
 func (t *QCPendingTree) enforceUpdateHighQC(inProposalId []byte) error {
 	node := t.DFSQueryNode(inProposalId)
 	if node == nil {
-		t.Log.Info("QCPendingTree::enforceUpdateHighQC::DFSQueryNode nil")
+		t.Log.Debug("QCPendingTree::enforceUpdateHighQC::DFSQueryNode nil")
 		return NoValidQC
 	}
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
@@ -180,24 +180,24 @@ func (t *QCPendingTree) enforceUpdateHighQC(inProposalId []byte) error {
 	t.GenericQC = nil
 	t.LockedQC = nil
 	t.CommitQC = nil
-	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
 	if node.Parent == nil {
 		return nil
 	}
 	t.GenericQC = node.Parent
-	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
 	// 找grand节点，标为LockedQC
 	if node.Parent.Parent == nil {
 		return nil
 	}
 	t.LockedQC = node.Parent.Parent
-	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
 	// 找grandgrand节点，标为CommitQC
 	if node.Parent.Parent.Parent == nil {
 		return nil
 	}
 	t.CommitQC = node.Parent.Parent.Parent
-	t.Log.Info("QCPendingTree::enforceUpdateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
 	return nil
 }
 

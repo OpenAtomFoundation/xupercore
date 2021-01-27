@@ -285,11 +285,11 @@ func (pc *PluggableConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.
 }
 
 // ProcessBeforeMinerm调用具体实例的ProcessBeforeMiner()
-func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
+func (pc *PluggableConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
 	con := pc.getCurrentConsensusComponent()
 	if con == nil {
 		pc.ctx.XLog.Error("Pluggable Consensus::ProcessBeforeMiner::tail consensus item is empty", "err", EmptyConsensusListErr)
-		return false, nil, EmptyConsensusListErr
+		return nil, nil, EmptyConsensusListErr
 	}
 	return con.ProcessBeforeMiner(timestamp)
 }

@@ -182,15 +182,19 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	// 3.共识挖矿前处理
 	height := t.ctx.Ledger.GetMeta().TrunkHeight + 1
 	now := time.Now()
-	isTruncate, extData, err := t.ctx.Consensus.ProcessBeforeMiner(now.UnixNano())
+	truncateTarget, extData, err := t.ctx.Consensus.ProcessBeforeMiner(now.UnixNano())
 	if err != nil {
 		ctx.GetLog().Warn("consensus process before miner failed", "err", err)
 		return fmt.Errorf("consensus process before miner failed")
 	}
-	ctx.GetLog().Debug("consensus before miner succ", "isTruncate", isTruncate, "extData", string(extData))
-	if isTruncate {
-		// 裁剪掉账本最高区块，裁掉的交易判断冲突重新回放，裁剪完后结束本次出块操作
-		return t.truncateForMiner(ctx, ledgerTipId)
+	ctx.GetLog().Debug("consensus before miner succ", "truncateTarget", truncateTarget, "extData", string(extData))
+	if truncateTarget != nil {
+		// 裁剪掉账本目标区块，裁掉的交易判断冲突重新回放，裁剪完后继续出块操作
+		if err := t.truncateForMiner(ctx, truncateTarget); err != nil {
+			return err
+		}
+		// 重置高度
+		height = t.ctx.Ledger.GetMeta().TrunkHeight + 1
 	}
 
 	// 4.打包区块
@@ -218,23 +222,23 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 }
 
 // 裁剪掉账本最新的区块
-func (t *Miner) truncateForMiner(ctx xctx.XContext, ledgerTipId []byte) error {
-	block, err := t.ctx.Ledger.QueryBlockHeader(ledgerTipId)
+func (t *Miner) truncateForMiner(ctx xctx.XContext, target []byte) error {
+	_, err := t.ctx.Ledger.QueryBlockHeader(target)
 	if err != nil {
-		ctx.GetLog().Warn("truncate failed because query tip block error", "err", err)
+		ctx.GetLog().Warn("truncate failed because query target error", "err", err)
 		return err
 	}
 
-	// 状态机回滚到前一个区块状态
-	err = t.ctx.State.Walk(block.PreHash, false)
+	// 状态机回滚到目标状态
+	err = t.ctx.State.Walk(target, false)
 	if err != nil {
-		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.F(ledgerTipId),
-			"walkTargetBlockId", utils.F(block.PreHash))
+		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.F(t.ctx.Ledger.GetMeta().TipBlockid),
+			"walkTargetBlockId", utils.F(target))
 		return err
 	}
 
-	// 账本裁剪掉这个区块
-	err = t.ctx.Ledger.Truncate(ledgerTipId)
+	// 账本裁剪到这个区块
+	err = t.ctx.Ledger.Truncate(target)
 	if err != nil {
 		ctx.GetLog().Warn("truncate failed because ledger truncate error", "err", err)
 		return err

@@ -225,7 +225,7 @@ func CompeteMaster(smr *chainedBft.Smr) string {
 func CompeteLoop(smr *chainedBft.Smr, log logs.Logger, validators []string) {
 	for {
 		miner := CompeteMaster(smr)
-		log.Info("Compete", "round", smr.GetCurrentView(), "leader", miner, "isMiner", miner == smr.GetAddress(), "address", smr.GetAddress())
+		log.Debug("Compete", "round", smr.GetCurrentView(), "leader", miner, "isMiner", miner == smr.GetAddress(), "address", smr.GetAddress())
 		if miner != smr.GetAddress() {
 			time.Sleep(time.Millisecond * 10)
 			continue

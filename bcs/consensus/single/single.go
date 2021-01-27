@@ -131,8 +131,8 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 }
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
-func (s *SingleConsensus) ProcessBeforeMiner(timestamp int64) (bool, []byte, error) {
-	return false, nil, nil
+func (s *SingleConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+	return nil, nil, nil
 }
 
 // CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
