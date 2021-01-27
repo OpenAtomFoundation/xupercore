@@ -99,23 +99,23 @@ type ConsensusStorage struct {
 }
 
 // ParseOldQCStorage 将有Justify结构的老共识结构解析出来
-func ParseOldQCStorage(storage []byte) (*lpb.QuorumCert, error) {
+func ParseOldQCStorage(storage []byte) (*ConsensusStorage, error) {
 	old := &ConsensusStorage{}
 	if err := json.Unmarshal(storage, &old); err != nil {
 		return nil, err
 	}
-	oldQC := old.Justify
-	if oldQC == nil {
-		return nil, nil
-	}
-	return oldQC, nil
+	return old, nil
 }
 
 // OldQCToNew 为老的QC pb结构转化为新的QC结构
 func OldQCToNew(storage []byte) (*chainedBft.QuorumCert, error) {
-	oldQC, err := ParseOldQCStorage(storage)
+	oldS, err := ParseOldQCStorage(storage)
 	if err != nil {
 		return nil, err
+	}
+	oldQC := oldS.Justify
+	if oldQC == nil {
+		return nil, InvalidJustify
 	}
 	justifyBytes := oldQC.ProposalMsg
 	justifyQC := &lpb.QuorumCert{}
@@ -161,8 +161,12 @@ func NewToOldQC(new *chainedBft.QuorumCert) (*lpb.QuorumCert, error) {
 
 // OldSignToNew 老的签名结构转化为新的签名结构
 func OldSignToNew(storage []byte) []*bftPb.QuorumCertSign {
-	oldQC, err := ParseOldQCStorage(storage)
+	oldS, err := ParseOldQCStorage(storage)
 	if err != nil {
+		return nil
+	}
+	oldQC := oldS.Justify
+	if oldQC == nil || oldQC.GetSignInfos() == nil {
 		return nil
 	}
 	old := oldQC.GetSignInfos().QCSignInfos
