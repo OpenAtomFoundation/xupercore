@@ -1,5 +1,14 @@
 package contract
 
+const (
+	// StatusOK is used when contract successfully ends.
+	StatusOK = 200
+	// StatusErrorThreshold is the status dividing line for the normal operation of the contract
+	StatusErrorThreshold = 400
+	// StatusError is used when contract fails.
+	StatusError = 500
+)
+
 // Context define context interface
 type Context interface {
 	Invoke(method string, args map[string][]byte) (*Response, error)
