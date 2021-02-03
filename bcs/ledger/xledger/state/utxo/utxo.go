@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -269,33 +268,17 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param ledger 账本对象
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
-func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta) (*UtxoVM, error) {
-	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime)
+func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
+	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime, stateDB)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmplockSeconds, contractExectionTime int) (*UtxoVM, error) {
-	// new kvdb instance
-	storePath := sctx.EnvCfg.GenDataAbsPath(sctx.EnvCfg.ChainDir)
-	storePath = filepath.Join(storePath, sctx.BCName)
-	stateDBPath := filepath.Join(storePath, def.StateStrgDirName)
-	kvParam := &kvdb.KVParameter{
-		DBPath:                stateDBPath,
-		KVEngineType:          sctx.LedgerCfg.KVEngineType,
-		MemCacheSize:          ledger.MemCacheSize,
-		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
-		OtherPaths:            sctx.LedgerCfg.OtherPaths,
-		StorageType:           sctx.LedgerCfg.StorageType,
-	}
-	baseDB, err := kvdb.CreateKVInstance(kvParam)
-	if err != nil {
-		return nil, err
-	}
-
+func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmplockSeconds,
+	contractExectionTime int, stateDB kvdb.Database) (*UtxoVM, error) {
 	utxoMutex := &sync.RWMutex{}
 	utxoVM := &UtxoVM{
 		metaHandle:           metaHandle,
-		ldb:                  baseDB,
+		ldb:                  stateDB,
 		Mutex:                utxoMutex,
 		MutexMem:             &sync.Mutex{},
 		SpLock:               NewSpinLock(),
@@ -305,7 +288,7 @@ func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmpl
 		lockExpireTime:       tmplockSeconds,
 		log:                  sctx.XLog,
 		ledger:               sctx.Ledger,
-		utxoTable:            kvdb.NewTable(baseDB, pb.UTXOTablePrefix),
+		utxoTable:            kvdb.NewTable(stateDB, pb.UTXOTablePrefix),
 		UtxoCache:            NewUtxoCache(cachesize),
 		OfflineTxChan:        make(chan []*pb.Transaction, OfflineTxChanBuffer),
 		PrevFoundKeyCache:    cache.NewLRUCache(cachesize),

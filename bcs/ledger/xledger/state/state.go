@@ -118,7 +118,7 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 		return nil, fmt.Errorf("create state failed because create meta error:%s", err)
 	}
 
-	obj.utxo, err = utxo.NewUtxo(sctx, obj.meta)
+	obj.utxo, err = utxo.NewUtxo(sctx, obj.meta, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create utxo error:%s", err)
 	}
