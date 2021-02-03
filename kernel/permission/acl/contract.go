@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	pb "github.com/xuperchain/xupercore/protos"
 )
@@ -52,7 +53,7 @@ func (t *KernMethod) NewAccount(ctx contract.KContext) (*contract.Response, erro
 	}
 
 	oldAccount, err := ctx.Get(utils.GetAccountBucket(), []byte(accountStr))
-	if err != nil {
+	if err != nil && err != sandbox.ErrNotFound {
 		return nil, err
 	}
 	if oldAccount != nil {
