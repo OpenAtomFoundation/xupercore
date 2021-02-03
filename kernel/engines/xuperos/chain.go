@@ -151,7 +151,11 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	requests := make([]*protos.InvokeRequest, 0, len(reqs))
 	responses := make([]*protos.ContractResponse, 0, len(reqs))
 	for i, req := range reqs {
-		if req == nil || req.ModuleName == "" || req.ContractName == "" || req.MethodName == "" {
+		if req == nil {
+			continue
+		}
+
+		if req.ModuleName == "" && req.ContractName == "" && req.MethodName == "" {
 			ctx.GetLog().Warn("PreExec req empty", "req", req)
 			continue
 		}
