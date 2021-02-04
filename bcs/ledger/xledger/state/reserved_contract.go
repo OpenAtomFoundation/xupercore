@@ -1,4 +1,4 @@
-package utxo
+package state
 
 import (
 	"bytes"
@@ -27,24 +27,24 @@ func genArgs(req []*protos.InvokeRequest) *reservedArgs {
 // It will check whether the transaction in reserved whitelist
 // if the config of chain contains reserved contracts
 // but the transaction does not contains reserved requests.
-func (uv *UtxoVM) VerifyReservedWhitelist(tx *pb.Transaction) bool {
+func (t *State) VerifyReservedWhitelist(tx *pb.Transaction) bool {
 	// verify reservedContracts len
-	reservedContracts := uv.metaHandle.GetReservedContracts()
+	reservedContracts := t.meta.GetReservedContracts()
 	if len(reservedContracts) == 0 {
-		uv.log.Info("verifyReservedWhitelist false reservedReqs is empty")
+		t.log.Info("verifyReservedWhitelist false reservedReqs is empty")
 		return false
 	}
 
 	// get white list account
-	accountName := uv.ledger.GetGenesisBlock().GetConfig().GetReservedWhitelistAccount()
-	uv.log.Trace("verifyReservedWhitelist", "accountName", accountName)
+	accountName := t.sctx.Ledger.GetGenesisBlock().GetConfig().GetReservedWhitelistAccount()
+	t.log.Trace("verifyReservedWhitelist", "accountName", accountName)
 	if accountName == "" {
-		uv.log.Info("verifyReservedWhitelist false, the chain does not have reserved whitelist", "accountName", accountName)
+		t.log.Info("verifyReservedWhitelist false, the chain does not have reserved whitelist", "accountName", accountName)
 		return false
 	}
-	acl, err := uv.aclMgr.GetAccountACL(accountName)
+	acl, err := t.sctx.AclMgr.GetAccountACL(accountName)
 	if err != nil || acl == nil {
-		uv.log.Info("verifyReservedWhitelist false, get reserved whitelist acl failed",
+		t.log.Info("verifyReservedWhitelist false, get reserved whitelist acl failed",
 			"err", err, "acl", acl)
 		return false
 	}
@@ -54,19 +54,19 @@ func (uv *UtxoVM) VerifyReservedWhitelist(tx *pb.Transaction) bool {
 		tx.GetContractRequests() != nil ||
 		tx.GetTxInputsExt() != nil ||
 		tx.GetTxOutputsExt() != nil {
-		uv.log.Info("verifyReservedWhitelist false the storage info should be nil")
+		t.log.Info("verifyReservedWhitelist false the storage info should be nil")
 		return false
 	}
 
 	// verify utxo input
 	if len(tx.GetTxInputs()) == 0 && len(tx.GetTxOutputs()) == 0 {
-		uv.log.Info("verifyReservedWhitelist true the utxo list is nil")
+		t.log.Info("verifyReservedWhitelist true the utxo list is nil")
 		return true
 	}
 	fromAddr := string(tx.GetTxInputs()[0].GetFromAddr())
 	for _, v := range tx.GetTxInputs() {
 		if string(v.GetFromAddr()) != fromAddr {
-			uv.log.Info("verifyReservedWhitelist false fromAddr should no more than one")
+			t.log.Info("verifyReservedWhitelist false fromAddr should no more than one")
 			return false
 		}
 	}
@@ -79,7 +79,7 @@ func (uv *UtxoVM) VerifyReservedWhitelist(tx *pb.Transaction) bool {
 		}
 		toAddrs[string(v.GetToAddr())] = true
 		if len(toAddrs) > 2 {
-			uv.log.Info("verifyReservedWhitelist false toAddrs should no more than two")
+			t.log.Info("verifyReservedWhitelist false toAddrs should no more than two")
 			return false
 		}
 	}
@@ -90,14 +90,14 @@ func (uv *UtxoVM) VerifyReservedWhitelist(tx *pb.Transaction) bool {
 			continue
 		}
 		if _, ok := acl.GetAksWeight()[k]; !ok {
-			uv.log.Info("verifyReservedWhitelist false the toAddr should in whitelist acl")
+			t.log.Info("verifyReservedWhitelist false the toAddr should in whitelist acl")
 			return false
 		}
 	}
 	return true
 }
 
-func (uv *UtxoVM) VerifyReservedContractRequests(reservedReqs, txReqs []*protos.InvokeRequest) bool {
+func (t *State) VerifyReservedContractRequests(reservedReqs, txReqs []*protos.InvokeRequest) bool {
 	if len(reservedReqs) > len(txReqs) {
 		return false
 	}
@@ -116,13 +116,13 @@ func (uv *UtxoVM) VerifyReservedContractRequests(reservedReqs, txReqs []*protos.
 }
 
 // geReservedContractRequest get reserved contract requests from system params, it doesn't consume gas.
-func (uv *UtxoVM) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
-	MetaReservedContracts := uv.metaHandle.GetReservedContracts()
+func (t *State) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
+	MetaReservedContracts := t.meta.GetReservedContracts()
 	if MetaReservedContracts == nil {
 		return nil, nil
 	}
 	reservedContractstpl := MetaReservedContracts
-	uv.log.Info("MetaReservedContracts", "reservedContracts", reservedContractstpl)
+	t.log.Info("MetaReservedContracts", "reservedContracts", reservedContractstpl)
 
 	// if all reservedContracts have not been updated, return nil, nil
 	ra := &reservedArgs{}
@@ -131,7 +131,7 @@ func (uv *UtxoVM) GetReservedContractRequests(req []*protos.InvokeRequest, isPre
 	} else {
 		// req should contrain reservedContracts, so the len of req should no less than reservedContracts
 		if len(req) < len(reservedContractstpl) {
-			uv.log.Warn("req should contain reservedContracts")
+			t.log.Warn("req should contain reservedContracts")
 			return nil, ErrGetReservedContracts
 		} else if len(req) > len(reservedContractstpl) {
 			ra = genArgs(req[len(reservedContractstpl):])
