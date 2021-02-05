@@ -64,44 +64,44 @@ var (
 	ErrSuccess      = &Error{ErrStatusSucc, 0, "success"}
 	ErrInternal     = &Error{ErrStatusInternalErr, 50000, "internal error"}
 	ErrUnknown      = &Error{ErrStatusInternalErr, 50001, "unknown error"}
-	ErrForbidden    = &Error{ErrStatusRefused, 40300, "forbidden"}
-	ErrUnauthorized = &Error{ErrStatusRefused, 40100, "unauthorized"}
+	ErrForbidden    = &Error{ErrStatusRefused, 40000, "forbidden"}
 	ErrParameter    = &Error{ErrStatusRefused, 40001, "param error"}
+	ErrUnauthorized = &Error{ErrStatusRefused, 40002, "unauthorized"}
 
 	// engine
-	ErrNewEngineCtxFailed = &Error{ErrStatusInternalErr, 50003, "create engine context failed"}
-	ErrNotEngineType      = &Error{ErrStatusRefused, 40010, "transfer engine type failed"}
-	ErrLoadEngConfFailed  = &Error{ErrStatusInternalErr, 50006, "load engine config failed"}
-	ErrNewLogFailed       = &Error{ErrStatusInternalErr, 50006, "new logger failed"}
+	ErrNewEngineCtxFailed = &Error{ErrStatusInternalErr, 50100, "create engine context failed"}
+	ErrNotEngineType      = &Error{ErrStatusInternalErr, 50101, "transfer engine type failed"}
+	ErrLoadEngConfFailed  = &Error{ErrStatusInternalErr, 50102, "load engine config failed"}
+	ErrNewLogFailed       = &Error{ErrStatusInternalErr, 50103, "new logger failed"}
 
 	// chain
-	ErrNewChainCtxFailed = &Error{ErrStatusInternalErr, 50011, "new chain context failed"}
-	ErrChainExist        = &Error{ErrStatusRefused, 40002, "chain already exists"}
-	ErrChainNotExist     = &Error{ErrStatusRefused, 40003, "chain not exist"}
-	ErrChainAlreadyExist = &Error{ErrStatusRefused, 40004, "chain already exist"}
-	ErrChainStatus       = &Error{ErrStatusRefused, 40005, "chain status error"}
-	ErrRootChainNotExist = &Error{ErrStatusRefused, 40006, "root chain not exist"}
-	ErrLoadChainFailed   = &Error{ErrStatusInternalErr, 50004, "load chain failed"}
-
-	// contract
-	ErrContractNewCtxFailed = &Error{ErrStatusInternalErr, 50004, "contract new context failed"}
-	ErrContractInvokeFailed = &Error{ErrStatusInternalErr, 50004, "contract invoke failed"}
-	ErrContractNewSandboxFailed = &Error{ErrStatusInternalErr, 40011, "contract new sandbox failed"}
-
-	// tx
-	ErrTxVerifyFailed = &Error{ErrStatusInternalErr, 40011, "verify tx failed"}
-	ErrTxAlreadyExist = &Error{ErrStatusInternalErr, 40013, "tx already exist"}
-	ErrTxNotExist     = &Error{ErrStatusInternalErr, 40014, "tx not exist"}
-	ErrTxNotEnough    = &Error{ErrStatusInternalErr, 50017, "tx not enough"}
-	ErrSubmitTxFailed = &Error{ErrStatusInternalErr, 50013, "submit tx failed"}
+	ErrNewChainCtxFailed = &Error{ErrStatusInternalErr, 50200, "new chain context failed"}
+	ErrLoadChainFailed   = &Error{ErrStatusInternalErr, 50201, "load chain failed"}
+	ErrRootChainNotExist = &Error{ErrStatusInternalErr, 50202, "root chain not exist"}
+	ErrChainStatus       = &Error{ErrStatusInternalErr, 50203, "chain status error"}
+	ErrChainExist        = &Error{ErrStatusInternalErr, 50204, "chain already exists"}
+	ErrChainNotExist     = &Error{ErrStatusInternalErr, 50205, "chain not exist"}
+	ErrChainAlreadyExist = &Error{ErrStatusInternalErr, 50206, "chain already exist"}
 
 	// block
-	ErrBlockNotExist   = &Error{ErrStatusInternalErr, 50015, "block not exist"}
-	ErrProcBlockFailed = &Error{ErrStatusInternalErr, 50015, "process block failed"}
+	ErrBlockNotExist   = &Error{ErrStatusInternalErr, 50300, "block not exist"}
+	ErrProcBlockFailed = &Error{ErrStatusInternalErr, 50301, "process block failed"}
+
+	// tx
+	ErrTxVerifyFailed = &Error{ErrStatusInternalErr, 50400, "verify tx failed"}
+	ErrTxAlreadyExist = &Error{ErrStatusInternalErr, 50401, "tx already exist"}
+	ErrTxNotExist     = &Error{ErrStatusInternalErr, 50402, "tx not exist"}
+	ErrTxNotEnough    = &Error{ErrStatusInternalErr, 50403, "tx not enough"}
+	ErrSubmitTxFailed = &Error{ErrStatusInternalErr, 50404, "submit tx failed"}
+
+	// contract
+	ErrContractNewCtxFailed = &Error{ErrStatusInternalErr, 50500, "contract new context failed"}
+	ErrContractInvokeFailed = &Error{ErrStatusInternalErr, 50501, "contract invoke failed"}
+	ErrContractNewSandboxFailed = &Error{ErrStatusInternalErr, 50502, "contract new sandbox failed"}
 
 	// net
-	ErrNewNetEventFailed = &Error{ErrStatusInternalErr, 50005, "new net event failed"}
-	ErrNewNetworkFailed  = &Error{ErrStatusInternalErr, 50010, "new network failed"}
-	ErrSendMessageFailed = &Error{ErrStatusInternalErr, 50016, "send message failed"}
-	ErrNetworkNoResponse = &Error{ErrStatusInternalErr, 50016, "network no response"}
+	ErrNewNetEventFailed = &Error{ErrStatusInternalErr, 50600, "new net event failed"}
+	ErrNewNetworkFailed  = &Error{ErrStatusInternalErr, 50601, "new network failed"}
+	ErrSendMessageFailed = &Error{ErrStatusInternalErr, 50602, "send message failed"}
+	ErrNetworkNoResponse = &Error{ErrStatusInternalErr, 50603, "network no response"}
 )

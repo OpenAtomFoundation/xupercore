@@ -109,7 +109,7 @@ func (t *Chain) Context() *common.ChainCtx {
 
 // 交易预执行
 func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string, authRequires []string) (*protos.InvokeResponse, error) {
-	if ctx == nil || ctx.GetLog() == nil || len(reqs) < 1 {
+	if ctx == nil || ctx.GetLog() == nil {
 		return nil, common.ErrParameter
 	}
 

@@ -515,7 +515,6 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		State:        sandBox,
 		Initiator:    tx.GetInitiator(),
 		AuthRequire:  tx.GetAuthRequire(),
-		ContractName: "",
 	}
 	gasLimit, err := getGasLimitFromTx(tx)
 	if err != nil {
@@ -537,6 +536,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 			return false, errors.New("out of gas")
 		}
 		contextConfig.ResourceLimits = limits
+		contextConfig.Module = tmpReq.ModuleName
 		contextConfig.ContractName = tmpReq.GetContractName()
 		contextConfig.Module = tmpReq.GetModuleName()
 		if transContractName == tmpReq.GetContractName() {
