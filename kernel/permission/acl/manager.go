@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
@@ -47,6 +46,10 @@ func (mgr *Manager) GetAccountACL(accountName string) (*pb.Acl, error) {
 		return nil, fmt.Errorf("query account acl failed.err:%v", err)
 	}
 
+	if len(acl) <= 0 {
+		return nil, nil
+	}
+
 	aclBuf := &pb.Acl{}
 	err = json.Unmarshal(acl, aclBuf)
 	if err != nil {
@@ -61,6 +64,10 @@ func (mgr *Manager) GetContractMethodACL(contractName, methodName string) (*pb.A
 	acl, err := mgr.GetObjectBySnapshot(utils.GetContractBucket(), []byte(key))
 	if err != nil {
 		return nil, fmt.Errorf("query contract method acl failed.err:%v", err)
+	}
+
+	if len(acl) <= 0 {
+		return nil, nil
 	}
 
 	aclBuf := &pb.Acl{}

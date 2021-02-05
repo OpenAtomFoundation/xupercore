@@ -1,7 +1,7 @@
 package utils
 
 const (
-	SubModName = "acl"
+	SubModName = "$acl"
 	StatusOK   = 200
 )
 

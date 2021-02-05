@@ -38,7 +38,7 @@ func (r *registryImpl) GetKernMethod(ctract, method string) (contract.KernMethod
 	}
 	contractMethod, ok := contractMap[method]
 	if !ok {
-		return nil, fmt.Errorf("kernel method '%s' for '%s' exists", method, ctract)
+		return nil, fmt.Errorf("kernel method '%s' for '%s' not exists", method, ctract)
 	}
 	return contractMethod, nil
 }

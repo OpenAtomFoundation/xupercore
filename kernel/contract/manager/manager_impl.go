@@ -60,7 +60,7 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	m.xbridge = xbridge
 	registry := &m.kregistry
 	registry.RegisterKernMethod("$contract", "deployContract", m.deployContract)
-	registry.RegisterKernMethod("$contract", "upgradeContract", m.deployContract)
+	registry.RegisterKernMethod("$contract", "upgradeContract", m.upgradeContract)
 	return m, nil
 }
 
