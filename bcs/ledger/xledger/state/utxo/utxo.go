@@ -24,7 +24,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/permission/acl"
-	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/cache"
 	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
@@ -39,13 +38,10 @@ var (
 	ErrNoEnoughUTXO        = errors.New("no enough money(UTXO) to start this transaction")
 	ErrUTXONotFound        = errors.New("this utxo can not be found")
 	ErrInputOutputNotEqual = errors.New("input's amount is not equal to output's")
-	ErrTxNotFound          = errors.New("this tx can not be found in unconfirmed-table")
 	ErrUnexpected          = errors.New("this is a unexpected error")
 	ErrNegativeAmount      = errors.New("amount in transaction can not be negative number")
 	ErrUTXOFrozen          = errors.New("utxo is still frozen")
 	ErrUTXODuplicated      = errors.New("found duplicated utxo in same tx")
-
-	ErrGetReservedContracts = errors.New("Get reserved contracts error")
 )
 
 // package constants
@@ -94,7 +90,6 @@ type UtxoVM struct {
 	unconfirmTxAmount    int64     // 未确认的Tx数目，用于监控
 	avgDelay             int64     // 平均上链延时
 	bcname               string
-	aclMgr               aclBase.AclManager
 
 	// 最新区块高度通知装置
 	heightNotifier *BlockHeightNotifier
@@ -300,7 +295,6 @@ func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmpl
 		cryptoClient:         sctx.Crypt,
 		maxConfirmedDelay:    DefaultMaxConfirmedDelay,
 		bcname:               sctx.BCName,
-		aclMgr:               sctx.AclMgr,
 		heightNotifier:       NewBlockHeightNotifier(),
 	}
 
@@ -548,16 +542,6 @@ func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
 	}
 	balanceCopy := big.NewInt(0).Set(utxoTotal)
 	return balanceCopy, nil
-}
-
-// QueryAccountACLWithConfirmed query account's ACL with confirm status
-func (uv *UtxoVM) QueryAccountACL(accountName string) (*protos.Acl, error) {
-	return uv.aclMgr.GetAccountACL(accountName)
-}
-
-// QueryContractMethodACLWithConfirmed query contract method's ACL with confirm status
-func (uv *UtxoVM) QueryContractMethodACL(contractName string, methodName string) (*protos.Acl, error) {
-	return uv.aclMgr.GetContractMethodACL(contractName, methodName)
 }
 
 // Close 关闭utxo vm, 目前主要是关闭leveldb

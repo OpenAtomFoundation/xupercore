@@ -49,8 +49,9 @@ var (
 	ErrInvalidTxExt   = errors.New("Invalid tx ext")
 	ErrTxTooLarge     = errors.New("Tx size is too large")
 
-	ErrParseContractUtxos = errors.New("Parse contract utxos error")
-	ErrContractTxAmout    = errors.New("Contract transfer amount error")
+	ErrParseContractUtxos   = errors.New("Parse contract utxos error")
+	ErrContractTxAmout      = errors.New("Contract transfer amount error")
+	ErrGetReservedContracts = errors.New("Get reserved contracts error")
 )
 
 const (
@@ -209,19 +210,15 @@ func (t *State) GetContractStatus(contractName string) (*protos.ContractStatus, 
 }
 
 func (t *State) QueryAccountACL(accountName string) (*protos.Acl, error) {
-	return t.utxo.QueryAccountACL(accountName)
+	return t.sctx.AclMgr.GetAccountACL(accountName)
 }
 
 func (t *State) QueryContractMethodACL(contractName string, methodName string) (*protos.Acl, error) {
-	return t.utxo.QueryContractMethodACL(contractName, methodName)
+	return t.sctx.AclMgr.GetContractMethodACL(contractName, methodName)
 }
 
 func (t *State) QueryAccountContainAK(address string) ([]string, error) {
 	return t.utxo.QueryAccountContainAK(address)
-}
-
-func (t *State) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
-	return t.utxo.GetReservedContractRequests(req, isPreExec)
 }
 
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供

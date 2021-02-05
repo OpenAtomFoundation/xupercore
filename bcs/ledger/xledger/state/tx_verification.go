@@ -463,19 +463,19 @@ func (t *State) verifyContractTxAmount(tx *pb.Transaction) (bool, error) {
 
 // verifyTxRWSets verify tx read sets and write sets
 func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
-	if t.utxo.VerifyReservedWhitelist(tx) {
+	if t.VerifyReservedWhitelist(tx) {
 		t.log.Info("verifyReservedWhitelist true", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 		return true, nil
 	}
 
 	req := tx.GetContractRequests()
-	reservedRequests, err := t.utxo.GetReservedContractRequests(tx.GetContractRequests(), false)
+	reservedRequests, err := t.GetReservedContractRequests(tx.GetContractRequests(), false)
 	if err != nil {
 		t.log.Error("getReservedContractRequests error", "error", err.Error())
 		return false, err
 	}
 
-	if !t.utxo.VerifyReservedContractRequests(reservedRequests, req) {
+	if !t.VerifyReservedContractRequests(reservedRequests, req) {
 		t.log.Error("verifyReservedContractRequests error", "reservedRequests", reservedRequests, "req", req)
 		return false, fmt.Errorf("verify reservedContracts error")
 	}
@@ -502,6 +502,9 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		XMReader: reader,
 	}
 	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxConfig)
+	if err != nil {
+		return false, nil
+	}
 
 	transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
 	if err != nil {
@@ -535,6 +538,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		contextConfig.ResourceLimits = limits
 		contextConfig.Module = tmpReq.ModuleName
 		contextConfig.ContractName = tmpReq.GetContractName()
+		contextConfig.Module = tmpReq.GetModuleName()
 		if transContractName == tmpReq.GetContractName() {
 			contextConfig.TransferAmount = transAmount.String()
 		} else {
