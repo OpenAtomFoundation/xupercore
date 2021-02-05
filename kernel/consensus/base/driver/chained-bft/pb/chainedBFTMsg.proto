@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package chainedBftPb;
+
+// QuorumCertSign 是一个(Addr, Pk, 签名)三元组
+message QuorumCertSign {
+  string Address = 1;
+  string PublicKey = 2;
+  bytes  Sign = 3;
+}
+
+/* ProposalMsg 是chained-bft中定义的Block形式，区别在于其有一个parentQC，该存储只供chained-bft类使用
+ * ProposalMsg的结构就类似一个Block的结构
+ */
+message ProposalMsg {
+	// 生产高度
+	int64 proposalView = 1;
+	bytes proposalId = 2;
+	// 生产时间
+	int64 timestamp = 3;
+	// 上一个区块基本信息
+	bytes JustifyQC = 4;
+	// 签名
+    QuorumCertSign Sign = 5;
+	// 消息摘要
+	bytes MsgDigest = 6;
+}
+
+// VoteMsg is the vote message of the protocal.
+message VoteMsg {
+	bytes VoteInfo = 1;
+	bytes LedgerCommitInfo = 2;
+	repeated QuorumCertSign Signature = 3;    
+}

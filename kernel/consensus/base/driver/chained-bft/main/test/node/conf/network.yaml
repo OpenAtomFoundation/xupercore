@@ -1,0 +1,10 @@
+# network config
+module: p2pv2
+port: 47101
+keyPath: /netkeys
+# bootNode节点自身不能配置bootNodes
+# bootNodes:
+isTls: true
+serviceName: localhost
+isStorePeers: true
+p2PDataPath: /p2p

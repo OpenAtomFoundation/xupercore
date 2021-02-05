@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+option go_package = "github.com/xuperchain/xupercore/protos";
+
+package protos;
+
+// 签名详情
+message SignatureInfo {
+    string PublicKey = 1;
+    bytes Sign = 2;
+}
+
+// --------   Account and Permission Section --------
+enum PermissionRule {
+    NULL = 0;           // 无权限控制
+    SIGN_THRESHOLD = 1; // 签名阈值策略
+    SIGN_AKSET = 2;     // AKSet签名策略
+    SIGN_RATE = 3;      // 签名率策略
+    SIGN_SUM = 4;       // 签名个数策略vim
+    CA_SERVER = 5;      // CA服务器鉴权
+    COMMUNITY_VOTE = 6; // 社区治理
+}
+
+message PermissionModel {
+    PermissionRule rule = 1;
+    double acceptValue = 2; // 取决于用哪种rule, 可以表示签名率，签名数或权重阈值
+}
+
+// AK集的表示方法
+message AkSet {
+    repeated string aks = 1; // 一堆公钥
+}
+message AkSets {
+    map<string, AkSet> sets = 1; // 公钥or账户名集
+    string expression = 2; // 表达式，一期不支持表达式，默认集合内是and，集合间是or
+}
+
+// Acl实际使用的结构
+message Acl {
+    PermissionModel pm = 1;            // 采用的权限模型
+    map<string, double> aksWeight = 2; // 公钥or账户名  -> 权重
+    AkSets akSets = 3;
+}
+
+// 查询Acl
+message AclStatus {
+    string bcname = 1;
+    string accountName = 2;
+    string contractName = 3;
+    string methodName = 4;
+    bool confirmed = 5;
+    Acl acl = 6;
+}
+
+message AK2AccountRequest {
+    string bcname = 1;
+    string address = 2;
+}
+
+message AK2AccountResponse {
+    string bcname = 1;
+    repeated string account = 2;
+}

@@ -1,0 +1,278 @@
+syntax = "proto3";
+
+import "xupercore/protos/contract.proto";
+import "xupercore/protos/ledger.proto";
+import "xupercore/protos/permission.proto";
+
+option go_package = "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb";
+
+package xldgpb;
+
+// TransactionStatus is the status of transaction
+
+enum TransactionStatus {
+    // Undefined status
+    TX_UNDEFINE = 0;
+    // Transaction not exist
+    TX_NOEXIST = 1;
+    // Transaction have been confirmed
+    TX_CONFIRM = 2;
+    // Transaction is on the furcation
+    TX_FURCATION = 3;
+    // Transaction have not been confirmed
+    TX_UNCONFIRM = 4;
+    // Transaction occurs error
+    TX_FAILED = 5;
+}
+
+// BlockStatus is the status of block
+enum BlockStatus {
+    BLOCK_ERROR = 0;
+    BLOCK_TRUNK = 1;
+    BLOCK_BRANCH = 2;
+    BLOCK_NOEXIST = 3;
+}
+
+// QCState is the phase of hotstuff
+enum QCState {
+    NEW_VIEW = 0;
+    PREPARE = 1;
+    PRE_COMMIT = 2;
+    COMMIT = 3;
+    DECIDE = 4;
+}
+
+// QCSignInfos is the signs of the leader gathered from replicas of a specifically certType.
+// A slice of signs is used at present.
+// TODO @qizheng09: It will be change to Threshold-Signatures after
+// Crypto lib support Threshold-Signatures.
+message QCSignInfos {
+    // QCSignInfos
+    repeated SignInfo QCSignInfos = 1;
+}
+
+// SignInfo is the signature information of the
+message SignInfo {
+    string Address = 1;
+    string PublicKey = 2;
+    bytes  Sign = 3;
+}
+
+// QuorumCert is a data type that combines a collection of signatures from replicas.
+message QuorumCert {
+    // The id of Proposal this QC certified.
+    bytes ProposalId = 1;
+    // The msg of Proposal this QC certified.
+    bytes ProposalMsg = 2;
+    // The current type of this QC certified.
+    // the type contains `NEW_VIEW`, `PREPARE`
+    QCState Type = 3;
+    // The view number of this QC certified.
+    int64 ViewNumber = 4;
+    // SignInfos is the signs of the leader gathered from replicas
+    // of a specifically certType.
+    QCSignInfos SignInfos  = 5;
+}
+
+message HDInfo {
+    // HDPublickey
+    bytes hd_public_key = 1;
+    // original_hash
+    bytes original_hash = 2;
+}
+
+// Unified Xuper Signature
+message XuperSignature {
+    repeated bytes public_keys = 1;
+    bytes signature = 2;
+}
+
+// Transaction is the information of the transaction
+message Transaction {
+    // txid is the id of this transaction
+    bytes txid = 1;
+    // the blockid the transaction belong to
+    bytes blockid = 2;
+    // Transaction input list
+    repeated protos.TxInput tx_inputs = 3;
+    // Transaction output list
+    repeated protos.TxOutput tx_outputs = 4;
+    // Transaction description or system contract
+    bytes desc = 6;
+    // Mining rewards
+    bool coinbase = 7;
+    // Random number used to avoid replay attacks
+    string nonce = 8;
+    // Timestamp to launch the transaction
+    int64 timestamp = 9;
+    // tx format version; tx格式版本号
+    int32 version = 10;
+    // auto generated tx
+    bool autogen = 11;
+
+    repeated protos.TxInputExt tx_inputs_ext = 23;
+    repeated protos.TxOutputExt tx_outputs_ext = 24;
+    repeated protos.InvokeRequest contract_requests = 25;
+
+    // 权限系统新增字段
+    // 交易发起者, 可以是一个Address或者一个Account
+    string initiator = 26;
+    // 交易发起需要被收集签名的AddressURL集合信息，包括用于utxo转账和用于合约调用
+    repeated string auth_require = 27;
+    // 交易发起者对交易元数据签名，签名的内容包括auth_require字段
+    repeated protos.SignatureInfo initiator_signs = 28;
+    // 收集到的签名
+    repeated protos.SignatureInfo auth_require_signs = 29;
+    // 节点收到tx的时间戳，不参与签名
+    int64 received_timestamp = 30;
+    // 统一签名(支持多重签名/环签名等，与initiator_signs/auth_require_signs不同时使用)
+    XuperSignature xuper_sign = 31;
+    // 可修改区块链标记
+    ModifyBlock modify_block = 32;
+    // HD加解密相关信息
+    HDInfo HD_info = 33;
+}
+
+// Ledger metadata
+message LedgerMeta {
+    // root block id
+    bytes root_blockid = 1;
+    // tip block id
+    bytes tip_blockid = 2;
+    // the height of the trunk
+    int64 trunk_height = 3;
+}
+
+// Utxo metadata
+message UtxoMeta {
+    // utxo vm目前执行到的blockid
+    bytes latest_blockid = 1;
+    repeated string lock_key_list = 2;
+    // 当前utxo vm上的总资产
+    string utxo_total = 3;
+    // 平均上链延时
+    int64 avgDelay = 4;
+    // 待确认交易量
+    int64 unconfirmTxAmount = 5;
+    // max block size
+    int64 max_block_size = 6;
+    // preset contracts
+    repeated protos.InvokeRequest reserved_contracts = 7;
+    // reset forbidden contract configuration
+    protos.InvokeRequest forbidden_contract = 8;
+    // the resource amount of creating an account
+    int64 new_account_resource_amount = 9;
+    // 当前不可逆区块高度，与utxo对齐
+    int64 irreversibleBlockHeight = 10;
+    // 当前不可逆区块高度调整窗口
+    int64 irreversibleSlideWindow = 11;
+    protos.GasPrice gasPrice = 12;
+    // 群组合约相关
+    protos.InvokeRequest group_chain_contract = 13;
+}
+
+// The internal block struct
+message InternalBlock {
+    // block version
+    int32 version = 1;
+    // Random number used to avoid replay attacks
+    int32 nonce = 2;
+    // blockid generate the hash sign of the block used by sha256
+    bytes blockid = 3;
+    // pre_hash is the parent blockid of the block
+    bytes pre_hash = 4;
+    // The miner id
+    bytes proposer = 5;
+    // The sign which miner signed: blockid + nonce + timestamp
+    bytes sign = 6;
+    // The pk of the miner
+    bytes pubkey = 7;
+    // The Merkle Tree root
+    bytes merkle_root = 8;
+    // The height of the blockchain
+    int64 height = 9;
+    // Timestamp of the block
+    int64 timestamp = 10;
+    // Transactions of the block, only txid stored on kv, the detail information
+    // stored in another table
+    repeated Transaction transactions = 11;
+    // The transaction count of the block
+    int32 tx_count = 12;
+    // 所有交易hash的merkle tree
+    repeated bytes merkle_tree = 13;
+    int64 curTerm = 16;
+    int64 curBlockNum = 17;
+    map<string, string> failed_txs = 18; // txid -> failed reason
+    int32 targetBits = 19;
+
+    // Justify used in chained-bft
+    QuorumCert Justify = 20;
+
+    // 下面的属性会动态变化
+    // If the block is on the trunk
+    bool in_trunk = 14;
+    // Next next block which on trunk
+    bytes next_hash = 15;
+}
+
+message Utxo {
+    bytes amount = 1;
+    bytes toAddr = 2;
+    bytes toPubkey = 3;
+    bytes refTxid = 4;
+    int32 refOffset = 5;
+}
+
+message ModifyBlock {
+    // txid交易被effective_txid的交易提出可修改区块链的请求
+    string effective_txid = 1;
+    // 本交易是否已被修改标记
+    bool marked = 2;
+    // txid交易被修改生效的高度
+    int64 effective_height = 3;
+    // 监管的public key
+    string public_key = 4;
+    // 监管地址对修改的交易id的签名
+    string sign = 5;
+}
+
+message TxDataAccount {
+    // 地址
+    string address = 1;
+    // 金额
+    string amount = 2;
+    // 冻结高度
+    int64 frozen_height = 3;
+}
+
+message UtxoRecord {
+    string utxoCount = 1;
+    string utxoAmount = 2;
+    repeated UtxoKey item = 3;
+}
+
+message UtxoKey {
+    string refTxid = 1;
+    string offset = 2;
+    string amount = 3;
+}
+
+message UtxoRecordDetail {
+    UtxoRecord openUtxo = 1;
+    UtxoRecord lockedUtxo = 2;
+    UtxoRecord frozenUtxo = 3;
+}
+
+message BalanceDetailInfo {
+    string balance = 1;
+    bool isFrozen = 2;
+}
+
+// UtxoOutput query results
+message UtxoOutput {
+    // utxo list
+    repeated Utxo utxoList = 1;
+    // total selected amount
+    string totalSelected = 2;
+}
+

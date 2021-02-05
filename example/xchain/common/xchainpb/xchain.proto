@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+import "xupercore/bcs/ledger/xledger/xldgpb/xledger.proto";
+import "xupercore/protos/contract.proto";
+
+package xchainpb;
+
+// 通用请求Header
+message ReqHeader {
+    // 请求id
+    string log_id = 1;
+    // 标记请求方，方便问题定位
+    string self_name = 2;
+}
+
+// 通用响应Header
+message RespHeader {
+    // 请求id
+    string log_id = 1;
+    // 错误码
+    int64 err_code = 2;
+    // 错误信息
+    string err_msg = 3;
+    // 节点追踪信息，方便问题定位
+    string trace_id = 4;
+}
+
+message BaseReq {
+    ReqHeader header = 1;
+}
+
+message BaseResp {
+    RespHeader header = 1;
+}
+
+message SubmitTxReq {
+    ReqHeader header = 1;
+    string  bcname = 2;
+    bytes   txid = 3;
+    xldgpb.Transaction tx = 4;
+}
+
+message PreExecReq {
+    ReqHeader header = 1;
+    string  bcname = 2;
+    repeated protos.InvokeRequest requests = 3;
+    string initiator = 4;
+    repeated string authRequire = 5;
+}
+
+message PreExecResp {
+    RespHeader header = 1;
+    string  bcname = 2;
+    protos.InvokeResponse response = 3;
+}
+
+message SelectUtxoReq {
+    ReqHeader header = 1;
+    string  bcname = 2;
+    string address = 3;
+    string totalNeed = 5;
+    bool needLock = 6;
+}
+
+message SelectUtxoResp {
+    RespHeader header = 1;
+    repeated xldgpb.Utxo utxoList = 2;
+    string totalAmount = 3;
+}
+
+message QueryTxReq {
+    ReqHeader header = 1;
+    string  bcname = 2;
+    bytes txid = 3;
+}
+
+message QueryTxResp {
+    RespHeader header = 1;
+    xldgpb.TransactionStatus status = 2;
+    int64 distance = 3;
+    xldgpb.Transaction tx = 4;
+}
+
+message QueryBlockReq {
+    ReqHeader header = 1;
+    string  bcname = 2;
+    bytes blockId = 3;
+    bool needContent = 4;
+}
+
+message QueryBlockResp {
+    RespHeader header = 1;
+    xldgpb.BlockStatus status = 2;
+    xldgpb.InternalBlock block = 3;
+}
+
+message QueryChainStatusReq {
+    ReqHeader header = 1;
+    string bcname = 2;
+    bool needBranchBlock = 3;
+}
+
+message QueryChainStatusResp {
+    RespHeader header = 1;
+    string bcname = 2;
+    xldgpb.LedgerMeta ledgerMeta = 3;
+    xldgpb.UtxoMeta utxoMeta = 4;
+    repeated string branchBlockId = 5;
+}
+
+service Xchain {
+    // 示例接口
+    rpc CheckAlive(BaseReq) returns (BaseResp) {}
+    // 提交交易
+    rpc SubmitTx(SubmitTxReq) returns (BaseResp) {}
+    // 合约预执行
+    rpc PreExec(PreExecReq) returns (PreExecResp) {}
+    // 选择utxo
+    rpc SelectUtxo(SelectUtxoReq) returns (SelectUtxoResp) {}
+    // 查询交易信息
+    rpc QueryTx(QueryTxReq) returns (QueryTxResp) {}
+    // 查询区块信息
+    rpc QueryBlock(QueryBlockReq) returns (QueryBlockResp) {}
+    // 查询区块链状态
+    rpc QueryChainStatus(QueryChainStatusReq) returns (QueryChainStatusResp) {}
+}

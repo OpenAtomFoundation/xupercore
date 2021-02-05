@@ -1,0 +1,7 @@
+# network config
+module: p2pv1
+address: /ip4/127.0.0.1/tcp/37103
+# bootNode节点自身不能配置bootNodes
+bootNodes:
+  - "127.0.0.1:37101"
+  - "127.0.0.1:37102"
