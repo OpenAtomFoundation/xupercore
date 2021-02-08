@@ -8,6 +8,7 @@ import (
 type kcontextImpl struct {
 	ctx *bridge.Context
 	contract.StateSandbox
+	contract.ChainCore
 	used, limit contract.Limits
 }
 
