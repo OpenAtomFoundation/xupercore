@@ -1,22 +1,59 @@
 package manager
 
 import (
+	"io/ioutil"
+	"os"
 	"testing"
 
+	_ "github.com/xuperchain/xupercore/bcs/contract/native"
+	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 )
 
+type fakeChainCore struct {
+}
+
+// GetAccountAddress get addresses associated with account name
+func (f *fakeChainCore) GetAccountAddresses(accountName string) ([]string, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// VerifyContractPermission verify permission of calling contract
+func (f *fakeChainCore) VerifyContractPermission(initiator string, authRequire []string, contractName string, methodName string) (bool, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// VerifyContractOwnerPermission verify contract ownership permisson
+func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
+	panic("not implemented") // TODO: Implement
+}
 func TestCreate(t *testing.T) {
-	_, err := contract.CreateManager("default", &contract.ManagerConfig{})
+	tmpdir, _ := ioutil.TempDir("", "contract-test")
+	defer os.RemoveAll(tmpdir)
+
+	_, err := contract.CreateManager("default", &contract.ManagerConfig{
+		Basedir:  tmpdir,
+		BCName:   "xuper",
+		Core:     new(fakeChainCore),
+		XMReader: sandbox.NewMemXModel(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestCreateSandbox(t *testing.T) {
-	m, err := contract.CreateManager("default", &contract.ManagerConfig{})
+	tmpdir, _ := ioutil.TempDir("", "contract-test")
+	defer os.RemoveAll(tmpdir)
+
+	m, err := contract.CreateManager("default", &contract.ManagerConfig{
+		Basedir:  tmpdir,
+		BCName:   "xuper",
+		Core:     new(fakeChainCore),
+		XMReader: sandbox.NewMemXModel(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,11 +69,15 @@ func TestCreateSandbox(t *testing.T) {
 }
 
 func TestInvoke(t *testing.T) {
-	m, err := contract.CreateManager("default", &contract.ManagerConfig{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	tmpdir, _ := ioutil.TempDir("", "contract-test")
+	defer os.RemoveAll(tmpdir)
 
+	m, err := contract.CreateManager("default", &contract.ManagerConfig{
+		Basedir:  tmpdir,
+		BCName:   "xuper",
+		Core:     new(fakeChainCore),
+		XMReader: sandbox.NewMemXModel(),
+	})
 	m.GetKernRegistry().RegisterKernMethod("$hello", "Hi", new(helloContract).Hi)
 
 	r := sandbox.NewMemXModel()
