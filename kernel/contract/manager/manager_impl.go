@@ -37,9 +37,10 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	xbridge, err := bridge.New(&bridge.XBridgeConfig{
 		Basedir: cfg.Basedir,
 		VMConfigs: map[bridge.ContractType]bridge.VMConfig{
-			// bridge.TypeWasm: &bridge.WasmConfig{
-			// 	Driver: "ixvm",
-			// },
+			bridge.TypeWasm: &bridge.WasmConfig{
+				Driver:        "xvm",
+				EnableUpgrade: true,
+			},
 			bridge.TypeNative: &bridge.NativeConfig{
 				Driver: "native",
 				Enable: true,
