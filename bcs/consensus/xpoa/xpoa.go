@@ -3,7 +3,6 @@ package xpoa
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -17,23 +16,6 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/lib/utils"
-)
-
-// TODO: 目前时间关系，暂时将xpoa放置在三代合约，后可以收敛至xuper5的kernel合约
-const (
-	// 为了避免调用utxoVM systemCall方法, 直接通过ledger读取xpoa合约存储
-	// ATTENTION: 此处xpoaBucket和xpoaKey必须和对应三代合约严格一致，并且该xpoa隐式限制只能包含xmodel机制的ledger才可调用
-	XPOABUCKET = "xpoa_validates"
-	XPOAKEY    = "VALIDATES"
-
-	MAXSLEEPTIME = 1000
-)
-
-var (
-	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
-	EmptyValidors    = errors.New("Current validators is empty.")
-	NotValidContract = errors.New("Cannot get valid res with contract.")
-	InvalidQC        = errors.New("QC struct is invalid.")
 )
 
 func init() {
@@ -80,12 +62,11 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	// create xpoaSchedule
 	schedule := &xpoaSchedule{
-		address:   cCtx.Network.PeerInfo().Account,
-		period:    xconfig.Period,
-		blockNum:  xconfig.BlockNum,
-		addrToNet: make(map[string]string),
-		ledger:    cCtx.Ledger,
-		log:       cCtx.XLog,
+		address:  cCtx.Network.PeerInfo().Account,
+		period:   xconfig.Period,
+		blockNum: xconfig.BlockNum,
+		ledger:   cCtx.Ledger,
+		log:      cCtx.XLog,
 	}
 	if xconfig.EnableBFT != nil {
 		schedule.enableBFT = true
@@ -95,11 +76,10 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	var validators []string
 	for _, v := range xconfig.InitProposer {
 		validators = append(validators, v.Address)
-		schedule.addrToNet[v.Address] = v.Neturl
 	}
 	reader, _ := schedule.ledger.GetTipXMSnapshotReader()
-	res, err := reader.Get(XPOABUCKET, []byte(XPOAKEY))
-	if snapshotValidators, _ := loadValidatorsMultiInfo(res, &schedule.addrToNet, &schedule.mutex); snapshotValidators != nil {
+	res, err := reader.Get(contractBucket, []byte(validateKeys))
+	if snapshotValidators, _ := loadValidatorsMultiInfo(res); snapshotValidators != nil {
 		validators = snapshotValidators
 	}
 	schedule.validators = validators
@@ -146,7 +126,10 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		xpoa.smr = smr
 		cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::load chained-bft successfully.")
 	}
-	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a xpoa instance successfully.", "xpoa", xpoa)
+	// 注册合约方法
+	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractEditValidate, xpoa.methodEditValidates)
+	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractGetValidates, xpoa.methodGetValidates)
+	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a xpoa instance successfully!", "xpoa", xpoa)
 	return xpoa
 }
 
@@ -181,7 +164,6 @@ Again:
 		return true, needSync, nil
 	}
 	x.bctx.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", false, "height", height)
-	// TODO: 后续调试时，确定此处是否需要sync
 	return false, false, nil
 }
 
