@@ -236,7 +236,13 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	}
 	log := ctx.GetLog()
 
-	// 防止重复提交交易
+	// 无币化
+    if len(tx.TxInputs) == 0 && !t.ctx.Ledger.GetNoFee() {
+        ctx.GetLog().Warn("PostTx TxInputs can not be null while need utxo")
+        return common.ErrTxNotEnough
+    }
+
+    // 防止重复提交交易
 	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
 		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
 		return common.ErrTxAlreadyExist
