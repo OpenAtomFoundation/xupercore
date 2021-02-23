@@ -32,7 +32,10 @@ func (t *KernMethod) NewAccount(ctx contract.KContext) (*contract.Response, erro
 	accountName := args["account_name"]
 	aclJSON := args["acl"]
 	aclBuf := &pb.Acl{}
-	json.Unmarshal(aclJSON, aclBuf)
+	err := json.Unmarshal(aclJSON, aclBuf)
+	if err != nil {
+	    return nil, fmt.Errorf("unmarshal args acl error: %v", err)
+    }
 
 	if accountName == nil {
 		return nil, fmt.Errorf("Invoke NewAccount failed, warn: account name is empty")
@@ -91,7 +94,11 @@ func (t *KernMethod) SetAccountACL(ctx contract.KContext) (*contract.Response, e
 	accountName := args["account_name"]
 	aclJSON := args["acl"]
 	aclBuf := &pb.Acl{}
-	json.Unmarshal(aclJSON, aclBuf)
+    err := json.Unmarshal(aclJSON, aclBuf)
+    if err != nil {
+        return nil, fmt.Errorf("unmarshal args acl error: %v", err)
+    }
+
 	if validErr := validACL(aclBuf); validErr != nil {
 		return nil, validErr
 	}
@@ -141,13 +148,16 @@ func (t *KernMethod) SetMethodACL(ctx contract.KContext) (*contract.Response, er
 	methodName := string(methodNameBuf)
 	aclJSON := args["acl"]
 	aclBuf := &pb.Acl{}
-	json.Unmarshal(aclJSON, aclBuf)
+    err := json.Unmarshal(aclJSON, aclBuf)
+    if err != nil {
+        return nil, fmt.Errorf("unmarshal args acl error: %v", err)
+    }
 
 	if validErr := validACL(aclBuf); validErr != nil {
 		return nil, validErr
 	}
 	key := utils.MakeContractMethodKey(contractName, methodName)
-	err := ctx.Put(utils.GetContractBucket(), []byte(key), aclJSON)
+	err = ctx.Put(utils.GetContractBucket(), []byte(key), aclJSON)
 	if err != nil {
 		return nil, err
 	}
