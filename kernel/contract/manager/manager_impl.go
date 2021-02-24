@@ -54,6 +54,9 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 				Registry: &m.kregistry,
 			},
 		},
+		Config: bridge.ContractConfig{
+		    EnableUpgrade: true,
+		},
 		XModel: cfg.XMReader,
 		Core:   cfg.Core,
 	})
@@ -119,6 +122,7 @@ func (m *managerImpl) upgradeContract(ctx contract.KContext) (*contract.Response
 	if contractName == nil {
 		return nil, errors.New("invoke Upgrade error, contract name is nil")
 	}
+
 	err := ctx.VerifyContractOwnerPermission(string(contractName), ctx.AuthRequire())
 	if err != nil {
 		return nil, err

@@ -17,6 +17,7 @@ func newKContext(ctx *bridge.Context) *kcontextImpl {
 		ctx:          ctx,
 		limit:        ctx.ResourceLimits,
 		StateSandbox: ctx.State,
+		ChainCore:    ctx.Core,
 	}
 }
 

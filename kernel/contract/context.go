@@ -29,6 +29,7 @@ type Response struct {
 // ContextConfig define the config of context
 type ContextConfig struct {
 	State StateSandbox
+	Core  ChainCore
 
 	Initiator   string
 	AuthRequire []string
