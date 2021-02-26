@@ -1,7 +1,6 @@
 package xpoa
 
 import (
-	"sync"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -19,10 +18,6 @@ type xpoaSchedule struct {
 	blockNum int64
 	// 当前validators的address
 	validators []string
-	// address到neturl的映射
-	addrToNet map[string]string
-	// 该锁的作用是保证addrToNet并发安全
-	mutex sync.Mutex
 
 	ledger    cctx.LedgerRely
 	enableBFT bool
@@ -87,7 +82,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		s.log.Error("Xpoa::getValidatesByBlockId::createSnapshot error.", "err", err)
 		return nil, err
 	}
-	res, err := reader.Get(XPOABUCKET, []byte(XPOAKEY))
+	res, err := reader.Get(contractBucket, []byte(validateKeys))
 	if res == nil || res.PureData.Value == nil {
 		// 即合约还未被调用，未有变量更新
 		return s.validators, nil
@@ -96,7 +91,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		s.log.Error("Xpoa::getValidatesByBlockId::reader Get error.", "err", err)
 		return nil, err
 	}
-	validators, err := loadValidatorsMultiInfo(res.PureData.Value, &s.addrToNet, &s.mutex)
+	validators, err := loadValidatorsMultiInfo(res.PureData.Value)
 	if err != nil {
 		s.log.Error("Xpoa::getValidatesByBlockId::loadValidatorsMultiInfo error.", "err", err)
 		return nil, err
@@ -104,46 +99,39 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 	return validators, nil
 }
 
-// GetValidators 用于计算目标round候选人信息，同时更新schedule address到internet地址映射
-func (s *xpoaSchedule) GetValidators(round int64) []string {
-	if round <= 3 {
-		return s.validators
+func (s *xpoaSchedule) getValidates(height int64) ([]string, error) {
+	if height <= 3 {
+		return s.validators, nil
 	}
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
-	b, err := s.ledger.QueryBlockByHeight(round - 3)
+	b, err := s.ledger.QueryBlockByHeight(height - 3)
 	if err != nil {
-		s.log.Error("Xpoa::GetValidators::QueryBlockByHeight error.", "err", err, "height", round-3)
-		return nil
+		s.log.Error("Xpoa::getValidates::QueryBlockByHeight error.", "err", err, "height", height-3)
+		return nil, err
 	}
 	validators, err := s.getValidatesByBlockId(b.GetBlockid())
 	if err != nil {
-		s.log.Error("Xpoa::GetValidators::getValidatesByBlockId error.", "err", err)
+		s.log.Error("Xpoa::getValidates::getValidatesByBlockId error.", "err", err)
+		return nil, err
+	}
+	return validators, nil
+}
+
+// GetValidators 用于计算目标round候选人信息，同时更新schedule address到internet地址映射
+func (s *xpoaSchedule) GetValidators(round int64) []string {
+	validators, err := s.getValidates(round)
+	if err != nil {
 		return nil
 	}
 	return validators
 }
 
 func (s *xpoaSchedule) GetIntAddress(addr string) string {
-	return s.addrToNet[addr]
-}
-
-func (s *xpoaSchedule) GetValidatorsMsgAddr() []string {
-	var urls []string
-	for _, v := range s.validators {
-		urls = append(urls, s.addrToNet[v])
-	}
-	return urls
+	return ""
 }
 
 func (s *xpoaSchedule) UpdateValidator(height int64) bool {
-	if height <= 3 {
-		return false
-	}
-	b, err := s.ledger.QueryBlockByHeight(height - 3)
-	if err != nil {
-		return false
-	}
-	validators, err := s.getValidatesByBlockId(b.GetBlockid())
+	validators, err := s.getValidates(height)
 	if err != nil || len(validators) == 0 {
 		return false
 	}

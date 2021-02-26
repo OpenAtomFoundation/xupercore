@@ -104,4 +104,7 @@ var (
 	ErrNewNetworkFailed  = &Error{ErrStatusInternalErr, 50601, "new network failed"}
 	ErrSendMessageFailed = &Error{ErrStatusInternalErr, 50602, "send message failed"}
 	ErrNetworkNoResponse = &Error{ErrStatusInternalErr, 50603, "network no response"}
+
+	// consensus
+	ErrConsensusStatus = &Error{ErrStatusInternalErr, 50701, "consensus status error"}
 )

@@ -71,8 +71,8 @@ func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 			startHeight: cCfg.StartHeight,
 			newHeight:   cCfg.StartHeight - 1,
 			index:       cCfg.Index,
-			miner: MinerInfo{
-				Address: cCtx.Address.Address,
+			miner: ValidatorsInfo{
+				Validators: []string{cCtx.Address.Address},
 			},
 		},
 		sigc: make(chan bool, 1),

@@ -2,11 +2,32 @@ package xpoa
 
 import (
 	"encoding/json"
-	"sync"
+	"errors"
 	"time"
 )
 
-const MAXMAPSIZE = 1000
+var (
+	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
+	EmptyValidors    = errors.New("Current validators is empty.")
+	NotValidContract = errors.New("Cannot get valid res with contract.")
+	InvalidQC        = errors.New("QC struct is invalid.")
+	targetParamErr   = errors.New("Target paramters are invalid, please check them.")
+	tooLowHeight     = errors.New("The height should be higher than 3.")
+)
+
+const (
+	contractBucket       = "$xpoa"
+	validateKeys         = "validates"
+	contractGetValidates = "getValidates"
+	contractEditValidate = "editValidates"
+
+	statusOK         = 200
+	statusBadRequest = 400
+	statusErr        = 500
+
+	MAXSLEEPTIME = 1000
+	MAXMAPSIZE   = 1000
+)
 
 type xpoaConfig struct {
 	Version int64 `json:"version,omitempty"`
@@ -40,33 +61,15 @@ type ProposerInfo struct {
 
 // LoadValidatorsMultiInfo
 // xpoa 格式为
-// { "proposers": [{"Address":$STRING, "PeerAddr":$STRING}...] }
-func loadValidatorsMultiInfo(res []byte, addrToNet *map[string]string, mutex *sync.Mutex) ([]string, error) {
+// { "validators": [$ADDR_STRING...] }
+func loadValidatorsMultiInfo(res []byte) ([]string, error) {
 	if res == nil {
 		return nil, NotValidContract
 	}
 	// 读取最新的validators值
-	contractInfo := ProposerInfos{}
+	contractInfo := ValidatorsInfo{}
 	if err := json.Unmarshal(res, &contractInfo); err != nil {
 		return nil, err
 	}
-	var validators []string
-	for _, node := range contractInfo.Proposers {
-		validators = append(validators, node.Address)
-		if _, ok := (*addrToNet)[node.Address]; !ok {
-			mutex.Lock()
-			(*addrToNet)[node.Address] = node.Neturl
-			mutex.Unlock()
-		}
-	}
-	return validators, nil
-}
-
-type ProposerInfos struct {
-	Proposers []NodeInfo `json:"proposers"`
-}
-
-type NodeInfo struct {
-	Address string `json:"Address"`
-	Neturl  string `json:"PeerAddr"`
+	return contractInfo.Validators, nil
 }
