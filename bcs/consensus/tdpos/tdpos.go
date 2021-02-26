@@ -3,7 +3,6 @@ package tdpos
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"sync"
 	"time"
 
@@ -19,30 +18,6 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/lib/logs"
-)
-
-const (
-	MAXSLEEPTIME = 1000
-
-	contractNominateCandidate = "runNominateCandidate"
-	contractRevokeCandidata   = "runRevokeCandidate"
-	contractVote              = "runVote"
-	contractRevokeVote        = "runRevokeVote"
-)
-
-var (
-	InitProposerNeturlErr         = errors.New("Init proposer neturl is invalid.")
-	ProposerNumErr                = errors.New("Proposer num isn't equal to proposer neturl.")
-	NeedNetURLErr                 = errors.New("Init proposer neturl must be mentioned.")
-	invalidProposerErr            = errors.New("Invalid proposer.")
-	invalidTermErr                = errors.New("Invalid term.")
-	proposeBlockMoreThanConfigErr = errors.New("Propose block more than config num error.")
-	timeoutBlockErr               = errors.New("New block is out of date.")
-
-	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
-	EmptyValidors    = errors.New("Current validators is empty.")
-	NotValidContract = errors.New("Cannot get valid res with contract.")
-	InvalidQC        = errors.New("QC struct is invalid.")
 )
 
 func init() {
@@ -358,6 +333,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	qc := tp.smr.GetCompleteHighQC()
 	qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
 	if !ok {
+		tp.log.Warn("Tdpos::ProcessBeforeMiner::qc transfer err", "qc", qc)
 		return nil, nil, InvalidQC
 	}
 	oldQC, err := common.NewToOldQC(qcQuorumCert)

@@ -2,7 +2,6 @@ package tdpos
 
 import (
 	"encoding/json"
-	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -10,15 +9,6 @@ import (
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/lib/logs"
-)
-
-const (
-	MAXHISPROPOSERSSIZE = 100
-)
-
-var (
-	proposerNotEnoughErr = errors.New("Term publish proposer num less than config.")
-	heightTooLow         = errors.New("The target height is lower than 4.")
 )
 
 // tdposSchedule 实现了ProposerElectionInterface接口，接口定义了proposers操作

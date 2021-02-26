@@ -28,7 +28,7 @@ const (
 	// <name, consensusName<STRING>>
 	// <config, configJson<STRING>>
 	// <beginHeight, height>
-	contractBucket = "consensus"
+	contractBucket = "$consensus"
 	consensusKey   = "PluggableConfig"
 )
 
