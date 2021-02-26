@@ -2,7 +2,6 @@ package tdpos
 
 import (
 	"encoding/json"
-	"errors"
 	"math/big"
 	"strconv"
 	"strings"
@@ -27,33 +26,6 @@ import (
 // 以上所有数据都更新到各自的链上存储中，直接走三代合约写入，去除原Finalize的最后写入更新机制
 // 由于三代合约读写集限制，不能针对同一个ExeInput触发并行操作，后到的tx将会出现读写集错误，即针对同一个大key的操作同一个区块只能顺序执行
 // 撤销走的是proposal合约，但目前看来proposal没有指明height
-const (
-	contractBucket = "tdpos"
-
-	nominateKey     = "nominate"
-	voteKeyPrefix   = "vote_"
-	revokeKeyPrefix = "revoke_"
-	urlmapKey       = "urlmap"
-
-	StatusOK  = 200
-	StatusErr = 500
-
-	NOMINATETYPE = "nominate"
-	VOTETYPE     = "vote"
-)
-
-var (
-	tooLowHeight      = errors.New("TipHeight < 3, use init parameters.")
-	nominateAddrErr   = errors.New("Addr in nominate candidate tx can not be empty.")
-	nominateUrlErr    = errors.New("NetUrl in nominate candidate tx can not be empty.")
-	emptyVoteAddrErr  = errors.New("Addr in vote candidate tx can not be empty.")
-	voteNominateErr   = errors.New("Addr in vote candidate hasn't been nominated.")
-	amountErr         = errors.New("Amount in contract can not be empty.")
-	authErr           = errors.New("candidate has not been authenticated")
-	repeatNominateErr = errors.New("The candidate had been nominate.")
-	emptyNominateKey  = errors.New("No valid candidate key when revoke.")
-	notFoundErr       = errors.New("Value not found, please check your input parameters.")
-)
 
 type nominateValue map[string]map[string]int64
 

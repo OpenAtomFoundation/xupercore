@@ -45,3 +45,10 @@ message BlockID {
     // if need content
     bool need_content = 3;
 }
+
+message ConsensusStatus {
+    string version = 1;
+    string consensus_name = 2;
+    string start_height = 3;
+    string validators_info = 4;
+}
