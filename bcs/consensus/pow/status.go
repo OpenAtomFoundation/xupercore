@@ -11,7 +11,11 @@ type PoWStatus struct {
 	mutex       sync.Mutex
 	newHeight   int64
 	index       int
-	miner       MinerInfo
+	miner       ValidatorsInfo
+}
+
+type ValidatorsInfo struct {
+	Validators []string `json:"validators"`
 }
 
 // GetVersion 返回pow所在共识version

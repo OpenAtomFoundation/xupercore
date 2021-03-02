@@ -27,11 +27,6 @@ type PoWStorage struct {
 	TargetBits uint32 `json:"targetBits,omitempty"`
 }
 
-// MinerInfo 针对GetCurrentValidatorsInfo json串解析
-type MinerInfo struct {
-	Address string `json:"address"`
-}
-
 // GetCompact 将一个256bits的大数转换为一个target
 func GetCompact(number *big.Int) (uint32, bool) {
 	nSize := (number.BitLen() + 7) / 8
