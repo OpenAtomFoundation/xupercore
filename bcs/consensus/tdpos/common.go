@@ -2,13 +2,64 @@ package tdpos
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
 	"time"
 )
 
-const MAXMAPSIZE = 1000
+const (
+	MAXSLEEPTIME        = 1000
+	MAXMAPSIZE          = 1000
+	MAXHISPROPOSERSSIZE = 100
+
+	contractNominateCandidate = "nominateCandidate"
+	contractRevokeCandidata   = "revokeNominate"
+	contractVote              = "voteCandidate"
+	contractRevokeVote        = "revokeVote"
+
+	contractBucket  = "$tdpos"
+	nominateKey     = "nominate"
+	voteKeyPrefix   = "vote_"
+	revokeKeyPrefix = "revoke_"
+	urlmapKey       = "urlmap"
+
+	StatusOK  = 200
+	StatusErr = 500
+
+	NOMINATETYPE = "nominate"
+	VOTETYPE     = "vote"
+)
+
+var (
+	InitProposerNeturlErr         = errors.New("Init proposer neturl is invalid.")
+	ProposerNumErr                = errors.New("Proposer num isn't equal to proposer neturl.")
+	NeedNetURLErr                 = errors.New("Init proposer neturl must be mentioned.")
+	invalidProposerErr            = errors.New("Invalid proposer.")
+	invalidTermErr                = errors.New("Invalid term.")
+	proposeBlockMoreThanConfigErr = errors.New("Propose block more than config num error.")
+	timeoutBlockErr               = errors.New("New block is out of date.")
+
+	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
+	EmptyValidors    = errors.New("Current validators is empty.")
+	NotValidContract = errors.New("Cannot get valid res with contract.")
+	InvalidQC        = errors.New("QC struct is invalid.")
+
+	proposerNotEnoughErr = errors.New("Term publish proposer num less than config.")
+	heightTooLow         = errors.New("The target height is lower than 4.")
+
+	tooLowHeight      = errors.New("TipHeight < 3, use init parameters.")
+	nominateAddrErr   = errors.New("Addr in nominate candidate tx can not be empty.")
+	nominateUrlErr    = errors.New("NetUrl in nominate candidate tx can not be empty.")
+	emptyVoteAddrErr  = errors.New("Addr in vote candidate tx can not be empty.")
+	voteNominateErr   = errors.New("Addr in vote candidate hasn't been nominated.")
+	amountErr         = errors.New("Amount in contract can not be empty.")
+	authErr           = errors.New("candidate has not been authenticated")
+	repeatNominateErr = errors.New("The candidate had been nominate.")
+	emptyNominateKey  = errors.New("No valid candidate key when revoke.")
+	notFoundErr       = errors.New("Value not found, please check your input parameters.")
+)
 
 // tdpos 共识机制的配置
 type tdposConfig struct {
@@ -33,11 +84,6 @@ type tdposConfig struct {
 	// json支持两种格式的解析形式
 	NeedNetURL bool            `json:"need_neturl"`
 	EnableBFT  map[string]bool `json:"bft_config,omitempty"`
-}
-
-type ProposerInfo struct {
-	Address string `json:"address"`
-	Neturl  string `json:"neturl"`
 }
 
 func (tp *tdposConsensus) needSync() bool {

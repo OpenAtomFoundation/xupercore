@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+type ValidatorsInfo struct {
+	Validators []string `json:"validators"`
+}
+
 // xpoaStatus 实现了ConsensusStatus接口
 type XpoaStatus struct {
 	Version     int64 `json:"version"`

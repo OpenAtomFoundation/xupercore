@@ -19,6 +19,8 @@ type ChainReader interface {
 	GetSystemStatus() (*xpb.SystemStatus, error)
 	// 获取节点NetUR
 	GetNetURL() (string, error)
+	// 获取共识状态
+	GetConsensusStatus() (*xpb.ConsensusStatus, error)
 }
 
 type chainReader struct {
@@ -64,6 +66,21 @@ func (t *chainReader) GetChainStatus() (*xpb.ChainStatus, error) {
 	}
 
 	return chainStatus, nil
+}
+
+func (t *chainReader) GetConsensusStatus() (*xpb.ConsensusStatus, error) {
+	consensus, err := t.chainCtx.Consensus.GetConsensusStatus()
+	if err != nil {
+		t.log.Warn("get consensus info error", "err", err)
+		return nil, common.ErrConsensusStatus
+	}
+	status := &xpb.ConsensusStatus{
+		Version:        fmt.Sprint(consensus.GetVersion()),
+		ConsensusName:  consensus.GetConsensusName(),
+		StartHeight:    fmt.Sprint(consensus.GetConsensusBeginInfo()),
+		ValidatorsInfo: string(consensus.GetCurrentValidatorsInfo()),
+	}
+	return status, nil
 }
 
 func (t *chainReader) IsTrunkTipBlock(blkId []byte) (bool, error) {

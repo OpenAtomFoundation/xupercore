@@ -4,6 +4,11 @@ import (
 	"encoding/json"
 )
 
+type ValidatorsInfo struct {
+	Validators []string `json:"validators"`
+	Neturls    []string `json:"neturls"`
+}
+
 // tdposStatus 实现了ConsensusStatus接口
 type TdposStatus struct {
 	Version     int64 `json:"version"`
@@ -39,20 +44,16 @@ func (t *TdposStatus) GetCurrentTerm() int64 {
 
 // 获取当前矿工信息
 func (t *TdposStatus) GetCurrentValidatorsInfo() []byte {
-	var v []*ProposerInfo
+	var addrs []string
+	var nets []string
 	for _, a := range t.election.proposers {
-		v = append(v, &ProposerInfo{
-			Address: a,
-			Neturl:  t.election.netUrlMap[a],
-		})
+		addrs = append(addrs, a)
+		nets = append(nets, t.election.netUrlMap[a])
 	}
 	i := ValidatorsInfo{
-		Validators: v,
+		Validators: addrs,
+		Neturls:    nets,
 	}
 	b, _ := json.Marshal(i)
 	return b
-}
-
-type ValidatorsInfo struct {
-	Validators []*ProposerInfo `json:"validators"`
 }

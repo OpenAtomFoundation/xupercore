@@ -73,7 +73,3 @@ func loadValidatorsMultiInfo(res []byte) ([]string, error) {
 	}
 	return contractInfo.Validators, nil
 }
-
-type ValidatorsInfo struct {
-	Validators []string `json:"validators"`
-}

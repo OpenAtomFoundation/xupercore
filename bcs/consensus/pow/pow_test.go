@@ -98,14 +98,14 @@ func TestGetConsensusStatus(t *testing.T) {
 		return
 	}
 	vb := status.GetCurrentValidatorsInfo()
-	m := MinerInfo{}
+	m := ValidatorsInfo{}
 	err = json.Unmarshal(vb, &m)
 	if err != nil {
 		t.Error("GetCurrentValidatorsInfo unmarshal error", "error", err)
 		return
 	}
-	if m.Address != bmock.Miner {
-		t.Error("GetCurrentValidatorsInfo error", "address", m.Address)
+	if m.Validators[0] != bmock.Miner {
+		t.Error("GetCurrentValidatorsInfo error", "address", m.Validators[0])
 	}
 }
 
