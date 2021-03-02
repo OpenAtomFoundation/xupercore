@@ -19,4 +19,6 @@ type KContext interface {
 
 	AddResourceUsed(delta Limits)
 	ResourceLimit() Limits
+
+	Call(module, contract, method string, args map[string][]byte) (*Response, error)
 }
