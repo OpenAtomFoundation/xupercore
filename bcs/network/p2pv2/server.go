@@ -62,6 +62,7 @@ var (
 	ErrConnectBootStrap = errors.New("error to connect to all bootstrap")
 	ErrLoadAccount      = errors.New("load account error")
 	ErrStoreAccount     = errors.New("dht store account error")
+    ErrConnect          = errors.New("connect all boot and static peer error")
 )
 
 // P2PServerV2 is the node in the network
@@ -159,7 +160,20 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 	// set broadcast peers limitation
 	MaxBroadCastPeers = cfg.MaxBroadcastPeers
 
-	return nil
+	if err := p.connect(); err != nil {
+        p.log.Error("connect all boot and static peer error")
+        return ErrConnect
+    }
+
+    key := Key(p.account)
+    value := p.getMultiAddr(p.host.ID(), p.host.Addrs())
+    err = p.kdht.PutValue(context.Background(), key, []byte(value))
+    if err != nil {
+        p.log.Error("dht put value error", "error", err)
+        return ErrStoreAccount
+    }
+
+    return nil
 }
 
 func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
@@ -222,19 +236,6 @@ func (p *P2PServerV2) Start() {
 	p.host.SetStreamHandler(protocol.ID(protocolID), p.streamHandler)
 	ctx, cancel := context.WithCancel(p.ctx)
 	p.cancel = cancel
-
-	if err := p.connect(); err != nil {
-		p.log.Error("connect all boot and static peer error")
-		panic("connect all boot and static peer error")
-	}
-
-	key := Key(p.account)
-	value := p.getMultiAddr(p.host.ID(), p.host.Addrs())
-	err := p.kdht.PutValue(context.Background(), key, []byte(value))
-	if err != nil {
-		p.log.Error("dht put value error", "error", err)
-		panic(ErrStoreAccount)
-	}
 
 	t := time.NewTicker(time.Second * 180)
 	go func() {
