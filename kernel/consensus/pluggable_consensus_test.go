@@ -2,7 +2,6 @@ package consensus
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -241,6 +240,7 @@ func NewUpdateM() map[string]map[string][]byte {
 	return a
 }
 
+/*
 func TestUpdateConsensus(t *testing.T) {
 	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
@@ -286,7 +286,7 @@ func TestUpdateConsensus(t *testing.T) {
 		t.Error("update error", "len", len(c))
 	}
 }
-
+*/
 func TestCompeteMaster(t *testing.T) {
 	// ledger的高度为2
 	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
