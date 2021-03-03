@@ -1239,6 +1239,7 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 	contextConfig := &contract.ContextConfig{
 		State:          sandBox,
+		Core:           t,
 		ResourceLimits: contract.MaxLimits,
 		ContractName:   request.GetContractName(),
 	}

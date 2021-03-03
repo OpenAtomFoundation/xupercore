@@ -87,6 +87,7 @@ func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Resp
 	initConfig := contract.ContextConfig{
 		ResourceLimits:        kctx.ResourceLimit(),
 		State:                 kctx,
+		Core:                  kctx,
 		Initiator:             kctx.Initiator(),
 		AuthRequire:           kctx.AuthRequire(),
 		ContractName:          contractName,
