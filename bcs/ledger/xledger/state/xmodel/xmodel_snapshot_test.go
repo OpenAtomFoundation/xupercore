@@ -1,6 +1,6 @@
 package xmodel
 
-import (
+/*import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -127,4 +127,4 @@ func TestGet(t *testing.T) {
 
 	fmt.Println(vData)
 	fmt.Println(hex.EncodeToString(vData.RefTxid))
-}
+}*/
