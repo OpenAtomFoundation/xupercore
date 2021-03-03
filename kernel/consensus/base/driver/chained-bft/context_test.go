@@ -1,6 +1,10 @@
 package chained_bft
 
-import "testing"
+import (
+	"testing"
+
+	mock "github.com/xuperchain/xupercore/bcs/consensus/mock"
+)
 
 func initQcTree() *QCPendingTree {
 	initQC := &QuorumCert{
@@ -20,6 +24,7 @@ func initQcTree() *QCPendingTree {
 		Root:     rootNode,
 		HighQC:   rootNode,
 		CommitQC: rootNode,
+		Log:      mock.NewFakeLogger(),
 	}
 }
 
