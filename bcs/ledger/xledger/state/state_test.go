@@ -1,6 +1,6 @@
 package state
 
-import (
+/*import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -561,46 +561,4 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal("CreateSnapshot fail")
 	}
-}
-
-type testOutput struct {
-	Outputs string `json:"outputs"`
-	GasUsed uint64 `json:"gasused"`
-	Error   error  `json:"error"`
-}
-
-func (to *testOutput) Decode(data []byte) error {
-	return json.Unmarshal(data, to)
-}
-
-func (to *testOutput) Encode() ([]byte, error) {
-	return json.Marshal(to)
-}
-
-/*
-func (to *testOutput) Decode(data []byte) error {
-    // return json.Unmarshal(data, to)
-    return nil
 }*/
-
-func (to *testOutput) GetGasUsed() uint64 {
-	return to.GasUsed
-}
-
-func (to *testOutput) Digest() ([]byte, error) {
-	buf := new(bytes.Buffer)
-	encoder := json.NewEncoder(buf)
-	err := encoder.Encode(*to)
-	if err == nil {
-		return hash.DoubleSha256(buf.Bytes()), err
-	}
-	return nil, err
-}
-
-func (to *testOutput) GetTxGeneratedByContract() ([]*pb.Transaction, error) {
-	return nil, nil
-}
-
-func (to *testOutput) VerifyTxGeneratedByContract(block *pb.InternalBlock, tx *pb.Transaction, idx int) (int, error) {
-	return idx, nil
-}

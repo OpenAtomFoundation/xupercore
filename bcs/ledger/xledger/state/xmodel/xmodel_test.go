@@ -1,6 +1,6 @@
 package xmodel
 
-import (
+/*import (
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -131,4 +131,4 @@ func TestBaiscFunc(t *testing.T) {
 		t.Fatal("unexpected", validKvCount)
 	}
 	ledger.Close()
-}
+}*/
