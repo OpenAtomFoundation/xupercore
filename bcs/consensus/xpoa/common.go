@@ -21,6 +21,8 @@ const (
 	contractGetValidates = "getValidates"
 	contractEditValidate = "editValidates"
 
+	fee = 1000
+
 	statusOK         = 200
 	statusBadRequest = 400
 	statusErr        = 500
