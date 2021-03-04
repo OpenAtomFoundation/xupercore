@@ -7,6 +7,7 @@ TESTNETDIR := $(HOMEDIR)/testnet
 export GO111MODULE=on
 X_ROOT_PATH := $(HOMEDIR)
 export X_ROOT_PATH
+export PATH := $(HOMEDIR):$(PATH)
 
 # make, make all
 all: clean compile
