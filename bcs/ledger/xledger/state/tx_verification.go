@@ -513,6 +513,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 
 	contextConfig := &contract.ContextConfig{
 		State:        sandBox,
+		Core:         t,
 		Initiator:    tx.GetInitiator(),
 		AuthRequire:  tx.GetAuthRequire(),
 	}
@@ -703,6 +704,10 @@ func (t *State) removeDuplicateUser(initiator string, authRequire []string) []st
 		dupCheck[user] = true
 	}
 	return finalUsers
+}
+
+func (t *State) GetAccountAddresses(accountName string) ([]string, error) {
+    return t.sctx.AclMgr.GetAccountAddresses(accountName)
 }
 
 // VerifyContractPermission implement Contract ChainCore, used to verify contract permission while contract running

@@ -172,6 +172,7 @@ func (c *SyscallService) ContractCall(ctx context.Context, in *pb.ContractCallRe
 	cfg := &contract.ContextConfig{
 		ContractName:   in.GetContract(),
 		State:          nctx.State,
+		Core:           nctx.Core,
 		CanInitialize:  false,
 		AuthRequire:    nctx.AuthRequire,
 		Initiator:      nctx.Initiator,

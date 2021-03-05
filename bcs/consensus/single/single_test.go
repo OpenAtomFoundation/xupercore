@@ -11,11 +11,11 @@ import (
 )
 
 func getSingleConsensusConf() []byte {
-	c := SingleConfig{
-		Miner:   bmock.Miner,
-		Period:  3000,
-		Version: 0,
-	}
+	c := map[string]string {
+	    "version": "0",
+	    "miner": bmock.Miner,
+	    "period": "3000",
+    }
 	j, _ := json.Marshal(c)
 	return j
 }
