@@ -6,14 +6,6 @@ XuperCore定位为广域场景适用、高可扩展、超高性能、自由开�
 
 XuperCore是XuperChain技术体系的基础内核，基于XuperCore构建的区块链标准发行版XuperChain和XuperOS，在多行业、多场景得到了落地验证。
 
-## 系统结构
-
-![jiagou](https://raw.githubusercontent.com/xuperchain/xupercore/master/docs/images/jiagou.png)
-
-## 内核框架
-
-![kernel](https://raw.githubusercontent.com/xuperchain/xupercore/master/docs/images/kernel.png)
-
 # 快速使用
 
 开发链可参考基于XuperCore实现的标准发行版XuperOS项目。工具和文档在建设中，敬请期待。
