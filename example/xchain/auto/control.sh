@@ -15,6 +15,8 @@ ConfDir="$Pwd/conf"
 AppConf="env.yaml"
 RootChainDir="$Pwd/data/blockchain/xuper"
 
+export PATH="$Pwd/bin":$PATH
+
 # check param
 [ -f "$ConfDir/$AppConf" ] || { echo "env.yaml not exist!"; exit 1; }
 
@@ -72,7 +74,7 @@ start() {
     waitRun
     if [ "$?" != "0" ]; then
         echo "start timeout,force stop app."
-        forceStop
+        forcestop
         echo "start fail."
         exit 1
     fi
