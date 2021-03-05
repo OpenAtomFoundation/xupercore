@@ -1257,6 +1257,11 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 	return false, nil
 }
 
+// WaitBlockHeight wait util the height of current block >= target
+func (t *State) WaitBlockHeight(target int64) int64 {
+    return t.heightNotifier.WaitHeight(target)
+}
+
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
 	return xmodel.GenWriteKeyWithPrefix(txOutputExt)
 }
