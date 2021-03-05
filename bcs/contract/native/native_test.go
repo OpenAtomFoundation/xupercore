@@ -1,21 +1,21 @@
 package native
 
 import (
-	"encoding/json"
+	//"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"testing"
+	//"testing"
 
-	"github.com/golang/protobuf/proto"
+	//"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"
-	"github.com/xuperchain/xupercore/protos"
+	//"github.com/xuperchain/xupercore/protos"
 )
 
 type testHelper struct {
@@ -100,7 +100,7 @@ func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authR
 	panic("not implemented") // TODO: Implement
 }
 
-func TestDeployNative(t *testing.T) {
+/*func TestDeployNative(t *testing.T) {
 	th := newTestHelper()
 	defer th.Close()
 
@@ -166,4 +166,4 @@ func TestDeployNative(t *testing.T) {
 	t.Logf("%#v", resp)
 	ctx.Release()
 
-}
+}*/

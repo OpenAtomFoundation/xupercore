@@ -18,6 +18,8 @@ type xpoaSchedule struct {
 	blockNum int64
 	// 当前validators的address
 	validators []string
+	// 存储初始值
+	initValidators []string
 
 	ledger    cctx.LedgerRely
 	enableBFT bool
@@ -83,9 +85,9 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		return nil, err
 	}
 	res, err := reader.Get(contractBucket, []byte(validateKeys))
-	if res == nil || res.PureData.Value == nil {
+	if res != nil && res.PureData.Value == nil {
 		// 即合约还未被调用，未有变量更新
-		return s.validators, nil
+		return s.initValidators, nil
 	}
 	if err != nil {
 		s.log.Error("Xpoa::getValidatesByBlockId::reader Get error.", "err", err)
