@@ -528,7 +528,7 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 
 	// 由于这里操作不是原子操作，需要保持按回滚顺序delete
 	for _, tx := range undoList {
-		t.tx.UnconfirmTxInMem.Delete(tx.Txid)
+		t.tx.UnconfirmTxInMem.Delete(string(tx.Txid))
 		t.log.Trace("delete from unconfirm tx memory", "txid", utils.F(tx.Txid))
 	}
 	return undoDone, undoList, nil
