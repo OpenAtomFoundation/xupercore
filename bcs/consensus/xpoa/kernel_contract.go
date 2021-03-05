@@ -43,19 +43,33 @@ func (x *xpoaConsensus) methodEditValidates(contractCtx contract.KContext) (*con
 	if err := contractCtx.Put(contractBucket, []byte(validateKeys), rawBytes); err != nil {
 		return NewContractErrResponse(statusErr, err.Error()), err
 	}
+	delta := contract.Limits{
+		XFee: fee,
+	}
+	contractCtx.AddResourceUsed(delta)
 	return NewContractOKResponse(rawBytes), nil
 }
 
 // methodGetValidates 候选人获取
 // Return: validates::候选人钱包地址
 func (x *xpoaConsensus) methodGetValidates(contractCtx contract.KContext) (*contract.Response, error) {
-	originValidators := x.election.GetValidators(x.election.ledger.GetTipBlock().GetHeight())
-	returnV := map[string][]string{
-		"validators": originValidators,
-	}
-	jsonBytes, err := json.Marshal(returnV)
+	var jsonBytes []byte
+	validatesBytes, err := contractCtx.Get(contractBucket, []byte(validateKeys))
 	if err != nil {
-		return NewContractErrResponse(statusErr, err.Error()), err
+		originValidators := x.election.GetValidators(x.election.ledger.GetTipBlock().GetHeight())
+		returnV := map[string][]string{
+			"validators": originValidators,
+		}
+		jsonBytes, err = json.Marshal(returnV)
+		if err != nil {
+			return NewContractErrResponse(statusErr, err.Error()), err
+		}
+	} else {
+		jsonBytes = validatesBytes
 	}
+	delta := contract.Limits{
+		XFee: fee / 1000,
+	}
+	contractCtx.AddResourceUsed(delta)
 	return NewContractOKResponse(jsonBytes), nil
 }
