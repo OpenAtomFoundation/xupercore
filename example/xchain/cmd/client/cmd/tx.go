@@ -3,6 +3,7 @@ package cmd
 import (
 	txcmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/tx"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -17,7 +18,7 @@ func GetTxCmd() *TxCmd {
 	txCmdIns.Cmd = &cobra.Command{
 		Use:           "tx",
 		Short:         "Transaction query operation.",
-		Example:       "xchain-cli tx query -t txid",
+		Example:       xdef.CmdLineName + " tx query -t txid",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/xchain/cmd"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -28,12 +29,12 @@ func main() {
 
 func NewServiceCommand() (*cobra.Command, error) {
 	rootCmd := &cobra.Command{
-		Use:           "xchain <command> [arguments]",
-		Short:         "xchain is a blockchain network building service.",
-		Long:          "xchain is a blockchain network building service.",
+		Use:           xdef.ServerName + " <command> [arguments]",
+		Short:         xdef.ServerName + " is a blockchain network building service.",
+		Long:          xdef.ServerName + " is a blockchain network building service.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Example:       "xchain startup --conf /home/rd/xchain/conf/env.yaml",
+		Example:       xdef.ServerName + " startup --conf /home/rd/xuperos/conf/env.yaml",
 	}
 
 	// cmd service
@@ -54,7 +55,7 @@ func GetVersionCmd() *versionCmd {
 	subCmd := &cobra.Command{
 		Use:     "version",
 		Short:   "view process version information.",
-		Example: "xchain version",
+		Example: xdef.ServerName + " version",
 		Run: func(cmd *cobra.Command, args []string) {
 			versionCmdIns.PrintVersion()
 		},
