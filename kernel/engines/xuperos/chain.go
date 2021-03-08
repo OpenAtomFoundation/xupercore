@@ -140,11 +140,11 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 
 	core := agent.NewChainCoreAgent(t.ctx)
 	contextConfig := &contract.ContextConfig{
-	    Core:           core,
-		State:     		sandbox,
-		Initiator:  	initiator,
-		AuthRequire:	authRequires,
-		ResourceLimits:	contract.MaxLimits,
+		Core:           core,
+		State:          sandbox,
+		Initiator:      initiator,
+		AuthRequire:    authRequires,
+		ResourceLimits: contract.MaxLimits,
 	}
 
 	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
@@ -217,12 +217,12 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 
 	rwSet := sandbox.RWSet()
 	invokeResponse := &protos.InvokeResponse{
-		GasUsed:     gasUsed,
-		Response:    responseBodes,
-		Inputs:      xmodel.GetTxInputs(rwSet.RSet),
-		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
-		Requests:    requests,
-		Responses:   responses,
+		GasUsed:   gasUsed,
+		Response:  responseBodes,
+		Inputs:    xmodel.GetTxInputs(rwSet.RSet),
+		Outputs:   xmodel.GetTxOutputs(rwSet.WSet),
+		Requests:  requests,
+		Responses: responses,
 		// TODO: 合约内转账未实现，空值
 		//UtxoInputs:  utxoInputs,
 		//UtxoOutputs: utxoOutputs,
@@ -239,12 +239,12 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	log := ctx.GetLog()
 
 	// 无币化
-    if len(tx.TxInputs) == 0 && !t.ctx.Ledger.GetNoFee() {
-        ctx.GetLog().Warn("PostTx TxInputs can not be null while need utxo")
-        return common.ErrTxNotEnough
-    }
+	if len(tx.TxInputs) == 0 && !t.ctx.Ledger.GetNoFee() {
+		ctx.GetLog().Warn("PostTx TxInputs can not be null while need utxo")
+		return common.ErrTxNotEnough
+	}
 
-    // 防止重复提交交易
+	// 防止重复提交交易
 	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
 		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
 		return common.ErrTxAlreadyExist
@@ -374,6 +374,28 @@ func (t *Chain) initChainCtx() error {
 	}
 	t.ctx.Consensus = cons
 	t.log.Trace("create consensus succ", "bcName", t.ctx.BCName)
+
+	// 8.提案
+	proposalObj, err := t.relyAgent.CreateProposal()
+	if err != nil {
+		t.log.Error("create proposal error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create proposal error")
+	}
+	t.ctx.Proposal = proposalObj
+	// 设置proposal manager到状态机
+	t.ctx.State.SetProposalMG(t.ctx.Proposal)
+	t.log.Trace("create proposal succ", "bcName", t.ctx.BCName)
+
+	// 9.提案
+	timerObj, err := t.relyAgent.CreateTimerTask()
+	if err != nil {
+		t.log.Error("create timer_task error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create timer_task error")
+	}
+	t.ctx.TimerTask = timerObj
+	// 设置timer manager到状态机
+	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
+	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
 
 	return nil
 }

@@ -256,12 +256,16 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	}
 	ctx.GetLog().Debug("pack block get max size succ", "sizeLimit", sizeLimit)
 
-	// 1.查询timer异步交易
-	timerTxList, err := t.getTimerTx(height)
-	for _, tx := range timerTxList {
-		sizeLimit -= proto.Size(tx)
+	// 1.生成timer交易
+	autoTx, err := t.getTimerTx(height)
+	if err != nil {
+		return nil, err
 	}
-	ctx.GetLog().Debug("pack block get timer tx succ", "txCount", len(timerTxList))
+	if autoTx != nil {
+		sizeLimit -= proto.Size(autoTx)
+	}
+
+	ctx.GetLog().Debug("pack block get timer tx succ", "auto tx", autoTx)
 
 	// 2.选择本次要打包的tx
 	generalTxList, err := t.getUnconfirmedTx(sizeLimit)
@@ -279,8 +283,8 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 
 	txList := make([]*lpb.Transaction, 0)
 	txList = append(txList, awardTx)
-	if len(timerTxList) > 0 {
-		txList = append(txList, timerTxList...)
+	if autoTx != nil {
+		txList = append(txList, autoTx)
 	}
 	if len(generalTxList) > 0 {
 		txList = append(txList, generalTxList...)
@@ -318,8 +322,14 @@ func (t *Miner) convertConsData(data []byte) (*agent.ConsensusStorage, error) {
 	return &consInfo, nil
 }
 
-func (t *Miner) getTimerTx(height int64) ([]*lpb.Transaction, error) {
-	return nil, nil
+func (t *Miner) getTimerTx(height int64) (*lpb.Transaction, error) {
+	autoTx, err := t.ctx.State.GetTimerTx(height)
+	if err != nil {
+		t.log.Error("Get timer tx error", "error", err)
+		return nil, common.ErrGenerateTimerTxFailed
+	}
+
+	return autoTx, nil
 }
 
 func (t *Miner) getUnconfirmedTx(sizeLimit int) ([]*lpb.Transaction, error) {

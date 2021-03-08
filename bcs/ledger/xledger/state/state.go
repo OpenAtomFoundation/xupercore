@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -22,6 +23,8 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
+	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -154,6 +157,14 @@ func (t *State) SetAclMG(aclMgr aclBase.AclManager) {
 
 func (t *State) SetContractMG(contractMgr contract.Manager) {
 	t.sctx.SetContractMG(contractMgr)
+}
+
+func (t *State) SetProposalMG(proposalMgr propose.ProposeManager) {
+	t.sctx.SetProposalMG(proposalMgr)
+}
+
+func (t *State) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
+	t.sctx.SetTimerTaskMG(timerTaskMgr)
 }
 
 // 选择足够金额的utxo
@@ -439,8 +450,15 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 		return err
 	}
 
+	// 获取定时任务
+	autoGenTx, genErr := t.GetTimerTx(block.Height)
+	if genErr != nil {
+		t.log.Warn("get timer tasks failed", "err", genErr)
+		return genErr
+	}
+
 	// parallel verify
-	verifyErr := t.verifyBlockTxs(block, isRootTx, unconfirmToConfirm)
+	verifyErr := t.verifyBlockTxs(block, isRootTx, unconfirmToConfirm, autoGenTx)
 	if verifyErr != nil {
 		t.log.Warn("verifyBlockTx error ", "err", verifyErr)
 		return verifyErr
@@ -495,6 +513,77 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.log.Debug("paly and repost succ", "blockId", utils.F(block.Blockid))
 
 	return nil
+}
+
+func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
+	stateConfig := &contract.SandboxConfig{
+		XMReader: t.CreateXMReader(),
+	}
+	if !t.sctx.IsInit() {
+		return nil, nil
+	}
+	t.log.Info("GetTimerTx", "blockHeight", blockHeight)
+	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(stateConfig)
+	if err != nil {
+		t.log.Error("PreExec new state sandbox error", "error", err)
+		return nil, err
+	}
+
+	contextConfig := &contract.ContextConfig{
+		State:       sandBox,
+		Initiator:   "",
+		AuthRequire: nil,
+	}
+
+	args := make(map[string][]byte)
+	args["block_height"] = []byte(strconv.FormatInt(blockHeight, 10))
+	req := protos.InvokeRequest{
+		ModuleName:   "xkernel",
+		ContractName: "$timer_task",
+		MethodName:   "Do",
+		Args:         args,
+	}
+
+	contextConfig.ResourceLimits = contract.MaxLimits
+	contextConfig.Module = req.ModuleName
+	contextConfig.ContractName = req.GetContractName()
+
+	ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
+	if err != nil {
+		t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", req.GetContractName())
+		return nil, err
+	}
+
+	ctxResponse, ctxErr := ctx.Invoke(req.MethodName, req.Args)
+	if ctxErr != nil {
+		ctx.Release()
+		t.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", req.GetContractName())
+		return nil, ctxErr
+	}
+	// 判断合约调用的返回码
+	if ctxResponse.Status >= 400 {
+		ctx.Release()
+		t.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", req.GetContractName())
+		return nil, errors.New(ctxResponse.Message)
+	}
+
+	ctx.Release()
+
+	rwSet := sandBox.RWSet()
+	if rwSet == nil {
+		return nil, nil
+	}
+	inputs := xmodel.GetTxInputs(rwSet.RSet)
+	outputs := xmodel.GetTxOutputs(rwSet.WSet)
+
+	autoTx, err := tx.GenerateAutoTxWithRWSets(inputs, outputs)
+	if err != nil {
+		return nil, err
+	}
+
+	t.log.Trace("verifyTxRWSets", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
+
+	return autoTx, nil
 }
 
 // 回滚全部未确认交易

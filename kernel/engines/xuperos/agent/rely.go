@@ -15,6 +15,8 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	cdef "github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
+	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -168,4 +170,38 @@ func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, er
 	}
 
 	return cons, nil
+}
+
+// 创建提案实例
+func (t *ChainRelyAgentImpl) CreateProposal() (propose.ProposeManager, error) {
+	ctx := t.chain.Context()
+	legAgent := NewLedgerAgent(ctx)
+	proposalCtx, err := propose.NewProposeCtx(ctx.BCName, legAgent, ctx.Contract)
+	if err != nil {
+		return nil, fmt.Errorf("create proposal ctx failed.err:%v", err)
+	}
+
+	proposalObj, err := propose.NewProposeManager(proposalCtx)
+	if err != nil {
+		return nil, fmt.Errorf("create proposal instance failed.err:%v", err)
+	}
+
+	return proposalObj, nil
+}
+
+// 创建定时器任务实例
+func (t *ChainRelyAgentImpl) CreateTimerTask() (timerTask.TimerManager, error) {
+	ctx := t.chain.Context()
+	legAgent := NewLedgerAgent(ctx)
+	timerCtx, err := timerTask.NewTimerTaskCtx(ctx.BCName, legAgent, ctx.Contract)
+	if err != nil {
+		return nil, fmt.Errorf("create timer_task ctx failed.err:%v", err)
+	}
+
+	timerObj, err := timerTask.NewTimerTaskManager(timerCtx)
+	if err != nil {
+		return nil, fmt.Errorf("create timer_task instance failed.err:%v", err)
+	}
+
+	return timerObj, nil
 }
