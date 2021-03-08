@@ -170,6 +170,7 @@ func (c *SyscallService) ContractCall(ctx context.Context, in *pb.ContractCallRe
 
 	nctx.ContractSet[in.GetContract()] = true
 	cfg := &contract.ContextConfig{
+		Module:         in.GetModule(),
 		ContractName:   in.GetContract(),
 		State:          nctx.State,
 		Core:           nctx.Core,
