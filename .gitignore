@@ -3,9 +3,8 @@ plugins/
 output/
 test/
 testnet/
-xvm/compile/wabt/build/
-contractsdk/cpp/build
-event_client
+logs/
+.compile_cache
 
 # Compiled source
 *.com

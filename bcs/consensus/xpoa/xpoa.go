@@ -77,6 +77,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	for _, v := range xconfig.InitProposer {
 		validators = append(validators, v.Address)
 	}
+	schedule.initValidators = validators
 	reader, _ := schedule.ledger.GetTipXMSnapshotReader()
 	res, err := reader.Get(contractBucket, []byte(validateKeys))
 	if snapshotValidators, _ := loadValidatorsMultiInfo(res); snapshotValidators != nil {
@@ -197,11 +198,17 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	// 兼容老的结构
 	justify, err := common.OldQCToNew(justifyBytes)
 	if err != nil {
-		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err, "blockId", utils.F(block.GetBlockid()))
+		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err,
+			"blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
 	pNode := x.smr.BlockToProposalNode(block)
-	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify, x.election.GetValidators(block.GetHeight()))
+	if pNode == nil {
+		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::BlockToProposalNode error.", "logid", ctx.GetLog().GetLogId(),
+			"blockId", utils.F(block.GetBlockid()), "preBlockId", utils.F(block.GetPreHash()))
+		return false, err
+	}
+	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify, x.election.GetValidators(justify.GetProposalView()))
 	if err != nil {
 		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "logid", ctx.GetLog().GetLogId(),
 			"proposalQC:[height]", pNode.In.GetProposalView(), "proposalQC:[id]", utils.F(pNode.In.GetProposalId()),
@@ -247,7 +254,8 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 					// 本地HighQC回滚错误直接退出
 					return nil, err
 				}
-				return x.smr.GetGenericQC().GetProposalId(), nil
+				// 此时HighQC已经变化
+				return x.smr.GetHighQC().GetProposalId(), nil
 			}
 			// 2. 账本高度更高时，裁剪账本
 			return x.smr.GetHighQC().GetProposalId(), nil
