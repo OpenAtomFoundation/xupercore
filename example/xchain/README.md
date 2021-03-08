@@ -1,4 +1,4 @@
-# XuperChain xchain
+# Xchain
 
 Xchain提供基于XuperCore动态内核技术实现区块链发行版示例。
 

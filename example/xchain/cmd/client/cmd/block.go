@@ -3,6 +3,7 @@ package cmd
 import (
 	blkcmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/block"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -17,7 +18,7 @@ func GetBlockCmd() *BlockCmd {
 	blockCmdIns.Cmd = &cobra.Command{
 		Use:           "block",
 		Short:         "Block info query operation.",
-		Example:       "xchain-cli block query [block_id]",
+		Example:       xdef.CmdLineName + " block query [block_id]",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

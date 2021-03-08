@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	sconf "github.com/xuperchain/xupercore/example/xchain/common/config"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 	"github.com/xuperchain/xupercore/example/xchain/service"
 	econf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
@@ -43,7 +44,7 @@ func GetStartupCmd() *StartupCmd {
 	startupCmdIns.Cmd = &cobra.Command{
 		Use:           "startup",
 		Short:         "Start up the blockchain node service.",
-		Example:       "xchain startup --conf /home/rd/xuperos/conf/env.yaml",
+		Example:       xdef.ServerName + " startup --conf /home/rd/xuperos/conf/env.yaml",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
