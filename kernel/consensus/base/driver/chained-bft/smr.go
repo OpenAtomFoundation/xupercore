@@ -340,7 +340,8 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			VoteInfo:  newVote,
 			SignInfos: []*chainedBftPb.QuorumCertSign{newProposalMsg.GetSign()},
 		}, parentQC, s.Election.GetValidators(parentQC.GetProposalView())); err != nil {
-			s.log.Error("smr::handleReceivedProposal::CheckProposal error", "error", err)
+			s.log.Error("smr::handleReceivedProposal::CheckProposal error", "error", err,
+				"parentView", parentQC.GetProposalView(), "parentId", utils.F(parentQC.GetProposalId()))
 			return
 		}
 	}

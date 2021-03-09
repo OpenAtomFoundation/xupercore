@@ -221,6 +221,18 @@ func (c *FakeKContext) AuthRequire() []string {
 	return nil
 }
 
+func (c *FakeKContext) GetAccountAddresses(accountName string) ([]string, error) {
+	return nil, nil
+}
+
+func (c *FakeKContext) VerifyContractPermission(initiator string, authRequire []string, contractName string, methodName string) (bool, error) {
+	return true, nil
+}
+
+func (c *FakeKContext) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
+	return nil
+}
+
 func (c *FakeKContext) RWSet() *contract.RWSet {
 	return nil
 }

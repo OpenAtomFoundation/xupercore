@@ -20,14 +20,13 @@ var (
 )
 
 func getPoWConsensusConf() []byte {
-	c := map[string]interface{}{
-		"defaultTarget":   "419668748",
-		"adjustHeightGap": "1",
-		"expectedPeriod":  "3000",
-		"maxTarget":       "0",
-	}
-	j, _ := json.Marshal(c)
-	return j
+	j := `{
+        	"defaultTarget": "419668748",
+        	"adjustHeightGap": "1",
+			"expectedPeriod":  "3000",
+			"maxTarget":       "0"
+    	}`
+	return []byte(j)
 }
 
 func prepare() (*cctx.ConsensusCtx, error) {
@@ -41,7 +40,7 @@ func getConsensusConf() def.ConsensusConfig {
 	return def.ConsensusConfig{
 		ConsensusName: "pow",
 		Config:        string(getPoWConsensusConf()),
-		StartHeight:   1,
+		StartHeight:   2,
 		Index:         0,
 	}
 }
@@ -89,7 +88,7 @@ func TestGetConsensusStatus(t *testing.T) {
 		t.Error("GetStepConsensusIndex error")
 		return
 	}
-	if status.GetConsensusBeginInfo() != 1 {
+	if status.GetConsensusBeginInfo() != 2 {
 		t.Error("GetConsensusBeginInfo error")
 		return
 	}
@@ -98,14 +97,14 @@ func TestGetConsensusStatus(t *testing.T) {
 		return
 	}
 	vb := status.GetCurrentValidatorsInfo()
-	m := MinerInfo{}
+	m := ValidatorsInfo{}
 	err = json.Unmarshal(vb, &m)
 	if err != nil {
 		t.Error("GetCurrentValidatorsInfo unmarshal error", "error", err)
 		return
 	}
-	if m.Address != bmock.Miner {
-		t.Error("GetCurrentValidatorsInfo error", "address", m.Address)
+	if m.Validators[0] != bmock.Miner {
+		t.Error("GetCurrentValidatorsInfo error", "address", m.Validators[0])
 	}
 }
 
@@ -202,7 +201,6 @@ func TestIsProofed(t *testing.T) {
 }
 
 func TestMining(t *testing.T) {
-	t.Log("NewBlockWithStorage error")
 	cCtx, err := prepare()
 	if err != nil {
 		t.Error("prepare error", err)
@@ -220,7 +218,7 @@ func TestMining(t *testing.T) {
 		TargetBits: minTarget,
 	}
 	by, _ := json.Marshal(ps)
-	B, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, by)
+	B, err := bmock.NewBlockWithStorage(3, cCtx.Crypto, cCtx.Address, by)
 	if err != nil {
 		t.Error("NewBlockWithStorage error", err)
 		return
@@ -261,7 +259,7 @@ func TestRefreshDifficulty(t *testing.T) {
 		TargetBits: minTarget,
 	}
 	by, _ := json.Marshal(ps)
-	B1, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, by)
+	B1, err := bmock.NewBlockWithStorage(3, cCtx.Crypto, cCtx.Address, by)
 	if err != nil {
 		t.Error("NewBlockWithStorage error", err)
 		return
@@ -276,7 +274,7 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("TestRefreshDifficulty put B1 err", "err", err)
 		return
 	}
-	B2, err := bmock.NewBlockWithStorage(1, cCtx.Crypto, cCtx.Address, by)
+	B2, err := bmock.NewBlockWithStorage(4, cCtx.Crypto, cCtx.Address, by)
 	if err != nil {
 		t.Error("NewBlockWithStorage error", err)
 		return
@@ -292,7 +290,7 @@ func TestRefreshDifficulty(t *testing.T) {
 		return
 	}
 
-	target, err := powC.refreshDifficulty(B2.GetBlockid(), 3)
+	target, err := powC.refreshDifficulty(B2.GetBlockid(), 5)
 	if err != nil {
 		t.Error("TestRefreshDifficulty refreshDifficulty err", "err", err, "target", target)
 		return

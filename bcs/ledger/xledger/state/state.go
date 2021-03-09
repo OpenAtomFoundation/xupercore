@@ -528,7 +528,7 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 
 	// 由于这里操作不是原子操作，需要保持按回滚顺序delete
 	for _, tx := range undoList {
-		t.tx.UnconfirmTxInMem.Delete(tx.Txid)
+		t.tx.UnconfirmTxInMem.Delete(string(tx.Txid))
 		t.log.Trace("delete from unconfirm tx memory", "txid", utils.F(tx.Txid))
 	}
 	return undoDone, undoList, nil
@@ -1239,6 +1239,7 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 	contextConfig := &contract.ContextConfig{
 		State:          sandBox,
+		Core:           t,
 		ResourceLimits: contract.MaxLimits,
 		ContractName:   request.GetContractName(),
 	}
@@ -1255,6 +1256,11 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 	}
 	ctx.Release()
 	return false, nil
+}
+
+// WaitBlockHeight wait util the height of current block >= target
+func (t *State) WaitBlockHeight(target int64) int64 {
+    return t.heightNotifier.WaitHeight(target)
 }
 
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {

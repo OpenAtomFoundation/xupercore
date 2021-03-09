@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -187,7 +188,7 @@ func NewSMR(node string, log logs.Logger, p2p network.Network) *chainedBft.Smr {
 	election := &ElectionA{
 		addrs: []string{NodeA, NodeB, NodeC},
 	}
-	s := chainedBft.NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q)
+	s := chainedBft.NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q, nil)
 	if s == nil {
 		return nil
 	}
@@ -236,7 +237,7 @@ func CompeteLoop(smr *chainedBft.Smr, log logs.Logger, validators []string) {
 			}
 			continue
 		}
-		if err := smr.ProcessProposal(smr.GetCurrentView(), []byte(string(smr.GetCurrentView())), validators); err != nil {
+		if err := smr.ProcessProposal(smr.GetCurrentView(), []byte(fmt.Sprint((smr.GetCurrentView()))), validators); err != nil {
 			log.Error("Smr ProcessProposal error", "error", err)
 		}
 	}

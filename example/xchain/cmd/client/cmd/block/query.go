@@ -6,6 +6,7 @@ import (
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/client"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -21,7 +22,7 @@ func GetQueryBlockCmd() *QueryBlockCmd {
 	queryBlockCmdIns.Cmd = &cobra.Command{
 		Use:           "query",
 		Short:         "print block details.",
-		Example:       "xchain-cli block query -b [blockId]",
+		Example:       xdef.CmdLineName + " block query -b [blockId]",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

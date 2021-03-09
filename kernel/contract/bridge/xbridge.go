@@ -148,6 +148,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 
 	ctx := v.ctxmgr.MakeContext()
 	ctx.State = ctxCfg.State
+	ctx.Core = ctxCfg.Core
 	ctx.ContractName = ctxCfg.ContractName
 	ctx.Initiator = ctxCfg.Initiator
 	ctx.AuthRequire = ctxCfg.AuthRequire

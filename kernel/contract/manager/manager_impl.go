@@ -2,11 +2,13 @@ package manager
 
 import (
 	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
+	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 )
 
 type managerImpl struct {
@@ -35,9 +37,10 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	xbridge, err := bridge.New(&bridge.XBridgeConfig{
 		Basedir: cfg.Basedir,
 		VMConfigs: map[bridge.ContractType]bridge.VMConfig{
-			// bridge.TypeWasm: &bridge.WasmConfig{
-			// 	Driver: "ixvm",
-			// },
+			bridge.TypeWasm: &bridge.WasmConfig{
+				Driver:        "xvm",
+				EnableUpgrade: true,
+			},
 			bridge.TypeNative: &bridge.NativeConfig{
 				Driver: "native",
 				Enable: true,
@@ -50,6 +53,9 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 				Enable:   true,
 				Registry: &m.kregistry,
 			},
+		},
+		Config: bridge.ContractConfig{
+		    EnableUpgrade: true,
 		},
 		XModel: cfg.XMReader,
 		Core:   cfg.Core,
@@ -77,15 +83,51 @@ func (m *managerImpl) GetKernRegistry() contract.KernRegistry {
 }
 
 func (m *managerImpl) deployContract(ctx contract.KContext) (*contract.Response, error) {
+	// check if account exist
+	accountName := ctx.Args()["account_name"]
+	contractName := ctx.Args()["contract_name"]
+	if accountName == nil || contractName == nil {
+		return nil, errors.New("invoke DeployMethod error, account name or contract name is nil")
+	}
+	// check if contractName is ok
+	if err := contract.ValidContractName(string(contractName)); err != nil {
+		return nil, fmt.Errorf("deploy failed, contract `%s` contains illegal character, error: %s", contractName, err)
+	}
+	_, err := ctx.Get(utils.GetAccountBucket(), accountName)
+	if err != nil {
+		return nil, fmt.Errorf("get account `%s` error: %s", accountName, err)
+	}
+
 	resp, limit, err := m.xbridge.DeployContract(ctx)
 	if err != nil {
 		return nil, err
 	}
 	ctx.AddResourceUsed(limit)
+
+	// key: contract, value: account
+	err = ctx.Put(utils.GetContract2AccountBucket(), contractName, accountName)
+	if err != nil {
+		return nil, err
+	}
+	key := utils.MakeAccountContractKey(string(accountName), string(contractName))
+	err = ctx.Put(utils.GetAccount2ContractBucket(), []byte(key), []byte(utils.GetAccountContractValue()))
+	if err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 
 func (m *managerImpl) upgradeContract(ctx contract.KContext) (*contract.Response, error) {
+	contractName := ctx.Args()["contract_name"]
+	if contractName == nil {
+		return nil, errors.New("invoke Upgrade error, contract name is nil")
+	}
+
+	err := ctx.VerifyContractOwnerPermission(string(contractName), ctx.AuthRequire())
+	if err != nil {
+		return nil, err
+	}
+
 	resp, limit, err := m.xbridge.UpgradeContract(ctx)
 	if err != nil {
 		return nil, err

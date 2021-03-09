@@ -3,6 +3,7 @@ package cmd
 import (
 	//contractcmd "github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd/contract"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -17,7 +18,7 @@ func GetContractCmd() *ContractCmd {
 	contractCmdIns.Cmd = &cobra.Command{
 		Use:           "contract",
 		Short:         "Contract operation.",
-		Example:       "xchain-cli contract invoke [options]",
+		Example:       xdef.CmdLineName + " contract invoke [options]",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

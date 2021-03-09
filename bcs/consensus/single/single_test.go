@@ -11,11 +11,11 @@ import (
 )
 
 func getSingleConsensusConf() []byte {
-	c := SingleConfig{
-		Miner:   bmock.Miner,
-		Period:  3000,
-		Version: 0,
-	}
+	c := map[string]string {
+	    "version": "0",
+	    "miner": bmock.Miner,
+	    "period": "3000",
+    }
 	j, _ := json.Marshal(c)
 	return j
 }
@@ -89,13 +89,13 @@ func TestGetConsensusStatus(t *testing.T) {
 		return
 	}
 	vb := status.GetCurrentValidatorsInfo()
-	m := MinerInfo{}
+	m := ValidatorsInfo{}
 	err = json.Unmarshal(vb, &m)
 	if err != nil {
 		t.Error("GetCurrentValidatorsInfo unmarshal error", "error", err)
 		return
 	}
-	if m.Miner != bmock.Miner {
+	if m.Validators[0] != bmock.Miner {
 		t.Error("GetCurrentValidatorsInfo error", "m", m, "vb", vb)
 	}
 }

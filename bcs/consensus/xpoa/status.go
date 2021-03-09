@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+type ValidatorsInfo struct {
+	Validators []string `json:"validators"`
+}
+
 // xpoaStatus 实现了ConsensusStatus接口
 type XpoaStatus struct {
 	Version     int64 `json:"version"`
@@ -41,20 +45,9 @@ func (x *XpoaStatus) GetCurrentTerm() int64 {
 
 // 获取当前矿工信息
 func (x *XpoaStatus) GetCurrentValidatorsInfo() []byte {
-	var v []*ProposerInfo
-	for _, a := range x.election.validators {
-		v = append(v, &ProposerInfo{
-			Address: a,
-			Neturl:  x.election.addrToNet[a],
-		})
-	}
 	i := ValidatorsInfo{
-		Validators: v,
+		Validators: x.election.validators,
 	}
 	b, _ := json.Marshal(i)
 	return b
-}
-
-type ValidatorsInfo struct {
-	Validators []*ProposerInfo `json:"validators"`
 }

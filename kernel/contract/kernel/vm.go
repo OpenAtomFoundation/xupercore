@@ -8,17 +8,19 @@ import (
 
 type kernvm struct {
 	registry contract.KernRegistry
+	config   *bridge.InstanceCreatorConfig
 }
 
 func newKernvm(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
 	return &kernvm{
 		registry: config.VMConfig.(*bridge.XkernelConfig).Registry,
+		config:   config,
 	}, nil
 }
 
 // CreateInstance instances a wasm virtual machine instance which can run a single contract call
 func (k *kernvm) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {
-	return newKernInstance(ctx, k.registry), nil
+	return newKernInstance(ctx, k.config.SyscallService, k.registry), nil
 }
 
 func (k *kernvm) RemoveCache(name string) {
@@ -30,10 +32,10 @@ type kernInstance struct {
 	registry contract.KernRegistry
 }
 
-func newKernInstance(ctx *bridge.Context, registry contract.KernRegistry) *kernInstance {
+func newKernInstance(ctx *bridge.Context, syscall *bridge.SyscallService, registry contract.KernRegistry) *kernInstance {
 	return &kernInstance{
 		ctx:      ctx,
-		kctx:     newKContext(ctx),
+		kctx:     newKContext(ctx, syscall),
 		registry: registry,
 	}
 }

@@ -90,9 +90,6 @@ type UtxoVM struct {
 	unconfirmTxAmount    int64     // 未确认的Tx数目，用于监控
 	avgDelay             int64     // 平均上链延时
 	bcname               string
-
-	// 最新区块高度通知装置
-	heightNotifier *BlockHeightNotifier
 }
 
 // InboundTx is tx wrapper
@@ -295,7 +292,6 @@ func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmpl
 		cryptoClient:         sctx.Crypt,
 		maxConfirmedDelay:    DefaultMaxConfirmedDelay,
 		bcname:               sctx.BCName,
-		heightNotifier:       NewBlockHeightNotifier(),
 	}
 
 	utxoTotalBytes, findTotalErr := utxoVM.metaHandle.MetaTable.Get([]byte(UTXOTotalKey))
@@ -708,11 +704,6 @@ func (uv *UtxoVM) QueryAccountContainAK(address string) ([]string, error) {
 		return []string{}, it.Error()
 	}
 	return accounts, nil
-}
-
-// WaitBlockHeight wait util the height of current block >= target
-func (uv *UtxoVM) WaitBlockHeight(target int64) int64 {
-	return uv.heightNotifier.WaitHeight(target)
 }
 
 func MakeUtxoKey(key []byte, amount string) *pb.UtxoKey {

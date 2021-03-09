@@ -1,4 +1,4 @@
-package utxo
+package state
 
 import (
 	"testing"

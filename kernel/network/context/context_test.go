@@ -7,7 +7,7 @@ import (
 )
 
 func TestNewNetCtx(t *testing.T) {
-	mock.InitLog()
+	mock.InitLogForTest()
 
 	ecfg, err := mock.NewEnvConfForTest()
 	if err != nil {

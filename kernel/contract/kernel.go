@@ -15,7 +15,10 @@ type KContext interface {
 
 	// 状态修改接口
 	StateSandbox
+	ChainCore
 
 	AddResourceUsed(delta Limits)
 	ResourceLimit() Limits
+
+	Call(module, contract, method string, args map[string][]byte) (*Response, error)
 }

@@ -1,17 +1,18 @@
 package single
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
-	"sync"
-	"time"
+    "bytes"
+    "encoding/json"
+    "errors"
+    "fmt"
+    "strconv"
+    "time"
 
-	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/consensus/base"
-	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
-	"github.com/xuperchain/xupercore/kernel/consensus/def"
+    "github.com/xuperchain/xupercore/kernel/common/xcontext"
+    "github.com/xuperchain/xupercore/kernel/consensus"
+    "github.com/xuperchain/xupercore/kernel/consensus/base"
+    cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+    "github.com/xuperchain/xupercore/kernel/consensus/def"
 )
 
 // 本次single改造支持single的升级，即Miner地址可变
@@ -49,12 +50,13 @@ func NewSingleConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 		cCtx.XLog.Error("Single::NewSingleConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
 		return nil
 	}
-	config := &SingleConfig{}
-	err := json.Unmarshal([]byte(cCfg.Config), config)
-	if err != nil {
-		cCtx.XLog.Error("Single::NewSingleConsensus::single struct unmarshal error", "error", err)
-		return nil
-	}
+
+    config, err := buildConfigs([]byte(cCfg.Config))
+    if err != nil {
+        cCtx.XLog.Error("Single::NewSingleConsensus::single parse config", "error", err)
+        return nil
+    }
+
 	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
 	status := &SingleStatus{
 		startHeight: cCfg.StartHeight,
@@ -173,50 +175,30 @@ type SingleConfig struct {
 	Version int64 `json:"version"`
 }
 
-type SingleStatus struct {
-	startHeight int64
-	mutex       sync.RWMutex
-	newHeight   int64
-	index       int
-	config      *SingleConfig
-}
+func buildConfigs(input []byte) (*SingleConfig, error) {
+    v := make(map[string]string)
+    err := json.Unmarshal(input, &v)
+    if err != nil {
+        return nil, fmt.Errorf("unmarshal single config error")
+    }
 
-// GetVersion 返回pow所在共识version
-func (s *SingleStatus) GetVersion() int64 {
-	return s.config.Version
-}
+    config := &SingleConfig{
+        Miner: v["miner"],
+    }
 
-// GetConsensusBeginInfo 返回该实例初始高度
-func (s *SingleStatus) GetConsensusBeginInfo() int64 {
-	return s.startHeight
-}
+    if v["version"] != "" {
+        config.Version, err = strconv.ParseInt(v["version"], 10, 64)
+        if err != nil {
+            return nil, fmt.Errorf("parse version error: %v, %v", err, v["version"])
+        }
+    }
 
-// GetStepConsensusIndex 获取共识item所在consensus slice中的index
-func (s *SingleStatus) GetStepConsensusIndex() int {
-	return s.index
-}
+    if v["period"] != "" {
+        config.Period, err = strconv.ParseInt(v["period"], 10, 64)
+        if err != nil {
+            return nil, fmt.Errorf("parse period error: %v, %v", err, v["period"])
+        }
+    }
 
-// GetConsensusName 获取共识类型
-func (s *SingleStatus) GetConsensusName() string {
-	return "single"
-}
-
-// GetCurrentTerm 获取当前状态机term
-func (s *SingleStatus) GetCurrentTerm() int64 {
-	s.mutex.RLock()
-	defer s.mutex.RUnlock()
-	return s.newHeight
-}
-
-// GetCurrentValidatorsInfo 获取当前矿工信息
-func (s *SingleStatus) GetCurrentValidatorsInfo() []byte {
-	miner := MinerInfo{
-		Miner: s.config.Miner,
-	}
-	m, _ := json.Marshal(miner)
-	return m
-}
-
-type MinerInfo struct {
-	Miner string `json:"miner"`
+    return config, nil
 }

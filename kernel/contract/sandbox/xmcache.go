@@ -1,8 +1,11 @@
 package sandbox
 
 import (
-	"errors"
-	"math/big"
+    "bytes"
+    "errors"
+    "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+    "math/big"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
@@ -432,24 +435,24 @@ func (xc *XMCache) getWriteSets() []*ledger.PureData {
 // 	return xc.putCrossQueries(xc.crossQueryCache.GetCrossQueryRWSets())
 // }
 
-// // ParseContractEvents parse contract events from tx
-// func ParseContractEvents(tx *pb.Transaction) ([]*pb.ContractEvent, error) {
-// 	var events []*pb.ContractEvent
-// 	for _, out := range tx.GetTxOutputsExt() {
-// 		if out.GetBucket() != TransientBucket {
-// 			continue
-// 		}
-// 		if !bytes.Equal(out.GetKey(), contractEventKey) {
-// 			continue
-// 		}
-// 		err := UnmsarshalMessages(out.GetValue(), &events)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		break
-// 	}
-// 	return events, nil
-// }
+// ParseContractEvents parse contract events from tx
+func ParseContractEvents(tx *lpb.Transaction) ([]*protos.ContractEvent, error) {
+	var events []*protos.ContractEvent
+	for _, out := range tx.GetTxOutputsExt() {
+		if out.GetBucket() != TransientBucket {
+			continue
+		}
+		if !bytes.Equal(out.GetKey(), contractEventKey) {
+			continue
+		}
+		err := xmodel.UnmsarshalMessages(out.GetValue(), &events)
+		if err != nil {
+			return nil, err
+		}
+		break
+	}
+	return events, nil
+}
 
 // // AddEvent add contract event to xmodel cache
 // func (xc *XMCache) AddEvent(events ...*pb.ContractEvent) {
