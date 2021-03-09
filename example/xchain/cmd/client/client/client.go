@@ -7,6 +7,7 @@ import (
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 	"github.com/xuperchain/xupercore/example/xchain/common/xchainpb"
 	"github.com/xuperchain/xupercore/lib/utils"
 
@@ -129,6 +130,6 @@ func (t *XchainClient) QueryTx(txId string) (*xchainpb.QueryTxResp, error) {
 func (t *XchainClient) genReqHeader() *xchainpb.ReqHeader {
 	return &xchainpb.ReqHeader{
 		LogId:    utils.GenLogId(),
-		SelfName: "xchain-cli",
+		SelfName: xdef.CmdLineName,
 	}
 }

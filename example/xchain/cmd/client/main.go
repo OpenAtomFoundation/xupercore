@@ -6,6 +6,7 @@ import (
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/cmd"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -31,12 +32,12 @@ func main() {
 
 func NewClientCommand() (*cobra.Command, error) {
 	rootCmd := &cobra.Command{
-		Use:           "xchain-cli <command> [arguments]",
-		Short:         "xchain-cli is a blockchain terminal client.",
-		Long:          "xchain-cli is a blockchain terminal client.",
+		Use:           xdef.CmdLineName + " <command> [arguments]",
+		Short:         xdef.CmdLineName + " is a blockchain terminal client.",
+		Long:          xdef.CmdLineName + " is a blockchain terminal client.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		Example:       "xchain-cli tx query [txid]",
+		Example:       xdef.CmdLineName + " tx query [txid]",
 	}
 
 	// cmd version
@@ -71,7 +72,7 @@ func GetVersionCmd() *versionCmd {
 	subCmd := &cobra.Command{
 		Use:     "version",
 		Short:   "view process version information.",
-		Example: "xchain version",
+		Example: xdef.CmdLineName + " version",
 		Run: func(cmd *cobra.Command, args []string) {
 			versionCmdIns.PrintVersion()
 		},
