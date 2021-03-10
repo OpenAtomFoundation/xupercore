@@ -113,14 +113,14 @@ func (t *KernMethod) LockGovernTokens(ctx contract.KContext) (*contract.Response
 	fmt.Println(initiator)
 
 	args := ctx.Args()
+	accountBuf := args["from"]
 	amountBuf := args["amount"]
-	lockHeightBuf := args["lock_height"]
-	if amountBuf == nil || lockHeightBuf == nil {
-		return nil, fmt.Errorf("lock gov tokens failed, amount is nil or lock_height name is nil")
+	lockHeightBuf := args["period"]
+	lockIDBuf := args["lock_id"]
+	lockTypeBuf := args["lock_type"]
+	if accountBuf == nil || amountBuf == nil || lockHeightBuf == nil || lockIDBuf == nil || lockTypeBuf == nil {
+		return nil, fmt.Errorf("lock gov tokens failed, account, amount, lock_height, lock_id or lock_type is nil")
 	}
-
-	//amount := string(amountBuf)
-	//lockHeight := string(lockHeightBuf)
 
 	delta := contract.Limits{
 		XFee: t.NewGovResourceAmount / 1000,

@@ -376,6 +376,17 @@ func (t *Chain) initChainCtx() error {
 	t.log.Trace("create consensus succ", "bcName", t.ctx.BCName)
 
 	// 8.提案
+	governTokenObj, err := t.relyAgent.CreateGovernToken()
+	if err != nil {
+		t.log.Error("create govern token error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create govern token error")
+	}
+	t.ctx.GovernToken = governTokenObj
+	// 设置govern token manager到状态机
+	t.ctx.State.SetGovernTokenMG(t.ctx.GovernToken)
+	t.log.Trace("create govern token succ", "bcName", t.ctx.BCName)
+
+	// 9.提案
 	proposalObj, err := t.relyAgent.CreateProposal()
 	if err != nil {
 		t.log.Error("create proposal error", "bcName", t.ctx.BCName, "err", err)
@@ -386,7 +397,7 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.State.SetProposalMG(t.ctx.Proposal)
 	t.log.Trace("create proposal succ", "bcName", t.ctx.BCName)
 
-	// 9.提案
+	// 10.定时器任务
 	timerObj, err := t.relyAgent.CreateTimerTask()
 	if err != nil {
 		t.log.Error("create timer_task error", "bcName", t.ctx.BCName, "err", err)

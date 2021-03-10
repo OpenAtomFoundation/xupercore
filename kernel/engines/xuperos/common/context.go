@@ -9,6 +9,7 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
@@ -49,6 +50,8 @@ type ChainCtx struct {
 	Crypto cryptoBase.CryptoClient
 	// 权限
 	Acl aclBase.AclManager
+	// 治理代币
+	GovernToken governToken.GovManager
 	// 提案
 	Proposal propose.ProposeManager
 	// 定时任务

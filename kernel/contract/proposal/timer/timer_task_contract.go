@@ -25,7 +25,7 @@ func (t *KernMethod) Add(ctx contract.KContext) (*contract.Response, error) {
 	proposalIDBuf := args["proposal_id"]
 	triggerBuf := args["trigger"]
 	if blockHeightBuf == nil || proposalIDBuf == nil || triggerBuf == nil {
-		return nil, fmt.Errorf("add timer task failed, block_height, proposal_id trigger is nil")
+		return nil, fmt.Errorf("add timer task failed, block_height, proposal_id or trigger is nil")
 	}
 
 	key := utils.MakeTimerBlockHeightTaskKey(string(blockHeightBuf), string(proposalIDBuf))
@@ -55,6 +55,12 @@ func (t *KernMethod) Do(ctx contract.KContext) (*contract.Response, error) {
 	if blockHeightBuf == nil {
 		return nil, fmt.Errorf("do timer tasks failed, blockHeightBuf is nil")
 	}
+
+	return &contract.Response{
+		Status:  utils.StatusOK,
+		Message: "success",
+		Body:    nil,
+	}, nil
 
 	// 根据高度遍历所有提案，判断是否达到投票要求并执行
 	prefix := utils.MakeTimerBlockHeightPrefix(string(blockHeightBuf))

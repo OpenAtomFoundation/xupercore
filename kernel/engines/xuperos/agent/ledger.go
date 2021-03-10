@@ -28,6 +28,13 @@ func (t *LedgerAgent) GetNewAccountGas() (int64, error) {
 	return amount, nil
 }
 
+// 从创世块获取治理代币消耗gas
+func (t *LedgerAgent) GetNewGovGas() (int64, error) {
+	// todo 还未实现
+	amount := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetNewAccountResourceAmount()
+	return amount, nil
+}
+
 // 从创世块获取加密算法类型
 func (t *LedgerAgent) GetCryptoType() (string, error) {
 	cryptoType := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetCryptoType()

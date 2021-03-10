@@ -15,6 +15,7 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	cdef "github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -170,6 +171,23 @@ func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, er
 	}
 
 	return cons, nil
+}
+
+// 创建治理代币实例
+func (t *ChainRelyAgentImpl) CreateGovernToken() (governToken.GovManager, error) {
+	ctx := t.chain.Context()
+	legAgent := NewLedgerAgent(ctx)
+	governTokenCtx, err := governToken.NewGovCtx(ctx.BCName, legAgent, ctx.Contract)
+	if err != nil {
+		return nil, fmt.Errorf("create govern_token ctx failed.err:%v", err)
+	}
+
+	governTokenObj, err := governToken.NewGovManager(governTokenCtx)
+	if err != nil {
+		return nil, fmt.Errorf("create govern_token instance failed.err:%v", err)
+	}
+
+	return governTokenObj, nil
 }
 
 // 创建提案实例

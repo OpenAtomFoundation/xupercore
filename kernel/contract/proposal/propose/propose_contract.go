@@ -44,6 +44,7 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	if err != nil {
 		return nil, err
 	}
+	timerArgs["block_height"] = []byte(strconv.FormatInt(proposal.Trigger.Height, 10))
 	timerArgs["trigger"] = triggerBytes
 	timerArgs["proposal_id"] = []byte(proposalID)
 	_, err = ctx.Call("xkernel", "$timer_task", "Add", timerArgs)
@@ -60,7 +61,8 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = []byte(amount)
 	governTokenArgs["period"] = []byte(period)
-	governTokenArgs["type"] = []byte(proposalType)
+	governTokenArgs["lock_id"] = []byte(proposalID)
+	governTokenArgs["lock_type"] = []byte(proposalType)
 	_, err = ctx.Call("xkernel", "$govern_token", "Lock", governTokenArgs)
 	if err != nil {
 		return nil, err
@@ -137,8 +139,8 @@ func (t *KernMethod) Vote(ctx contract.KContext) (*contract.Response, error) {
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = lockAmount
 	governTokenArgs["period"] = []byte(period)
-	governTokenArgs["proposal_id"] = proposalIDBuf
-	governTokenArgs["type"] = []byte(proposalType)
+	governTokenArgs["lock_id"] = proposalIDBuf
+	governTokenArgs["lock_type"] = []byte(proposalType)
 	_, err = ctx.Call("xkernel", "$govern_token", "Lock", governTokenArgs)
 	if err != nil {
 		return nil, err

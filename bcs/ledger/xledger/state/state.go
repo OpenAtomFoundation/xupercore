@@ -23,6 +23,7 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
@@ -157,6 +158,10 @@ func (t *State) SetAclMG(aclMgr aclBase.AclManager) {
 
 func (t *State) SetContractMG(contractMgr contract.Manager) {
 	t.sctx.SetContractMG(contractMgr)
+}
+
+func (t *State) SetGovernTokenMG(governTokenMgr governToken.GovManager) {
+	t.sctx.SetGovernTokenMG(governTokenMgr)
 }
 
 func (t *State) SetProposalMG(proposalMgr propose.ProposeManager) {
@@ -550,20 +555,20 @@ func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 
 	ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
 	if err != nil {
-		t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", req.GetContractName())
+		t.log.Error("GetTimerTx NewContext error", "err", err, "contractName", req.GetContractName())
 		return nil, err
 	}
 
 	ctxResponse, ctxErr := ctx.Invoke(req.MethodName, req.Args)
 	if ctxErr != nil {
 		ctx.Release()
-		t.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", req.GetContractName())
+		t.log.Error("GetTimerTx Invoke error", "error", ctxErr, "contractName", req.GetContractName())
 		return nil, ctxErr
 	}
 	// 判断合约调用的返回码
 	if ctxResponse.Status >= 400 {
 		ctx.Release()
-		t.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", req.GetContractName())
+		t.log.Error("GetTimerTx Invoke error", "status", ctxResponse.Status, "contractName", req.GetContractName())
 		return nil, errors.New(ctxResponse.Message)
 	}
 
@@ -581,7 +586,7 @@ func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 		return nil, err
 	}
 
-	t.log.Trace("verifyTxRWSets", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
+	t.log.Trace("GetTimerTx", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
 
 	return autoTx, nil
 }
@@ -1349,7 +1354,7 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 // WaitBlockHeight wait util the height of current block >= target
 func (t *State) WaitBlockHeight(target int64) int64 {
-    return t.heightNotifier.WaitHeight(target)
+	return t.heightNotifier.WaitHeight(target)
 }
 
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {

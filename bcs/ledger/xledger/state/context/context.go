@@ -9,6 +9,7 @@ import (
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
@@ -37,6 +38,8 @@ type StateCtx struct {
 	// contract Manager
 	// 注意：依赖注入后才可以使用
 	ContractMgr contract.Manager
+	// 注意：注入后才可以使用
+	GovernTokenMgr governToken.GovManager
 	// 注意：注入后才可以使用
 	ProposalMgr propose.ProposeManager
 	// 注意：注入后才可以使用
@@ -80,6 +83,10 @@ func (t *StateCtx) SetContractMG(contractMgr contract.Manager) {
 	t.ContractMgr = contractMgr
 }
 
+func (t *StateCtx) SetGovernTokenMG(governTokenMgr governToken.GovManager) {
+	t.GovernTokenMgr = governTokenMgr
+}
+
 func (t *StateCtx) SetProposalMG(proposalMgr propose.ProposeManager) {
 	t.ProposalMgr = proposalMgr
 }
@@ -90,7 +97,8 @@ func (t *StateCtx) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
 
 //state各个func里尽量调一下判断
 func (t *StateCtx) IsInit() bool {
-	if t.AclMgr == nil || t.ContractMgr == nil || t.ProposalMgr == nil || t.TimerTaskMgr == nil || t.Crypt == nil || t.Ledger == nil {
+	if t.AclMgr == nil || t.ContractMgr == nil || t.GovernTokenMgr == nil || t.ProposalMgr == nil ||
+		t.TimerTaskMgr == nil || t.Crypt == nil || t.Ledger == nil {
 		return false
 	}
 
