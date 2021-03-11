@@ -12,7 +12,8 @@ import (
 // Context 保存了合约执行的内核状态，
 // 所有的系统调用产生的状态保存在这里
 type Context struct {
-	ID int64
+	ID     int64
+	Module string
 	// 合约名字
 	ContractName string
 
@@ -55,12 +56,11 @@ type Context struct {
 // DiskUsed returns the bytes written to xmodel
 func (c *Context) DiskUsed() int64 {
 	size := int64(0)
-	// TODO: rwset
-	// _, wset, _ := c.Cache.GetRWSets()
-	// for _, w := range wset {
-	// 	size += int64(len(w.GetKey()))
-	// 	size += int64(len(w.GetValue()))
-	// }
+	wset := c.State.RWSet().WSet
+	for _, w := range wset {
+		size += int64(len(w.GetKey()))
+		size += int64(len(w.GetValue()))
+	}
 	return size
 }
 
@@ -72,6 +72,10 @@ func (c *Context) ExceedDiskLimit() bool {
 
 // ResourceUsed returns the resource used by context
 func (c *Context) ResourceUsed() contract.Limits {
+	// 历史原因kernel合约只计算虚拟机的资源消耗
+	if c.Module == string(TypeKernel) {
+		return c.Instance.ResourceUsed()
+	}
 	var total contract.Limits
 	total.Add(c.Instance.ResourceUsed()).Add(c.SubResourceUsed)
 	total.Add(eventsResourceUsed(c.Events))

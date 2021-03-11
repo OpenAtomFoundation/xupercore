@@ -19,9 +19,9 @@ func loadConfig(fname string) (*contract.ContractConfig, error) {
 		return nil, fmt.Errorf("read config failed.path:%s,err:%v", fname, err)
 	}
 
-	var cfg contract.ContractConfig
-	if err = viperObj.Unmarshal(cfg); err != nil {
+	cfg := contract.DefaultContractConfig()
+	if err = viperObj.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmatshal config failed.path:%s,err:%v", fname, err)
 	}
-	return &cfg, nil
+	return cfg, nil
 }

@@ -123,7 +123,7 @@ func DefaultContractConfig() *ContractConfig {
 		},
 		EVM: EVMConfig{
 			Enable: true,
-			Driver: "burrow",
+			Driver: "evm",
 		},
 	}
 }
