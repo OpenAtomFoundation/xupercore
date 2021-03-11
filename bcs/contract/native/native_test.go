@@ -108,7 +108,8 @@ func TestNativeUpgrade(t *testing.T) {
 }
 
 func TestNativeDocker(t *testing.T) {
-	_, err := exec.Command("docker", "ps").CombinedOutput()
+	const imageName = "centos:7.5.1804"
+	_, err := exec.Command("docker", "inspect", imageName).CombinedOutput()
 	if err != nil {
 		t.Skip("docker available")
 		return
@@ -116,7 +117,7 @@ func TestNativeDocker(t *testing.T) {
 	cfg := *contractConfig
 	cfg.Native.Docker = contract.NativeDockerConfig{
 		Enable:    true,
-		ImageName: "docker.io/centos:7.5.1804",
+		ImageName: imageName,
 		Cpus:      1,
 		Memory:    "1G",
 	}
