@@ -8,32 +8,18 @@ import (
 	"testing"
 )
 
-var (
-	keypath = "./testkey"
-)
-
-func generateKey() error {
-	err := os.Mkdir(keypath, os.ModePerm)
-	if err != nil {
-		return err
-	}
-	xcc := &GmCryptoClient{}
-	err = xcc.ExportNewAccount(keypath)
-	return err
-}
-
-func readKey() ([]byte, []byte, []byte, error) {
-	addr, err := ioutil.ReadFile(keypath + "/address")
+func readKey(path string) ([]byte, []byte, []byte, error) {
+	addr, err := ioutil.ReadFile(path + "/address")
 	if err != nil {
 		fmt.Printf("GetAccInfoFromFile error load address error = %v", err)
 		return nil, nil, nil, err
 	}
-	pubkey, err := ioutil.ReadFile(keypath + "/public.key")
+	pubkey, err := ioutil.ReadFile(path + "/public.key")
 	if err != nil {
 		fmt.Printf("GetAccInfoFromFile error load pubkey error = %v", err)
 		return nil, nil, nil, err
 	}
-	prikey, err := ioutil.ReadFile(keypath + "/private.key")
+	prikey, err := ioutil.ReadFile(path + "/private.key")
 	if err != nil {
 		fmt.Printf("GetAccInfoFromFile error load prikey error = %v", err)
 		return nil, nil, nil, err
@@ -41,30 +27,29 @@ func readKey() ([]byte, []byte, []byte, error) {
 	return addr, pubkey, prikey, err
 }
 
-func cleanKey() {
-	os.Remove(keypath + "/address")
-	os.Remove(keypath + "/public.key")
-	os.Remove(keypath + "/private.key")
-	os.Remove(keypath)
+func cleanKey(path string) {
+	os.Remove(path + "/address")
+	os.Remove(path + "/public.key")
+	os.Remove(path + "/private.key")
 }
 
 func Test_Gm(t *testing.T) {
-	err := generateKey()
+	gmc := GetInstance()
+
+	err := gmc.ExportNewAccount("./")
 	if err != nil {
 		t.Error("generate key failed")
 		return
 	}
-	addr, pub, priv, err := readKey()
+	addr, pub, priv, err := readKey("./")
 	if err != nil {
 		t.Error("read key failed")
 		return
 	}
 	t.Logf("created key, address=%s, pub=%s\n", addr, pub)
-	defer cleanKey()
+	defer cleanKey("./")
 
 	msg := []byte("this is a test msg")
-
-	gmc := &GmCryptoClient{}
 	pubkey, err := gmc.GetEcdsaPublicKeyFromJsonStr(string(pub[:]))
 	if err != nil {
 		t.Errorf("GetEcdsaPublicKeyFromJSON failed, err=%v\n", err)

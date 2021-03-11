@@ -23,7 +23,7 @@ import (
 
 var (
 	ErrNegativeAmount = errors.New("amount in transaction can not be negative number")
-	ErrTxNotFound     = errors.New("this tx can not be found in unconfirmed-table")
+	ErrTxNotFound     = errors.New("transaction not found")
 	ErrUnexpected     = errors.New("this is a unexpected error")
 )
 

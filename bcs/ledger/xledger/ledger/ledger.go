@@ -33,8 +33,6 @@ var (
 	ErrTxDuplicated = errors.New("transaction duplicated in different blocks")
 	// ErrRootBlockAlreadyExist is returned when two genesis block is checked in the process of confirming block
 	ErrRootBlockAlreadyExist = errors.New("this ledger already has genesis block")
-	// ErrMinerInterrupt is returned when IsEnablePowMinning is false
-	ErrMinerInterrupt = errors.New("new block interrupts the process of the miner")
 	// ErrTxNotConfirmed return tx not confirmed error
 	ErrTxNotConfirmed = errors.New("transaction not confirmed")
 	// NumCPU returns the number of CPU cores for the current system
@@ -269,17 +267,6 @@ func (l *Ledger) FormatMinerBlock(txList []*pb.Transaction,
 	preHash []byte, targetBits int32, utxoTotal *big.Int,
 	qc *pb.QuorumCert, failedTxs map[string]string, blockHeight int64) (*pb.InternalBlock, error) {
 	return l.formatBlock(txList, proposer, ecdsaPk, timestamp, curTerm, curBlockNum, preHash, targetBits, utxoTotal, true, qc, failedTxs, blockHeight)
-}
-
-// IsProofed check workload proof
-func IsProofed(blockID []byte, targetBits int32) bool {
-	given := big.NewInt(0).SetBytes(blockID)
-	target := big.NewInt(1)
-	target.Lsh(target, uint(256-targetBits))
-	if given.Cmp(target) == -1 {
-		return true
-	}
-	return false
 }
 
 // FormatFakeBlock format fake block for contract pre-execution without signing

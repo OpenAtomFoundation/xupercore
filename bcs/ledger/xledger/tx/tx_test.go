@@ -1,8 +1,6 @@
-package xmodel
+package tx
 
 import (
-	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -11,21 +9,60 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
-	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/mock"
 	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
-	"github.com/xuperchain/xupercore/protos"
 )
 
-const (
-	BobAddress = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
-)
+var GenesisConf = []byte(`
+		{
+    "version": "1",
+    "predistribution": [
+        {
+            "address": "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
+            "quota": "100000000000000000000"
+        }
+    ],
+    "maxblocksize": "16",
+    "award": "1000000",
+    "decimals": "8",
+    "award_decay": {
+        "height_gap": 31536000,
+        "ratio": 1
+    },
+    "gas_price": {
+        "cpu_rate": 1000,
+        "mem_rate": 1000000,
+        "disk_rate": 1,
+        "xfee_rate": 1
+    },
+    "new_account_resource_amount": 1000,
+    "genesis_consensus": {
+        "name": "single",
+        "config": {
+            "miner": "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
+            "period": 3000
+        }
+    }
+}
+    `)
 
-func TestGet(t *testing.T) {
+func TestTx(t *testing.T) {
+	_, minerErr := GenerateAwardTx("miner-1", "1000", []byte("award"))
+	if minerErr != nil {
+		t.Fatal(minerErr)
+	}
+	_, etxErr := GenerateEmptyTx([]byte("empty"))
+	if etxErr != nil {
+		t.Fatal(minerErr)
+	}
+	_, rtxErr := GenerateRootTx(GenesisConf)
+	if rtxErr != nil {
+		t.Fatal(rtxErr)
+	}
+
 	workspace, dirErr := ioutil.TempDir("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
@@ -47,21 +84,6 @@ func TestGet(t *testing.T) {
 	ledger, err := ledger_pkg.CreateLedger(lctx, GenesisConf)
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	t1 := &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
-	t1.Coinbase = true
-	t1.Desc = []byte(`{"maxblocksize" : "128"}`)
-	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	block, err := ledger.FormatRootBlock([]*pb.Transaction{t1})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	confirmStatus := ledger.ConfirmBlock(block, true)
-	if !confirmStatus.Succ {
-		t.Fatal(fmt.Errorf("confirm block fail"))
 	}
 
 	crypt, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
@@ -90,28 +112,25 @@ func TestGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	xmod, err := NewXModel(sctx, ldb)
+	txHandle, err := NewTx(sctx, ldb)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	blkId, err := ledger.QueryBlockByHeight(0)
+	err = txHandle.LoadUnconfirmedTxFromDisk()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	xmsp, err := xmod.CreateSnapshot(blkId.Blockid)
+	unConfirmedTx, err := txHandle.GetUnconfirmedTx(false)
 	if err != nil {
 		t.Fatal(err)
+	} else {
+		t.Log("unconfirmed tx len:", len(unConfirmedTx))
 	}
-
-	vData, err := xmsp.Get("proftestc", []byte("key_1"))
+	txHandle.SetMaxConfirmedDelay(500)
+	txMap, txGraph, txDelay, err := txHandle.SortUnconfirmedTx()
 	if err != nil {
 		t.Fatal(err)
+	} else {
+		t.Log("sort txs", "txMap", txMap, "txGraph", txGraph, "txDelay", txDelay)
 	}
-
-	fmt.Println(vData)
-	fmt.Println(hex.EncodeToString(vData.RefTxid))
-
-	ledger.Close()
 }
