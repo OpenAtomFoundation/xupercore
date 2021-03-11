@@ -18,7 +18,8 @@ type XBridge struct {
 	vmconfigs      map[ContractType]VMConfig
 	creators       map[ContractType]InstanceCreator
 	xmodel         ledger.XMReader
-	config         ContractConfig
+	config         contract.ContractConfig
+	core           contract.ChainCore
 
 	// debugLogger *log.Logger
 
@@ -29,7 +30,7 @@ type XBridgeConfig struct {
 	Basedir   string
 	VMConfigs map[ContractType]VMConfig
 	XModel    ledger.XMReader
-	Config    ContractConfig
+	Config    contract.ContractConfig
 	LogWriter io.Writer
 	Core      contract.ChainCore
 }
@@ -43,6 +44,7 @@ func New(cfg *XBridgeConfig) (*XBridge, error) {
 		vmconfigs: cfg.VMConfigs,
 		creators:  make(map[ContractType]InstanceCreator),
 		xmodel:    cfg.XModel,
+		core:      cfg.Core,
 		config:    cfg.Config,
 	}
 	xbridge.contractManager = &contractManager{
@@ -148,13 +150,12 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 
 	ctx := v.ctxmgr.MakeContext()
 	ctx.State = ctxCfg.State
-	ctx.Core = ctxCfg.Core
+	ctx.Core = v.core
 	ctx.ContractName = ctxCfg.ContractName
 	ctx.Initiator = ctxCfg.Initiator
 	ctx.AuthRequire = ctxCfg.AuthRequire
 	ctx.ResourceLimits = ctxCfg.ResourceLimits
 	ctx.CanInitialize = ctxCfg.CanInitialize
-	// ctx.Core = ctxCfg.Core
 	ctx.TransferAmount = ctxCfg.TransferAmount
 	ctx.ContractSet = ctxCfg.ContractSet
 	if ctx.ContractSet == nil {

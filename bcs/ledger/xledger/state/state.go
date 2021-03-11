@@ -1239,7 +1239,6 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 	contextConfig := &contract.ContextConfig{
 		State:          sandBox,
-		Core:           t,
 		ResourceLimits: contract.MaxLimits,
 		ContractName:   request.GetContractName(),
 	}
@@ -1260,7 +1259,7 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 // WaitBlockHeight wait util the height of current block >= target
 func (t *State) WaitBlockHeight(target int64) int64 {
-    return t.heightNotifier.WaitHeight(target)
+	return t.heightNotifier.WaitHeight(target)
 }
 
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {

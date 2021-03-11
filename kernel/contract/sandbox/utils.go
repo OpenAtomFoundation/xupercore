@@ -36,3 +36,15 @@ func IsEmptyVersionedData(vd *ledger.VersionedData) bool {
 func IsDelFlag(value []byte) bool {
 	return bytes.Equal([]byte(DelFlag), value)
 }
+
+// helper for test
+func putVersionedData(state *MemXModel, bucket string, key []byte, value []byte) {
+	state.Put(bucket, key, &ledger.VersionedData{
+		RefTxid: []byte("txid"),
+		PureData: &ledger.PureData{
+			Bucket: bucket,
+			Key:    key,
+			Value:  value,
+		},
+	})
+}

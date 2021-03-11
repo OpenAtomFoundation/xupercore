@@ -1,58 +1,32 @@
 package native
 
 import (
-	//"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"os/exec"
 	"path/filepath"
-	//"testing"
+	"testing"
 
-	//"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
-	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
-	"github.com/xuperchain/xupercore/kernel/ledger"
-	//"github.com/xuperchain/xupercore/protos"
+	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
 
-type testHelper struct {
-	basedir string
-
-	state   ledger.XMReader
-	manager contract.Manager
+var contractConfig = &contract.ContractConfig{
+	EnableUpgrade: true,
+	Xkernel: contract.XkernelConfig{
+		Enable: true,
+		Driver: "default",
+	},
+	Native: contract.NativeConfig{
+		Enable: true,
+		Driver: "native",
+	},
 }
 
-func newTestHelper() *testHelper {
-	basedir, err := ioutil.TempDir("", "native-test")
-	if err != nil {
-		panic(err)
-	}
-
-	state := sandbox.NewMemXModel()
-
-	m, err := contract.CreateManager("default", &contract.ManagerConfig{
-		Basedir:  basedir,
-		BCName:   "xuper",
-		Core:     new(fakeChainCore),
-		XMReader: state,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	th := &testHelper{
-		basedir: basedir,
-		manager: m,
-		state:   state,
-	}
-	return th
-}
-
-func (t *testHelper) Compile() ([]byte, error) {
-	target := filepath.Join(t.basedir, "counter.bin")
+func compile(th *mock.TestHelper) ([]byte, error) {
+	target := filepath.Join(th.Basedir(), "counter.bin")
 	cmd := exec.Command("go", "build", "-o", target)
 	cmd.Dir = "testdata"
 	out, err := cmd.CombinedOutput()
@@ -66,104 +40,101 @@ func (t *testHelper) Compile() ([]byte, error) {
 	return bin, nil
 }
 
-func (t *testHelper) Manager() contract.Manager {
-	return t.manager
-}
-
-func (t *testHelper) Basedir() string {
-	return t.basedir
-}
-
-func (t *testHelper) State() ledger.XMReader {
-	return t.state
-}
-
-func (t *testHelper) Close() {
-	os.RemoveAll(t.basedir)
-}
-
-type fakeChainCore struct {
-}
-
-// GetAccountAddress get addresses associated with account name
-func (f *fakeChainCore) GetAccountAddresses(accountName string) ([]string, error) {
-	panic("not implemented") // TODO: Implement
-}
-
-// VerifyContractPermission verify permission of calling contract
-func (f *fakeChainCore) VerifyContractPermission(initiator string, authRequire []string, contractName string, methodName string) (bool, error) {
-	panic("not implemented") // TODO: Implement
-}
-
-// VerifyContractOwnerPermission verify contract ownership permisson
-func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
-	panic("not implemented") // TODO: Implement
-}
-
-/*func TestDeployNative(t *testing.T) {
-	th := newTestHelper()
+func TestNativeDeploy(t *testing.T) {
+	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
 
-	m := th.Manager()
-
-	bin, err := th.Compile()
+	bin, err := compile(th)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: th.State(),
+	resp, err := th.Deploy("native", "go", "counter", bin, map[string][]byte{
+		"creator": []byte("icexin"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	ctx, err := m.NewContext(&contract.ContextConfig{
-		Module:         "xkernel",
-		ContractName:   "$contract",
-		State:          state,
-		ResourceLimits: contract.MaxLimits,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	desc := &protos.WasmCodeDesc{
-		Runtime:      "go",
-		ContractType: "native",
-	}
-	descbuf, _ := proto.Marshal(desc)
-
-	initArgs := map[string][]byte{"creator": []byte("icexin")}
-	argsBuf, _ := json.Marshal(initArgs)
-
-	resp, err := ctx.Invoke("deployContract", map[string][]byte{
-		"account_name":  []byte("XC111111@xuper"),
-		"contract_name": []byte("counter"),
-		"contract_code": bin,
-		"contract_desc": descbuf,
-		"init_args":     argsBuf,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	t.Logf("%#v", resp)
-	ctx.Release()
+}
 
-	ctx, err = m.NewContext(&contract.ContextConfig{
-		Module:         "native",
-		ContractName:   "counter",
-		State:          state,
-		ResourceLimits: contract.MaxLimits,
+func TestNativeInvoke(t *testing.T) {
+	th := mock.NewTestHelper(contractConfig)
+	defer th.Close()
+
+	bin, err := compile(th)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
+		"creator": []byte("icexin"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resp, err = ctx.Invoke("Increase", map[string][]byte{
-		"key": []byte("icexin"),
+	resp, err := th.Invoke("native", "counter", "increase", map[string][]byte{
+		"key": []byte("k1"),
 	})
-	t.Logf("%#v", resp)
-	ctx.Release()
+	if err != nil {
+		t.Fatal(err)
+	}
 
-}*/
+	t.Logf("body:%s", resp.Body)
+}
+
+func TestNativeUpgrade(t *testing.T) {
+	th := mock.NewTestHelper(contractConfig)
+	defer th.Close()
+
+	bin, err := compile(th)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
+		"creator": []byte("icexin"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = th.Upgrade("counter", bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNativeDocker(t *testing.T) {
+	_, err := exec.Command("docker", "ps").CombinedOutput()
+	if err != nil {
+		t.Skip("docker available")
+		return
+	}
+	cfg := *contractConfig
+	cfg.Native.Docker = contract.NativeDockerConfig{
+		Enable:    true,
+		ImageName: "docker.io/centos:7.5.1804",
+		Cpus:      1,
+		Memory:    "1G",
+	}
+
+	th := mock.NewTestHelper(&cfg)
+	defer th.Close()
+
+	bin, err := compile(th)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := th.Deploy("native", "go", "counter", bin, map[string][]byte{
+		"creator": []byte("icexin"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("%#v", resp)
+}

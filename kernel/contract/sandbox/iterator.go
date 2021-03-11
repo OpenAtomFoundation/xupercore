@@ -7,15 +7,74 @@ import (
 	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
+// peekIterator用来辅助multiIterator更容易实现
+type peekIterator struct {
+	next  bool
+	key   []byte
+	value *ledger.VersionedData
+
+	iter ledger.XMIterator
+}
+
+func newPeekIterator(iter ledger.XMIterator) *peekIterator {
+	p := &peekIterator{
+		iter: iter,
+	}
+	p.fill()
+	return p
+}
+
+func (p *peekIterator) fill() {
+	ok := p.iter.Next()
+	if !ok {
+		p.next = false
+		p.key = nil
+		p.value = nil
+		return
+	}
+	p.next = true
+	p.key = p.iter.Key()
+	p.value = p.iter.Value()
+}
+
+func (p *peekIterator) HasNext() bool {
+	return p.next
+}
+
+func (p *peekIterator) Next() ([]byte, *ledger.VersionedData) {
+	if !p.HasNext() {
+		return nil, nil
+	}
+	key := p.key
+	value := p.value
+	p.fill()
+	return key, value
+}
+
+// Peek向前查询key, value的值但不移动迭代器的指针
+func (p *peekIterator) Peek() ([]byte, *ledger.VersionedData) {
+	if !p.HasNext() {
+		return nil, nil
+	}
+	return p.key, p.value
+}
+
+func (p *peekIterator) Error() error {
+	return p.iter.Error()
+}
+
+func (p *peekIterator) Close() {
+	p.next = false
+	p.key = nil
+	p.value = nil
+	p.iter.Close()
+}
+
 // multiIterator 按照归并排序合并两个XMIterator
 // 如果两个XMIterator在某次迭代返回同样的Key，选取front的Value
 type multiIterator struct {
-	front ledger.XMIterator
-	back  ledger.XMIterator
-
-	first    bool
-	frontEnd bool
-	backEnd  bool
+	front *peekIterator
+	back  *peekIterator
 
 	key   []byte
 	value *ledger.VersionedData
@@ -23,69 +82,48 @@ type multiIterator struct {
 
 func newMultiIterator(front, back ledger.XMIterator) ledger.XMIterator {
 	m := &multiIterator{
-		front: front,
-		back:  back,
-		first: true,
-	}
-	m.frontEnd = m.front.Next()
-	m.backEnd = m.back.Next()
-	k1, k2 := m.front.Key(), m.back.Key()
-	ret := compareBytes(k1, k2)
-	switch ret {
-	case 0, -1:
-		m.setKeyValue(m.front)
-	case 1:
-		m.setKeyValue(m.back)
+		front: newPeekIterator(front),
+		back:  newPeekIterator(back),
 	}
 	return m
 }
 
 func (m *multiIterator) Key() []byte {
-	if m.frontEnd && m.backEnd {
-		return nil
-	}
 	return m.key
 }
 
 func (m *multiIterator) Value() *ledger.VersionedData {
-	if m.frontEnd && m.backEnd {
-		return nil
-	}
 	return m.value
 }
 
 func (m *multiIterator) Next() bool {
-	if m.frontEnd && m.backEnd {
-		return false
+	if !m.front.HasNext() {
+		ok := m.back.HasNext()
+		m.key, m.value = m.back.Next()
+		return ok
 	}
-	if m.first {
-		m.first = false
-		return true
+	if !m.back.HasNext() {
+		ok := m.front.HasNext()
+		m.key, m.value = m.front.Next()
+		return ok
 	}
 
-	k1, k2 := m.front.Key(), m.back.Key()
+	k1, _ := m.front.Peek()
+	k2, _ := m.back.Peek()
 	ret := compareBytes(k1, k2)
 	switch ret {
 	case 0:
-		m.frontEnd = m.front.Next()
-		m.backEnd = m.back.Next()
-		m.setKeyValue(m.front)
+		m.key, m.value = m.front.Next()
+		m.back.Next()
 	case -1:
-		m.frontEnd = m.front.Next()
-		m.setKeyValue(m.front)
+		m.key, m.value = m.front.Next()
 	case 1:
-		m.backEnd = m.back.Next()
-		m.setKeyValue(m.back)
+		m.key, m.value = m.back.Next()
 	default:
 		panic("unexpected compareBytes return")
 	}
 
-	return !(m.frontEnd && m.backEnd)
-}
-
-func (m *multiIterator) setKeyValue(iter ledger.XMIterator) {
-	m.key = iter.Key()
-	m.value = iter.Value()
+	return true
 }
 
 func (m *multiIterator) Error() error {
@@ -109,13 +147,15 @@ func (m *multiIterator) Close() {
 
 // rsetIterator 把迭代到的Key记录到读集里面
 type rsetIterator struct {
-	mc *XMCache
+	bucket string
+	mc     *XMCache
 	ledger.XMIterator
 	err error
 }
 
-func newRsetIterator(iter ledger.XMIterator, mc *XMCache) ledger.XMIterator {
+func newRsetIterator(bucket string, iter ledger.XMIterator, mc *XMCache) ledger.XMIterator {
 	return &rsetIterator{
+		bucket:     bucket,
 		mc:         mc,
 		XMIterator: iter,
 	}
@@ -129,14 +169,8 @@ func (r *rsetIterator) Next() bool {
 	if !ok {
 		return false
 	}
-	rawkey := r.Key()
-	bucket, key, err := parseRawKey(rawkey)
-	if err != nil {
-		r.err = err
-		return false
-	}
 	// fill read set
-	r.mc.Get(bucket, key)
+	r.mc.Get(r.bucket, r.XMIterator.Key())
 	return true
 }
 
@@ -160,7 +194,7 @@ func newContractIterator(xmiter ledger.XMIterator) contract.Iterator {
 
 func (c *ContractIterator) Value() []byte {
 	v := c.XMIterator.Value()
-	return v.PureData.Value
+	return v.GetPureData().GetValue()
 }
 
 // stripDelIterator 从迭代器里剔除删除标注和空版本
@@ -177,9 +211,6 @@ func newStripDelIterator(xmiter ledger.XMIterator) ledger.XMIterator {
 func (s *stripDelIterator) Next() bool {
 	for s.XMIterator.Next() {
 		v := s.Value()
-		if IsEmptyVersionedData(v) {
-			continue
-		}
 		if IsDelFlag(v.PureData.Value) {
 			continue
 		}

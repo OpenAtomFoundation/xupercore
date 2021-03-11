@@ -1,6 +1,4 @@
-package bridge
-
-import "github.com/xuperchain/xupercore/kernel/contract"
+package contract
 
 // NativeConfig contains the two above config
 type NativeConfig struct {
@@ -41,10 +39,9 @@ type XVMConfig struct {
 
 // WasmConfig wasm config
 type WasmConfig struct {
-	Driver        string
-	External      bool
-	XVM           XVMConfig
-	EnableUpgrade bool
+	Enable bool
+	Driver string
+	XVM    XVMConfig
 }
 
 func (w *WasmConfig) DriverName() string {
@@ -52,7 +49,7 @@ func (w *WasmConfig) DriverName() string {
 }
 
 func (w *WasmConfig) IsEnable() bool {
-	return true
+	return w.Enable
 }
 
 type EVMConfig struct {
@@ -72,7 +69,7 @@ type XkernelConfig struct {
 	Enable bool
 	Driver string
 
-	Registry contract.KernRegistry
+	Registry KernRegistry
 }
 
 func (x *XkernelConfig) DriverName() string {
@@ -101,4 +98,32 @@ type ContractConfig struct {
 	EnableDebugLog bool
 	DebugLog       LogConfig
 	EnableUpgrade  bool
+
+	Native  NativeConfig
+	Wasm    WasmConfig
+	Xkernel XkernelConfig
+	EVM     EVMConfig
+}
+
+func DefaultContractConfig() *ContractConfig {
+	return &ContractConfig{
+		EnableDebugLog: true,
+		EnableUpgrade:  true,
+		Native: NativeConfig{
+			Enable: true,
+			Driver: "native",
+		},
+		Wasm: WasmConfig{
+			Enable: true,
+			Driver: "xvm",
+		},
+		Xkernel: XkernelConfig{
+			Enable: true,
+			Driver: "default",
+		},
+		EVM: EVMConfig{
+			Enable: true,
+			Driver: "burrow",
+		},
+	}
 }

@@ -12,7 +12,7 @@ import (
 
 	units "github.com/docker/go-units"
 	log "github.com/xuperchain/log15"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/kernel/contract"
 )
 
 var (
@@ -40,7 +40,7 @@ type DockerProcess struct {
 	envs     []string
 	mounts   []string
 	// ports    []string
-	cfg *bridge.NativeDockerConfig
+	cfg *contract.NativeDockerConfig
 
 	id string
 	log.Logger

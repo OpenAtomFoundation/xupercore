@@ -51,14 +51,11 @@ func (m *MemXModel) Select(bucket string, startKey []byte, endKey []byte) (ledge
 	}
 	rawStartKey := makeRawKey(bucket, startKey)
 	rawEndKey := makeRawKey(bucket, endKey)
-	return newTreeIterator(m.tree, rawStartKey, rawEndKey), nil
+	return newTreeRangeIterator(m.tree, rawStartKey, rawEndKey), nil
 }
 
-func (m *MemXModel) NewIterator(startKey []byte, endKey []byte) (ledger.XMIterator, error) {
-	if startKey != nil && compareBytes(startKey, endKey) >= 0 {
-		return nil, errors.New("bad iterator range")
-	}
-	return newTreeIterator(m.tree, startKey, endKey), nil
+func (m *MemXModel) NewIterator() ledger.XMIterator {
+	return newTreeIterator(m.tree)
 }
 
 // treeIterator 把tree的Iterator转换成XMIterator
@@ -68,18 +65,29 @@ type treeIterator struct {
 	end  []byte
 	key  []byte
 	err  error
+
+	iterDone bool
 }
 
-func newTreeIterator(tree *redblacktree.Tree, start, end []byte) ledger.XMIterator {
+func newTreeIterator(tree *redblacktree.Tree) ledger.XMIterator {
+	iter := tree.Iterator()
+	return &treeIterator{
+		tree: tree,
+		iter: &iter,
+	}
+}
+
+func newTreeRangeIterator(tree *redblacktree.Tree, start, end []byte) ledger.XMIterator {
 	var iter redblacktree.Iterator
 	if start == nil {
 		iter = tree.Iterator()
 	} else {
 		startNode, ok := tree.Floor(start)
 		if !ok {
-			return new(treeIterator)
+			iter = tree.Iterator()
+		} else {
+			iter = tree.IteratorAt(startNode)
 		}
-		iter = tree.IteratorAt(startNode)
 	}
 
 	return &treeIterator{
@@ -90,39 +98,50 @@ func newTreeIterator(tree *redblacktree.Tree, start, end []byte) ledger.XMIterat
 }
 
 func (t *treeIterator) Next() bool {
+	if t.iterDone {
+		return false
+	}
+
 	if t.iter == nil {
+		t.iterDone = true
 		return false
 	}
 	if t.err != nil {
+		t.iterDone = true
 		return false
 	}
 
 	if !t.iter.Next() {
+		t.iterDone = true
 		return false
 	}
 	rawkey := t.iter.Key()
 
 	if t.end != nil && t.tree.Comparator(rawkey, t.end) >= 0 {
+		t.iterDone = true
 		return false
 	}
 	_, key, err := parseRawKey(rawkey.([]byte))
 	if err != nil {
 		t.err = err
+		t.iterDone = true
 		return false
 	}
 	t.key = key
 	return true
 }
 
+// 如果迭代器结束则Key返回nil
 func (t *treeIterator) Key() []byte {
-	if t.iter == nil {
+	if t.iterDone {
 		return nil
 	}
 	return t.key
 }
 
+// 如果迭代器结束则Value返回nil
 func (t *treeIterator) Value() *ledger.VersionedData {
-	if t.iter == nil {
+	if t.iterDone {
 		return nil
 	}
 	return t.iter.Value().(*ledger.VersionedData)
@@ -133,7 +152,7 @@ func (t *treeIterator) Error() error {
 }
 
 func (t *treeIterator) Close() {
-	t.iter = nil
+	t.iterDone = true
 }
 
 func treeCompare(a, b interface{}) int {
