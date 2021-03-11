@@ -117,7 +117,6 @@ func (v *contractManager) initContract(tp ContractType, contextConfig *contract.
 	if err != nil {
 		return nil, contract.Limits{}, err
 	}
-	fmt.Printf("%#v", ctx.ResourceUsed())
 	return out, ctx.ResourceUsed(), nil
 }
 
