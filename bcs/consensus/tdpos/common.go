@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
-	"time"
 )
 
 const (
@@ -18,18 +17,21 @@ const (
 	contractRevokeCandidata   = "revokeNominate"
 	contractVote              = "voteCandidate"
 	contractRevokeVote        = "revokeVote"
+	contractGetTdposInfos     = "getTdposInfos"
 
 	contractBucket  = "$tdpos"
 	nominateKey     = "nominate"
 	voteKeyPrefix   = "vote_"
 	revokeKeyPrefix = "revoke_"
-	urlmapKey       = "urlmap"
+	termKey         = "term"
 
 	StatusOK  = 200
 	StatusErr = 500
 
 	NOMINATETYPE = "nominate"
 	VOTETYPE     = "vote"
+
+	fee = 1000
 )
 
 var (
@@ -55,7 +57,7 @@ var (
 	emptyVoteAddrErr  = errors.New("Addr in vote candidate tx can not be empty.")
 	voteNominateErr   = errors.New("Addr in vote candidate hasn't been nominated.")
 	amountErr         = errors.New("Amount in contract can not be empty.")
-	authErr           = errors.New("candidate has not been authenticated")
+	authErr           = errors.New("Candidate has not authenticated your submission.")
 	repeatNominateErr = errors.New("The candidate had been nominate.")
 	emptyNominateKey  = errors.New("No valid candidate key when revoke.")
 	notFoundErr       = errors.New("Value not found, please check your input parameters.")
@@ -190,20 +192,6 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 	return tdposCfg, nil
 }
 
-func cleanProduceMap(isProduce map[int64]bool, period int64) {
-	// 删除已经落盘的所有key
-	if len(isProduce) <= MAXMAPSIZE {
-		return
-	}
-	t := time.Now().UnixNano()
-	key := t / period
-	for k, _ := range isProduce {
-		if k < key-MAXMAPSIZE {
-			delete(isProduce, k)
-		}
-	}
-}
-
 // 每个地址每一轮的总票数
 type termBallots struct {
 	Address string
@@ -225,23 +213,4 @@ func (tv termBallotsSlice) Less(i, j int) bool {
 		return tv[j].Address < tv[i].Address
 	}
 	return tv[j].Ballots < tv[i].Ballots
-}
-
-type historyProposer struct {
-	height    int64
-	proposers []string
-}
-
-type historyProposers []historyProposer
-
-func (s historyProposers) Len() int {
-	return len(s)
-}
-
-func (s historyProposers) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
-func (s historyProposers) Less(i, j int) bool {
-	return s[i].height < s[j].height
 }

@@ -148,7 +148,7 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	}
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
 	t.HighQC = node
-	t.Log.Debug("QCPendingTree::updateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "HighQC height", node.In.GetProposalView(), "HighQC", utils.F(node.In.GetProposalId()))
 	if node.Parent == nil {
 		return
 	}

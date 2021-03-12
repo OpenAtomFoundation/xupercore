@@ -112,3 +112,52 @@ func TestUpdateHighQC(t *testing.T) {
 		return
 	}
 }
+
+func TestEnforceUpdateHighQC(t *testing.T) {
+	tree := prepareTree(t)
+	tree.updateHighQC([]byte{3})
+	tree.enforceUpdateHighQC([]byte{1})
+	if tree.GetHighQC().In.GetProposalView() != 1 {
+		t.Error("enforceUpdateHighQC update highQC error", "height", tree.GetHighQC().In.GetProposalView())
+		return
+	}
+}
+
+// TestUpdateCommit Tree如下
+// root 0
+// |    \
+// node1 1 node12
+// |
+// node2 2
+// |
+// node3 3
+// |
+// node4 4
+func TestUpdateCommit(t *testing.T) {
+	tree := prepareTree(t)
+	tree.updateHighQC([]byte{3})
+
+	QC3 := CreateQC([]byte{4}, 3)
+	node := tree.DFSQueryNode([]byte{3})
+	node1 := &ProposalNode{
+		In:     QC3,
+		Parent: node,
+	}
+	if err := tree.updateQcStatus(node1); err != nil {
+		t.Error("updateQcStatus error")
+		return
+	}
+	QC4 := CreateQC([]byte{5}, 4)
+	node2 := &ProposalNode{
+		In:     QC4,
+		Parent: node1,
+	}
+	if err := tree.updateQcStatus(node2); err != nil {
+		t.Error("updateQcStatus node2 error")
+		return
+	}
+	tree.updateCommit(tree.GetLockedQC().In)
+	if tree.Root.In.GetProposalView() == 0 {
+		t.Error("updateCommit error")
+	}
+}

@@ -118,6 +118,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractRevokeCandidata, tdpos.runRevokeCandidate)
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractVote, tdpos.runVote)
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractRevokeVote, tdpos.runRevokeVote)
+	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractGetTdposInfos, tdpos.runGetTdposInfos)
 	return tdpos
 }
 
@@ -130,38 +131,33 @@ Again:
 	if sleep > MAXSLEEPTIME {
 		sleep = MAXSLEEPTIME
 	}
-	v, ok := tp.isProduce[key]
-	if !ok || v == false {
+	_, ok := tp.isProduce[key]
+	if !ok {
 		tp.isProduce[key] = true
 	} else {
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		// 定期清理isProduce
-		cleanProduceMap(tp.isProduce, tp.config.Period)
+		common.CleanProduceMap(tp.isProduce, tp.config.Period)
 		goto Again
 	}
 
 	// 查当前时间的term 和 pos
 	term, pos, blockPos := tp.election.minerScheduling(time.Now().UnixNano())
-	proposerChangedFlag := false
-	// 根据term更新当前validators
-	if term > tp.election.curTerm {
-		proposerChangedFlag = tp.election.UpdateProposers(height) && height > 3
-	}
-	// 查当前term 和 pos是否是自己
-	tp.election.curTerm = term
 	if blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Warn("Tdpos::CompeteMaster::minerScheduling err", "term", term, "pos", pos, "blockPos", blockPos)
 		goto Again
 	}
-	// 在smr层面更新候选人信息
-	if proposerChangedFlag {
-		err := tp.election.notifyTermChanged(height)
-		if err != nil {
-			tp.log.Warn("Tdpos::CompeteMaster::proposer or term change, bft Update Validators failed", "error", err)
-		}
+
+	tp.log.Debug("Tdpos::CompeteMaster!!!!!!", "term", term, "tp.election.curTerm", tp.election.curTerm)
+
+	// 根据term更新当前validators, 当投票之后，并不会在3个块后变更候选人，而是等到下个term
+	if term > tp.election.curTerm {
+		tp.election.UpdateProposers(tp.election.ledger.GetTipBlock().GetHeight() + 1)
 	}
+	// 查当前term 和 pos是否是自己
+	tp.election.curTerm = term
 	// master check
-	if tp.election.proposers[pos] == tp.election.address {
+	if tp.election.validators[pos] == tp.election.address {
 		tp.log.Debug("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.GetTipBlock().GetHeight())
 		s := tp.needSync()
 		return true, s, nil
@@ -201,7 +197,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		return false, err
 	}
 	if wantProposers[pos] != string(block.GetProposer()) {
-		tp.log.Warn("Tdpos::CheckMinerMatch::invalid proposer", "want", wantProposers[pos], "have", block.GetProposer())
+		tp.log.Warn("Tdpos::CheckMinerMatch::invalid proposer", "want", wantProposers[pos], "have", string(block.GetProposer()))
 		return false, invalidProposerErr
 	}
 
@@ -279,7 +275,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	if term != tp.election.curTerm || blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
 		return nil, nil, timeoutBlockErr
 	}
-	if tp.election.proposers[pos] != tp.election.address {
+	if tp.election.validators[pos] != tp.election.address {
 		return nil, nil, timeoutBlockErr
 	}
 
@@ -301,7 +297,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	if !bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tp.election.ledger.GetTipBlock().GetBlockid()) {
 		// 单个节点不存在投票验证的hotstuff流程，因此返回true
-		if len(tp.election.proposers) == 1 {
+		if len(tp.election.validators) == 1 {
 			return nil, nil, nil
 		}
 		truncateT, err = func() ([]byte, error) {
@@ -321,7 +317,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 					// 本地HighQC回滚错误直接退出
 					return nil, err
 				}
-				return tp.smr.GetGenericQC().GetProposalId(), nil
+				return tp.smr.GetHighQC().GetProposalId(), nil
 			}
 			// 2. 账本高度更高时，裁剪账本
 			return tp.smr.GetHighQC().GetProposalId(), nil
@@ -377,7 +373,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	// 查看本地是否是最新round的生产者
 	_, pos, _ := tp.election.minerScheduling(block.GetTimestamp())
 	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
-	if tp.election.proposers[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {
+	if tp.election.validators[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {
 		validators := tp.election.GetValidators(block.GetHeight())
 		if err := tp.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), validators); err != nil {
 			tp.log.Warn("Tdpos::smr::ProcessConfirmBlock::bft next proposal failed", "error", err)

@@ -1,0 +1,7 @@
+# network config
+module: p2pv2
+address: /ip4/127.0.0.1/tcp/47101
+# bootNode节点自身不能配置bootNodes
+# bootNodes:
+isTls: true
+serviceName: localhost
