@@ -12,9 +12,7 @@ type VMConfig interface {
 
 // InstanceCreatorConfig configures InstanceCreator
 type InstanceCreatorConfig struct {
-	Basedir string
-	// SyscallService *SyscallService
-	// TODO
+	Basedir        string
 	SyscallService *SyscallService
 	// VMConfig is the config of vm driver
 	VMConfig VMConfig

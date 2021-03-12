@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
@@ -17,6 +18,8 @@ var (
 	NotValidContract = errors.New("Cannot get valid res with contract.")
 	EmptyJustify     = errors.New("Justify is empty.")
 	InvalidJustify   = errors.New("Justify structure is invalid.")
+
+	MaxMapSize = 1000
 )
 
 // AddressEqual 判断两个validators地址是否相等
@@ -86,6 +89,20 @@ func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *cha
 		HighQC:   rNode,
 		CommitQC: rNode,
 		Log:      log,
+	}
+}
+
+func CleanProduceMap(isProduce map[int64]bool, period int64) {
+	// 删除已经落盘的所有key
+	if len(isProduce) <= MaxMapSize {
+		return
+	}
+	t := time.Now().UnixNano() / int64(time.Millisecond)
+	key := t / period
+	for k, _ := range isProduce {
+		if k <= key-int64(MaxMapSize) {
+			delete(isProduce, k)
+		}
 	}
 }
 

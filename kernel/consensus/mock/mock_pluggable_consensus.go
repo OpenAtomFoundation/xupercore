@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xuperchain/xupercore/bcs/network/p2pv2"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
 
@@ -273,6 +278,10 @@ func (c *FakeKContext) ResourceLimit() contract.Limits {
 	}
 }
 
+func (c *FakeKContext) Call(module, contract, method string, args map[string][]byte) (*contract.Response, error) {
+	return nil, nil
+}
+
 type FakeManager struct {
 	R *FakeRegistry
 }
@@ -299,4 +308,27 @@ func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contr
 
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {
 	return nil, nil
+}
+
+func NewXContent() *xctx.BaseCtx {
+	return &xctx.BaseCtx{}
+}
+
+func NewP2P(node string) (p2p.Server, *nctx.NetCtx, error) {
+	// 创建p2p
+	var Npath string
+	switch node {
+	case "node":
+		Npath = "node"
+	case "nodeA":
+		Npath = "node1"
+	case "nodeB":
+		Npath = "node2"
+	case "nodeC":
+		Npath = "node3"
+	}
+	ecfg, _ := mock.NewEnvConfForTest("p2pv2/" + Npath + "/conf/env.yaml")
+	ctx, _ := nctx.NewNetCtx(ecfg)
+	p2pNode := p2pv2.NewP2PServerV2()
+	return p2pNode, ctx, nil
 }

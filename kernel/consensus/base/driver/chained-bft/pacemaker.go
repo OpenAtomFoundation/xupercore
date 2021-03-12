@@ -9,8 +9,6 @@ type PacemakerInterface interface {
 	GetCurrentView() int64
 	// 原NextNewProposal，generate new proposal directly.
 	AdvanceView(qc QuorumCertInterface) (bool, error)
-	// TODO: 原有的NextNewView，NewView是我们的Chained-Hotstuff的特殊实现之一，后面可以考虑如何优化掉
-	PrepareAdvance(viewNum int64, proposer string) error
 }
 
 // DefaultPaceMaker 是一个PacemakerInterface的默认实现，我们与PacemakerInterface放置在一起，方便查看
@@ -21,11 +19,6 @@ type DefaultPaceMaker struct {
 	StartView   int64
 	currentView int64
 	// timeout int64
-}
-
-// PrepareAdvance
-func (p *DefaultPaceMaker) PrepareAdvance(viewNum int64, proposer string) error {
-	return nil
 }
 
 func (p *DefaultPaceMaker) AdvanceView(qc QuorumCertInterface) (bool, error) {

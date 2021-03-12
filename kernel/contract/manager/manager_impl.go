@@ -30,6 +30,19 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	if cfg.XMReader == nil {
 		return nil, errors.New("nil xmodel reader when init contract manager")
 	}
+	if cfg.EnvConf == nil && cfg.Config == nil {
+		return nil, errors.New("nil contract config when init contract manager")
+	}
+	var xcfg *contract.ContractConfig
+	if cfg.EnvConf == nil {
+		xcfg = cfg.Config
+	} else {
+		var err error
+		xcfg, err = loadConfig(cfg.EnvConf.GenConfFilePath(contractConfigName))
+		if err != nil {
+			return nil, fmt.Errorf("error while load contract config:%s", err)
+		}
+	}
 
 	m := &managerImpl{
 		core: cfg.Core,
@@ -37,26 +50,16 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	xbridge, err := bridge.New(&bridge.XBridgeConfig{
 		Basedir: cfg.Basedir,
 		VMConfigs: map[bridge.ContractType]bridge.VMConfig{
-			bridge.TypeWasm: &bridge.WasmConfig{
-				Driver:        "xvm",
-				EnableUpgrade: true,
-			},
-			bridge.TypeNative: &bridge.NativeConfig{
-				Driver: "native",
-				Enable: true,
-			},
-			// bridge.TypeEvm: &bridge.EVMConfig{
-			// 	Enable: false,
-			// },
-			bridge.TypeKernel: &bridge.XkernelConfig{
-				Driver:   "default",
-				Enable:   true,
+			bridge.TypeWasm:   &xcfg.Wasm,
+			bridge.TypeNative: &xcfg.Native,
+			bridge.TypeEvm:    &xcfg.EVM,
+			bridge.TypeKernel: &contract.XkernelConfig{
+				Driver:   xcfg.Xkernel.Driver,
+				Enable:   xcfg.Xkernel.Enable,
 				Registry: &m.kregistry,
 			},
 		},
-		Config: bridge.ContractConfig{
-		    EnableUpgrade: true,
-		},
+		Config: *xcfg,
 		XModel: cfg.XMReader,
 		Core:   cfg.Core,
 	})
@@ -75,7 +78,7 @@ func (m *managerImpl) NewContext(cfg *contract.ContextConfig) (contract.Context,
 }
 
 func (m *managerImpl) NewStateSandbox(cfg *contract.SandboxConfig) (contract.StateSandbox, error) {
-	return sandbox.NewXModelCache(cfg.XMReader)
+	return sandbox.NewXModelCache(cfg.XMReader), nil
 }
 
 func (m *managerImpl) GetKernRegistry() contract.KernRegistry {
@@ -123,7 +126,7 @@ func (m *managerImpl) upgradeContract(ctx contract.KContext) (*contract.Response
 		return nil, errors.New("invoke Upgrade error, contract name is nil")
 	}
 
-	err := ctx.VerifyContractOwnerPermission(string(contractName), ctx.AuthRequire())
+	err := m.core.VerifyContractOwnerPermission(string(contractName), ctx.AuthRequire())
 	if err != nil {
 		return nil, err
 	}

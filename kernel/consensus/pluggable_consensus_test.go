@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -219,10 +220,20 @@ func TestNewPluggableConsensus(t *testing.T) {
 		t.Error("GetConsensusName error", err)
 		return
 	}
+	wl := mock.NewFakeLedger(GetWrongConsensusConf())
+	wctx := GetConsensusCtx(wl)
+	_, err = NewPluggableConsensus(wctx)
+	if err == nil {
+		t.Error("Empty name error")
+	}
 }
 
 func GetNewConsensusConf() []byte {
 	return []byte("{\"name\":\"another\",\"config\":\"\"}")
+}
+
+func GetWrongConsensusConf() []byte {
+	return []byte("{\"name\":\"\",\"config\":\"\"}")
 }
 
 func NewUpdateArgs() map[string][]byte {
@@ -240,7 +251,6 @@ func NewUpdateM() map[string]map[string][]byte {
 	return a
 }
 
-/*
 func TestUpdateConsensus(t *testing.T) {
 	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
@@ -286,7 +296,7 @@ func TestUpdateConsensus(t *testing.T) {
 		t.Error("update error", "len", len(c))
 	}
 }
-*/
+
 func TestCompeteMaster(t *testing.T) {
 	// ledger的高度为2
 	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
@@ -300,6 +310,28 @@ func TestCompeteMaster(t *testing.T) {
 	_, _, err := pc.CompeteMaster(newHeight)
 	if err != nil {
 		t.Error("CompeteMaster error")
+	}
+}
+
+func TestCheckMinerMatch(t *testing.T) {
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
+	ctx := GetConsensusCtx(l)
+	pc, _ := NewPluggableConsensus(ctx)
+	newHeight := l.GetTipBlock().GetHeight() + 1
+	_, err := pc.CheckMinerMatch(mock.NewXContent(), mock.NewBlock(int(newHeight)))
+	if err != nil {
+		t.Error("CheckMinerMatch error")
+	}
+}
+
+func TestCalculateBlock(t *testing.T) {
+	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
+	ctx := GetConsensusCtx(l)
+	pc, _ := NewPluggableConsensus(ctx)
+	newHeight := l.GetTipBlock().GetHeight() + 1
+	err := pc.CalculateBlock(mock.NewBlock(int(newHeight)))
+	if err != nil {
+		t.Error("CalculateBlock error")
 	}
 }
 

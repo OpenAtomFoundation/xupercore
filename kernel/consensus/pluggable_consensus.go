@@ -16,9 +16,7 @@ import (
 const (
 	// pluggable_consensus需向三代合约注册的合约方法名, 共识使用三代合约存储作为自己的存储
 	// contractUpdateMethod 为更新共识注册，用于在提案-投票成功后，触发共识由原A转换成B
-	// contractReadMethod 为读注册，主要用于共识管理升级历史存储
 	contractUpdateMethod = "updateConsensus"
-	contractReadMethod   = "readConsensus"
 	// pluggable_consensus使用的三代kernel合约存储bucket名
 	// 共识的key value设计如下
 	// key, value直接通过index拿取历史可插拔slice的长度index([0,len-1])，通过index为自增变量为key，对应如下:
@@ -65,8 +63,6 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 	}
 	// 向合约注册升级方法
 	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractUpdateMethod, pc.updateConsensus)
-	// 向合约注册读方法
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractReadMethod, pc.readConsensus)
 	xMReader, err := cCtx.Ledger.GetTipXMSnapshotReader()
 	if err != nil {
 		return nil, err
@@ -141,28 +137,6 @@ func (pc *PluggableConsensus) makeConsensusItem(cCtx cctx.ConsensusCtx, cCfg def
 	}
 	cCtx.XLog.Debug("Pluggable Consensus::makeConsensusItem::create a consensus item.", "type", cCfg.ConsensusName)
 	return specificCon, nil
-}
-
-// readConsensus 读pluggable_consensus存储合约方法
-func (pc *PluggableConsensus) readConsensus(ctx contract.KContext) (*contract.Response, error) {
-	pluggableConfig, err := ctx.Get(contractBucket, []byte(consensusKey))
-	if err != nil {
-		pc.ctx.XLog.Warn("Pluggable Consensus::readConsensus::get object failed", "error", err)
-		return nil, ContractCallErr
-	}
-	c := map[int]def.ConsensusConfig{}
-	err = json.Unmarshal(pluggableConfig, &c)
-	if err != nil {
-		pc.ctx.XLog.Warn("Pluggable Consensus::readConsensus::unmarshal error", "error", err)
-		return nil, ContractCallErr
-	}
-	if len(c) == 0 {
-		pc.ctx.XLog.Warn("Pluggable Consensus::readConsensus::unInitialized")
-		return nil, ContractCallErr
-	}
-	return &contract.Response{
-		Body: pluggableConfig,
-	}, nil
 }
 
 // updateConsensus 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例

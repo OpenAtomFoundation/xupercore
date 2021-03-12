@@ -3,7 +3,6 @@ package tdpos
 import (
 	"encoding/json"
 	"sort"
-	"sync"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -31,13 +30,9 @@ type tdposSchedule struct {
 	enableChainedBFT bool
 
 	// 当前validators的address
-	proposers []string
-	netUrlMap map[string]string
-	curTerm   int64
-
-	// 增速使用的高度到proposers的映射，固定长度的slice，清理掉低height
-	proposersMapping historyProposers
-	mappingMutex     sync.Mutex
+	validators     []string
+	initValidators []string
+	curTerm        int64
 
 	log    logs.Logger
 	ledger cctx.LedgerRely
@@ -52,17 +47,14 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) 
 		alternateInterval: xconfig.AlternateInterval,
 		termInterval:      xconfig.TermInterval,
 		initTimestamp:     xconfig.InitTimestamp,
-		proposers:         (xconfig.InitProposer)["1"],
-		netUrlMap:         make(map[string]string),
+		validators:        (xconfig.InitProposer)["1"],
 		log:               log,
 		ledger:            ledger,
 	}
 	index := 0
-	netUrls := (xconfig.InitProposerNeturl)["1"]
-	for index < len(schedule.proposers) {
-		key := schedule.proposers[index]
-		value := netUrls[index]
-		schedule.netUrlMap[key] = value
+	for index < len(schedule.validators) {
+		key := schedule.validators[index]
+		schedule.initValidators = append(schedule.initValidators, key)
 		index++
 	}
 
@@ -74,8 +66,8 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) 
 		return nil
 	}
 
-	if !common.AddressEqual(schedule.proposers, refresh) && len(refresh) != 0 {
-		schedule.proposers = refresh
+	if !common.AddressEqual(schedule.validators, refresh) && len(refresh) != 0 {
+		schedule.validators = refresh
 	}
 	if xconfig.EnableBFT != nil {
 		schedule.enableChainedBFT = true
@@ -105,6 +97,29 @@ func (s *tdposSchedule) minerScheduling(timestamp int64) (term int64, pos int64,
 	return
 }
 
+// getSnapshotKey 获取当前tip高度对应key的快照
+func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) ([]byte, error) {
+	if height <= 0 {
+		return nil, heightTooLow
+	}
+	block, err := s.ledger.QueryBlockByHeight(height)
+	if err != nil {
+		s.log.Debug("tdpos::getSnapshotKey::QueryBlockByHeight err.", "err", err)
+		return nil, err
+	}
+	reader, err := s.ledger.CreateSnapshot(block.GetBlockid())
+	if err != nil {
+		s.log.Error("tdpos::getSnapshotKey::CreateSnapshot err.", "err", err)
+		return nil, err
+	}
+	versionData, err := reader.Get(bucket, key)
+	if err != nil {
+		s.log.Debug("tdpos::getSnapshotKey::reader.Get err.", "err", err)
+		return nil, err
+	}
+	return versionData.PureData.Value, nil
+}
+
 // GetLeader 根据输入的round，计算应有的proposer，实现election接口
 // 该方法主要为了支撑smr扭转和矿工挖矿，在handleReceivedProposal阶段会调用该方法
 // 由于xpoa主逻辑包含回滚逻辑，因此回滚逻辑必须在ProcessProposal进行
@@ -130,55 +145,11 @@ func (s *tdposSchedule) GetLeader(round int64) string {
 	return proposers[pos]
 }
 
-// getSnapshotKey 获取当前tip高度的前三个区块高度的对应key的快照
-func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) ([]byte, error) {
-	if height <= 3 {
-		return nil, heightTooLow
-	}
-	// 获取指定tipId的前三个区块
-	block, err := s.ledger.QueryBlockByHeight(height - 3)
-	if err != nil {
-		s.log.Debug("tdpos::getSnapshotKey::QueryBlockByHeight err.", "err", err)
-		return nil, err
-	}
-	reader, err := s.ledger.CreateSnapshot(block.GetBlockid())
-	if err != nil {
-		s.log.Error("tdpos::getSnapshotKey::CreateSnapshot err.", "err", err)
-		return nil, err
-	}
-	versionData, err := reader.Get(bucket, key)
-	// TODO: 具体合约未被调用过，初始化时需返回init参数
-	if err != nil {
-		s.log.Debug("tdpos::getSnapshotKey::reader.Get err.", "err", err)
-		return nil, err
-	}
-	return versionData.PureData.Value, nil
-}
-
 // GetValidators election接口实现，获取指定round的候选人节点Address
 func (s *tdposSchedule) GetValidators(round int64) []string {
 	if round <= 3 {
-		return s.proposers
+		return s.initValidators
 	}
-	// tdpos的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
-	// 查看增速映射里是否有对应的值
-	s.mappingMutex.Lock()
-	sort.Stable(s.proposersMapping)
-	floor := -1
-	for i, p := range s.proposersMapping {
-		if p.height <= round {
-			floor = i
-			continue
-		}
-		break
-	}
-	if floor >= 0 {
-		s.mappingMutex.Unlock()
-		return s.proposersMapping[floor].proposers
-	}
-	s.mappingMutex.Unlock()
-
-	// 否则读取快照
 	proposers, err := s.calculateProposers(round)
 	if err != nil {
 		return nil
@@ -188,27 +159,78 @@ func (s *tdposSchedule) GetValidators(round int64) []string {
 
 // GetIntAddress election接口实现，获取候选人地址到网络地址的映射
 func (s *tdposSchedule) GetIntAddress(address string) string {
-	return s.netUrlMap[address]
+	return ""
+}
+
+// updateProposers 根据各合约存储计算当前proposers
+func (s *tdposSchedule) UpdateProposers(height int64) bool {
+	if height <= 3 {
+		return false
+	}
+	s.log.Debug("tdpos::UpdateProposers!!!!!!")
+	nextProposers, err := s.calculateProposers(height)
+	if err != nil || len(nextProposers) == 0 {
+		return false
+	}
+	s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "proposers", nextProposers)
+	if !common.AddressEqual(nextProposers, s.validators) {
+		s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "proposers", nextProposers)
+		s.validators = nextProposers
+		return true
+	}
+	return false
 }
 
 // calculateProposers 根据vote选票信息计算最新的topK proposer, 调用方需检查height > 3
+// 若提案投票人数总和小于指定数目，则统一仍使用初始值
+// 或者根据历史termKey获取历史候选人集合
 func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 	if height <= 3 {
-		return s.proposers, nil
+		return s.initValidators, nil
 	}
-	// 获取候选人信息
-	res, err := s.getSnapshotKey(height, contractBucket, []byte(nominateKey))
+	nowTerm, _, _ := s.minerScheduling(time.Now().UnixNano())
+	s.log.Debug("tdpos::calculateProposers!!!", "tipHeight", s.ledger.GetTipBlock().GetHeight(), "height", height)
+	// 情况一：目标height尚未产生，计算新一轮值
+	if s.ledger.GetTipBlock().GetHeight() < height {
+		if s.curTerm == nowTerm {
+			// 当前并不需要更新候选人
+			s.log.Debug("tdpos::calculateProposers::s.curTerm == nowTerm")
+			return s.validators, nil
+		}
+		// 更新候选人时需要读取快照，并计算投票的top K
+		p, err := s.calTopKNominator(height)
+		if err != nil {
+			s.log.Error("tdpos::calculateProposers::calculateTopK err.", "err", err)
+			return nil, err
+		}
+		s.log.Debug("tdpos::calculateProposers::calTopKNominator", "p", p)
+		return p, nil
+	}
+	// 情况二：读取历史值，此时分成历史Key读取和计算差值两部分
+	b, err := s.ledger.QueryBlockByHeight(height)
 	if err != nil {
-		s.log.Error("tdpos::calculateProposers::getSnapshotKey err.", "err", err)
+		s.log.Error("tdpos::calculateProposers::QueryBlockByHeight err.", "err", err)
+		return nil, err
+	}
+	term, _, _ := s.minerScheduling(b.GetTimestamp())
+	return s.calHisValidators(height, term)
+}
+
+// calTopKNominator 计算最新的投票的topK候选人并返回
+func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
+	// 获取nominate信息
+	res, err := s.getSnapshotKey(height-3, contractBucket, []byte(nominateKey))
+	if err != nil {
+		s.log.Error("tdpos::calculateTopK::getSnapshotKey err.", "err", err)
 		return nil, err
 	}
 	// 未读到值时直接返回初始化值
 	if res == nil {
-		return s.proposers, nil
+		return s.initValidators, nil
 	}
 	nominateValue := NewNominateValue()
 	if err := json.Unmarshal(res, &nominateValue); err != nil {
-		s.log.Error("tdpos::calculateProposers::load nominate read set err.")
+		s.log.Error("tdpos::calculateTopK::load nominate read set err.")
 		return nil, err
 	}
 	var termBallotSli termBallotsSlice
@@ -218,13 +240,14 @@ func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 		}
 		// 根据候选人信息获取vote选票信息
 		key := voteKeyPrefix + candidate
-		res, err := s.getSnapshotKey(height, contractBucket, []byte(key))
+		res, err := s.getSnapshotKey(height-3, contractBucket, []byte(key))
 		if err != nil {
-			s.log.Error("tdpos::calculateProposers::load vote read set err.")
+			s.log.Error("tdpos::calculateTopK::load vote read set err.")
 			return nil, err
 		}
+		// 未有vote信息则跳过
 		if res == nil {
-			return s.proposers, nil
+			continue
 		}
 		voteValue := NewvoteValue()
 		if err := json.Unmarshal(res, &voteValue); err != nil {
@@ -236,73 +259,71 @@ func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 		termBallotSli = append(termBallotSli, candidateBallot)
 	}
 	if int64(termBallotSli.Len()) < s.proposerNum {
-		s.log.Error("tdpos::calculateProposers::Term publish proposer num less than config", "termVotes", termBallotSli)
-		return nil, proposerNotEnoughErr
+		s.log.Error("tdpos::calculateTopK::Term publish proposer num less than config", "termVotes", termBallotSli)
+		return s.initValidators, nil
 	}
 	// 计算topK候选人
 	sort.Stable(termBallotSli)
+	s.log.Debug("tdpos::calculateTopK!!!!", "termBallotSli", termBallotSli)
 	var proposers []string
 	for i := int64(0); i < s.proposerNum; i++ {
 		proposers = append(proposers, termBallotSli[i].Address)
 	}
-	s.mappingMutex.Lock()
-	defer s.mappingMutex.Unlock()
-	s.proposersMapping = append(s.proposersMapping, historyProposer{
-		height:    height,
-		proposers: proposers,
-	})
-	if len(s.proposersMapping) > MAXHISPROPOSERSSIZE {
-		s.proposersMapping = s.proposersMapping[len(s.proposersMapping)-MAXHISPROPOSERSSIZE:]
-	}
 	return proposers, nil
 }
 
-// updateProposers 根据各合约存储计算当前proposers
-func (s *tdposSchedule) UpdateProposers(height int64) bool {
-	if height <= 3 {
-		return false
-	}
-	nextProposers, err := s.calculateProposers(height)
-	if err != nil || len(nextProposers) == 0 {
-		return false
-	}
-	if !common.AddressEqual(nextProposers, s.proposers) {
-		// 更新netURL
-		res, err := s.getSnapshotKey(height, contractBucket, []byte(urlmapKey))
-		if err != nil {
-			s.log.Error("tdpos::updateProposers::getSnapshotKey error", "err", err)
-			return false
-		}
-		if res == nil {
-			return false
-		}
-		netURLValue := NewNetURLMap()
-		if err := json.Unmarshal(res, &netURLValue); err != nil {
-			s.log.Error("tdpos::updateProposers::unmarshal err.", "err", err)
-			return false
-		}
-		for k, v := range netURLValue {
-			s.netUrlMap[k] = v
-		}
-		s.proposers = nextProposers
-		return true
-	}
-	return false
-}
-
-// notifyTermChanged 改变底层smr的候选人
-func (s *tdposSchedule) notifyTermChanged(height int64) error {
-	if !s.enableChainedBFT {
-		// BFT not enabled, continue
-		return nil
-	}
-	proposers, err := s.calculateProposers(height)
+// calHisValidators 根据termKey计算历史候选人信息
+// ...｜<----termK---->｜...｜<----termK+N---->｜...|<----termK+M---->|<---termK+M+1--->
+// ...|..VoteA....VoteB|....|......VoteC......|....|.....VoteD.......|................
+// ...|B1|B2|..........|Bn..|Bm|Bm+1|.........|Bk|.|Bv|Bv+1|.........|Bx|Bx+1|Bx+2|...
+// ..........term1.....|term2|.....term3......|term4|.....term5......|......term6+....
+func (s *tdposSchedule) calHisValidators(height int64, inputTerm int64) ([]string, error) {
+	// 获取term信息
+	res, err := s.getSnapshotKey(height, contractBucket, []byte(termKey))
 	if err != nil {
-		return err
+		s.log.Error("tdpos::calHisValidators::getSnapshotKey err.", "err", err)
+		return nil, err
 	}
-	s.log.Debug("tdpos::notifyTermChanged", "s.proposers", s.proposers, "proposers", proposers)
-	if !common.AddressEqual(proposers, s.proposers) {
-		s.proposers = proposers
+	if res == nil {
+		return s.initValidators, nil
 	}
-	return nil
+	termV := NewTermValue()
+	if err := json.Unmarshal(res, &termV); err != nil {
+		s.log.Error("tdpos::calHisValidators::Unmarshal err.", "err", err)
+		return nil, err
+	}
+	// 如果slice最后一个值仍比当前值小，则需查找计算
+	if termV[len(termV)-1].term < inputTerm {
+		// 此时根据最后一次记录term的height向后查找，然后计算候选人值
+		beginH := termV[len(termV)-1].height
+		for {
+			beginH = beginH + 1
+			b, err := s.ledger.QueryBlockByHeight(beginH)
+			// 未找到更大的term，此时应该返回当前值
+			if err != nil {
+				s.log.Error("tdpos::calHisValidators::QueryBlockByHeight err.", "err", err)
+				return termV[len(termV)-1].validators, nil
+			}
+			bv, _ := b.GetConsensusStorage()
+			tdposStorage, err := common.ParseOldQCStorage(bv)
+			if err != nil {
+				s.log.Error("tdpos::calHisValidators::ParseOldQCStorage err.", "err", err)
+				return nil, err
+			}
+			if tdposStorage.CurTerm > termV[len(termV)-1].term {
+				return s.calTopKNominator(b.GetHeight())
+			}
+		}
+	}
+	// 如果在历史值区间，则可直接计算结果
+	index := 0
+	for i, item := range termV {
+		if item.term <= inputTerm {
+			index = i
+			continue
+		}
+		break
+	}
+	s.log.Debug("tdpos::calHisValidators", "termV[index].validator", termV[index].validators)
+	return termV[index].validators, nil
 }
