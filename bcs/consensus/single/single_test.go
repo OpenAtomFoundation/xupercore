@@ -3,6 +3,7 @@ package single
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
@@ -60,6 +61,14 @@ func TestNewSingleConsensus(t *testing.T) {
 	}
 	if i := NewSingleConsensus(*cCtx, getWrongConsensusConf()); i != nil {
 		t.Error("NewSingleConsensus check name error")
+	}
+	i.Stop()
+	i.Start()
+	i.ProcessBeforeMiner(time.Now().UnixNano())
+	cCtx.XLog = nil
+	i = NewSingleConsensus(*cCtx, conf)
+	if i != nil {
+		t.Error("NewSingleConsensus nil logger error")
 	}
 }
 
@@ -130,5 +139,9 @@ func TestCheckMinerMatch(t *testing.T) {
 	ok, err := i.CheckMinerMatch(&cCtx.BaseCtx, f)
 	if !ok || err != nil {
 		t.Error("TestCheckMinerMatch error", "error", err, cCtx.Address.PrivateKey)
+	}
+	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
+	if err != nil {
+		t.Error("ProcessBeforeMiner error", "error", err)
 	}
 }

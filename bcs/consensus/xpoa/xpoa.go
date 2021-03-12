@@ -149,7 +149,7 @@ Again:
 	} else {
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
 		// 定期清理isProduce
-		cleanProduceMap(x.isProduce, x.election.period)
+		common.CleanProduceMap(x.isProduce, x.election.period)
 		goto Again
 	}
 

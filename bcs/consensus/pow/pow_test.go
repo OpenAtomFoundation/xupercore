@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 	"testing"
+	"time"
 
 	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
@@ -68,6 +69,19 @@ func TestNewPoWConsensus(t *testing.T) {
 	}
 	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf()); i != nil {
 		t.Error("NewPoWConsensus check name error")
+	}
+}
+
+func TestProcessBeforeMiner(t *testing.T) {
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error.")
+		return
+	}
+	i := NewPoWConsensus(*cCtx, getConsensusConf())
+	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
+	if err != nil {
+		t.Error("ProcessBeforeMiner error.")
 	}
 }
 
@@ -223,9 +237,13 @@ func TestMining(t *testing.T) {
 		t.Error("NewBlockWithStorage error", err)
 		return
 	}
-	err = powC.mining(B)
+	err = powC.CalculateBlock(B)
 	if err != nil {
-		t.Error("TestMining mining error", "blockId", B.GetBlockid(), "err", err)
+		t.Error("CalculateBlock mining error", "err", err)
+	}
+	err = powC.ProcessConfirmBlock(B)
+	if err != nil {
+		t.Error("ProcessConfirmBlock mining error", "err", err)
 	}
 }
 
@@ -295,4 +313,16 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("TestRefreshDifficulty refreshDifficulty err", "err", err, "target", target)
 		return
 	}
+	ps = PoWStorage{
+		TargetBits: target,
+	}
+	by, _ = json.Marshal(ps)
+	B3, err := bmock.NewBlockWithStorage(5, cCtx.Crypto, cCtx.Address, by)
+	if err != nil {
+		t.Error("NewBlockWithStorage error B3", err)
+		return
+	}
+	go powC.mining(B3)
+	powC.sigc <- false
+
 }

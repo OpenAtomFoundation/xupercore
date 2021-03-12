@@ -2,10 +2,12 @@ package tdpos
 
 import (
 	"encoding/json"
-	"math/big"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 )
@@ -19,9 +21,8 @@ import (
 //                value = <${from_addr}, ${ballot_count}>
 // 3. 撤销动作相关  key = "revoke_${candi_addr}"
 //                value = <${from_addr}, <(${TYPE_VOTE/TYPE_NOMINATE}, ${ballot_count})>>
-// 4. 钱包p2p映射  key = "urlmap"
-//                value = <${candi_addr}, ${neturl}>
-//
+// 4. term存储相关，仅在vote操作后上报 key = "term"
+//                               value = <${term}, ${Validators}, ${height}> (仅记录变化值)
 // 以上所有的数据读通过快照读取, 快照读取的是当前区块的前三个区块的值
 // 以上所有数据都更新到各自的链上存储中，直接走三代合约写入，去除原Finalize的最后写入更新机制
 // 由于三代合约读写集限制，不能针对同一个ExeInput触发并行操作，后到的tx将会出现读写集错误，即针对同一个大key的操作同一个区块只能顺序执行
@@ -47,14 +48,20 @@ type revokeItem struct {
 	timestamp  int64
 }
 
-type netURLMap map[string]string
-
-func NewNetURLMap() netURLMap {
-	return make(map[string]string)
-}
-
 func NewRevokeValue() revokeValue {
 	return make(map[string][]revokeItem)
+}
+
+type termValue []termItem
+
+type termItem struct {
+	validators []string
+	term       int64
+	height     int64
+}
+
+func NewTermValue() []termItem {
+	return make([]termItem, 0)
 }
 
 func NewContractErrResponse(msg string) *contract.Response {
@@ -64,10 +71,11 @@ func NewContractErrResponse(msg string) *contract.Response {
 	}
 }
 
-func NewContractOKResponse(msg string) *contract.Response {
+func NewContractOKResponse(json []byte) *contract.Response {
 	return &contract.Response{
 		Status:  StatusOK,
-		Message: msg,
+		Message: "success",
+		Body:    json,
 	}
 }
 
@@ -83,86 +91,51 @@ func (tp *tdposConsensus) isAuthAddress(candidate string, initiator string, auth
 	return false
 }
 
-// checkNominateParam 查看候选人合约参数是否合法
-// Args: candidate::候选人钱包地址
-//       neturl::候选人url
-//       amount::投票者票数
-func (tp *tdposConsensus) checkNominateParam(args map[string][]byte) (map[string]string, error) {
-	candidateBytes := args["candidate"]
-	candidateName := string(candidateBytes)
-	if candidateName == "" {
-		return nil, nominateAddrErr
-	}
-	candidateUrlBytes := args["neturl"]
-	candidateUrl := string(candidateUrlBytes)
-	if candidateUrl == "" {
-		return nil, nominateUrlErr
-	}
-	amountBytes := args["amount"]
-	amount := string(amountBytes)
-	if amount == "" {
-		return nil, amountErr
-	}
-	return map[string]string{
-		"candidate": candidateName,
-		"neturl":    candidateUrl,
-		"amount":    amount,
-	}, nil
-}
-
 // runNominateCandidate 执行提名候选人
-// TODO: 抵押十万分之一？
 func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*contract.Response, error) {
 	// 核查nominate合约参数有效性
 	txArgs := contractCtx.Args()
-	args, err := tp.checkNominateParam(txArgs)
-	if err != nil {
-		return NewContractErrResponse(err.Error()), err
+	candidateBytes := txArgs["candidate"]
+	candidateName := string(candidateBytes)
+	if candidateName == "" {
+		return NewContractErrResponse(nominateAddrErr.Error()), nominateAddrErr
 	}
-	amount, err := strconv.ParseInt(args["amount"], 10, 64)
-	if err != nil {
-		return NewContractErrResponse(err.Error()), err
+	amountBytes := txArgs["amount"]
+	amountStr := string(amountBytes)
+	amount, err := strconv.ParseInt(amountStr, 10, 64)
+	if amount == 0 || err != nil {
+		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
 	// 是否按照要求多签
-	if ok := tp.isAuthAddress(args["candidate"], contractCtx.Initiator(), contractCtx.AuthRequire()); !ok {
+	if ok := tp.isAuthAddress(candidateName, contractCtx.Initiator(), contractCtx.AuthRequire()); !ok {
 		return NewContractErrResponse(authErr.Error()), authErr
 	}
 	// TODO: 调用冻结接口，Args: FromAddr, amount
 
-	// 读取提名候选人key，改写；读取钱包p2p映射，改写
-	// 提名候选人改写
+	// 1. 读取提名候选人key，改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight < 3 {
-		tp.log.Debug("tdpos::getSnapshotKey::TipHeight < 3, use init parameters.")
-		return NewContractErrResponse("Cannot nominate candidators when block height < 3."), tooLowHeight
+	if tipHeight <= 3 {
+		return NewContractErrResponse("Cannot nominate candidators when block height <= 3."), tooLowHeight
 	}
-	res, err := tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(nominateKey))
+	res, err := tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(nominateKey))
 	if err != nil {
 		return NewContractErrResponse("Internal error."), err
 	}
 	nominateValue := NewNominateValue()
-	if err := json.Unmarshal(res, &nominateValue); err != nil {
-		tp.log.Error("tdpos::runNominateCandidate::load read set err.")
-		return NewContractErrResponse("Internal error."), err
+	if res != nil { // 非首次初始化
+		if err := json.Unmarshal(res, &nominateValue); err != nil {
+			tp.log.Error("tdpos::runNominateCandidate::load read set err.")
+			return NewContractErrResponse("Internal error."), err
+		}
 	}
-	res, err = tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(urlmapKey))
-	if err != nil {
-		return NewContractErrResponse("Internal error."), err
-	}
-	netURLValue := NewNetURLMap()
-	if err := json.Unmarshal(res, &netURLValue); err != nil {
-		tp.log.Error("tdpos::runNominateCandidate::load neturl read set err.")
-		return NewContractErrResponse("Internal error."), err
-	}
-	// 已经提过名
-	if _, ok := nominateValue[args["candidate"]]; ok {
+	if _, ok := nominateValue[candidateName]; ok { // 已经提过名
 		return NewContractErrResponse(repeatNominateErr.Error()), repeatNominateErr
 	}
 	record := make(map[string]int64)
 	record[contractCtx.Initiator()] = amount
-	nominateValue[args["candidate"]] = record
+	nominateValue[candidateName] = record
 
-	// 候选人改写
+	// 2. 候选人改写
 	returnBytes, err := json.Marshal(nominateValue)
 	if err != nil {
 		return NewContractErrResponse(err.Error()), err
@@ -170,16 +143,11 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 	if err := contractCtx.Put(contractBucket, []byte(nominateKey), returnBytes); err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
-	// urlmap改写
-	netURLValue[args["candidate"]] = args["neturl"]
-	urlBytes, err := json.Marshal(netURLValue)
-	if err != nil {
-		return NewContractErrResponse(err.Error()), err
+	delta := contract.Limits{
+		XFee: fee,
 	}
-	if err := contractCtx.Put(contractBucket, []byte(urlmapKey), urlBytes); err != nil {
-		return NewContractErrResponse(err.Error()), err
-	}
-	return NewContractOKResponse("ok"), nil
+	contractCtx.AddResourceUsed(delta)
+	return NewContractOKResponse([]byte("ok")), nil
 }
 
 // runRevokeCandidate 执行候选人撤销,仅支持自我撤销
@@ -195,21 +163,22 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	}
 	// TODO: 调用解冻接口，Args: FromAddr, amount
 
-	// 读取提名候选人key，改写；读取钱包p2p映射，改写
-	// 提名候选人改写
+	// 1. 提名候选人改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight < 3 {
-		tp.log.Debug("tdpos::getSnapshotKey::TipHeight < 3, use init parameters.")
+	if tipHeight <= 3 {
+		tp.log.Debug("tdpos::getSnapshotKey::TipHeight <= 3, use init parameters.")
 		return NewContractErrResponse("Cannot revoke candidators when block height < 3."), tooLowHeight
 	}
-	res, err := tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(nominateKey))
+	res, err := tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(nominateKey))
 	if err != nil {
 		return NewContractErrResponse("Internal error."), err
 	}
 	nominateValue := NewNominateValue()
-	if err := json.Unmarshal(res, &nominateValue); err != nil {
-		tp.log.Error("tdpos::runRevokeCandidate::load read set err.")
-		return NewContractErrResponse("Internal error."), err
+	if res != nil {
+		if err := json.Unmarshal(res, &nominateValue); err != nil {
+			tp.log.Error("tdpos::runRevokeCandidate::load read set err.")
+			return NewContractErrResponse(notFoundErr.Error()), err
+		}
 	}
 	// 查看是否有历史投票
 	v, ok := nominateValue[candidateName]
@@ -220,22 +189,24 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	if !ok {
 		return NewContractErrResponse(notFoundErr.Error()), notFoundErr
 	}
-	// 读取撤销记录
+
+	// 2. 读取撤销记录
 	revokeKey := revokeKeyPrefix + candidateName
-	res, err = tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(revokeKey))
+	res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
 	if err != nil {
 		return NewContractErrResponse("Internal error."), err
 	}
 	revokeValue := NewRevokeValue()
-	if err := json.Unmarshal(res, &revokeValue); err != nil {
-		tp.log.Error("tdpos::runRevokeCandidate::load revoke read set err.")
-		return NewContractErrResponse("Internal error."), err
+	if res != nil {
+		if err := json.Unmarshal(res, &revokeValue); err != nil {
+			tp.log.Error("tdpos::runRevokeCandidate::load revoke read set err.")
+			return NewContractErrResponse(notFoundErr.Error()), err
+		}
 	}
-	// 改写数据前操作
-	// 1. 更改撤销记录
+
+	// 3. 更改撤销记录
 	if _, ok := revokeValue[contractCtx.Initiator()]; !ok {
-		var itemSli []revokeItem
-		revokeValue[contractCtx.Initiator()] = itemSli
+		revokeValue[contractCtx.Initiator()] = make([]revokeItem, 0)
 	}
 	revokeValue[contractCtx.Initiator()] = append(revokeValue[contractCtx.Initiator()], revokeItem{
 		revokeType: NOMINATETYPE,
@@ -246,19 +217,24 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	if err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
-	// 2. 删除候选人记录
+
+	// 4. 删除候选人记录
 	delete(nominateValue, candidateName)
 	nominateBytes, err := json.Marshal(nominateValue)
 	if err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
-	if err := contractCtx.Put(contractBucket, []byte(nominateKey), nominateBytes); err != nil {
-		return NewContractErrResponse(err.Error()), err
-	}
 	if err := contractCtx.Put(contractBucket, []byte(revokeKey), revokeBytes); err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
-	return NewContractOKResponse("ok"), nil
+	if err := contractCtx.Put(contractBucket, []byte(nominateKey), nominateBytes); err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
+	delta := contract.Limits{
+		XFee: fee,
+	}
+	contractCtx.AddResourceUsed(delta)
+	return NewContractOKResponse([]byte("ok")), nil
 }
 
 // runVote 执行投票
@@ -273,21 +249,19 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	}
 	amountBytes := txArgs["amount"]
 	amountStr := string(amountBytes)
-	if amountStr == "" {
+	amount, err := strconv.ParseInt(amountStr, 10, 64)
+	if amount == 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
-	var amountBig big.Int
-	amount := amountBig.SetBytes(amountBytes).Int64()
 	// TODO: 调用冻结接口，Args: FromAddr, amount
 
-	// 读取候选人投票key，改写
-	// 首先检查vote的地址是否在候选人池中，快照读取候选人池
+	// 1. 检查vote的地址是否在候选人池中，快照读取候选人池，vote相关参数一定是会在nominate列表中显示
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight < 3 {
-		tp.log.Debug("tdpos::getSnapshotKey::TipHeight < 3, use init parameters.")
+	if tipHeight <= 3 {
+		tp.log.Debug("tdpos::getSnapshotKey::TipHeight <= 3, use init parameters.")
 		return NewContractErrResponse("Cannot vote candidators when block height < 3."), tooLowHeight
 	}
-	res, err := tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(nominateKey))
+	res, err := tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(nominateKey))
 	if err != nil {
 		return NewContractErrResponse("Internal error."), err
 	}
@@ -299,24 +273,27 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	if _, ok := nominateValue[candidateName]; !ok {
 		return NewContractErrResponse(voteNominateErr.Error()), voteNominateErr
 	}
-	// 读取投票存储
+
+	// 2. 读取投票存储
 	voteKey := voteKeyPrefix + candidateName
-	res, err = tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(voteKey))
+	res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(voteKey))
 	if err != nil {
-		tp.log.Error("tdpos::runVote::load vote read set err when get key.")
-		return NewContractErrResponse("Internal error."), err
+		return NewContractErrResponse("tdpos::Vote::get key err."), err
 	}
 	voteValue := NewvoteValue()
-	if err := json.Unmarshal(res, &voteValue); err != nil {
-		tp.log.Error("tdpos::runVote::load vote read set err.")
-		return NewContractErrResponse(err.Error()), err
+	if res != nil {
+		if err := json.Unmarshal(res, &voteValue); err != nil {
+			tp.log.Error("tdpos::runVote::load vote read set err.")
+			return NewContractErrResponse(err.Error()), err
+		}
 	}
-	// 改写vote数据
+
+	// 3. 改写vote数据
 	if _, ok := voteValue[contractCtx.Initiator()]; !ok {
 		voteValue[contractCtx.Initiator()] = 0
 	}
 	voteValue[contractCtx.Initiator()] += amount
-	// 改写前操作
+	tp.log.Error("tdpos::runVote!!!!!!!!", "voteValue", voteValue)
 	voteBytes, err := json.Marshal(voteValue)
 	if err != nil {
 		return NewContractErrResponse(err.Error()), err
@@ -324,7 +301,61 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	if err := contractCtx.Put(contractBucket, []byte(voteKey), voteBytes); err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
-	return NewContractOKResponse("ok"), nil
+
+	// 4. 顺带更新term索引
+	if err := tp.refreshTerm(tipHeight, contractCtx); err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
+
+	delta := contract.Limits{
+		XFee: fee,
+	}
+	contractCtx.AddResourceUsed(delta)
+	return NewContractOKResponse([]byte("ok")), nil
+}
+
+// refreshTerm 被动触发更新term列表，当且仅当当前候选人集合和
+func (tp *tdposConsensus) refreshTerm(tipHeight int64, contractCtx contract.KContext) error {
+	// 此处不并需要tipheight-3
+	res, err := tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(termKey))
+	if err != nil {
+		return err
+	}
+	item := termItem{
+		validators: tp.election.validators,
+		term:       tp.election.curTerm,
+		height:     tipHeight,
+	}
+	termValue := NewTermValue()
+	// 初始化则直接push值
+	if res == nil {
+		termValue = append(termValue, item)
+		termBytes, err := json.Marshal(termValue)
+		if err != nil {
+			return err
+		}
+		if err := contractCtx.Put(contractBucket, []byte(termKey), termBytes); err != nil {
+			return err
+		}
+		return nil
+	}
+	if err := json.Unmarshal(res, &termValue); err != nil {
+		return err
+	}
+	// 仅与最新的值对比，若有变化则插入新值
+	tail := termValue[len(termValue)-1]
+	if !common.AddressEqual(tail.validators, tp.election.validators) {
+		termValue = append(termValue, item)
+	}
+	tp.log.Error("tdpos::runVote!!!!!!!!", "termValue", termValue)
+	termBytes, err := json.Marshal(termValue)
+	if err != nil {
+		return err
+	}
+	if err := contractCtx.Put(contractBucket, []byte(termKey), termBytes); err != nil {
+		return err
+	}
+	return nil
 }
 
 // runRevokeVote 执行选票撤销
@@ -340,21 +371,20 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 	}
 	amountBytes := txArgs["amount"]
 	amountStr := string(amountBytes)
-	if amountStr == "" {
+	amount, err := strconv.ParseInt(amountStr, 10, 64)
+	if amount == 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
-	var amountBig big.Int
-	amount := amountBig.SetBytes(amountBytes).Int64()
 	// TODO: 调用解冻接口，Args: FromAddr, amount
 
-	// 首先检查是否在vote池子里面，读取候选人存储
+	// 1. 检查是否在vote池子里面，读取vote存储
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight < 3 {
-		tp.log.Debug("tdpos::getSnapshotKey::TipHeight < 3, use init parameters.")
+	if tipHeight <= 3 {
+		tp.log.Debug("tdpos::getSnapshotKey::TipHeight <= 3, use init parameters.")
 		return NewContractErrResponse("Cannot revoke vote when block height < 3."), tooLowHeight
 	}
 	voteKey := voteKeyPrefix + candidateName
-	res, err := tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(voteKey))
+	res, err := tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(voteKey))
 	if err != nil {
 		tp.log.Error("tdpos::runRevokeVote::load vote read set err when get key.")
 		return NewContractErrResponse("Internal error."), err
@@ -364,21 +394,139 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 		tp.log.Error("tdpos::runRevokeVote::load vote read set err.")
 		return NewContractErrResponse(err.Error()), err
 	}
-	v, ok := voteValue[candidateName]
+	v, ok := voteValue[contractCtx.Initiator()]
 	if !ok {
-		return NewContractErrResponse(emptyNominateKey.Error()), emptyNominateKey
+		return NewContractErrResponse(notFoundErr.Error()), notFoundErr
 	}
 	if v < amount {
 		return NewContractErrResponse("Your vote amount is less than have."), emptyNominateKey
 	}
-	// 改写数据，注意，vote即使变成null也并不影响其在候选人池中，无需重写候选人池
-	voteValue[candidateName] -= amount
+
+	// 2. 读取撤销记录，后续改写用
+	revokeKey := revokeKeyPrefix + candidateName
+	res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
+	if err != nil {
+		return NewContractErrResponse("Internal error."), err
+	}
+	revokeValue := NewRevokeValue()
+	if res != nil {
+		if err := json.Unmarshal(res, &revokeValue); err != nil {
+			tp.log.Error("tdpos::runRevokeCandidate::load revoke read set err.")
+			return NewContractErrResponse(notFoundErr.Error()), err
+		}
+	}
+
+	// 3. 改写撤销存储，撤销表中新增操作
+	if _, ok := revokeValue[contractCtx.Initiator()]; !ok {
+		revokeValue[contractCtx.Initiator()] = make([]revokeItem, 0)
+	}
+	revokeValue[contractCtx.Initiator()] = append(revokeValue[contractCtx.Initiator()], revokeItem{
+		revokeType: VOTETYPE,
+		ballot:     amount,
+		timestamp:  time.Now().UnixNano(),
+	})
+	revokeBytes, err := json.Marshal(revokeValue)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
+
+	// 4. 改写vote数据，注意，vote即使变成null也并不影响其在候选人池中，无需重写候选人池
+	voteValue[contractCtx.Initiator()] -= amount
 	voteBytes, err := json.Marshal(voteValue)
 	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
+	if err := contractCtx.Put(contractBucket, []byte(revokeKey), revokeBytes); err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
 	if err := contractCtx.Put(contractBucket, []byte(voteKey), voteBytes); err != nil {
 		return NewContractErrResponse(err.Error()), err
 	}
-	return NewContractOKResponse("ok"), nil
+	delta := contract.Limits{
+		XFee: fee,
+	}
+	contractCtx.AddResourceUsed(delta)
+	return NewContractOKResponse([]byte("ok")), nil
+}
+
+// runGetTdposInfos 读接口
+func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*contract.Response, error) {
+	initValue := `{
+		"validators": ` + fmt.Sprintf("%s", tp.election.initValidators) + ` 
+	}`
+	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
+	if tipHeight <= 3 {
+		return NewContractOKResponse([]byte(initValue)), nil
+	}
+
+	// nominate信息
+	res, err := tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(nominateKey))
+	if res == nil {
+		return NewContractOKResponse([]byte(initValue)), nil
+	}
+	if err != nil {
+		return NewContractErrResponse("Internal error."), err
+	}
+	nominateValue := NewNominateValue()
+	if err := json.Unmarshal(res, &nominateValue); err != nil {
+		return NewContractErrResponse("tdpos::GetTdposInfos::load nominates read set err."), err
+	}
+
+	tp.log.Error("tdpos::GetTdposInfos", "nominateValue", nominateValue)
+
+	// vote信息
+	voteMap := make(map[string]voteValue)
+	for candidate, _ := range nominateValue {
+		voteKey := voteKeyPrefix + candidate // 读取投票存储
+		res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(voteKey))
+		if err != nil {
+			tp.log.Error("tdpos::GetTdposInfos::load vote read set err when get key.", "key", voteKey)
+			continue
+		}
+		voteValue := NewvoteValue()
+		if res == nil {
+			continue
+		}
+		if err := json.Unmarshal(res, &voteValue); err != nil {
+			tp.log.Error("tdpos::GetTdposInfos::load vote read set err.", "res", res, "err", err)
+			continue
+		}
+		voteMap[candidate] = voteValue
+	}
+
+	tp.log.Error("tdpos::GetTdposInfos", "voteMap", voteMap)
+
+	// revoke信息
+	revokeMap := make(map[string]revokeValue)
+	for candidate, _ := range nominateValue {
+		revokeKey := revokeKeyPrefix + candidate
+		res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
+		if err != nil {
+			tp.log.Error("tdpos::GetTdposInfos::load revoke read set err when get key.", "key", revokeKey)
+			continue
+		}
+		revokeValue := NewRevokeValue()
+		if res == nil {
+			continue
+		}
+		if err := json.Unmarshal(res, &revokeValue); err != nil {
+			tp.log.Error("tdpos::GetTdposInfos::load revoke read set err.", "res", res, "err", err)
+			continue
+		}
+		revokeMap[candidate] = revokeValue
+	}
+
+	tp.log.Error("tdpos::GetTdposInfos", "revokeMap", revokeMap)
+
+	r := `{
+		"validators": ` + fmt.Sprintf("%s", tp.election.validators) + `,
+		"nominate":` + fmt.Sprintf("%v", nominateValue) + `,
+		"vote":` + fmt.Sprintf("%v", voteMap) + `,
+		"revoke":` + fmt.Sprintf("%v", revokeMap) + `
+	}`
+	delta := contract.Limits{
+		XFee: fee,
+	}
+	contractCtx.AddResourceUsed(delta)
+	return NewContractOKResponse([]byte(r)), nil
 }
