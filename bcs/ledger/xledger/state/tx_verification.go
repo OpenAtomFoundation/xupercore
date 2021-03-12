@@ -568,10 +568,9 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	}
 
 	contextConfig := &contract.ContextConfig{
-		State:        sandBox,
-		Core:         t,
-		Initiator:    tx.GetInitiator(),
-		AuthRequire:  tx.GetAuthRequire(),
+		State:       sandBox,
+		Initiator:   tx.GetInitiator(),
+		AuthRequire: tx.GetAuthRequire(),
 	}
 	gasLimit, err := getGasLimitFromTx(tx)
 	if err != nil {
@@ -782,7 +781,7 @@ func (t *State) removeDuplicateUser(initiator string, authRequire []string) []st
 }
 
 func (t *State) GetAccountAddresses(accountName string) ([]string, error) {
-    return t.sctx.AclMgr.GetAccountAddresses(accountName)
+	return t.sctx.AclMgr.GetAccountAddresses(accountName)
 }
 
 // VerifyContractPermission implement Contract ChainCore, used to verify contract permission while contract running

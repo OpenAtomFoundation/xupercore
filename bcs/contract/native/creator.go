@@ -32,7 +32,7 @@ func newNativeCreator(cfg *bridge.InstanceCreatorConfig) (bridge.InstanceCreator
 		return nil, err
 	}
 
-	pm, err := newProcessManager(cfg.VMConfig.(*bridge.NativeConfig), cfg.Basedir, listenAddr)
+	pm, err := newProcessManager(cfg.VMConfig.(*contract.NativeConfig), cfg.Basedir, listenAddr)
 	if err != nil {
 		return nil, err
 	}

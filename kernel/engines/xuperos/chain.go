@@ -138,9 +138,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		return nil, common.ErrContractNewSandboxFailed
 	}
 
-	core := agent.NewChainCoreAgent(t.ctx)
 	contextConfig := &contract.ContextConfig{
-		Core:           core,
 		State:          sandbox,
 		Initiator:      initiator,
 		AuthRequire:    authRequires,

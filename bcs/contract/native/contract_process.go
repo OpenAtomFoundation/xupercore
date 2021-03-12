@@ -10,7 +10,7 @@ import (
 	"time"
 
 	log15 "github.com/xuperchain/log15"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pbrpc"
 	"github.com/xuperchain/xupercore/protos"
@@ -19,7 +19,7 @@ import (
 )
 
 type contractProcess struct {
-	cfg *bridge.NativeConfig
+	cfg *contract.NativeConfig
 
 	name      string
 	basedir   string
@@ -38,7 +38,7 @@ type contractProcess struct {
 	rpcClient pbrpc.NativeCodeClient
 }
 
-func newContractProcess(cfg *bridge.NativeConfig, name, basedir, chainAddr string, desc *protos.WasmCodeDesc) (*contractProcess, error) {
+func newContractProcess(cfg *contract.NativeConfig, name, basedir, chainAddr string, desc *protos.WasmCodeDesc) (*contractProcess, error) {
 	process := &contractProcess{
 		cfg:           cfg,
 		name:          name,

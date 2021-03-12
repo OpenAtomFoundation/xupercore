@@ -1,11 +1,12 @@
 package sandbox
 
 import (
-    "bytes"
-    "errors"
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-    "math/big"
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
@@ -46,14 +47,14 @@ type XMCache struct {
 }
 
 // NewXModelCache new an instance of XModel Cache
-func NewXModelCache(model ledger.XMReader) (*XMCache, error) {
+func NewXModelCache(model ledger.XMReader) *XMCache {
 	return &XMCache{
 		model:        model,
 		inputsCache:  NewMemXModel(),
 		outputsCache: NewMemXModel(),
 		// utxoCache:       NewUtxoCache(utxovm),
 		// crossQueryCache: NewCrossQueryCache(),
-	}, nil
+	}
 }
 
 // // NewXModelCacheWithInputs make new XModelCache with Inputs
@@ -95,10 +96,10 @@ func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
 	if IsEmptyVersionedData(verData) {
 		return nil, ErrNotFound
 	}
-	if IsDelFlag(verData.PureData.Value) {
+	if IsDelFlag(verData.GetPureData().GetValue()) {
 		return nil, ErrHasDel
 	}
-	return verData.PureData.Value, nil
+	return verData.GetPureData().GetValue(), nil
 }
 
 // Level1 读取，从outputsCache中读取
@@ -169,7 +170,7 @@ func (xc *XMCache) Select(bucket string, startKey []byte, endKey []byte) (contra
 // newXModelCacheIterator new an instance of XModel Cache iterator
 func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
 	iter, _ := mc.outputsCache.Select(bucket, startKey, endKey)
-	outputIter := newStripDelIterator(iter)
+	outputIter := iter
 
 	iter, _ = mc.inputsCache.Select(bucket, startKey, endKey)
 	inputIter := newStripDelIterator(iter)
@@ -179,9 +180,14 @@ func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey
 		return nil, err
 	}
 	backendIter = newStripDelIterator(
-		newRsetIterator(backendIter, mc),
+		newRsetIterator(bucket, backendIter, mc),
 	)
-	multiIter := newMultiIterator(outputIter, newMultiIterator(inputIter, backendIter))
+	// return newContractIterator(backendIter), nil
+
+	// 优先级顺序 outputIter -> inputIter -> backendIter
+	// 意味着如果一个key在三个迭代器里面同时出现，优先级高的会覆盖优先级底的
+	multiIter := newMultiIterator(inputIter, backendIter)
+	multiIter = newMultiIterator(outputIter, multiIter)
 	return newContractIterator(multiIter), nil
 }
 
@@ -198,10 +204,7 @@ func (xc *XMCache) RWSet() *contract.RWSet {
 
 func (xc *XMCache) getReadSets() []*ledger.VersionedData {
 	var readSets []*ledger.VersionedData
-	iter, err := xc.inputsCache.NewIterator(nil, nil)
-	if err != nil {
-		panic(err)
-	}
+	iter := xc.inputsCache.NewIterator()
 	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
@@ -212,10 +215,7 @@ func (xc *XMCache) getReadSets() []*ledger.VersionedData {
 
 func (xc *XMCache) getWriteSets() []*ledger.PureData {
 	var writeSets []*ledger.PureData
-	iter, err := xc.outputsCache.NewIterator(nil, nil)
-	if err != nil {
-		panic(err)
-	}
+	iter := xc.outputsCache.NewIterator()
 	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()

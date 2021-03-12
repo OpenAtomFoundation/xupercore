@@ -7,6 +7,7 @@ import (
 	osexec "os/exec"
 	"path/filepath"
 
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xvm/compile"
 	"github.com/xuperchain/xvm/exec"
@@ -17,7 +18,7 @@ import (
 type xvmCreator struct {
 	cm       *codeManager
 	config   bridge.InstanceCreatorConfig
-	vmconfig *bridge.WasmConfig
+	vmconfig *contract.WasmConfig
 
 	wasm2cPath string
 }
@@ -46,7 +47,7 @@ func newXVMCreator(creatorConfig *bridge.InstanceCreatorConfig) (bridge.Instance
 		config:     *creatorConfig,
 	}
 	if creatorConfig.VMConfig != nil {
-		creator.vmconfig = creatorConfig.VMConfig.(*bridge.WasmConfig)
+		creator.vmconfig = creatorConfig.VMConfig.(*contract.WasmConfig)
 		optlevel := creator.vmconfig.XVM.OptLevel
 		if optlevel < 0 || optlevel > 3 {
 			return nil, fmt.Errorf("bad xvm optlevel:%d", optlevel)
