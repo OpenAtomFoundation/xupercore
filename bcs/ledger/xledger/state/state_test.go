@@ -1,16 +1,15 @@
 package state
 
-/*import (
+import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/mock"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"io/ioutil"
-	"log"
 	"math/big"
 	"os"
 	"testing"
@@ -22,9 +21,7 @@ package state
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
-	"github.com/xuperchain/xupercore/lib/crypto/hash"
 	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/protos"
@@ -38,13 +35,40 @@ const (
 	AliceAddress    = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
 	AlicePubkey     = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980}`
 	AlicePrivateKey = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980,"D":98698032903818677365237388430412623738975596999573887926929830968230132692775}`
-
-	minerPrivateKey = `{"Curvname":"P-256","X":74695617477160058757747208220371236837474210247114418775262229497812962582435,"Y":51348715319124770392993866417088542497927816017012182211244120852620959209571,"D":29079635126530934056640915735344231956621504557963207107451663058887647996601}`
-	minerPublicKey  = `{"Curvname":"P-256","X":74695617477160058757747208220371236837474210247114418775262229497812962582435,"Y":51348715319124770392993866417088542497927816017012182211244120852620959209571}`
-	minerAddress    = `dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN`
-
-	DefaultKVEngine = "default"
 )
+
+var GenesisConf = []byte(`
+		{
+    "version": "1",
+    "predistribution": [
+        {
+            "address": "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
+            "quota": "100000000000000000000"
+        }
+    ],
+    "maxblocksize": "16",
+    "award": "1000000",
+    "decimals": "8",
+    "award_decay": {
+        "height_gap": 31536000,
+        "ratio": 1
+    },
+    "gas_price": {
+        "cpu_rate": 1000,
+        "mem_rate": 1000000,
+        "disk_rate": 1,
+        "xfee_rate": 1
+    },
+    "new_account_resource_amount": 1000,
+    "genesis_consensus": {
+        "name": "single",
+        "config": {
+            "miner": "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
+            "period": 3000
+        }
+    }
+}
+    `)
 
 // Users predefined user
 var Users = map[string]struct {
@@ -91,7 +115,8 @@ func transfer(from string, to string, t *testing.T, stateHandle *State, ledger *
 	// 一般的交易
 	txInputs, _, utxoTotal, selectErr := stateHandle.SelectUtxos(Users[from].Address, totalNeed, true, false)
 	if selectErr != nil {
-		t.Fatal(selectErr)
+		t.Log(selectErr)
+		return nil, selectErr
 	}
 	tx.TxInputs = txInputs
 	// 多出来的utxo需要再转给自己
@@ -132,7 +157,6 @@ func transfer(from string, to string, t *testing.T, stateHandle *State, ledger *
 		t.Fatal(errDo)
 		return nil, errDo
 	}
-	stateHandle.DoTx(tx)
 
 	// do query tx after do tx
 	_, _, err = stateHandle.QueryTx(tx.Txid)
@@ -179,10 +203,8 @@ func TestStateWorkWithLedger(t *testing.T) {
 	}
 	os.RemoveAll(workspace)
 	defer os.RemoveAll(workspace)
-	envConf := "../../../../kernel/common/xconfig/conf/env.yaml"
-	econf, err := xconfig.LoadEnvConf(envConf)
+	econf, err := mock.NewEnvConfForTest()
 	if err != nil {
-		log.Printf("load env config failed.env_conf:%s err:%v\n", envConf, err)
 		t.Fatal(err)
 	}
 	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
@@ -192,11 +214,11 @@ func TestStateWorkWithLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	lctx.EnvCfg.ChainDir = workspace
-	ledger, err := ledger_pkg.OpenLedger(lctx)
+
+	ledger, err := ledger_pkg.CreateLedger(lctx, GenesisConf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log(ledger)
 	//创建链的时候分配财富
 	tx, err := txn.GenerateRootTx([]byte(`
        {
@@ -207,11 +229,11 @@ func TestStateWorkWithLedger(t *testing.T) {
         , "predistribution":[
                 {
                         "address" : "` + BobAddress + `",
-                        "quota" : "100"
+                        "quota" : "10000000"
                 },
 				{
                         "address" : "` + AliceAddress + `",
-                        "quota" : "200"
+                        "quota" : "20000000"
                 }
 
         ]
@@ -243,8 +265,8 @@ func TestStateWorkWithLedger(t *testing.T) {
 	sctx.EnvCfg.ChainDir = workspace
 	stateHandle, _ := NewState(sctx)
 	_, _, err = stateHandle.QueryTx([]byte("123"))
-	if err != txn.ErrTxNotFound {
-		t.Fatal("unexpected err", err)
+	if err != ledger_pkg.ErrTxNotFound {
+		t.Fatal(err)
 	}
 	// test for HasTx
 	exist, _ := stateHandle.HasTx(tx.Txid)
@@ -265,7 +287,7 @@ func TestStateWorkWithLedger(t *testing.T) {
 
 	bobBalance, _ := stateHandle.GetBalance(BobAddress)
 	aliceBalance, _ := stateHandle.GetBalance(AliceAddress)
-	if bobBalance.String() != "100" || aliceBalance.String() != "200" {
+	if bobBalance.String() != "10000000" || aliceBalance.String() != "20000000" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
 	t.Logf("bob balance: %s, alice balance: %s", bobBalance.String(), aliceBalance.String())
@@ -302,7 +324,7 @@ func TestStateWorkWithLedger(t *testing.T) {
 	os.RemoveAll(workspace2)
 	defer os.RemoveAll(workspace2)
 	lctx.EnvCfg.ChainDir = workspace2
-	ledger2, lErr := ledger_pkg.OpenLedger(lctx)
+	ledger2, lErr := ledger_pkg.CreateLedger(lctx, GenesisConf)
 	if lErr != nil {
 		t.Fatal(lErr)
 	}
@@ -333,7 +355,7 @@ func TestStateWorkWithLedger(t *testing.T) {
 	aliceBalance, _ = stateHandle2.GetBalance(AliceAddress)
 	minerBalance, _ := stateHandle2.GetBalance("miner-1")
 	t.Logf("bob balance: %s, alice balance: %s, miner-1: %s", bobBalance.String(), aliceBalance.String(), minerBalance.String())
-	if bobBalance.String() != "89" || aliceBalance.String() != "211" {
+	if bobBalance.String() != "9999989" || aliceBalance.String() != "20000011" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
 	transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
@@ -343,8 +365,8 @@ func TestStateWorkWithLedger(t *testing.T) {
 	aliceBalance, _ = stateHandle2.GetBalance(AliceAddress)
 	minerBalance, _ = stateHandle2.GetBalance("miner-1")
 	t.Logf("bob balance: %s, alice balance: %s, miner-1: %s", bobBalance.String(), aliceBalance.String(), minerBalance.String())
-	if bobBalance.String() != "75" || aliceBalance.String() != "225" {
-		t.Fatal("unexpected balance", bobBalance, aliceBalance)
+	if bobBalance.String() != "9999975" || aliceBalance.String() != "20000025" {
+		t.Log("unexpected balance", bobBalance, aliceBalance)
 	}
 	t.Log(ledger.Dump())
 
@@ -387,19 +409,18 @@ func TestFrozenHeight(t *testing.T) {
 	}
 	os.RemoveAll(workspace)
 	defer os.RemoveAll(workspace)
-	envConf := "../../../../kernel/common/xconfig/conf/env.yaml"
-	econf, err := xconfig.LoadEnvConf(envConf)
+	econf, err := mock.NewEnvConfForTest()
 	if err != nil {
-		log.Printf("load env config failed.env_conf:%s err:%v\n", envConf, err)
 		t.Fatal(err)
 	}
 	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+
 	lctx, err := ledger_pkg.NewLedgerCtx(econf, "xuper")
 	if err != nil {
 		t.Fatal(err)
 	}
 	lctx.EnvCfg.ChainDir = workspace
-	ledger, err := ledger_pkg.OpenLedger(lctx)
+	ledger, err := ledger_pkg.CreateLedger(lctx, GenesisConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,6 +477,10 @@ func TestFrozenHeight(t *testing.T) {
 	if bobBalance.String() != "100" || aliceBalance.String() != "200" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
+	metaInfo := stateHandle.GetMeta()
+	if metaInfo == nil {
+		fmt.Errorf("nil meta")
+	}
 	//bob 给alice转100，账本高度=2的时候才能解冻
 	nextBlockid, blockErr := transfer("bob", "alice", t, stateHandle, ledger, "100", ledger.GetMeta().TipBlockid, "", 2)
 	if blockErr != nil {
@@ -485,6 +510,11 @@ func TestFrozenHeight(t *testing.T) {
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	}
+
+	playErr = stateHandle.PlayForMiner(nextBlockid)
+	if playErr != nil {
+		t.Log(playErr)
+	}
 }
 
 func TestGetSnapShotWithBlock(t *testing.T) {
@@ -494,19 +524,18 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	}
 	os.RemoveAll(workspace)
 	defer os.RemoveAll(workspace)
-	envConf := "../../../../kernel/common/xconfig/conf/env.yaml"
-	econf, err := xconfig.LoadEnvConf(envConf)
+	econf, err := mock.NewEnvConfForTest()
 	if err != nil {
-		log.Printf("load env config failed.env_conf:%s err:%v\n", envConf, err)
 		t.Fatal(err)
 	}
 	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+
 	lctx, err := ledger_pkg.NewLedgerCtx(econf, "xuper")
 	if err != nil {
 		t.Fatal(err)
 	}
 	lctx.EnvCfg.ChainDir = workspace
-	ledger, err := ledger_pkg.OpenLedger(lctx)
+	ledger, err := ledger_pkg.CreateLedger(lctx, GenesisConf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,6 +582,7 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	}
 	sctx.EnvCfg.ChainDir = workspace
 	stateHandle, _ := NewState(sctx)
+	stateHandle.ClearCache()
 	playErr := stateHandle.Play(block.Blockid)
 	if playErr != nil {
 		t.Fatal(playErr)
@@ -561,4 +591,20 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal("CreateSnapshot fail")
 	}
-}*/
+	_, err = stateHandle.GetContractStatus("$acl")
+	if err != nil {
+		t.Log("get contract status fail", "err", err)
+	}
+	_, err = stateHandle.GetTipSnapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stateHandle.CreateXMSnapshotReader(block.GetBlockid())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stateHandle.GetTipXMSnapshotReader()
+	if err != nil {
+		t.Fatal(err)
+	}
+}

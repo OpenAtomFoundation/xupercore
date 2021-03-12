@@ -728,6 +728,10 @@ func (t *State) NewBatch() kvdb.Batch {
 	return t.ldb.NewBatch()
 }
 
+func (t *State) GetLDB() kvdb.Database {
+	return t.ldb
+}
+
 func (t *State) ClearCache() {
 	t.utxo.UtxoCache = utxo.NewUtxoCache(t.utxo.CacheSize)
 	t.utxo.PrevFoundKeyCache = cache.NewLRUCache(t.utxo.CacheSize)

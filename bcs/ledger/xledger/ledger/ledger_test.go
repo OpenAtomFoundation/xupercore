@@ -1,37 +1,90 @@
 package ledger
 
-/*import (
+import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	//"fmt"
+	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
+
+	//"io/ioutil"
+	"math/big"
+	//"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	"github.com/xuperchain/xupercore/lib/logs"
+	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
-const AliceAddress = "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
-const AlicePubkey = `{"Curvname":"P-256","X":74695617477160058757747208220371236837474210247114418775262229497812962582435,"Y":51348715319124770392993866417088542497927816017012182211244120852620959209571}`
-const AlicePrivateKey = `{"Curvname":"P-256","X":74695617477160058757747208220371236837474210247114418775262229497812962582435,"Y":51348715319124770392993866417088542497927816017012182211244120852620959209571,"D":29079635126530934056640915735344231956621504557963207107451663058887647996601}`
+const AliceAddress = "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
 const BobAddress = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
 
-const DefaultKvEngine = "default"
-
-func TestOpenClose(t *testing.T) {
-	workSpace, dirErr := ioutil.TempDir("/tmp", "")
+func openLedger() (*Ledger, error) {
+	workspace, dirErr := ioutil.TempDir("/tmp", "")
 	if dirErr != nil {
-		t.Fatal(dirErr)
+		return nil, dirErr
 	}
-	os.RemoveAll(workSpace)
-	defer os.RemoveAll(workSpace)
-	ledger, err := NewLedger(workSpace, nil, nil, DefaultKvEngine, crypto_client.CryptoTypeDefault)
+	os.RemoveAll(workspace)
+	defer os.RemoveAll(workspace)
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		return nil, err
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+
+	lctx, err := NewLedgerCtx(econf, "xuper")
+	if err != nil {
+		return nil, err
+	}
+	lctx.EnvCfg.ChainDir = workspace
+
+	genesisConf := []byte(`
+		{
+    "version": "1",
+    "predistribution": [
+        {
+            "address": "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+            "quota": "100000000000000000000"
+        }
+    ],
+    "maxblocksize": "16",
+    "award": "1000000",
+    "decimals": "8",
+    "award_decay": {
+        "height_gap": 31536000,
+        "ratio": 1
+    },
+    "gas_price": {
+        "cpu_rate": 1000,
+        "mem_rate": 1000000,
+        "disk_rate": 1,
+        "xfee_rate": 1
+    },
+    "new_account_resource_amount": 1000,
+    "genesis_consensus": {
+        "name": "single",
+        "config": {
+            "miner": "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+            "period": 3000
+        }
+    }
+}
+    `)
+	ledgerIns, err := CreateLedger(lctx, genesisConf)
+	if err != nil {
+		return nil, err
+	}
+	return ledgerIns, nil
+}
+func TestOpenClose(t *testing.T) {
+	ledger, err := openLedger()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,28 +93,17 @@ func TestOpenClose(t *testing.T) {
 }
 
 func TestBasicFunc(t *testing.T) {
-	workSpace, dirErr := ioutil.TempDir("/tmp", "")
-	if dirErr != nil {
-		t.Fatal(dirErr)
-	}
-	os.RemoveAll(workSpace)
-	defer os.RemoveAll(workSpace)
-	ledger, err := NewLedger(workSpace, nil, nil, DefaultKvEngine, crypto_client.CryptoTypeDefault)
+	ledger, err := openLedger()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-		cryptoClient, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
-		if err != nil {
-			t.Fatal(err)
-		}
 	t1 := &pb.Transaction{}
 	t2 := &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
 	t1.Coinbase = true
 	t1.Desc = []byte(`{"maxblocksize" : "128"}`)
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	ecdsaPk, pkErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	t.Logf("pkSk: %v", ecdsaPk)
@@ -87,9 +129,9 @@ func TestBasicFunc(t *testing.T) {
 	}
 	t1 = &pb.Transaction{}
 	t2 = &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	block2, err := ledger.FormatBlock([]*pb.Transaction{t1, t2},
 		[]byte("xchain-Miner-222222"),
@@ -115,7 +157,9 @@ func TestBasicFunc(t *testing.T) {
 	if string(blockByHeight.Blockid) != string(blockCopy.Blockid) {
 		t.Fatalf("query block by height failed")
 	}
-	lastBlock, _ := ledger.QueryLastBlock()
+
+	lastBlockHeight := ledger.meta.GetTrunkHeight()
+	lastBlock, _ := ledger.QueryBlockByHeight(lastBlockHeight)
 	t.Logf("query last block %x", lastBlock.Blockid)
 	t.Logf("block1 next hash %x", blockCopy.NextHash)
 	blockCopy2, readErr2 := ledger.QueryBlock(blockCopy.NextHash)
@@ -129,29 +173,23 @@ func TestBasicFunc(t *testing.T) {
 		t.Fatalf("query tx fail, %v", txErr)
 	}
 	t.Logf("tx detail: %v", txCopy)
+	_, err = ledger.QueryBlockByTxid(t1.Txid)
+	if err != nil {
+		t.Fatal("query by txid err:", err)
+	}
 	maxBlockSize := ledger.GetMaxBlockSize()
 	if maxBlockSize != (128 << 20) {
 		t.Fatalf("maxBlockSize unexpected: %v", maxBlockSize)
 	}
 
-		upErr := ledger.UpdateMaxBlockSize(0, ledger.baseDB.NewBatch())
-
-		if upErr == nil {
-			t.Fatal("unexpected")
-		}
-		ledger.UpdateMaxBlockSize(123, ledger.baseDB.NewBatch())
-		if ledger.GetMaxBlockSize() != 123 {
-			t.Fatalf("unexpected block size, %d", ledger.GetMeta().MaxBlockSize)
-		}
-
 	// coinbase txs > 1
 	t1 = &pb.Transaction{}
 	t2 = &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
 	t1.Coinbase = true
 	t1.Desc = []byte("{}")
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Coinbase = true
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	block3, err := ledger.FormatBlock([]*pb.Transaction{t1, t2},
@@ -168,32 +206,27 @@ func TestBasicFunc(t *testing.T) {
 		t.Fatal("The num of coinbase txs error")
 	}
 
+	verifyRes, err := ledger.VerifyBlock(block2, "1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("verify res:", verifyRes)
+
 	ledger.Close()
 }
 
 func TestSplitFunc(t *testing.T) {
-	workSpace, dirErr := ioutil.TempDir("/tmp", "")
-	if dirErr != nil {
-		t.Fatal(dirErr)
-	}
-	os.RemoveAll(workSpace)
-	defer os.RemoveAll(workSpace)
-	ledger, err := NewLedger(workSpace, nil, nil, DefaultKvEngine, crypto_client.CryptoTypeDefault)
+	ledger, err := openLedger()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-		cryptoClient, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
-		if err != nil {
-			t.Fatal(err)
-		}
 	t1 := &pb.Transaction{}
 	t2 := &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
 	t1.Coinbase = true
 	t1.Desc = []byte("{}")
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	ecdsaPk, pkErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	t.Logf("pkSk: %v", ecdsaPk)
@@ -218,9 +251,9 @@ func TestSplitFunc(t *testing.T) {
 	}
 	t1 = &pb.Transaction{}
 	t2 = &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("999"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("999"), ToAddr: []byte(BobAddress)})
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	block2, err := ledger.FormatBlock([]*pb.Transaction{t1, t2},
 		[]byte("xchain-Miner-222222"),
@@ -262,12 +295,11 @@ func TestSplitFunc(t *testing.T) {
 		block3.Blockid, big.NewInt(0),
 	)
 	t.Logf("bolock4 id %x", block4.Blockid)
-	ib := &pb.Block{Blockid: block4.Blockid, Block: block4}
-	ibErr := ledger.SavePendingBlock(ib)
+	ibErr := ledger.SavePendingBlock(block4)
 	if ibErr != nil {
 		t.Fatal("save pending block fail", ibErr)
 	}
-	ibBlock, ibLookErr := ledger.GetPendingBlock(ib.Block.Blockid)
+	ibBlock, ibLookErr := ledger.GetPendingBlock(block4.Blockid)
 	if ibBlock == nil || ibLookErr != nil {
 		t.Fatal("fail to get pending block", ibLookErr)
 	} else {
@@ -277,7 +309,7 @@ func TestSplitFunc(t *testing.T) {
 	if !confirmStatus.Succ {
 		t.Fatal("confirm block fail 4")
 	}
-	_, ibLookErr = ledger.GetPendingBlock(ib.Blockid)
+	_, ibLookErr = ledger.GetPendingBlock(block4.Blockid)
 	if ibLookErr != nil && ibLookErr != ErrBlockNotExist {
 		t.Fatal("pending block is expected to be deleted", ibLookErr)
 	}
@@ -290,13 +322,40 @@ func TestSplitFunc(t *testing.T) {
 		}
 	}
 
-	totalProperty := ledger.GetEstimatedTotal()
-	t.Log("ledger total property", totalProperty)
 	gensisBlock := ledger.GetGenesisBlock()
 	if gensisBlock != nil {
 		t.Log("gensisBlock ", gensisBlock)
 	} else {
 		t.Fatal("gensis_block is expected to be not nil")
+	}
+
+	slideWindow := ledger.GetIrreversibleSlideWindow()
+	maxBlockSize := ledger.GetMaxBlockSize()
+	gasPrice := ledger.GetGasPrice()
+	noFee := ledger.GetNoFee()
+	newAccountAmount := ledger.GetNewAccountResourceAmount()
+	t.Log("slideWindow:", slideWindow, " maxBlockSize:", maxBlockSize, " gasPrice", gasPrice,
+		" noFee", noFee, " newAccountAmount", newAccountAmount)
+	reservedContracts, err := ledger.GetReservedContracts()
+	if reservedContracts != nil {
+		t.Log("reservedContract ", reservedContracts)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	fobidContracts, err := ledger.GetForbiddenContract()
+	if fobidContracts != nil {
+		t.Log("fobidContracts ", fobidContracts)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupChainContracts, err := ledger.GetGroupChainContract()
+	if groupChainContracts != nil {
+		t.Log("groupChainContracts ", groupChainContracts)
+	}
+	if err != nil {
+		t.Fatal(err)
 	}
 	curBlockid := block4.Blockid
 	destBlockid := block2.Blockid
@@ -336,13 +395,7 @@ func TestSplitFunc(t *testing.T) {
 }
 
 func TestTruncate(t *testing.T) {
-	workSpace, dirErr := ioutil.TempDir("/tmp", "")
-	if dirErr != nil {
-		t.Fatal(dirErr)
-	}
-	os.RemoveAll(workSpace)
-	defer os.RemoveAll(workSpace)
-	ledger, err := NewLedger(workSpace, nil, nil, DefaultKvEngine, crypto_client.CryptoTypeDefault)
+	ledger, err := openLedger()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,11 +403,11 @@ func TestTruncate(t *testing.T) {
 
 	t1 := &pb.Transaction{}
 	t2 := &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
 	t1.Coinbase = true
 	t1.Desc = []byte(`{"maxblocksize" : "128"}`)
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	ecdsaPk, pkErr := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	t.Logf("pkSk: %v", ecdsaPk)
@@ -373,9 +426,9 @@ func TestTruncate(t *testing.T) {
 
 	t1 = &pb.Transaction{}
 	t2 = &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("666"), ToAddr: []byte(BobAddress)})
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	t2.TxInputs = append(t2.TxInputs, &pb.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
+	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	//block2
 	block2, err := ledger.FormatBlock([]*pb.Transaction{t1, t2},
@@ -440,4 +493,4 @@ func TestTruncate(t *testing.T) {
 	t.Log(ledger.meta)
 
 	ledger.Close()
-}*/
+}
