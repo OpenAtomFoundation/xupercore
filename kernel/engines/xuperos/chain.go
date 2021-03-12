@@ -213,6 +213,10 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		context.Release()
 	}
 
+	err = sandbox.Flush()
+	if err != nil {
+		return nil, err
+	}
 	rwSet := sandbox.RWSet()
 	invokeResponse := &protos.InvokeResponse{
 		GasUsed:   gasUsed,
