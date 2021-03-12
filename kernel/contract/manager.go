@@ -27,6 +27,8 @@ type ManagerConfig struct {
 	EnvConf  *xconfig.EnvConf
 	Core     ChainCore
 	XMReader ledger.XMReader
+
+	Config *ContractConfig // used by testing
 }
 
 // ChainCore is the interface of chain service

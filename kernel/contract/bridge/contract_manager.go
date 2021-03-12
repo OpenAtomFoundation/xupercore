@@ -87,7 +87,6 @@ func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Resp
 	initConfig := contract.ContextConfig{
 		ResourceLimits:        kctx.ResourceLimit(),
 		State:                 kctx,
-		Core:                  kctx,
 		Initiator:             kctx.Initiator(),
 		AuthRequire:           kctx.AuthRequire(),
 		ContractName:          contractName,
@@ -173,20 +172,19 @@ func (c *contractManager) UpgradeContract(kctx contract.KContext) (*contract.Res
 			Status: 200,
 			Body:   []byte("upgrade success"),
 		}, contract.Limits{
-			// Disk: modelCacheDiskUsed(store),
+			Disk: modelCacheDiskUsed(store),
 		}, nil
 }
 
-// TODO:
-// func modelCacheDiskUsed(cache *xmodel.XMCache) int64 {
-// 	size := int64(0)
-// 	_, wset, _ := cache.GetRWSets()
-// 	for _, w := range wset {
-// 		size += int64(len(w.GetKey()))
-// 		size += int64(len(w.GetValue()))
-// 	}
-// 	return size
-// }
+func modelCacheDiskUsed(store contract.KContext) int64 {
+	size := int64(0)
+	wset := store.RWSet().WSet
+	for _, w := range wset {
+		size += int64(len(w.GetKey()))
+		size += int64(len(w.GetValue()))
+	}
+	return size
+}
 
 func ContractCodeDescKey(contractName string) []byte {
 	return []byte(contractName + "." + "desc")
