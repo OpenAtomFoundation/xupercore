@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd `dirname $0`/../../../
+cd `dirname $0`/../
 
 HOMEDIR=`pwd`
 OUTPUTDIR="$HOMEDIR/output"

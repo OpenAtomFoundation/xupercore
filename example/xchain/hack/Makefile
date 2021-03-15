@@ -15,13 +15,13 @@ export PATH := $(OUTDIR)/bin:$(XVMDIR):$(PATH)
 all: clean compile
 
 # make compile, go build
-compile: xvm xchain
-# make xchain
-xchain:
-	bash $(HOMEDIR)/example/xchain/auto/build.sh
+compile: xvm chain
+chain:
+	bash $(HOMEDIR)/auto/build.sh
+
 # make xvm
 xvm:
-	bash $(HOMEDIR)/example/xchain/auto/build_xvm.sh
+	bash $(HOMEDIR)/auto/build_xvm.sh
 
 # make test, test your code
 test: xvm unit

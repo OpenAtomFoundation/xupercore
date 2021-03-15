@@ -57,7 +57,7 @@ func NewClientCommand() (*cobra.Command, error) {
 	rootFlag.StringVarP(&global.GFlagCrypto, "crypto", "", "default", "crypto type")
 	rootFlag.StringVarP(&global.GFlagHost, "host", "H", "127.0.0.1:36101", "node host")
 	rootFlag.StringVarP(&global.GFlagKeys, "keys", "", "./data/keys", "account address")
-	rootFlag.StringVarP(&global.GFlagBCName, "name", "", "xuper", "chain name")
+	rootFlag.StringVarP(&global.GFlagBCName, "name", "", xdef.DefChainName, "chain name")
 
 	return rootCmd, nil
 }
