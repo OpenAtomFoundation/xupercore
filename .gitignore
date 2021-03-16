@@ -5,6 +5,7 @@ test/
 testnet/
 logs/
 .compile_cache
+.autogen
 
 # Compiled source
 *.com

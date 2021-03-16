@@ -31,7 +31,7 @@ func GetQueryTxCmd() *QueryTxCmd {
 	}
 
 	// 设置命令行参数并绑定变量
-	queryTxCmdIns.Cmd.Flags().StringVarP(&queryTxCmdIns.TxId, "txid", "", "", "transaction txid")
+	queryTxCmdIns.Cmd.Flags().StringVarP(&queryTxCmdIns.TxId, "txid", "t", "", "transaction txid")
 
 	return queryTxCmdIns
 }
