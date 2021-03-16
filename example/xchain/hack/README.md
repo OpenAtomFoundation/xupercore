@@ -17,12 +17,16 @@
 ```
 // clone项目
 git clone https://github.com/xxx/xxx.git
+
 // 进入工程目录
 cd xxx
+
 // 编译工程
 make all
+
 // 部署测试网络
-make testnet
+sh ./auto/deploy_testnet.sh
+
 // 分别启动三个节点（确保端口未被占用）
 cd ./testnet/node1
 sh ./control.sh start
