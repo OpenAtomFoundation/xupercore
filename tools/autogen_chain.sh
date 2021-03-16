@@ -1,21 +1,54 @@
 #!/bin/bash
 
-if [ $# -ne 2 ]; then
-    echo "param error.example:sh ./tools/autogen_chain.sh hello /home/rd/gopath/src"
-    exit 1;
-fi
-
-if [ "$1" == "" ] || [ "$2" == "" ]; then
-    echo "chain name or output dir unset"
-    exit 1;
-fi
-
 cd `dirname $0`/../
 
 HOMEDIR=`pwd`
 AUTOGENPKG="$HOMEDIR/.autogen"
-NEWCHAINNAME="$1"
-OUTPUTDIR="$2"
+NEWCHAINNAME=""
+OUTPUTDIR=""
+GITREPO=""
+
+function outusage() {
+    echo -e "autogen_chain.sh is a tool for automatic generation of new chain framework.\n"
+    echo -e "Usage:\n"
+    echo -e "\tsh ./tools/autogen_chain.sh <command> [arguments]\n"
+    echo -e "The commands are:\n"
+    echo -e "\t-n\tchain name"
+    echo -e "\t-r\tgit repositories"
+    echo -e "\t-o\toutput dir"
+    echo -e "\n"
+    echo -e "Example:sh ./tools/autogen_chain.sh -n hello -r bob -o /home/rd/gopath/src\n"
+}
+
+Example="sh ./tools/autogen_chain.sh -n hello -r bob -o /home/rd/gopath/src"
+if [ $# -ne 6 ]; then
+    outusage
+    exit 1;
+fi
+
+while getopts "n:r:o:" arg
+do
+    case $arg in
+    n)
+        NEWCHAINNAME=$OPTARG
+        ;;
+    r)
+        GITREPO=$OPTARG
+        ;;
+    o)
+        OUTPUTDIR=$OPTARG
+        ;;
+    ?)
+        outusage
+        exit 1
+        ;;
+    esac
+done
+
+if [ "$NEWCHAINNAME" == "" ] || [ "$GITREPO" == "" ] || [ "$OUTPUTDIR" == "" ]; then
+    outusage
+    exit 1;
+fi
 
 function autogenpkg() {
     echo "start auto pkg..."
@@ -68,7 +101,7 @@ function replace() {
     done
 
     srcStr="github.com\/xuperchain\/xupercore\/example\/xchain\/"
-    targetStr="github.com\/xuperchain\/$NEWCHAINNAME\/"
+    targetStr="github.com\/$GITREPO\/$NEWCHAINNAME\/"
     for f in `grep $srcStr -l -r -n ./`
     do
         #echo "sed -i 's/$srcStr/$targetStr/g' $f"
@@ -79,7 +112,7 @@ function replace() {
         fi
     done
 
-    sed -i "s/github.com\/xuperchain\/xchain/github.com\/xuperchain\/$NEWCHAINNAME/g" ./go.mod
+    sed -i "s/github.com\/xuperchain\/xchain/github.com\/$GITREPO\/$NEWCHAINNAME/g" ./go.mod
     sed -i "s/rootChain: xuper/rootChain: $NEWCHAINNAME/g" ./conf/engine.yaml 
     sed -i "s/DefChainName = \"xuper\"/DefChainName = \"$NEWCHAINNAME\"/g" ./common/def/def.go
 
@@ -94,8 +127,12 @@ autogenpkg
 replace
 
 # move to output dir
-rm -rf "$OUTPUTDIR/github.com/xuperchain/$NEWCHAINNAME/"
-mkdir -p "$OUTPUTDIR/github.com/xuperchain/"
-cp -r $AUTOGENPKG "$OUTPUTDIR/github.com/xuperchain/$NEWCHAINNAME/"
+coderepodir="$OUTPUTDIR/github.com/$GITREPO/$NEWCHAINNAME/"
+if [ -d "$coderepodir" ]; then
+    echo "output dir has exist,auto gen failed.outdir:$coderepodir"   
+    exit 1
+fi
+mkdir -p "$OUTPUTDIR/github.com/$GITREPO/"
+cp -r $AUTOGENPKG "$coderepodir"
 
-echo "auto generate chain code succ"
+echo "auto generate chain code succ.outdir:$coderepodir"
