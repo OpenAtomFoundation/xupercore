@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
+    "github.com/libp2p/go-libp2p-core/routing"
+    "time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	knet "github.com/xuperchain/xupercore/kernel/network"
@@ -165,14 +166,6 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
         return ErrConnect
     }
 
-    key := Key(p.account)
-    value := p.getMultiAddr(p.host.ID(), p.host.Addrs())
-    err = p.kdht.PutValue(context.Background(), key, []byte(value))
-    if err != nil {
-        p.log.Error("dht put value error", "error", err)
-        return ErrStoreAccount
-    }
-
     return nil
 }
 
@@ -272,6 +265,17 @@ func (p *P2PServerV2) streamHandler(netStream network.Stream) {
 	if _, err := p.streamPool.NewStream(p.ctx, netStream); err != nil {
 		p.log.Warn("new stream error")
 	}
+
+    key := Key(p.account)
+    _, err := p.kdht.GetValue(context.Background(), key)
+    if err == routing.ErrNotFound {
+        value := p.getMultiAddr(p.host.ID(), p.host.Addrs())
+        err = p.kdht.PutValue(context.Background(), key, []byte(value))
+        if err != nil {
+            p.log.Error("dht put value error", "error", err)
+            return
+        }
+    }
 }
 
 // Stop stop the node
@@ -279,7 +283,9 @@ func (p *P2PServerV2) Stop() {
 	p.log.Info("StopP2PServer")
 	p.kdht.Close()
 	p.host.Close()
-	p.cancel()
+	if p.cancel != nil {
+        p.cancel()
+    }
 }
 
 // PeerID return the peer ID

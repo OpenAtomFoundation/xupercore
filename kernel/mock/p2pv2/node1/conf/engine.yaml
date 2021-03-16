@@ -1,0 +1,8 @@
+# root chain name
+rootChain: xuper
+# blockBroadcaseMode is the mode for broadcast new block
+blockBroadcastMode: 0
+# txCacheExpiredTime set expired time for tx cache
+txidCacheExpiredTime: 3m 
+# txIdCacheGCInterval set clean up interval for tx cache
+txIdCacheGCInterval: 10m

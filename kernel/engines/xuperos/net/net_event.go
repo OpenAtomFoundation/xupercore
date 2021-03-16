@@ -2,7 +2,8 @@ package xuperos
 
 import (
 	"bytes"
-	"fmt"
+    "encoding/json"
+    "fmt"
 
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -257,6 +258,11 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 		ctx.GetLog().Trace("SendBlock validate param error", "error", err)
 		return err
 	}
+
+    if data, err := json.Marshal(in); err == nil {
+        ctx.GetLog().Debug("ProcBlock", "blockid", utils.F(in.Blockid), "data", string(data))
+        fmt.Printf("JSON ProcBlock=%s\n", data)
+    }
 
 	if err := chain.ProcBlock(ctx, in); err != nil {
 		if common.CastError(err).Equal(common.ErrForbidden) {

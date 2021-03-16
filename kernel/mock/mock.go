@@ -1,11 +1,15 @@
 package mock
 
 import (
-	"path/filepath"
+    "fmt"
+    "log"
+    "os"
+    "path/filepath"
 
-	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
-	"github.com/xuperchain/xupercore/lib/logs"
-	"github.com/xuperchain/xupercore/lib/utils"
+    xledger "github.com/xuperchain/xupercore/bcs/ledger/xledger/utils"
+    xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
+    "github.com/xuperchain/xupercore/lib/logs"
+    "github.com/xuperchain/xupercore/lib/utils"
 )
 
 func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
@@ -16,7 +20,20 @@ func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
 
 	dir := utils.GetCurFileDir()
 	econfPath := filepath.Join(dir, path)
-	return xconf.LoadEnvConf(econfPath)
+	econf, err := xconf.LoadEnvConf(econfPath)
+	if err != nil {
+	    return nil, err
+    }
+
+    econf.RootPath = utils.GetCurFileDir()
+    logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+
+    if len(paths) > 0 {
+        RemoveLedger(econf)
+        CreateLedger(econf)
+    }
+
+    return econf, nil
 }
 
 func GetNetConfPathForTest() string {
@@ -24,12 +41,30 @@ func GetNetConfPathForTest() string {
 	return filepath.Join(dir, "conf/network.yaml")
 }
 
+func CreateLedger(conf *xconf.EnvConf) error {
+    dir := utils.GetCurFileDir()
+    err := xledger.CreateLedger("xuper", filepath.Join(dir, "genesis/xuper.json"), conf)
+    if err != nil {
+        log.Printf("create ledger failed.err:%v\n", err)
+        return fmt.Errorf("create ledger failed")
+    }
+    return nil
+}
+
+func RemoveLedger(conf *xconf.EnvConf) error {
+    path := conf.GenDataAbsPath("blockchain")
+    if err := os.RemoveAll(path); err != nil {
+        log.Printf("remove ledger failed.err:%v\n", err)
+        return err
+    }
+    return nil
+}
+
 func InitLogForTest() error {
-	ecfg, err := NewEnvConfForTest()
+	_, err := NewEnvConfForTest()
 	if err != nil {
 		return err
 	}
 
-	logs.InitLog(ecfg.GenConfFilePath(ecfg.LogConf), ecfg.GenDirAbsPath(ecfg.LogDir))
 	return nil
 }
