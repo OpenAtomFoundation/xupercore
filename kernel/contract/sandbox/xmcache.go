@@ -27,6 +27,10 @@ var (
 	contractEventKey      = []byte("contractEvent")
 )
 
+var (
+	_ contract.StateSandbox = (*XMCache)(nil)
+)
+
 // UtxoVM manages utxos
 type UtxoVM interface {
 	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
@@ -43,7 +47,7 @@ type XMCache struct {
 
 	// utxoCache       *UtxoCache
 	// crossQueryCache *CrossQueryCache
-	// events          []*protos.ContractEvent
+	events []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
@@ -56,25 +60,6 @@ func NewXModelCache(model ledger.XMReader) *XMCache {
 		// crossQueryCache: NewCrossQueryCache(),
 	}
 }
-
-// // NewXModelCacheWithInputs make new XModelCache with Inputs
-// func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*pb.TxInput, crossQueries []*pb.CrossQueryInfo) *XMCache {
-// 	xc := &XMCache{
-// 		isPenetrate:  false,
-// 		inputsCache:  memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-// 		outputsCache: memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-// 	}
-// 	for _, vd := range vdatas {
-// 		bucket := vd.GetPureData().GetBucket()
-// 		key := vd.GetPureData().GetKey()
-// 		rawKey := makeRawKey(bucket, key)
-// 		valBuf, _ := proto.Marshal(vd)
-// 		xc.inputsCache.Put(rawKey, valBuf)
-// 	}
-// 	// xc.utxoCache = NewUtxoCacheWithInputs(utxoInputs)
-// 	// xc.crossQueryCache = NewCrossQueryCacheWithData(crossQueries)
-// 	return xc
-// }
 
 // Get 读取一个key的值，返回的value就是有版本的data
 func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
@@ -454,39 +439,40 @@ func ParseContractEvents(tx *lpb.Transaction) ([]*protos.ContractEvent, error) {
 	return events, nil
 }
 
-// // AddEvent add contract event to xmodel cache
-// func (xc *XMCache) AddEvent(events ...*pb.ContractEvent) {
-// 	xc.events = append(xc.events, events...)
-// }
+// AddEvent add contract event to xmodel cache
+func (xc *XMCache) AddEvent(events ...*protos.ContractEvent) {
+	xc.events = append(xc.events, events...)
+}
 
-// func (xc *XMCache) writeEventRWSet() error {
-// 	if len(xc.events) == 0 {
-// 		return nil
-// 	}
-// 	buf, err := MarshalMessages(xc.events)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return xc.Put(TransientBucket, contractEventKey, buf)
-// }
+func (xc *XMCache) writeEventRWSet() error {
+	if len(xc.events) == 0 {
+		return nil
+	}
+	buf, err := xmodel.MarshalMessages(xc.events)
+	if err != nil {
+		return err
+	}
+	return xc.Put(TransientBucket, contractEventKey, buf)
+}
 
-// // WriteTransientBucket write transient bucket data.
-// // transient bucket is a special bucket used to store some data
-// // generated during the execution of the contract, but will not be referenced by other txs.
-// func (xc *XMCache) WriteTransientBucket() error {
-// 	err := xc.writeUtxoRWSet()
-// 	if err != nil {
-// 		return err
-// 	}
+// WriteTransientBucket write transient bucket data.
+// transient bucket is a special bucket used to store some data
+// generated during the execution of the contract, but will not be referenced by other txs.
+func (xc *XMCache) Flush() error {
+	var err error
+	// err = xc.writeUtxoRWSet()
+	// if err != nil {
+	// 	return err
+	// }
 
-// 	err = xc.writeCrossQueriesRWSet()
-// 	if err != nil {
-// 		return err
-// 	}
+	// err = xc.writeCrossQueriesRWSet()
+	// if err != nil {
+	// 	return err
+	// }
 
-// 	err = xc.writeEventRWSet()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+	err = xc.writeEventRWSet()
+	if err != nil {
+		return err
+	}
+	return nil
+}

@@ -1,19 +1,20 @@
 #!/bin/bash
 
-cd `dirname $0`/../../../
+cd `dirname $0`/../
 
 HOMEDIR=`pwd`
 OUTDIR="$HOMEDIR/output"
 XVMDIR="$HOMEDIR/.compile_cache/xvm"
+CHAINNAME="xchain"
 
 # make output dir
-if [ ! -d "$OUTDIR" ];then
+if [ ! -d "$OUTDIR" ]; then
     mkdir $OUTDIR
 fi
 rm -rf "$OUTDIR/*"
 
 # check xvm
-if [ ! -f "$XVMDIR/wasm2c" ];then
+if [ ! -f "$XVMDIR/wasm2c" ]; then
     echo "please first execute: make xvm"
     exit 1
 fi
@@ -22,18 +23,14 @@ function buildpkg() {
     output=$1
     pkg=$2
 
-    version=`git rev-parse --abbrev-ref HEAD`
-    if [ $? != 0 ]; then
-        version="unknow"
-    fi
-    
-    commitId=`git rev-parse --short HEAD`
-    if [ $? != 0 ]; then
-        commitId="unknow"
-    fi
-
+    version="unknow"
+    commitId="unknow"
     buildTime=$(date "+%Y-%m-%d-%H:%M:%S")
-    
+
+    if [ -d "$HOMEDIR/.git" ]; then
+        version=`git rev-parse --abbrev-ref HEAD`
+        commitId=`git rev-parse --short HEAD`
+    fi
     
     # build
     if [ ! -d "$OUTDIR/bin" ]; then
@@ -48,14 +45,14 @@ function buildpkg() {
 }
 
 # build xuperos
-buildpkg xchain "$HOMEDIR/example/xchain/cmd/chain/main.go"
-buildpkg xchain-cli "$HOMEDIR/example/xchain/cmd/client/main.go"
+buildpkg "$CHAINNAME" "$HOMEDIR/cmd/chain/main.go"
+buildpkg "$CHAINNAME-cli" "$HOMEDIR/cmd/client/main.go"
 
 # build output
-cp -r "$HOMEDIR/example/xchain/conf" "$OUTDIR"
-cp "$HOMEDIR/example/xchain/auto/control.sh" "$OUTDIR"
+cp -r "$HOMEDIR/conf" "$OUTDIR"
+cp "$HOMEDIR/auto/control.sh" "$OUTDIR"
 mkdir -p "$OUTDIR/data"
-cp -r "$HOMEDIR/example/xchain/data/genesis" "$OUTDIR/data"
+cp -r "$HOMEDIR/data/genesis" "$OUTDIR/data"
 cp "$XVMDIR/wasm2c" "$OUTDIR/bin"
 
 echo "compile done!"

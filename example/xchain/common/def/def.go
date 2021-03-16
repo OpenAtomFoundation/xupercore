@@ -7,4 +7,6 @@ const (
 	ServerName = "xchain"
 	// 命令行进程名
 	CmdLineName = "xchain-cli"
+	// 默认链名
+	DefChainName = "xuper"
 )

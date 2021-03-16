@@ -570,10 +570,10 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		ctx.Release()
 	}
 
-	/*err = env.GetModelCache().WriteTransientBucket()
+	err = sandBox.Flush()
 	if err != nil {
 		return false, err
-	}*/
+	}
 
 	RWSet := sandBox.RWSet()
 	t.log.Trace("verifyTxRWSets", "env.output", wset, "writeSet", RWSet.WSet)

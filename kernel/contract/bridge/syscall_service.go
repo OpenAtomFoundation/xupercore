@@ -390,8 +390,7 @@ func (c *SyscallService) EmitEvent(ctx context.Context, in *pb.EmitEventRequest)
 		Body:     in.GetBody(),
 	}
 	nctx.Events = append(nctx.Events, event)
-	// TODO:
-	// nctx.Cache.AddEvent(event)
+	nctx.State.AddEvent(event)
 	return &pb.EmitEventResponse{}, nil
 }
 

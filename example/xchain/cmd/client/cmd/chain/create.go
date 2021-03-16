@@ -40,7 +40,7 @@ func GetCreateChainCmd() *CreateChainCmd {
 
 	// 设置命令行参数并绑定变量
 	subCmd.Flags().StringVarP(&createChainCmdIns.GenesisConf,
-		"genesis_conf", "g", "./data/genesis/xuper.json", "genesis config file path")
+		"genesis_conf", "g", "./data/genesis/single.json", "genesis config file path")
 	subCmd.Flags().StringVarP(&createChainCmdIns.EnvConf,
 		"env_conf", "e", "./conf/env.yaml", "env config file path")
 
