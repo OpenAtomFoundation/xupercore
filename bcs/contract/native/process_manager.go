@@ -7,19 +7,20 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/protos"
 )
 
 type processManager struct {
-	cfg       *bridge.NativeConfig
+	cfg       *contract.NativeConfig
 	basedir   string
 	chainAddr string
 	mutex     sync.Mutex
 	contracts map[string]*contractProcess
 }
 
-func newProcessManager(cfg *bridge.NativeConfig, basedir string, chainAddr string) (*processManager, error) {
+func newProcessManager(cfg *contract.NativeConfig, basedir string, chainAddr string) (*processManager, error) {
 	return &processManager{
 		cfg:       cfg,
 		basedir:   basedir,

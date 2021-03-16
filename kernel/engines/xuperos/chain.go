@@ -138,13 +138,11 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		return nil, common.ErrContractNewSandboxFailed
 	}
 
-	core := agent.NewChainCoreAgent(t.ctx)
 	contextConfig := &contract.ContextConfig{
-	    Core:           core,
-		State:     		sandbox,
-		Initiator:  	initiator,
-		AuthRequire:	authRequires,
-		ResourceLimits:	contract.MaxLimits,
+		State:          sandbox,
+		Initiator:      initiator,
+		AuthRequire:    authRequires,
+		ResourceLimits: contract.MaxLimits,
 	}
 
 	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
@@ -215,14 +213,18 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		context.Release()
 	}
 
+	err = sandbox.Flush()
+	if err != nil {
+		return nil, err
+	}
 	rwSet := sandbox.RWSet()
 	invokeResponse := &protos.InvokeResponse{
-		GasUsed:     gasUsed,
-		Response:    responseBodes,
-		Inputs:      xmodel.GetTxInputs(rwSet.RSet),
-		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
-		Requests:    requests,
-		Responses:   responses,
+		GasUsed:   gasUsed,
+		Response:  responseBodes,
+		Inputs:    xmodel.GetTxInputs(rwSet.RSet),
+		Outputs:   xmodel.GetTxOutputs(rwSet.WSet),
+		Requests:  requests,
+		Responses: responses,
 		// TODO: 合约内转账未实现，空值
 		//UtxoInputs:  utxoInputs,
 		//UtxoOutputs: utxoOutputs,
@@ -239,12 +241,12 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	log := ctx.GetLog()
 
 	// 无币化
-    if len(tx.TxInputs) == 0 && !t.ctx.Ledger.GetNoFee() {
-        ctx.GetLog().Warn("PostTx TxInputs can not be null while need utxo")
-        return common.ErrTxNotEnough
-    }
+	if len(tx.TxInputs) == 0 && !t.ctx.Ledger.GetNoFee() {
+		ctx.GetLog().Warn("PostTx TxInputs can not be null while need utxo")
+		return common.ErrTxNotEnough
+	}
 
-    // 防止重复提交交易
+	// 防止重复提交交易
 	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
 		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
 		return common.ErrTxAlreadyExist

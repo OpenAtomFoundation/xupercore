@@ -5,12 +5,10 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/xuperchain/xupercore/bcs/network/p2pv2"
-	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 	"github.com/xuperchain/xupercore/kernel/network"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -20,17 +18,17 @@ var (
 	LogPath  = filepath.Join(utils.GetCurFileDir(), "/main/test")
 	NodePath = filepath.Join(utils.GetCurFileDir(), "../../../../mock/p2pv2")
 
-	NodeA   = "gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"
+	NodeA   = "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
 	NodeAIp = "/ip4/127.0.0.1/tcp/47101/p2p/QmVcSF4F7rTdsvUJqsik98tXRXMBUqL5DSuBpyYKVhjuG4"
 	PubKeyA = "{\"Curvname\":\"P-256\",\"X\":74695617477160058757747208220371236837474210247114418775262229497812962582435,\"Y\":51348715319124770392993866417088542497927816017012182211244120852620959209571}"
 	PriKeyA = "{\"Curvname\":\"P-256\",\"X\":74695617477160058757747208220371236837474210247114418775262229497812962582435,\"Y\":51348715319124770392993866417088542497927816017012182211244120852620959209571,\"D\":29079635126530934056640915735344231956621504557963207107451663058887647996601}"
 
-	NodeB   = "TDYJN5mYuX8KR3RqRUi2MQWW7weQYdrcD"
+	NodeB   = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
 	NodeBIp = "/ip4/127.0.0.1/tcp/47102/p2p/Qmd1sJ4s7JTfHvetfjN9vNE5fhkLESs42tYHc5RYUBPnEv"
 	PubKeyB = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980}`
 	PriKeyB = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980,"D":98698032903818677365237388430412623738975596999573887926929830968230132692775}`
 
-	NodeC   = "kDyW3By3FreKosnNyjPc18CFW2EafuPV8"
+	NodeC   = "akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"
 	PubKeyC = `{"Curvname":"P-256","X":82701086955329320728418181640262300520017105933207363210165513352476444381539,"Y":23833609129887414146586156109953595099225120577035152268521694007099206660741}`
 	PriKeyC = `{"Curvname":"P-256","X":82701086955329320728418181640262300520017105933207363210165513352476444381539,"Y":23833609129887414146586156109953595099225120577035152268521694007099206660741,"D":57537645914107818014162200570451409375770015156750200591470574847931973776404}`
 	NodeCIp = "/ip4/127.0.0.1/tcp/47103/p2p/QmUv4Jw8QbW85SHQRiXi2jffFXTXZzRxhW2H34Hq6W4d58"
@@ -68,8 +66,6 @@ func (e *ElectionA) GetIntAddress(a string) string {
 func NewFakeLogger(node string) logs.Logger {
 	var Npath string
 	switch node {
-	case "node":
-		Npath = "node"
 	case "nodeA":
 		Npath = "node1"
 	case "nodeB":
@@ -86,7 +82,7 @@ func NewFakeLogger(node string) logs.Logger {
 	return log
 }
 
-func InitQcTee() *QCPendingTree {
+func InitQcTee(log logs.Logger) *QCPendingTree {
 	initQC := &QuorumCert{
 		VoteInfo: &VoteInfo{
 			ProposalId:   []byte{0},
@@ -104,39 +100,17 @@ func InitQcTee() *QCPendingTree {
 		Root:     rootNode,
 		HighQC:   rootNode,
 		CommitQC: rootNode,
+		Log:      log,
 	}
 }
 
-func NewP2P(node string, t *testing.T) network.Network {
-	// 创建p2p
-	var Npath string
-	switch node {
-	case "nodeA":
-		Npath = "node1"
-	case "nodeB":
-		Npath = "node2"
-	case "nodeC":
-		Npath = "node3"
-	}
-	path := filepath.Join(NodePath, Npath)
-	econfPath := filepath.Join(path, "conf/env.yaml")
-	ecfg, err := xconfig.LoadEnvConf(econfPath)
-	if err != nil {
-		t.Error("LoadEnvConf error", "error", err)
-		return nil
-	}
-	netCtx, err := nctx.NewNetCtx(ecfg)
-	if err != nil {
-		t.Error("NewNetCtx error", "error", err)
-		return nil
-	}
-	p2p, err := network.NewNetwork(netCtx)
-	return p2p
-}
-
-func NewCryptoClient(node string, t *testing.T) (cctx.Address, cctx.CryptoClient) {
+func NewFakeCryptoClient(node string, t *testing.T) (cctx.Address, cctx.CryptoClient) {
 	var priKeyStr, pubKeyStr, addr string
 	switch node {
+	case "node":
+		addr = NodeA
+		pubKeyStr = PubKeyA
+		priKeyStr = PriKeyA
 	case "nodeA":
 		addr = NodeA
 		pubKeyStr = PubKeyA
@@ -167,10 +141,10 @@ func NewCryptoClient(node string, t *testing.T) (cctx.Address, cctx.CryptoClient
 }
 
 func NewSMR(node string, log logs.Logger, p2p network.Network, t *testing.T) *Smr {
-	a, cc := NewCryptoClient(node, t)
+	a, cc := NewFakeCryptoClient(node, t)
 	cryptoClient := cCrypto.NewCBFTCrypto(&a, cc)
 	pacemaker := &DefaultPaceMaker{}
-	q := InitQcTee()
+	q := InitQcTee(log)
 	saftyrules := &DefaultSaftyRules{
 		Crypto: cryptoClient,
 		QcTree: q,
@@ -186,55 +160,34 @@ func NewSMR(node string, log logs.Logger, p2p network.Network, t *testing.T) *Sm
 	return s
 }
 
-func TestNewSmr(t *testing.T) {
-	log := NewFakeLogger("nodeA")
-	p := NewP2P("nodeA", t)
-	s := NewSMR("nodeA", log, p, t)
-	if s == nil {
-		t.Error("NewSmr error")
-	}
-}
-
-func TestProcessProposalSingle(t *testing.T) {
-	log := NewFakeLogger("nodeA")
-	p := NewP2P("nodeA", t)
-	s := NewSMR("nodeA", log, p, t)
-	NewP2P("nodeB", t)
-	NewSMR("nodeB", log, p, t)
-	NewP2P("nodeC", t)
-	NewSMR("nodeC", log, p, t)
-	// 相同proposalId不能重复提交
-	err := s.ProcessProposal(1, []byte{0}, []string{NodeAIp})
-	if err != SameProposalNotify {
-		t.Error("ProcessProposal error", "error", err)
-	}
-}
-
 func TestSMR(t *testing.T) {
 	logA := NewFakeLogger("nodeA")
 	logB := NewFakeLogger("nodeB")
 	logC := NewFakeLogger("nodeC")
-	pA := NewP2P("nodeA", t)
-	go pA.Start()
-	pB := NewP2P("nodeB", t)
-	go pB.Start()
-	pC := NewP2P("nodeC", t)
-	go pC.Start()
+	pA, ctxA, err := kmock.NewP2P("nodeA")
+	pB, ctxB, err := kmock.NewP2P("nodeB")
+	pC, ctxC, err := kmock.NewP2P("nodeC")
+	pA.Init(ctxA)
+	pB.Init(ctxB)
+	pC.Init(ctxC)
 	sA := NewSMR("nodeA", logA, pA, t)
-	go sA.Start()
 	sB := NewSMR("nodeB", logB, pB, t)
-	go sB.Start()
 	sC := NewSMR("nodeC", logC, pC, t)
+	go pA.Start()
+	go pB.Start()
+	go pC.Start()
+	go sA.Start()
+	go sB.Start()
 	go sC.Start()
-	time.Sleep(time.Second * 10)
+	time.Sleep(time.Second * 15)
 
 	// 模拟第一个Proposal交互
-	err := sA.ProcessProposal(1, []byte{1}, []string{NodeAIp, NodeBIp, NodeCIp})
+	err = sA.ProcessProposal(1, []byte{1}, []string{NodeA, NodeB, NodeC})
 	if err != nil {
 		t.Error("ProcessProposal error", "error", err)
 		return
 	}
-	time.Sleep(time.Second * 30)
+	time.Sleep(time.Second * 15)
 	// 检查存储
 	// A --- B --- C
 	//      收集A
@@ -246,12 +199,13 @@ func TestSMR(t *testing.T) {
 		t.Error("update qcTree error", "aiV", aiV)
 		return
 	}
+
+	// 检查B节点，B节点收集A发起的1轮qc，A的票应该有3张，B应该进入2轮
+	nodeBH := sB.qcTree.GetHighQC()
+	nodeBH.In.GetProposalView()
 	/*
-		// 检查B节点，B节点收集A发起的1轮qc，A的票应该有3张，B应该进入2轮
-		nodeBH := sB.qcTree.GetHighQC()
-		biV := nodeBH.In.GetProposalView()
 		if biV != 1 {
-			t.Error("update qcTree error", "biV", aiV)
+			t.Error("update qcTree error", "biV", biV)
 			return
 		}
 		if sB.GetCurrentView() != 2 {
@@ -275,7 +229,7 @@ func TestSMR(t *testing.T) {
 
 		// 模拟第二个Proposal交互, 此时由B节点发出
 		// ABC节点应该都存储了新的view=2的node，但是只有C更新了HighQC
-		err = sB.ProcessProposal(2, []byte{2}, []string{NodeAIp, NodeBIp, NodeCIp})
+		err = sB.ProcessProposal(2, []byte{2}, []string{NodeA, NodeB, NodeC})
 		if err != nil {
 			t.Error("ProcessProposal error", "error", err)
 			return
@@ -315,7 +269,7 @@ func TestSMR(t *testing.T) {
 		sB.UpdateJustifyQcStatus(justi)
 		sC.UpdateJustifyQcStatus(justi)
 
-		err = sA.ProcessProposal(2, []byte{3}, []string{NodeAIp, NodeBIp, NodeCIp})
+		err = sA.ProcessProposal(2, []byte{3}, []string{NodeA, NodeB, NodeC})
 		if err != nil {
 			t.Error("ProcessProposal error", "error", err)
 			return

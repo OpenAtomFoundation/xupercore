@@ -6,6 +6,7 @@ import (
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/utils"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/lib/logs"
 	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
@@ -28,7 +29,7 @@ func GetCreateChainCmd() *CreateChainCmd {
 	subCmd := &cobra.Command{
 		Use:           "create",
 		Short:         "create chain.",
-		Example:       "xchain-cli chain create",
+		Example:       xdef.CmdLineName + " chain create",
 		SilenceUsage:  true,
 		SilenceErrors: false,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -39,7 +40,7 @@ func GetCreateChainCmd() *CreateChainCmd {
 
 	// 设置命令行参数并绑定变量
 	subCmd.Flags().StringVarP(&createChainCmdIns.GenesisConf,
-		"genesis_conf", "g", "./data/genesis/xuper.json", "genesis config file path")
+		"genesis_conf", "g", "./data/genesis/single.json", "genesis config file path")
 	subCmd.Flags().StringVarP(&createChainCmdIns.EnvConf,
 		"env_conf", "e", "./conf/env.yaml", "env config file path")
 

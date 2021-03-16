@@ -54,42 +54,37 @@ const (
 	// TxVersion 为所有交易使用的版本
 	TxVersion = 1
 
-	FeePlaceholder            = "$"
-	UTXOTotalKey              = "xtotal"
-	UTXOContractExecutionTime = 500
-	DefaultMaxConfirmedDelay  = 300
+	FeePlaceholder = "$"
+	UTXOTotalKey   = "xtotal"
 )
 
 type TxLists []*pb.Transaction
 
 type UtxoVM struct {
-	metaHandle           *meta.Meta
-	ldb                  kvdb.Database
-	Mutex                *sync.RWMutex // utxo leveldb表读写锁
-	MutexMem             *sync.Mutex   // 内存锁定状态互斥锁
-	SpLock               *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
-	mutexBalance         *sync.Mutex   // 余额Cache锁
-	lockKeys             map[string]*UtxoLockItem
-	lockKeyList          *list.List // 按锁定的先后顺序，方便过期清理
-	lockExpireTime       int        // 临时锁定的最长时间
-	UtxoCache            *UtxoCache
-	log                  logs.Logger
-	ledger               *ledger.Ledger           // 引用的账本对象
-	utxoTable            kvdb.Database            // utxo表
-	OfflineTxChan        chan []*pb.Transaction   // 未确认tx的通知chan
-	PrevFoundKeyCache    *cache.LRUCache          // 上一次找到的可用utxo key，用于加速GenerateTx
-	utxoTotal            *big.Int                 // 总资产
-	cryptoClient         crypto_base.CryptoClient // 加密实例
-	ModifyBlockAddr      string                   // 可修改区块链的监管地址
-	BalanceCache         *cache.LRUCache          //余额cache,加速GetBalance查询
-	CacheSize            int                      //记录构造utxo时传入的cachesize
-	BalanceViewDirty     map[string]int           //balanceCache 标记dirty: addr -> sequence of view
-	contractExectionTime int
-	unconfirmTxInMem     *sync.Map //未确认Tx表的内存镜像
-	maxConfirmedDelay    uint32    // 交易处于unconfirm状态的最长时间，超过后会被回滚
-	unconfirmTxAmount    int64     // 未确认的Tx数目，用于监控
-	avgDelay             int64     // 平均上链延时
-	bcname               string
+	metaHandle        *meta.Meta
+	ldb               kvdb.Database
+	Mutex             *sync.RWMutex // utxo leveldb表读写锁
+	MutexMem          *sync.Mutex   // 内存锁定状态互斥锁
+	SpLock            *SpinLock     // 自旋锁,根据交易涉及的utxo和改写的变量
+	mutexBalance      *sync.Mutex   // 余额Cache锁
+	lockKeys          map[string]*UtxoLockItem
+	lockKeyList       *list.List // 按锁定的先后顺序，方便过期清理
+	lockExpireTime    int        // 临时锁定的最长时间
+	UtxoCache         *UtxoCache
+	log               logs.Logger
+	ledger            *ledger.Ledger           // 引用的账本对象
+	utxoTable         kvdb.Database            // utxo表
+	OfflineTxChan     chan []*pb.Transaction   // 未确认tx的通知chan
+	PrevFoundKeyCache *cache.LRUCache          // 上一次找到的可用utxo key，用于加速GenerateTx
+	utxoTotal         *big.Int                 // 总资产
+	cryptoClient      crypto_base.CryptoClient // 加密实例
+	ModifyBlockAddr   string                   // 可修改区块链的监管地址
+	BalanceCache      *cache.LRUCache          //余额cache,加速GetBalance查询
+	CacheSize         int                      //记录构造utxo时传入的cachesize
+	BalanceViewDirty  map[string]int           //balanceCache 标记dirty: addr -> sequence of view
+	unconfirmTxInMem  *sync.Map                //未确认Tx表的内存镜像
+	unconfirmTxAmount int64                    // 未确认的Tx数目，用于监控
+	bcname            string
 }
 
 // InboundTx is tx wrapper
@@ -261,37 +256,35 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
 func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
-	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, UTXOContractExecutionTime, stateDB)
+	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize int, tmplockSeconds,
-	contractExectionTime int, stateDB kvdb.Database) (*UtxoVM, error) {
+func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize, tmplockSeconds int,
+	stateDB kvdb.Database) (*UtxoVM, error) {
 	utxoMutex := &sync.RWMutex{}
 	utxoVM := &UtxoVM{
-		metaHandle:           metaHandle,
-		ldb:                  stateDB,
-		Mutex:                utxoMutex,
-		MutexMem:             &sync.Mutex{},
-		SpLock:               NewSpinLock(),
-		mutexBalance:         &sync.Mutex{},
-		lockKeys:             map[string]*UtxoLockItem{},
-		lockKeyList:          list.New(),
-		lockExpireTime:       tmplockSeconds,
-		log:                  sctx.XLog,
-		ledger:               sctx.Ledger,
-		utxoTable:            kvdb.NewTable(stateDB, pb.UTXOTablePrefix),
-		UtxoCache:            NewUtxoCache(cachesize),
-		OfflineTxChan:        make(chan []*pb.Transaction, OfflineTxChanBuffer),
-		PrevFoundKeyCache:    cache.NewLRUCache(cachesize),
-		utxoTotal:            big.NewInt(0),
-		BalanceCache:         cache.NewLRUCache(cachesize),
-		CacheSize:            cachesize,
-		BalanceViewDirty:     map[string]int{},
-		contractExectionTime: contractExectionTime,
-		cryptoClient:         sctx.Crypt,
-		maxConfirmedDelay:    DefaultMaxConfirmedDelay,
-		bcname:               sctx.BCName,
+		metaHandle:        metaHandle,
+		ldb:               stateDB,
+		Mutex:             utxoMutex,
+		MutexMem:          &sync.Mutex{},
+		SpLock:            NewSpinLock(),
+		mutexBalance:      &sync.Mutex{},
+		lockKeys:          map[string]*UtxoLockItem{},
+		lockKeyList:       list.New(),
+		lockExpireTime:    tmplockSeconds,
+		log:               sctx.XLog,
+		ledger:            sctx.Ledger,
+		utxoTable:         kvdb.NewTable(stateDB, pb.UTXOTablePrefix),
+		UtxoCache:         NewUtxoCache(cachesize),
+		OfflineTxChan:     make(chan []*pb.Transaction, OfflineTxChanBuffer),
+		PrevFoundKeyCache: cache.NewLRUCache(cachesize),
+		utxoTotal:         big.NewInt(0),
+		BalanceCache:      cache.NewLRUCache(cachesize),
+		CacheSize:         cachesize,
+		BalanceViewDirty:  map[string]int{},
+		cryptoClient:      sctx.Crypt,
+		bcname:            sctx.BCName,
 	}
 
 	utxoTotalBytes, findTotalErr := utxoVM.metaHandle.MetaTable.Get([]byte(UTXOTotalKey))
@@ -557,12 +550,6 @@ func (uv *UtxoVM) ScanWithPrefix(prefix []byte) kvdb.Iterator {
 	return uv.ldb.NewIteratorWithPrefix(prefix)
 }
 
-// GetFromTable 从一个表读取一个key的value
-func (uv *UtxoVM) GetFromTable(tablePrefix []byte, key []byte) ([]byte, error) {
-	realKey := append([]byte(tablePrefix), key...)
-	return uv.ldb.Get(realKey)
-}
-
 // RemoveUtxoCache 清理utxoCache
 func (uv *UtxoVM) RemoveUtxoCache(address string, utxoKey string) {
 	uv.log.Trace("RemoveUtxoCache", "address", address, "utxoKey", utxoKey)
@@ -572,12 +559,6 @@ func (uv *UtxoVM) RemoveUtxoCache(address string, utxoKey string) {
 // NewBatch return batch instance
 func (uv *UtxoVM) NewBatch() kvdb.Batch {
 	return uv.ldb.NewBatch()
-}
-
-// SetMaxConfirmedDelay set the max value of tx confirm delay. If beyond, tx will be rollbacked
-func (uv *UtxoVM) SetMaxConfirmedDelay(seconds uint32) {
-	uv.maxConfirmedDelay = seconds
-	uv.log.Info("set max confirmed delay of tx", "seconds", seconds)
 }
 
 // SetModifyBlockAddr set modified block addr

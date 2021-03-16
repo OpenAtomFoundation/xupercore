@@ -170,9 +170,9 @@ func (c *SyscallService) ContractCall(ctx context.Context, in *pb.ContractCallRe
 
 	nctx.ContractSet[in.GetContract()] = true
 	cfg := &contract.ContextConfig{
+		Module:         in.GetModule(),
 		ContractName:   in.GetContract(),
 		State:          nctx.State,
-		Core:           nctx.Core,
 		CanInitialize:  false,
 		AuthRequire:    nctx.AuthRequire,
 		Initiator:      nctx.Initiator,
@@ -390,8 +390,7 @@ func (c *SyscallService) EmitEvent(ctx context.Context, in *pb.EmitEventRequest)
 		Body:     in.GetBody(),
 	}
 	nctx.Events = append(nctx.Events, event)
-	// TODO:
-	// nctx.Cache.AddEvent(event)
+	nctx.State.AddEvent(event)
 	return &pb.EmitEventResponse{}, nil
 }
 

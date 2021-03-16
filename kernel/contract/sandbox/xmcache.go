@@ -1,11 +1,12 @@
 package sandbox
 
 import (
-    "bytes"
-    "errors"
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-    "math/big"
+	"bytes"
+	"errors"
+	"math/big"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
@@ -26,6 +27,10 @@ var (
 	contractEventKey      = []byte("contractEvent")
 )
 
+var (
+	_ contract.StateSandbox = (*XMCache)(nil)
+)
+
 // UtxoVM manages utxos
 type UtxoVM interface {
 	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
@@ -42,38 +47,19 @@ type XMCache struct {
 
 	// utxoCache       *UtxoCache
 	// crossQueryCache *CrossQueryCache
-	// events          []*protos.ContractEvent
+	events []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
-func NewXModelCache(model ledger.XMReader) (*XMCache, error) {
+func NewXModelCache(model ledger.XMReader) *XMCache {
 	return &XMCache{
 		model:        model,
 		inputsCache:  NewMemXModel(),
 		outputsCache: NewMemXModel(),
 		// utxoCache:       NewUtxoCache(utxovm),
 		// crossQueryCache: NewCrossQueryCache(),
-	}, nil
+	}
 }
-
-// // NewXModelCacheWithInputs make new XModelCache with Inputs
-// func NewXModelCacheWithInputs(vdatas []*xmodel_pb.VersionedData, utxoInputs []*pb.TxInput, crossQueries []*pb.CrossQueryInfo) *XMCache {
-// 	xc := &XMCache{
-// 		isPenetrate:  false,
-// 		inputsCache:  memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-// 		outputsCache: memdb.New(comparer.DefaultComparer, DefaultMemDBSize),
-// 	}
-// 	for _, vd := range vdatas {
-// 		bucket := vd.GetPureData().GetBucket()
-// 		key := vd.GetPureData().GetKey()
-// 		rawKey := makeRawKey(bucket, key)
-// 		valBuf, _ := proto.Marshal(vd)
-// 		xc.inputsCache.Put(rawKey, valBuf)
-// 	}
-// 	// xc.utxoCache = NewUtxoCacheWithInputs(utxoInputs)
-// 	// xc.crossQueryCache = NewCrossQueryCacheWithData(crossQueries)
-// 	return xc
-// }
 
 // Get 读取一个key的值，返回的value就是有版本的data
 func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
@@ -95,10 +81,10 @@ func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
 	if IsEmptyVersionedData(verData) {
 		return nil, ErrNotFound
 	}
-	if IsDelFlag(verData.PureData.Value) {
+	if IsDelFlag(verData.GetPureData().GetValue()) {
 		return nil, ErrHasDel
 	}
-	return verData.PureData.Value, nil
+	return verData.GetPureData().GetValue(), nil
 }
 
 // Level1 读取，从outputsCache中读取
@@ -169,7 +155,7 @@ func (xc *XMCache) Select(bucket string, startKey []byte, endKey []byte) (contra
 // newXModelCacheIterator new an instance of XModel Cache iterator
 func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
 	iter, _ := mc.outputsCache.Select(bucket, startKey, endKey)
-	outputIter := newStripDelIterator(iter)
+	outputIter := iter
 
 	iter, _ = mc.inputsCache.Select(bucket, startKey, endKey)
 	inputIter := newStripDelIterator(iter)
@@ -179,9 +165,14 @@ func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey
 		return nil, err
 	}
 	backendIter = newStripDelIterator(
-		newRsetIterator(backendIter, mc),
+		newRsetIterator(bucket, backendIter, mc),
 	)
-	multiIter := newMultiIterator(outputIter, newMultiIterator(inputIter, backendIter))
+	// return newContractIterator(backendIter), nil
+
+	// 优先级顺序 outputIter -> inputIter -> backendIter
+	// 意味着如果一个key在三个迭代器里面同时出现，优先级高的会覆盖优先级底的
+	multiIter := newMultiIterator(inputIter, backendIter)
+	multiIter = newMultiIterator(outputIter, multiIter)
 	return newContractIterator(multiIter), nil
 }
 
@@ -198,10 +189,7 @@ func (xc *XMCache) RWSet() *contract.RWSet {
 
 func (xc *XMCache) getReadSets() []*ledger.VersionedData {
 	var readSets []*ledger.VersionedData
-	iter, err := xc.inputsCache.NewIterator(nil, nil)
-	if err != nil {
-		panic(err)
-	}
+	iter := xc.inputsCache.NewIterator()
 	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
@@ -212,10 +200,7 @@ func (xc *XMCache) getReadSets() []*ledger.VersionedData {
 
 func (xc *XMCache) getWriteSets() []*ledger.PureData {
 	var writeSets []*ledger.PureData
-	iter, err := xc.outputsCache.NewIterator(nil, nil)
-	if err != nil {
-		panic(err)
-	}
+	iter := xc.outputsCache.NewIterator()
 	defer iter.Close()
 	for iter.Next() {
 		val := iter.Value()
@@ -454,39 +439,40 @@ func ParseContractEvents(tx *lpb.Transaction) ([]*protos.ContractEvent, error) {
 	return events, nil
 }
 
-// // AddEvent add contract event to xmodel cache
-// func (xc *XMCache) AddEvent(events ...*pb.ContractEvent) {
-// 	xc.events = append(xc.events, events...)
-// }
+// AddEvent add contract event to xmodel cache
+func (xc *XMCache) AddEvent(events ...*protos.ContractEvent) {
+	xc.events = append(xc.events, events...)
+}
 
-// func (xc *XMCache) writeEventRWSet() error {
-// 	if len(xc.events) == 0 {
-// 		return nil
-// 	}
-// 	buf, err := MarshalMessages(xc.events)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return xc.Put(TransientBucket, contractEventKey, buf)
-// }
+func (xc *XMCache) writeEventRWSet() error {
+	if len(xc.events) == 0 {
+		return nil
+	}
+	buf, err := xmodel.MarshalMessages(xc.events)
+	if err != nil {
+		return err
+	}
+	return xc.Put(TransientBucket, contractEventKey, buf)
+}
 
-// // WriteTransientBucket write transient bucket data.
-// // transient bucket is a special bucket used to store some data
-// // generated during the execution of the contract, but will not be referenced by other txs.
-// func (xc *XMCache) WriteTransientBucket() error {
-// 	err := xc.writeUtxoRWSet()
-// 	if err != nil {
-// 		return err
-// 	}
+// WriteTransientBucket write transient bucket data.
+// transient bucket is a special bucket used to store some data
+// generated during the execution of the contract, but will not be referenced by other txs.
+func (xc *XMCache) Flush() error {
+	var err error
+	// err = xc.writeUtxoRWSet()
+	// if err != nil {
+	// 	return err
+	// }
 
-// 	err = xc.writeCrossQueriesRWSet()
-// 	if err != nil {
-// 		return err
-// 	}
+	// err = xc.writeCrossQueriesRWSet()
+	// if err != nil {
+	// 	return err
+	// }
 
-// 	err = xc.writeEventRWSet()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return nil
-// }
+	err = xc.writeEventRWSet()
+	if err != nil {
+		return err
+	}
+	return nil
+}

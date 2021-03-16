@@ -13,7 +13,7 @@ type kernvm struct {
 
 func newKernvm(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
 	return &kernvm{
-		registry: config.VMConfig.(*bridge.XkernelConfig).Registry,
+		registry: config.VMConfig.(*contract.XkernelConfig).Registry,
 		config:   config,
 	}, nil
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/client"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +21,7 @@ func GetChainStatusCmd() *ChainStatusCmd {
 	chainStatusCmdIns.Cmd = &cobra.Command{
 		Use:           "status",
 		Short:         "print chain status.",
-		Example:       "xchain-cli chain status",
+		Example:       xdef.CmdLineName + " chain status",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

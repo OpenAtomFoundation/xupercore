@@ -1,121 +1,106 @@
 package xmodel
 
-/*import (
+import (
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
-	log "github.com/xuperchain/log15"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
+	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
-)
-
-var (
-	ledg    *ledger.Ledger
-	stateDB kvdb.Database
-	slog    log.Logger
-)
-
-// 如果指定一个存在的账本目录，就会从这个目录加载，默认创建一个新的空账本
-const (
-	// 账本存储目录
-	ledgPath = ""
+	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 const (
 	BobAddress = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
 )
 
-func initTestEnv() (isTmp bool, rootPath string, err error) {
-	slog = log.New("module", "xmodel")
-	slog.SetHandler(log.StreamHandler(os.Stderr, log.LogfmtFormat()))
-
-	isTmp, rootPath, err = createTmpLedger()
-	if err != nil {
-		return isTmp, rootPath, err
+func TestGet(t *testing.T) {
+	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	if dirErr != nil {
+		t.Fatal(dirErr)
 	}
-
-	ledg, err = ledger.NewLedger(rootPath, nil, nil, "default", "default")
+	os.RemoveAll(workspace)
+	defer os.RemoveAll(workspace)
+	econf, err := mock.NewEnvConfForTest()
 	if err != nil {
-		return isTmp, rootPath, err
+		t.Fatal(err)
 	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
 
-	stateDB, err = openDB(rootPath+"/utxoVM", slog)
+	lctx, err := ledger_pkg.NewLedgerCtx(econf, "xuper")
 	if err != nil {
-		return isTmp, rootPath, err
+		t.Fatal(err)
 	}
+	lctx.EnvCfg.ChainDir = workspace
 
-	return isTmp, rootPath, err
-}
-
-func createTmpLedger() (bool, string, error) {
-	if ledgPath != "" {
-		return false, ledgPath, nil
-	}
-
-	rootPath, err := ioutil.TempDir("/tmp", "")
+	ledger, err := ledger_pkg.CreateLedger(lctx, GenesisConf)
 	if err != nil {
-		return false, "", err
-	}
-	os.RemoveAll(rootPath)
-
-	ledg, err = ledger.NewLedger(rootPath, nil, nil, "default", "default")
-	if err != nil {
-		return true, rootPath, err
+		t.Fatal(err)
 	}
 
 	t1 := &pb.Transaction{}
-	t1.TxOutputs = append(t1.TxOutputs, &pb.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
+	t1.TxOutputs = append(t1.TxOutputs, &protos.TxOutput{Amount: []byte("888"), ToAddr: []byte(BobAddress)})
 	t1.Coinbase = true
 	t1.Desc = []byte(`{"maxblocksize" : "128"}`)
 	t1.Txid, _ = txhash.MakeTransactionID(t1)
-	block, err := ledg.FormatRootBlock([]*pb.Transaction{t1})
+	block, err := ledger.FormatRootBlock([]*pb.Transaction{t1})
 	if err != nil {
-		return true, rootPath, err
+		t.Fatal(err)
 	}
 
-	confirmStatus := ledg.ConfirmBlock(block, true)
+	confirmStatus := ledger.ConfirmBlock(block, true)
 	if !confirmStatus.Succ {
-		return true, rootPath, fmt.Errorf("confirm block fail")
+		t.Fatal(fmt.Errorf("confirm block fail"))
 	}
 
-	ledg.Close()
-	return true, rootPath, nil
-}
-
-func getBlkIdByHeight(height int64) ([]byte, error) {
-	blkInfo, err := ledg.QueryBlockByHeight(height)
-	if err != nil {
-		return nil, err
-	}
-
-	return blkInfo.Blockid, nil
-}
-
-func TestGet(t *testing.T) {
-	isTmp, rootPath, err := initTestEnv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if isTmp {
-		defer os.RemoveAll(rootPath)
-	}
-
-	xmod, err := NewXuperModel(ledg, stateDB, slog)
+	crypt, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	blkId, err := getBlkIdByHeight(0)
+	sctx, err := context.NewStateCtx(econf, "xuper", ledger, crypt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sctx.EnvCfg.ChainDir = workspace
+
+	storePath := sctx.EnvCfg.GenDataAbsPath(sctx.EnvCfg.ChainDir)
+	storePath = filepath.Join(storePath, sctx.BCName)
+	stateDBPath := filepath.Join(storePath, def.StateStrgDirName)
+	kvParam := &kvdb.KVParameter{
+		DBPath:                stateDBPath,
+		KVEngineType:          sctx.LedgerCfg.KVEngineType,
+		MemCacheSize:          ledger_pkg.MemCacheSize,
+		FileHandlersCacheSize: ledger_pkg.FileHandlersCacheSize,
+		OtherPaths:            sctx.LedgerCfg.OtherPaths,
+		StorageType:           sctx.LedgerCfg.StorageType,
+	}
+	ldb, err := kvdb.CreateKVInstance(kvParam)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xmod, err := NewXModel(sctx, ldb)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	xmsp, err := xmod.CreateSnapshot(blkId)
+	blkId, err := ledger.QueryBlockByHeight(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	xmsp, err := xmod.CreateSnapshot(blkId.Blockid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,4 +112,6 @@ func TestGet(t *testing.T) {
 
 	fmt.Println(vData)
 	fmt.Println(hex.EncodeToString(vData.RefTxid))
-}*/
+
+	ledger.Close()
+}

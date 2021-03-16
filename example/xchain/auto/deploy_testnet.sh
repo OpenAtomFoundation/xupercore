@@ -30,7 +30,12 @@ function installNode() {
     cp -r "$HOMEDIR/example/xchain/data/mock/$node/conf" "$INSTALLDIR/$node/conf"
     cp -r "$HOMEDIR/example/xchain/data/mock/$node/data" "$INSTALLDIR/$node/data"
     cp -r "$HOMEDIR/example/xchain/data/genesis" "$INSTALLDIR/$node/data/genesis"
-    
+    cp -r "$HOMEDIR/example/xchain/conf/engine.yaml" "$INSTALLDIR/$node/conf/engine.yaml"
+    cp -r "$HOMEDIR/example/xchain/conf/env.yaml" "$INSTALLDIR/$node/conf/env.yaml"
+    cp -r "$HOMEDIR/example/xchain/conf/ledger.yaml" "$INSTALLDIR/$node/conf/ledger.yaml"
+    cp -r "$HOMEDIR/example/xchain/conf/log.yaml" "$INSTALLDIR/$node/conf/log.yaml"
+    cp -r "$HOMEDIR/example/xchain/conf/contract.yaml" "$INSTALLDIR/$node/conf/contract.yaml"
+
     echo "finish $node install."
 }
 

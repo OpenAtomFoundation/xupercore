@@ -9,6 +9,7 @@ import (
     _ "github.com/xuperchain/xupercore/bcs/consensus/single"
     _ "github.com/xuperchain/xupercore/bcs/consensus/tdpos"
     _ "github.com/xuperchain/xupercore/bcs/consensus/xpoa"
+    _ "github.com/xuperchain/xupercore/bcs/contract/evm"
     _ "github.com/xuperchain/xupercore/bcs/contract/native"
     _ "github.com/xuperchain/xupercore/bcs/contract/xvm"
     _ "github.com/xuperchain/xupercore/bcs/network/p2pv1"

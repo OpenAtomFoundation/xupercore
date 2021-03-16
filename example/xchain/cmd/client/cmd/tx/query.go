@@ -6,6 +6,7 @@ import (
 
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/client"
 	"github.com/xuperchain/xupercore/example/xchain/cmd/client/common/global"
+	xdef "github.com/xuperchain/xupercore/example/xchain/common/def"
 
 	"github.com/spf13/cobra"
 )
@@ -21,7 +22,7 @@ func GetQueryTxCmd() *QueryTxCmd {
 	queryTxCmdIns.Cmd = &cobra.Command{
 		Use:           "query",
 		Short:         "print transaction details.",
-		Example:       "xchain-cli tx query -t [txid]",
+		Example:       xdef.CmdLineName + " tx query -t [txid]",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -30,7 +31,7 @@ func GetQueryTxCmd() *QueryTxCmd {
 	}
 
 	// 设置命令行参数并绑定变量
-	queryTxCmdIns.Cmd.Flags().StringVarP(&queryTxCmdIns.TxId, "txid", "", "", "transaction txid")
+	queryTxCmdIns.Cmd.Flags().StringVarP(&queryTxCmdIns.TxId, "txid", "t", "", "transaction txid")
 
 	return queryTxCmdIns
 }

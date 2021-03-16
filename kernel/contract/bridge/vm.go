@@ -12,9 +12,7 @@ type VMConfig interface {
 
 // InstanceCreatorConfig configures InstanceCreator
 type InstanceCreatorConfig struct {
-	Basedir string
-	// SyscallService *SyscallService
-	// TODO
+	Basedir        string
 	SyscallService *SyscallService
 	// VMConfig is the config of vm driver
 	VMConfig VMConfig
@@ -27,6 +25,7 @@ type NewInstanceCreatorFunc func(config *InstanceCreatorConfig) (InstanceCreator
 type ContractCodeProvider interface {
 	GetContractCodeDesc(name string) (*protos.WasmCodeDesc, error)
 	GetContractCode(name string) ([]byte, error)
+	GetContractAbi(name string) ([]byte, error)
 }
 
 // InstanceCreator is the creator of contract virtual machine instance
