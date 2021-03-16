@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-    "github.com/libp2p/go-libp2p-core/routing"
     "time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
@@ -22,6 +21,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
+    "github.com/libp2p/go-libp2p-core/routing"
 	"github.com/libp2p/go-libp2p-kad-dht"
 	noise "github.com/libp2p/go-libp2p-noise"
 	record "github.com/libp2p/go-libp2p-record"

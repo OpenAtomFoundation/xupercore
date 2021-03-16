@@ -3,15 +3,16 @@ package xuperos
 import (
     "encoding/hex"
     "fmt"
+    "math/big"
+    "testing"
+    "time"
+
     "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
     lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
     "github.com/xuperchain/xupercore/kernel/common/xaddress"
     "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
     "github.com/xuperchain/xupercore/lib/utils"
     "github.com/xuperchain/xupercore/protos"
-    "math/big"
-    "testing"
-    "time"
 )
 
 var (
