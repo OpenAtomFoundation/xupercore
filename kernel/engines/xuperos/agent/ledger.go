@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	consdef "github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
@@ -26,6 +27,19 @@ func NewLedgerAgent(chainCtx *common.ChainCtx) *LedgerAgent {
 func (t *LedgerAgent) GetNewAccountGas() (int64, error) {
 	amount := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetNewAccountResourceAmount()
 	return amount, nil
+}
+
+// 从创世块获取治理代币消耗gas
+func (t *LedgerAgent) GetNewGovGas() (int64, error) {
+	// todo 还未实现
+	amount := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetNewAccountResourceAmount()
+	return amount, nil
+}
+
+// 从创世块获取治理代币消耗gas
+func (t *LedgerAgent) GetGenesisPreDistribution() ([]ledger.Predistribution, error) {
+	preDistribution := t.chainCtx.Ledger.GenesisBlock.GetConfig().GetPredistribution()
+	return preDistribution, nil
 }
 
 // 从创世块获取加密算法类型

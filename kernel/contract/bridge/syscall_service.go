@@ -145,7 +145,7 @@ func (c *SyscallService) ContractCall(ctx context.Context, in *pb.ContractCallRe
 	if !ok {
 		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
 	}
-	if nctx.ContractSet[in.GetContract()] {
+	if nctx.ContractSet[in.GetContract()] && in.GetContract() != "$timer_task" {
 		return nil, errors.New("recursive contract call not permitted")
 	}
 

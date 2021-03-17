@@ -20,6 +20,8 @@ type ContractReader interface {
 	QueryAccountACL(account string) (*protos.Acl, error)
 	// 查询合约方法ACL
 	QueryContractMethodACL(contract, method string) (*protos.Acl, error)
+	// 查询账户治理代币余额
+	QueryAccountGovernTokenBalance(account string) (string, error)
 }
 
 type contractReader struct {
@@ -118,4 +120,13 @@ func (t *contractReader) QueryContractMethodACL(contract, method string) (*proto
 	}
 
 	return acl, nil
+}
+
+func (t *contractReader) QueryAccountGovernTokenBalance(account string) (string, error) {
+	amount, err := t.chainCtx.State.QueryAccountGovernTokenBalance(account)
+	if err != nil {
+		return "0", common.CastError(err)
+	}
+
+	return amount, nil
 }

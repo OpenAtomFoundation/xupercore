@@ -29,6 +29,7 @@
  GetAddressContracts(ctx context.Context, in *pb.AddressContractsRequest) (*pb.AddressContractsResponse, error) {
  GetAccountByAK(ctx context.Context, in *pb.AK2AccountRequest) (*pb.AK2AccountResponse, error) {
  QueryACL(ctx context.Context, in *pb.AclStatus) (*pb.AclStatus, error) {
+ GetGovernTokenBalance(ctx context.Context, in *pb.AddressStatus) (*pb.AddressStatus, error) {
 
  // utxo读组件提供
  QueryUtxoRecord(ctx context.Context, in *pb.UtxoRecordDetail) (*pb.UtxoRecordDetail, error) {
