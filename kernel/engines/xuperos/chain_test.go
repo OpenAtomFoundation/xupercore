@@ -90,7 +90,7 @@ func mockTransferTx(chain common.Chain) (*lpb.Transaction, error) {
 }
 
 func TestChain_SubmitTx(t *testing.T) {
-    engine, err := mockEngine("p2pv2/node1/conf/env.yaml")
+    engine, err := MockEngine("p2pv2/node1/conf/env.yaml")
     if err != nil {
         t.Logf("%v", err)
         return
@@ -196,7 +196,7 @@ func mockContractTx(chain common.Chain) (*lpb.Transaction, error) {
 }
 
 func TestChain_PreExec(t *testing.T) {
-    engine, err := mockEngine("p2pv2/node1/conf/env.yaml")
+    engine, err := MockEngine("p2pv2/node1/conf/env.yaml")
     if err != nil {
         t.Logf("%v", err)
         return

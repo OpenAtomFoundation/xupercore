@@ -3,7 +3,7 @@ package mock
 import (
 	"errors"
 	"fmt"
-	"time"
+    "time"
 
 	"github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -14,6 +14,7 @@ import (
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/utils"
+    "github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -240,6 +241,12 @@ func (c *FakeKContext) VerifyContractOwnerPermission(contractName string, authRe
 
 func (c *FakeKContext) RWSet() *contract.RWSet {
 	return nil
+}
+
+func (c *FakeKContext) AddEvent(events ...*protos.ContractEvent) {}
+
+func (c *FakeKContext) Flush() error {
+    return nil
 }
 
 func (c *FakeKContext) Get(bucket string, key []byte) ([]byte, error) {
