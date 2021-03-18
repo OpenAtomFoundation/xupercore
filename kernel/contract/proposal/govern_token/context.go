@@ -6,13 +6,10 @@ import (
 	xledger "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-)
-
-const (
-	SubModName = "$govern_token"
 )
 
 type LedgerRely interface {
@@ -37,7 +34,7 @@ func NewGovCtx(bcName string, leg LedgerRely, contract contract.Manager) (*GovCt
 		return nil, fmt.Errorf("new gov ctx failed because param error")
 	}
 
-	log, err := logs.NewLogger("", SubModName)
+	log, err := logs.NewLogger("", utils.GovernTokenKernelContract)
 	if err != nil {
 		return nil, fmt.Errorf("new gov ctx failed because new logger error. err:%v", err)
 	}

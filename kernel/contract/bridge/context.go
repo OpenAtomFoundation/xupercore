@@ -27,6 +27,8 @@ type Context struct {
 
 	Initiator string
 
+	Caller string
+
 	AuthRequire []string
 
 	CanInitialize bool

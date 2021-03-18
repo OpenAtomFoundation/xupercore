@@ -26,7 +26,6 @@ func NewKernContractMethod(bcName string, NewGovResourceAmount int64, Predistrib
 }
 
 func (t *KernMethod) InitGovernTokens(ctx contract.KContext) (*contract.Response, error) {
-
 	totalSupply := big.NewInt(0)
 	for _, ps := range t.Predistribution {
 		amount := big.NewInt(0)
@@ -157,6 +156,10 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 }
 
 func (t *KernMethod) LockGovernTokens(ctx contract.KContext) (*contract.Response, error) {
+	// 调用权限校验
+	if ctx.Caller() != utils.ProposalKernelContract && ctx.Caller() != utils.TDPOSKernelContract {
+		return nil, fmt.Errorf("caller %s no authority to LockGovernTokens", ctx.Caller())
+	}
 	args := ctx.Args()
 	accountBuf := args["from"]
 	amountBuf := args["amount"]
@@ -215,6 +218,10 @@ func (t *KernMethod) LockGovernTokens(ctx contract.KContext) (*contract.Response
 }
 
 func (t *KernMethod) UnLockGovernTokens(ctx contract.KContext) (*contract.Response, error) {
+	// 调用权限校验
+	if ctx.Caller() != utils.ProposalKernelContract || ctx.Caller() != utils.TDPOSKernelContract {
+		return nil, fmt.Errorf("caller %s no authority to UnLockGovernTokens", ctx.Caller())
+	}
 	args := ctx.Args()
 	accountBuf := args["from"]
 	amountBuf := args["amount"]

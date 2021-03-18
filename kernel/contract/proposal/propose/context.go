@@ -5,13 +5,10 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
-)
-
-const (
-	SubModName = "$proposal"
 )
 
 type LedgerRely interface {
@@ -32,7 +29,7 @@ func NewProposeCtx(bcName string, leg LedgerRely, contract contract.Manager) (*P
 		return nil, fmt.Errorf("new propose ctx failed because param error")
 	}
 
-	log, err := logs.NewLogger("", SubModName)
+	log, err := logs.NewLogger("", utils.ProposalKernelContract)
 	if err != nil {
 		return nil, fmt.Errorf("new propose ctx failed because new logger error. err:%v", err)
 	}

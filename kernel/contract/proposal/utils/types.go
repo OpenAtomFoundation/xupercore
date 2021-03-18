@@ -15,6 +15,13 @@ const (
 	ProposalStatusSuccess   = "success"
 )
 
+const (
+	GovernTokenKernelContract = "$govern_token"
+	ProposalKernelContract    = "$proposal"
+	TimerTaskKernelContract   = "$timer_task"
+	TDPOSKernelContract       = "$tdpos"
+)
+
 // Govern Token Balance
 // TotalBalance = AvailableBalanceForTDPOS + LockedBalanceForTDPOS = AvailableBalanceForProposal + LockedBalanceForProposal
 // 用户的可转账余额是min(AvailableBalanceForTDPOS, AvailableBalanceForProposal)

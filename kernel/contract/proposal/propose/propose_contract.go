@@ -46,7 +46,7 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	triggerArgs := make(map[string]interface{})
 	triggerArgs["proposal_id"] = []byte(proposalID)
 	trigger := &utils.TriggerDesc{
-		Module: SubModName,
+		Module: utils.ProposalKernelContract,
 		Method: "CheckVoteResult",
 		Args:   triggerArgs,
 	}
@@ -58,7 +58,7 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	timerArgs["block_height"] = stopVoteHeight
 	timerArgs["trigger"] = triggerBytes
 	timerArgs["proposal_id"] = []byte(proposalID)
-	_, err = ctx.Call("xkernel", "$timer_task", "Add", timerArgs)
+	_, err = ctx.Call("xkernel", utils.TimerTaskKernelContract, "Add", timerArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = []byte(amount)
 	governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
-	_, err = ctx.Call("xkernel", "$govern_token", "Lock", governTokenArgs)
+	_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", governTokenArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (t *KernMethod) Vote(ctx contract.KContext) (*contract.Response, error) {
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = lockAmount
 	governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
-	_, err = ctx.Call("xkernel", "$govern_token", "Lock", governTokenArgs)
+	_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", governTokenArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (t *KernMethod) Thaw(ctx contract.KContext) (*contract.Response, error) {
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = lockAmountBuf
 	governTokenArgs["proposal_type"] = []byte(utils.ProposalTypeOrdinary)
-	_, err = ctx.Call("xkernel", "$govern_token", "UnLock", governTokenArgs)
+	_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", governTokenArgs)
 	if err != nil {
 		return nil, err
 	}
@@ -273,6 +273,11 @@ type ProposalID struct {
 
 func (t *KernMethod) CheckVoteResult(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
+
+	// 调用权限校验
+	if ctx.Caller() != utils.TimerTaskKernelContract {
+		return nil, fmt.Errorf("caller %s no authority to CheckVoteResult", ctx.Caller())
+	}
 
 	proposalID := &ProposalID{}
 	err := json.Unmarshal(args["args"], proposalID)
@@ -310,7 +315,7 @@ func (t *KernMethod) CheckVoteResult(ctx contract.KContext) (*contract.Response,
 		timerArgs["block_height"] = []byte(strconv.FormatInt(proposal.Trigger.Height, 10))
 		timerArgs["trigger"] = triggerBytes
 		timerArgs["proposal_id"] = proposalIDBuf
-		_, err = ctx.Call("xkernel", "$timer_task", "Add", timerArgs)
+		_, err = ctx.Call("xkernel", utils.TimerTaskKernelContract, "Add", timerArgs)
 		if err != nil {
 			return nil, err
 		}
@@ -335,7 +340,7 @@ func (t *KernMethod) CheckVoteResult(ctx contract.KContext) (*contract.Response,
 		governTokenArgs["from"] = account
 		governTokenArgs["amount"] = unLockAmount
 		governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
-		_, err = ctx.Call("xkernel", "$govern_token", "UnLock", governTokenArgs)
+		_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", governTokenArgs)
 		if err != nil {
 			continue
 		}

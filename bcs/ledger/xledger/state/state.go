@@ -590,8 +590,6 @@ func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 		return nil, err
 	}
 
-	fmt.Println("GenerateAutoTxWithRWSets", autoTx)
-
 	t.log.Trace("GetTimerTx", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
 
 	return autoTx, nil
@@ -654,9 +652,6 @@ func (t *State) GetDistributeGovernTokenTx() (*pb.Transaction, error) {
 	}
 	inputs := xmodel.GetTxInputs(rwSet.RSet)
 	outputs := xmodel.GetTxOutputs(rwSet.WSet)
-
-	fmt.Println("GenerateAutoTxWithRWSets:", inputs)
-	fmt.Println("GenerateAutoTxWithRWSets:", outputs)
 
 	autoTx, err := tx.GenerateAutoTxWithRWSets(inputs, outputs)
 	if err != nil {

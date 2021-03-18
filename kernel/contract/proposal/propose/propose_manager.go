@@ -21,10 +21,10 @@ func NewProposeManager(ctx *ProposeCtx) (ProposeManager, error) {
 
 	t := NewKernContractMethod(ctx.BcName)
 	register := ctx.Contract.GetKernRegistry()
-	register.RegisterKernMethod(SubModName, "Propose", t.Propose)
-	register.RegisterKernMethod(SubModName, "Vote", t.Vote)
-	register.RegisterKernMethod(SubModName, "Thaw", t.Thaw)
-	register.RegisterKernMethod(SubModName, "CheckVoteResult", t.CheckVoteResult)
+	register.RegisterKernMethod(utils.ProposalKernelContract, "Propose", t.Propose)
+	register.RegisterKernMethod(utils.ProposalKernelContract, "Vote", t.Vote)
+	register.RegisterKernMethod(utils.ProposalKernelContract, "Thaw", t.Thaw)
+	register.RegisterKernMethod(utils.ProposalKernelContract, "CheckVoteResult", t.CheckVoteResult)
 
 	mg := &Manager{
 		Ctx: ctx,

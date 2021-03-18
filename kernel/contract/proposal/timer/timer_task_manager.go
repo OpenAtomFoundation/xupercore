@@ -22,8 +22,8 @@ func NewTimerTaskManager(ctx *TimerCtx) (TimerManager, error) {
 
 	t := NewKernContractMethod(ctx.BcName)
 	register := ctx.Contract.GetKernRegistry()
-	register.RegisterKernMethod(SubModName, "Add", t.Add)
-	register.RegisterKernMethod(SubModName, "Do", t.Do)
+	register.RegisterKernMethod(utils.TimerTaskKernelContract, "Add", t.Add)
+	register.RegisterKernMethod(utils.TimerTaskKernelContract, "Do", t.Do)
 
 	mg := &Manager{
 		Ctx: ctx,
