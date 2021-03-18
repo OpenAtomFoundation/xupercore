@@ -65,6 +65,11 @@ type GasPrice struct {
 	XfeeRate int64 `json:"xfee_rate" mapstructure:"xfee_rate"`
 }
 
+type Predistribution struct {
+	Address string `json:"address"`
+	Quota   string `json:"quota"`
+}
+
 // InvokeRequest define genesis reserved_contracts configure
 type InvokeRequest struct {
 	ModuleName   string            `json:"module_name" mapstructure:"module_name"`
@@ -146,6 +151,26 @@ func (rc *RootConfig) GetGroupChainContract() ([]*protos.InvokeRequest, error) {
 // GetReservedWhitelistAccount return reserved whitelist account
 func (rc *RootConfig) GetReservedWhitelistAccount() string {
 	return rc.ReservedWhitelist.Account
+}
+
+// GetPredistribution return predistribution
+func (rc *RootConfig) GetPredistribution() []Predistribution {
+	return PredistributionTranslator(rc.Predistribution)
+}
+
+func PredistributionTranslator(predistribution []struct {
+	Address string `json:"address"`
+	Quota   string `json:"quota"`
+}) []Predistribution {
+	var predistributionArray []Predistribution
+	for _, pd := range predistribution {
+		ps := Predistribution{
+			Address: pd.Address,
+			Quota:   pd.Quota,
+		}
+		predistributionArray = append(predistributionArray, ps)
+	}
+	return predistributionArray
 }
 
 // GenesisBlock genesis block data structure

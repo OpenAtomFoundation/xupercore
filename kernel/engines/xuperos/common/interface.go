@@ -8,6 +8,9 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
+	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -56,4 +59,7 @@ type ChainRelyAgent interface {
 	CreateConsensus() (consensus.ConsensusInterface, error)
 	CreateCrypto(cryptoType string) (cryptoBase.CryptoClient, error)
 	CreateAcl() (aclBase.AclManager, error)
+	CreateGovernToken() (governToken.GovManager, error)
+	CreateProposal() (propose.ProposeManager, error)
+	CreateTimerTask() (timerTask.TimerManager, error)
 }

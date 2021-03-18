@@ -377,5 +377,38 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.Consensus = cons
 	t.log.Trace("create consensus succ", "bcName", t.ctx.BCName)
 
+	// 8.提案
+	governTokenObj, err := t.relyAgent.CreateGovernToken()
+	if err != nil {
+		t.log.Error("create govern token error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create govern token error")
+	}
+	t.ctx.GovernToken = governTokenObj
+	// 设置govern token manager到状态机
+	t.ctx.State.SetGovernTokenMG(t.ctx.GovernToken)
+	t.log.Trace("create govern token succ", "bcName", t.ctx.BCName)
+
+	// 9.提案
+	proposalObj, err := t.relyAgent.CreateProposal()
+	if err != nil {
+		t.log.Error("create proposal error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create proposal error")
+	}
+	t.ctx.Proposal = proposalObj
+	// 设置proposal manager到状态机
+	t.ctx.State.SetProposalMG(t.ctx.Proposal)
+	t.log.Trace("create proposal succ", "bcName", t.ctx.BCName)
+
+	// 10.定时器任务
+	timerObj, err := t.relyAgent.CreateTimerTask()
+	if err != nil {
+		t.log.Error("create timer_task error", "bcName", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create timer_task error")
+	}
+	t.ctx.TimerTask = timerObj
+	// 设置timer manager到状态机
+	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
+	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
+
 	return nil
 }

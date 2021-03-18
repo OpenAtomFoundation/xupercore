@@ -33,6 +33,8 @@ type ContextConfig struct {
 	Initiator   string
 	AuthRequire []string
 
+	Caller string
+
 	Module       string
 	ContractName string
 

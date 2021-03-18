@@ -18,6 +18,7 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -95,6 +96,26 @@ func GenerateEmptyTx(desc []byte) (*pb.Transaction, error) {
 	utxoTx.Txid = txid
 	utxoTx.Autogen = true
 	return utxoTx, err
+}
+
+// 生成只有读写集的空交易
+func GenerateAutoTxWithRWSets(inputs []*protos.TxInputExt, outputs []*protos.TxOutputExt) (*pb.Transaction, error) {
+
+	tx := &pb.Transaction{
+		Coinbase:     false,
+		Nonce:        utils.GenNonce(),
+		Timestamp:    time.Now().UnixNano(),
+		Version:      TxVersion,
+		Autogen:      true,
+		TxInputsExt:  inputs,
+		TxOutputsExt: outputs,
+	}
+
+	txid, err := txhash.MakeTransactionID(tx)
+
+	tx.Txid = txid
+
+	return tx, err
 }
 
 // 通过创世块配置生成创世区块交易

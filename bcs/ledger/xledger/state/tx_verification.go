@@ -135,6 +135,62 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 	return true, nil
 }
 
+// ImmediateVerifyTx verify auto tx Immediately
+// Transaction verification workflow:
+//	 0. 其实可以直接判断二者的txid，相同，则包括读写集在内的内容都相同
+//   1. verify transaction ID is the same with data hash
+//   2. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
+//      operation, keep it at last)
+func (t *State) ImmediateVerifyAutoTx(tx *pb.Transaction, autoTx *pb.Transaction, isRootTx bool) (bool, error) {
+	// Pre processing of tx data
+	if !isRootTx && tx.Version == RootTxVersion {
+		return false, ErrVersionInvalid
+	}
+	if tx.Version > BetaTxVersion || tx.Version < RootTxVersion {
+		return false, ErrVersionInvalid
+	}
+	MaxTxSizePerBlock, MaxTxSizePerBlockErr := t.MaxTxSizePerBlock()
+	if MaxTxSizePerBlockErr != nil {
+		return false, MaxTxSizePerBlockErr
+	}
+	if proto.Size(tx) > MaxTxSizePerBlock {
+		t.log.Warn("tx too large, should not be greater than half of max blocksize", "size", proto.Size(tx))
+		return false, ErrTxTooLarge
+	}
+
+	// Start transaction verification workflow
+	if tx.Version > RootTxVersion {
+		// verify txid
+		txid, err := txhash.MakeTransactionID(tx)
+		if err != nil {
+			t.log.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
+			return false, err
+		}
+		if bytes.Compare(tx.Txid, txid) != 0 {
+			t.log.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
+			return false, fmt.Errorf("Txid verify failed")
+		}
+
+		// verify RWSet(compare RWSet)
+		ok, err := t.verifyAutoTxRWSets(tx, autoTx)
+		if err != nil {
+			t.log.Warn("ImmediateVerifyTx: verifyTxRWSets failed", "error", err)
+			// reset error message
+			if strings.HasPrefix(err.Error(), "Gas not enough") {
+				err = ErrGasNotEnough
+			} else {
+				err = ErrRWSetInvalid
+			}
+			return ok, err
+		}
+		if !ok {
+			// always return RWSet Invalid Error if verification not passed
+			return ok, ErrRWSetInvalid
+		}
+	}
+	return true, nil
+}
+
 // Note that if tx.XuperSign is not nil, the signature verification use XuperSign process
 func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, map[string]bool, error) {
 	// XuperSign is not empty, use XuperSign verify
@@ -585,6 +641,25 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	return true, nil
 }
 
+// verifyAutoTxRWSets verify auto tx read sets and write sets
+func (t *State) verifyAutoTxRWSets(tx, autoTx *pb.Transaction) (bool, error) {
+	txRsets := tx.GetTxInputsExt()
+	autoRsets := autoTx.GetTxInputsExt()
+
+	txWsets := tx.GetTxOutputsExt()
+	autoWsets := autoTx.GetTxOutputsExt()
+
+	t.log.Trace("verifyTxRWSets", "tx", txRsets, "auto", autoRsets)
+	t.log.Trace("verifyTxRWSets", "tx", txWsets, "auto", autoWsets)
+	// todo 判断读写集是否相同相等
+	//ok := xmodel.Equal(txWsets, autoWsets)
+	//if !ok {
+	//	return false, fmt.Errorf("write set not equal")
+	//}
+
+	return true, nil
+}
+
 func (t *State) verifyMarked(tx *pb.Transaction) (bool, bool, error) {
 	isRelyOnMarkedTx := false
 	if tx.GetModifyBlock() != nil && tx.ModifyBlock.Marked {
@@ -754,7 +829,7 @@ func (t *State) queryAccountACL(accountName string) (*protos.Acl, error) {
 	return t.sctx.AclMgr.GetAccountACL(accountName)
 }
 
-func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirmToConfirm map[string]bool) error {
+func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirmToConfirm map[string]bool, autoTx *pb.Transaction) error {
 	var err error
 	var once sync.Once
 	wg := sync.WaitGroup{}
@@ -763,7 +838,7 @@ func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirm
 		wg.Add(1)
 		go func(txs []*pb.Transaction) {
 			defer wg.Done()
-			verifyErr := t.verifyDAGTxs(txs, isRootTx, unconfirmToConfirm)
+			verifyErr := t.verifyDAGTxs(txs, isRootTx, unconfirmToConfirm, autoTx)
 			onceBody := func() {
 				err = verifyErr
 			}
@@ -777,17 +852,22 @@ func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirm
 	return err
 }
 
-func (t *State) verifyDAGTxs(txs []*pb.Transaction, isRootTx bool, unconfirmToConfirm map[string]bool) error {
+func (t *State) verifyDAGTxs(txs []*pb.Transaction, isRootTx bool, unconfirmToConfirm map[string]bool, autoTx *pb.Transaction) error {
 	for _, tx := range txs {
 		if tx == nil {
 			return errors.New("verifyTx error, tx is nil")
 		}
 		txid := string(tx.GetTxid())
 		if unconfirmToConfirm[txid] == false {
-			if !t.verifyAutogenTx(tx) {
-				return ErrInvalidAutogenTx
+			if !t.verifyAutogenTx(tx) && autoTx != nil {
+				// 校验auto tx
+				if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, isRootTx); !ok {
+					t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+					return errors.New("dotx failed to ImmediateVerifyAutoTx error")
+				}
 			}
 			if !tx.Autogen && !tx.Coinbase {
+				// 校验用户交易
 				if ok, err := t.ImmediateVerifyTx(tx, isRootTx); !ok {
 					t.log.Warn("dotx failed to ImmediateVerifyTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
 					ok, isRelyOnMarkedTx, err := t.verifyMarked(tx)
@@ -815,15 +895,18 @@ func (t *State) verifyAutogenTx(tx *pb.Transaction) bool {
 		return true
 	}
 
-	if len(tx.TxInputs) > 0 || len(tx.TxOutputs) > 0 {
-		// autogen tx must have no tx inputs/outputs
-		return false
-	}
+	// autogen tx have tx inputs/outputs
+	// autogen tx must have tx inputs/outputs extend
 
-	if len(tx.TxInputsExt) > 0 || len(tx.TxOutputsExt) > 0 {
-		// autogen tx must have no tx inputs/outputs extend
-		return false
-	}
+	//if len(tx.TxInputs) > 0 || len(tx.TxOutputs) > 0 {
+	//	// autogen tx must have no tx inputs/outputs
+	//	return false
+	//}
+	//
+	//if len(tx.TxInputsExt) > 0 || len(tx.TxOutputsExt) > 0 {
+	//	// autogen tx must have no tx inputs/outputs extend
+	//	return false
+	//}
 
 	return true
 }
