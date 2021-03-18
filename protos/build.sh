@@ -32,3 +32,8 @@ protoc -I ../ \
 --go_opt=paths=source_relative \
 --go_out=plugins=grpc:./ \
 -I ./ protos/event.proto
+
+protoc -I ../ \
+--go_opt=paths=source_relative \
+--go_out=plugins=grpc:./ \
+-I ./ protos/proposal.proto
