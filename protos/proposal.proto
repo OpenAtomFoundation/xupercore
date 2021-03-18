@@ -21,6 +21,13 @@ message TriggerDesc {
     map<string, bytes> args = 4;
 }
 
+enum ProposalStatus {
+    VOTING = 0;
+    SUCCESS = 1;
+    FAILURE = 2;
+    CANCELED = 3;
+}
+
 // Proposal
 message Proposal {
     string module = 1;
@@ -29,7 +36,7 @@ message Proposal {
     TriggerDesc trigger = 4;
 
     string vote_amount = 5;
-    string status = 6;
+    ProposalStatus status = 6;
     string proposer = 7;
 }
 
