@@ -1,32 +1,31 @@
 package p2pv2
 
 import (
-	"context"
-	"errors"
-	"fmt"
+    "context"
+    "errors"
+    "fmt"
     "time"
 
-	"github.com/xuperchain/xupercore/kernel/common/xaddress"
-	knet "github.com/xuperchain/xupercore/kernel/network"
-	"github.com/xuperchain/xupercore/kernel/network/config"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	"github.com/xuperchain/xupercore/lib/logs"
-	pb "github.com/xuperchain/xupercore/protos"
+    "github.com/xuperchain/xupercore/kernel/common/xaddress"
+    knet "github.com/xuperchain/xupercore/kernel/network"
+    "github.com/xuperchain/xupercore/kernel/network/config"
+    nctx "github.com/xuperchain/xupercore/kernel/network/context"
+    "github.com/xuperchain/xupercore/kernel/network/p2p"
+    "github.com/xuperchain/xupercore/lib/logs"
+    pb "github.com/xuperchain/xupercore/protos"
 
-	ipfsaddr "github.com/ipfs/go-ipfs-addr"
-	"github.com/libp2p/go-libp2p"
-	circuit "github.com/libp2p/go-libp2p-circuit"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-    "github.com/libp2p/go-libp2p-core/routing"
-	"github.com/libp2p/go-libp2p-kad-dht"
-	noise "github.com/libp2p/go-libp2p-noise"
-	record "github.com/libp2p/go-libp2p-record"
-	"github.com/multiformats/go-multiaddr"
-	"github.com/patrickmn/go-cache"
+    ipfsaddr "github.com/ipfs/go-ipfs-addr"
+    "github.com/libp2p/go-libp2p"
+    circuit "github.com/libp2p/go-libp2p-circuit"
+    "github.com/libp2p/go-libp2p-core/host"
+    "github.com/libp2p/go-libp2p-core/network"
+    "github.com/libp2p/go-libp2p-core/peer"
+    "github.com/libp2p/go-libp2p-core/protocol"
+    "github.com/libp2p/go-libp2p-kad-dht"
+    noise "github.com/libp2p/go-libp2p-noise"
+    record "github.com/libp2p/go-libp2p-record"
+    "github.com/multiformats/go-multiaddr"
+    "github.com/patrickmn/go-cache"
 )
 
 const (
@@ -34,8 +33,6 @@ const (
 
 	namespace = "xuper"
 	retry     = 10
-
-	expiredTime = time.Minute
 )
 
 func init() {
@@ -145,7 +142,7 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 		return ErrLoadAccount
 	}
 
-	p.accounts = cache.New(expiredTime, expiredTime)
+	p.accounts = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 	// dispatcher
 	p.dispatcher = p2p.NewDispatcher(ctx)
@@ -223,14 +220,34 @@ func setStaticNodes(ctx *nctx.NetCtx, p *P2PServerV2) {
 	p.staticNodes = staticNodes
 }
 
+func (p *P2PServerV2) setKdhtValue() {
+    // store: account => address
+    account := GenAccountKey(p.account)
+    address := p.getMultiAddr(p.host.ID(), p.host.Addrs())
+    err := p.kdht.PutValue(context.Background(), account, []byte(address))
+    if err != nil {
+        p.log.Error("dht put account=>address value error", "error", err)
+    }
+
+    // store: peer.ID => account
+    id := GenPeerIDKey(p.id)
+    err = p.kdht.PutValue(context.Background(), id, []byte(p.account))
+    if err != nil {
+        p.log.Error("dht put id=>account value error", "error", err)
+    }
+}
+
 // Start start the node
 func (p *P2PServerV2) Start() {
 	p.log.Trace("StartP2PServer", "address", p.host.Addrs())
 	p.host.SetStreamHandler(protocol.ID(protocolID), p.streamHandler)
-	ctx, cancel := context.WithCancel(p.ctx)
-	p.cancel = cancel
 
-	t := time.NewTicker(time.Second * 180)
+    p.setKdhtValue()
+
+    ctx, cancel := context.WithCancel(p.ctx)
+    p.cancel = cancel
+
+    t := time.NewTicker(time.Second * 180)
 	go func() {
 		defer t.Stop()
 		for {
@@ -265,17 +282,6 @@ func (p *P2PServerV2) streamHandler(netStream network.Stream) {
 	if _, err := p.streamPool.NewStream(p.ctx, netStream); err != nil {
 		p.log.Warn("new stream error")
 	}
-
-    key := Key(p.account)
-    _, err := p.kdht.GetValue(context.Background(), key)
-    if err == routing.ErrNotFound {
-        value := p.getMultiAddr(p.host.ID(), p.host.Addrs())
-        err = p.kdht.PutValue(context.Background(), key, []byte(value))
-        if err != nil {
-            p.log.Error("dht put value error", "error", err)
-            return
-        }
-    }
 }
 
 // Stop stop the node
@@ -312,11 +318,30 @@ func (p *P2PServerV2) Context() *nctx.NetCtx {
 }
 
 func (p *P2PServerV2) PeerInfo() pb.PeerInfo {
-	return pb.PeerInfo{
-		Id:      p.host.ID().Pretty(),
-		Address: p.getMultiAddr(p.host.ID(), p.host.Addrs()),
-		Account: p.account,
-	}
+    peerInfo := pb.PeerInfo{
+        Id:      p.host.ID().Pretty(),
+        Address: p.getMultiAddr(p.host.ID(), p.host.Addrs()),
+        Account: p.account,
+    }
+
+    peerStore := p.host.Peerstore()
+    for _, peerID := range p.kdht.RoutingTable().ListPeers() {
+        key := GenPeerIDKey(peerID)
+        account, err := p.kdht.GetValue(context.Background(), key)
+        if err != nil {
+            p.log.Warn("get account error", "peerID", peerID)
+        }
+
+        addrInfo := peerStore.PeerInfo(peerID)
+        remotePeerInfo := &pb.PeerInfo{
+            Id:      peerID.String(),
+            Address: p.getMultiAddr(addrInfo.ID, addrInfo.Addrs),
+            Account: string(account),
+        }
+        peerInfo.Peer = append(peerInfo.Peer, remotePeerInfo)
+    }
+
+	return peerInfo
 }
 
 func (p *P2PServerV2) getMultiAddr(peerID peer.ID, addrs []multiaddr.Multiaddr) string {

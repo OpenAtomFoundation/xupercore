@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
+    "github.com/patrickmn/go-cache"
+    "sync"
 	"time"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -307,6 +308,6 @@ func (p *P2PServerV2) GetPeerIdByAccount(account string) (peer.ID, error) {
 		return "", fmt.Errorf("address error: %s, address=%s", err, value)
 	}
 
-	p.accounts.Set(key, peerID, 0)
+	p.accounts.Set(key, peerID, cache.NoExpiration)
 	return peerID, nil
 }
