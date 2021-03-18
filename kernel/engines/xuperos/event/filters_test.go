@@ -1,10 +1,10 @@
 package event
 
 import (
-    "testing"
+	"testing"
 
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-    "github.com/xuperchain/xupercore/protos"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 func expectTxMatch(t *testing.T, tx *lpb.Transaction, pbfilter *protos.BlockFilter) {

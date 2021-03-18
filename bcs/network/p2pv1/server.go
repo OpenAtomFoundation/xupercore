@@ -26,8 +26,6 @@ import (
 
 const (
 	ServerName = "p2pv1"
-
-	expiredTime = time.Minute
 )
 
 var (
@@ -101,7 +99,7 @@ func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
 		p.log.Error("load account error", "path", keyPath)
 		return ErrLoadAccount
 	}
-	p.accounts = cache.New(expiredTime, expiredTime)
+	p.accounts = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 	p.bootNodes = make([]string, 0)
 	p.staticNodes = make(map[string][]string, 0)
@@ -210,16 +208,44 @@ func (p *P2PServerV1) PeerInfo() pb.PeerInfo {
 		p.log.Warn("address illegal", "error", err)
 	}
 
-	return pb.PeerInfo{
+	peerInfo := pb.PeerInfo{
 		Id:      ip,
 		Address: ip,
 		Account: p.account,
 	}
+
+	accounts := p.accounts.Items()
+	peerID2Accounts := make(map[string]string, len(accounts))
+	for account, item := range accounts {
+		if id, ok := item.Object.(string); ok {
+			peerID2Accounts[id] = account
+		}
+	}
+
+	peers := p.pool.GetAll()
+	for id, address := range peers {
+		if address == ip {
+			continue
+		}
+
+		remotePeerInfo := &pb.PeerInfo{
+			Id:      id,
+			Address: address,
+			Account: peerID2Accounts[id],
+		}
+		peerInfo.Peer = append(peerInfo.Peer, remotePeerInfo)
+	}
+
+	return peerInfo
 }
 
 // connectBootNodes connect to boot node
 func (p *P2PServerV1) connectBootNodes() {
 	p.bootNodes = p.config.BootNodes
+	if len(p.bootNodes) <= 0 {
+		p.log.Warn("connectBootNodes error: boot node empty")
+		return
+	}
 
 	addresses := make([]string, 0, len(p.bootNodes))
 	for _, address := range p.bootNodes {
@@ -262,6 +288,7 @@ func (p *P2PServerV1) connectBootNodes() {
 func (p *P2PServerV1) connectStaticNodes() {
 	p.staticNodes = p.config.StaticNodes
 	if len(p.staticNodes) <= 0 {
+		p.log.Warn("connectStaticNodes error: static node empty")
 		return
 	}
 
@@ -291,7 +318,7 @@ func (p *P2PServerV1) connectStaticNodes() {
 
 	remotePeerInfos, err := p.GetPeerInfo(allAddresses)
 	if err != nil {
-		p.log.Error("connect boot node error", "error", err, "address", allAddresses)
+		p.log.Error("connect static node error", "error", err, "address", allAddresses)
 		return
 	}
 

@@ -1,6 +1,7 @@
 package p2pv1
 
 import (
+	"github.com/patrickmn/go-cache"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/protos"
@@ -11,7 +12,7 @@ func (p *P2PServerV1) GetPeerInfo(addresses []string) ([]*pb.PeerInfo, error) {
 	msg := p2p.NewMessage(pb.XuperMessage_GET_PEER_INFO, &peerInfo)
 	response, err := p.SendMessageWithResponse(p.ctx, msg, p2p.WithAddresses(addresses))
 	if err != nil {
-		p.log.Error("get peer error", "error", err)
+		p.log.Error("get peer error", "log_id", msg.GetHeader().GetLogid(), "error", err)
 		return nil, err
 	}
 
@@ -20,7 +21,7 @@ func (p *P2PServerV1) GetPeerInfo(addresses []string) ([]*pb.PeerInfo, error) {
 		var peerInfo pb.PeerInfo
 		err := p2p.Unmarshal(msg, &peerInfo)
 		if err != nil {
-			p.log.Warn("unmarshal NewNode response error", "error", err)
+			p.log.Warn("unmarshal NewNode response error", "log_id", msg.GetHeader().GetLogid(), "error", err)
 			continue
 		}
 
@@ -65,7 +66,7 @@ func (p *P2PServerV1) handleGetPeerInfo(ctx xctx.XContext, request *pb.XuperMess
 	if _, ok := uniq[peerInfo.Address]; !ok {
 		p.dynamicNodes = append(p.dynamicNodes, peerInfo.Address)
 	}
-	p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), 0)
+	p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), cache.NoExpiration)
 
 	return resp, nil
 }

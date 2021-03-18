@@ -67,7 +67,7 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	// 初始化引擎运行上下文
 	engCtx, err := t.createEngCtx(envCfg)
 	if err != nil {
-		return common.ErrNewEngineCtxFailed
+		return common.ErrNewEngineCtxFailed.More("%v", err)
 	}
 	t.engCtx = engCtx
 	t.log = t.engCtx.XLog

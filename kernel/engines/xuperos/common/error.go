@@ -95,8 +95,8 @@ var (
 	ErrSubmitTxFailed = &Error{ErrStatusInternalErr, 50404, "submit tx failed"}
 
 	// contract
-	ErrContractNewCtxFailed = &Error{ErrStatusInternalErr, 50500, "contract new context failed"}
-	ErrContractInvokeFailed = &Error{ErrStatusInternalErr, 50501, "contract invoke failed"}
+	ErrContractNewCtxFailed     = &Error{ErrStatusInternalErr, 50500, "contract new context failed"}
+	ErrContractInvokeFailed     = &Error{ErrStatusInternalErr, 50501, "contract invoke failed"}
 	ErrContractNewSandboxFailed = &Error{ErrStatusInternalErr, 50502, "contract new sandbox failed"}
 
 	// net

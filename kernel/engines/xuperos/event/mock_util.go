@@ -2,9 +2,9 @@ package event
 
 import (
 	"crypto/rand"
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-    "github.com/xuperchain/xupercore/protos"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type blockBuilder struct {

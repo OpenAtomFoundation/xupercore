@@ -2,8 +2,8 @@ package event
 
 import (
 	"encoding/hex"
-    "github.com/xuperchain/xupercore/protos"
-    "strconv"
+	"github.com/xuperchain/xupercore/protos"
+	"strconv"
 	"testing"
 	"time"
 )

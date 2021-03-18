@@ -45,7 +45,6 @@ func startNode1(t *testing.T) {
 	}(t)
 }
 
-
 func startNode2(t *testing.T) {
 	ecfg, _ := mock.NewEnvConfForTest("p2pv1/node2/conf/env.yaml")
 	ctx, _ := nctx.NewNetCtx(ecfg)
@@ -96,5 +95,5 @@ func TestP2PServerV1(t *testing.T) {
 	startNode2(t)
 	time.Sleep(time.Second)
 	startNode3(t)
-    time.Sleep(time.Second)
+	time.Sleep(time.Second)
 }

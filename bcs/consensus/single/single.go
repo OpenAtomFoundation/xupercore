@@ -1,18 +1,18 @@
 package single
 
 import (
-    "bytes"
-    "encoding/json"
-    "errors"
-    "fmt"
-    "strconv"
-    "time"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strconv"
+	"time"
 
-    "github.com/xuperchain/xupercore/kernel/common/xcontext"
-    "github.com/xuperchain/xupercore/kernel/consensus"
-    "github.com/xuperchain/xupercore/kernel/consensus/base"
-    cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
-    "github.com/xuperchain/xupercore/kernel/consensus/def"
+	"github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/consensus"
+	"github.com/xuperchain/xupercore/kernel/consensus/base"
+	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/consensus/def"
 )
 
 // 本次single改造支持single的升级，即Miner地址可变
@@ -51,11 +51,11 @@ func NewSingleConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 		return nil
 	}
 
-    config, err := buildConfigs([]byte(cCfg.Config))
-    if err != nil {
-        cCtx.XLog.Error("Single::NewSingleConsensus::single parse config", "error", err)
-        return nil
-    }
+	config, err := buildConfigs([]byte(cCfg.Config))
+	if err != nil {
+		cCtx.XLog.Error("Single::NewSingleConsensus::single parse config", "error", err)
+		return nil
+	}
 
 	// newHeight取上一共识的最高值，因为此时BeginHeight也许并为生产出来
 	status := &SingleStatus{
@@ -176,29 +176,29 @@ type SingleConfig struct {
 }
 
 func buildConfigs(input []byte) (*SingleConfig, error) {
-    v := make(map[string]string)
-    err := json.Unmarshal(input, &v)
-    if err != nil {
-        return nil, fmt.Errorf("unmarshal single config error")
-    }
+	v := make(map[string]string)
+	err := json.Unmarshal(input, &v)
+	if err != nil {
+		return nil, fmt.Errorf("unmarshal single config error")
+	}
 
-    config := &SingleConfig{
-        Miner: v["miner"],
-    }
+	config := &SingleConfig{
+		Miner: v["miner"],
+	}
 
-    if v["version"] != "" {
-        config.Version, err = strconv.ParseInt(v["version"], 10, 64)
-        if err != nil {
-            return nil, fmt.Errorf("parse version error: %v, %v", err, v["version"])
-        }
-    }
+	if v["version"] != "" {
+		config.Version, err = strconv.ParseInt(v["version"], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse version error: %v, %v", err, v["version"])
+		}
+	}
 
-    if v["period"] != "" {
-        config.Period, err = strconv.ParseInt(v["period"], 10, 64)
-        if err != nil {
-            return nil, fmt.Errorf("parse period error: %v, %v", err, v["period"])
-        }
-    }
+	if v["period"] != "" {
+		config.Period, err = strconv.ParseInt(v["period"], 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse period error: %v, %v", err, v["period"])
+		}
+	}
 
-    return config, nil
+	return config, nil
 }

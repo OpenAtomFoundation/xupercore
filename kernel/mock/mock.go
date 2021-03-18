@@ -16,20 +16,21 @@ func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
 
 	dir := utils.GetCurFileDir()
 	econfPath := filepath.Join(dir, path)
-	return xconf.LoadEnvConf(econfPath)
-}
+	econf, err := xconf.LoadEnvConf(econfPath)
+	if err != nil {
+		return nil, err
+	}
 
-func GetNetConfPathForTest() string {
-	dir := utils.GetCurFileDir()
-	return filepath.Join(dir, "conf/network.yaml")
+	econf.RootPath = utils.GetCurFileDir()
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	return econf, nil
 }
 
 func InitLogForTest() error {
-	ecfg, err := NewEnvConfForTest()
+	_, err := NewEnvConfForTest()
 	if err != nil {
 		return err
 	}
 
-	logs.InitLog(ecfg.GenConfFilePath(ecfg.LogConf), ecfg.GenDirAbsPath(ecfg.LogDir))
 	return nil
 }
