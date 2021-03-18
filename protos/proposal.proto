@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+option go_package = "github.com/xuperchain/xupercore/protos";
+
+package protos;
+
+// GovernTokenBalance
+message GovernTokenBalance {
+    string total_balance = 1;
+    string available_balance_for_tdpos = 2;
+    string locked_balance_for_tdpos = 3;
+    string available_balance_for_proposal = 4;
+    string locked_balance_for_proposal = 5;
+}
+
+// TriggerDesc
+message TriggerDesc {
+    int64 height = 1;
+    string module = 2;
+    string method = 3;
+    map<string, bytes> args = 4;
+}
+
+enum ProposalStatus {
+    VOTING = 0;
+    SUCCESS = 1;
+    FAILURE = 2;
+    CANCELED = 3;
+}
+
+// Proposal
+message Proposal {
+    string module = 1;
+    string method = 2;
+    map<string, bytes> args = 3;
+    TriggerDesc trigger = 4;
+
+    string vote_amount = 5;
+    ProposalStatus status = 6;
+    string proposer = 7;
+}
+
+
