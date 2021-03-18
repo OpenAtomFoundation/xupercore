@@ -1,9 +1,9 @@
 package p2pv2
 
 import (
-    "fmt"
+	"fmt"
 
-    "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 type blankValidator struct{}
@@ -16,9 +16,9 @@ func Key(account string) string {
 }
 
 func GenAccountKey(account string) string {
-    return fmt.Sprintf("/%s/account/%s", namespace, account)
+	return fmt.Sprintf("/%s/account/%s", namespace, account)
 }
 
 func GenPeerIDKey(id peer.ID) string {
-    return fmt.Sprintf("/%s/id/%s", namespace, id)
+	return fmt.Sprintf("/%s/id/%s", namespace, id)
 }

@@ -1,19 +1,19 @@
 package xuperos
 
 import (
-    "bytes"
-    "fmt"
+	"bytes"
+	"fmt"
 
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-    xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-    "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
-    "github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
-    "github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
-    "github.com/xuperchain/xupercore/kernel/network/p2p"
-    "github.com/xuperchain/xupercore/lib/logs"
-    "github.com/xuperchain/xupercore/lib/timer"
-    "github.com/xuperchain/xupercore/lib/utils"
-    "github.com/xuperchain/xupercore/protos"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/timer"
+	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 const (

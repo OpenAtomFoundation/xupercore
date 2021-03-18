@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	"github.com/golang/protobuf/proto"
-    "github.com/xuperchain/xupercore/protos"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var _ Topic = (*BlockTopic)(nil)

@@ -188,8 +188,8 @@ func (p *ConnPool) GetAll() map[string]string {
 		addr := key.(string)
 		conn := value.(*Conn)
 		if conn.conn.GetState() == connectivity.Ready {
-            remotePeer[conn.PeerID()] = addr
-        }
+			remotePeer[conn.PeerID()] = addr
+		}
 		return true
 	})
 

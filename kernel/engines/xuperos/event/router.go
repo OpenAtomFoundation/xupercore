@@ -2,9 +2,9 @@ package event
 
 import (
 	"fmt"
-    "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 
-    pb "github.com/xuperchain/xupercore/protos"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 // Router distribute events according to the event type and filter

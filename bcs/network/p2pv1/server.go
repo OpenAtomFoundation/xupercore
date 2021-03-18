@@ -209,32 +209,32 @@ func (p *P2PServerV1) PeerInfo() pb.PeerInfo {
 	}
 
 	peerInfo := pb.PeerInfo{
-        Id:      ip,
-        Address: ip,
-        Account: p.account,
-    }
+		Id:      ip,
+		Address: ip,
+		Account: p.account,
+	}
 
-    accounts := p.accounts.Items()
-    peerID2Accounts := make(map[string]string, len(accounts))
-    for account, item := range accounts {
-        if id, ok := item.Object.(string); ok {
-            peerID2Accounts[id] = account
-        }
-    }
+	accounts := p.accounts.Items()
+	peerID2Accounts := make(map[string]string, len(accounts))
+	for account, item := range accounts {
+		if id, ok := item.Object.(string); ok {
+			peerID2Accounts[id] = account
+		}
+	}
 
 	peers := p.pool.GetAll()
 	for id, address := range peers {
-	    if address == ip {
-	        continue
-        }
+		if address == ip {
+			continue
+		}
 
-	    remotePeerInfo := &pb.PeerInfo{
-            Id:      id,
-            Address: address,
-            Account: peerID2Accounts[id],
-        }
-        peerInfo.Peer = append(peerInfo.Peer, remotePeerInfo)
-    }
+		remotePeerInfo := &pb.PeerInfo{
+			Id:      id,
+			Address: address,
+			Account: peerID2Accounts[id],
+		}
+		peerInfo.Peer = append(peerInfo.Peer, remotePeerInfo)
+	}
 
 	return peerInfo
 }
@@ -243,9 +243,9 @@ func (p *P2PServerV1) PeerInfo() pb.PeerInfo {
 func (p *P2PServerV1) connectBootNodes() {
 	p.bootNodes = p.config.BootNodes
 	if len(p.bootNodes) <= 0 {
-	    p.log.Warn("connectBootNodes error: boot node empty")
-        return
-    }
+		p.log.Warn("connectBootNodes error: boot node empty")
+		return
+	}
 
 	addresses := make([]string, 0, len(p.bootNodes))
 	for _, address := range p.bootNodes {
@@ -288,7 +288,7 @@ func (p *P2PServerV1) connectBootNodes() {
 func (p *P2PServerV1) connectStaticNodes() {
 	p.staticNodes = p.config.StaticNodes
 	if len(p.staticNodes) <= 0 {
-        p.log.Warn("connectStaticNodes error: static node empty")
+		p.log.Warn("connectStaticNodes error: static node empty")
 		return
 	}
 

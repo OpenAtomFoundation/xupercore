@@ -1,11 +1,11 @@
 package mock
 
 import (
-    "path/filepath"
+	"path/filepath"
 
-    xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
-    "github.com/xuperchain/xupercore/lib/logs"
-    "github.com/xuperchain/xupercore/lib/utils"
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/utils"
 )
 
 func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
@@ -18,12 +18,12 @@ func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
 	econfPath := filepath.Join(dir, path)
 	econf, err := xconf.LoadEnvConf(econfPath)
 	if err != nil {
-	    return nil, err
-    }
+		return nil, err
+	}
 
-    econf.RootPath = utils.GetCurFileDir()
-    logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
-    return econf, nil
+	econf.RootPath = utils.GetCurFileDir()
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	return econf, nil
 }
 
 func InitLogForTest() error {

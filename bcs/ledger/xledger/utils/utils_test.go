@@ -1,13 +1,13 @@
 package utils
 
 import (
-    "io/ioutil"
-    "os"
-    "path/filepath"
-    "testing"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
 
-    "github.com/xuperchain/xupercore/kernel/mock"
-    _ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
 )
 
 func TestCreateLedger(t *testing.T) {

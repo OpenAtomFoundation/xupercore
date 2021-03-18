@@ -2,10 +2,10 @@ package event
 
 import (
 	"errors"
-    "time"
+	"time"
 
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-    pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 var _ Iterator = (*BlockIterator)(nil)
