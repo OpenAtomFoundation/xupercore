@@ -16,7 +16,7 @@ message GovernTokenBalance {
 // TriggerDesc
 message TriggerDesc {
     int64 height = 1;
-    int64 module = 2;
+    string module = 2;
     string method = 3;
     map<string, bytes> args = 4;
 }
