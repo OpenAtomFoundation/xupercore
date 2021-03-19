@@ -223,6 +223,10 @@ func (c *FakeKContext) Initiator() string {
 	return ""
 }
 
+func (c *FakeKContext) Caller() string {
+	return ""
+}
+
 func (c *FakeKContext) AuthRequire() []string {
 	return nil
 }
