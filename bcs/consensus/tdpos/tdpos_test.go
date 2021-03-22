@@ -2,6 +2,7 @@ package tdpos
 
 import (
 	"testing"
+	"time"
 
 	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
@@ -62,7 +63,82 @@ func TestNewTdposConsensus(t *testing.T) {
 	}
 	i := NewTdposConsensus(*cCtx, getConfig())
 	if i == nil {
-		t.Error("NewPoWConsensus error", "conf", getConfig())
+		t.Error("NewTdposConsensus error", "conf", getConfig())
 		return
+	}
+}
+
+func TestCompeteMaster(t *testing.T) {
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	i := NewTdposConsensus(*cCtx, getConfig())
+	if i == nil {
+		t.Error("NewTdposConsensus error", "conf", getConfig())
+		return
+	}
+	_, _, err = i.CompeteMaster(3)
+	if err != nil {
+		t.Error("CompeteMaster error", "err", err)
+	}
+}
+
+func TestCheckMinerMatch(t *testing.T) {
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	i := NewTdposConsensus(*cCtx, getConfig())
+	if i == nil {
+		t.Error("NewTdposConsensus error", "conf", getConfig())
+		return
+	}
+	b3 := kmock.NewBlock(3)
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.SetConsensusStorage(1, SetTdposStorage(1))
+	l.SetConsensusStorage(2, SetTdposStorage(1))
+	l.SetConsensusStorage(3, SetTdposStorage(1))
+	c := cCtx.BaseCtx
+	i.CheckMinerMatch(&c, b3)
+}
+
+func TestProcessBeforeMiner(t *testing.T) {
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	i := NewTdposConsensus(*cCtx, getConfig())
+	if i == nil {
+		t.Error("NewTdposConsensus error", "conf", getConfig())
+		return
+	}
+	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
+	if err != timeoutBlockErr {
+		t.Error("ProcessBeforeMiner error", "err", err)
+	}
+}
+
+func TestProcessConfirmBlock(t *testing.T) {
+	cCtx, err := prepare()
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	i := NewTdposConsensus(*cCtx, getConfig())
+	if i == nil {
+		t.Error("NewTdposConsensus error", "conf", getConfig())
+		return
+	}
+	b3 := kmock.NewBlock(3)
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.SetConsensusStorage(1, SetTdposStorage(1))
+	l.SetConsensusStorage(2, SetTdposStorage(1))
+	l.SetConsensusStorage(3, SetTdposStorage(1))
+	if err := i.ProcessConfirmBlock(b3); err != nil {
+		t.Error("ProcessConfirmBlock error", "err", err)
 	}
 }

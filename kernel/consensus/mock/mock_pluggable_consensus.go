@@ -14,6 +14,7 @@ import (
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/utils"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -47,6 +48,7 @@ func NewBlock(height int) *FakeBlock {
 		Blockid:          []byte{byte(height)},
 		ConsensusStorage: []byte{},
 		Timestamp:        time.Now().UnixNano(),
+		Proposer:         "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
 	}
 }
 
@@ -116,6 +118,7 @@ type FakeLedger struct {
 	ledgerMap     map[string]*FakeBlock
 	consensusConf []byte
 	sandbox       *FakeSandBox
+	fakeReader    FakeXMReader
 }
 
 type FakeSandBox struct {
@@ -149,6 +152,7 @@ func NewFakeLedger(conf []byte) *FakeLedger {
 		consensusConf: conf,
 		sandbox:       a,
 	}
+	l.fakeReader = NewFakeXMReader()
 	for i := 0; i < 3; i++ {
 		l.Put(NewBlock(i))
 	}
@@ -176,6 +180,9 @@ func (l *FakeLedger) QueryBlock(blockId []byte) (ledger.BlockHandle, error) {
 }
 
 func (l *FakeLedger) QueryBlockByHeight(height int64) (ledger.BlockHandle, error) {
+	if int(height) > len(l.ledgerSlice)-1 {
+		return nil, blockSetItemErr
+	}
 	return l.ledgerSlice[height], nil
 }
 
@@ -195,11 +202,26 @@ func (l *FakeLedger) GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) {
 }
 
 func (l *FakeLedger) CreateSnapshot(blkId []byte) (ledger.XMReader, error) {
-	return nil, nil
+	return &l.fakeReader, nil
+}
+
+func (l *FakeLedger) SetSnapshot(bucket string, key []byte, value []byte) {
+	l.fakeReader[string(key)] = FReaderItem{
+		Bucket: bucket,
+		Key:    key,
+		Value:  value,
+	}
 }
 
 func (l *FakeLedger) GetTipSnapshot() (ledger.XMReader, error) {
 	return nil, nil
+}
+
+func (l *FakeLedger) SetConsensusStorage(height int, s []byte) {
+	if len(l.ledgerSlice)-1 < height {
+		return
+	}
+	l.ledgerSlice[height].ConsensusStorage = s
 }
 
 type FakeKContext struct {
@@ -216,6 +238,14 @@ func NewFakeKContext(args map[string][]byte, m map[string]map[string][]byte) *Fa
 
 func (c *FakeKContext) Args() map[string][]byte {
 	return c.args
+}
+
+func (c *FakeKContext) AddEvent(events ...*protos.ContractEvent) {
+	return
+}
+
+func (c *FakeKContext) Flush() error {
+	return nil
 }
 
 func (c *FakeKContext) Initiator() string {
@@ -307,6 +337,37 @@ func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contr
 }
 
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {
+	return nil, nil
+}
+
+type FReaderItem struct {
+	Bucket string
+	Key    []byte
+	Value  []byte
+}
+
+type FakeXMReader map[string]FReaderItem
+
+func NewFakeXMReader() FakeXMReader {
+	a := make(map[string]FReaderItem)
+	return a
+}
+
+func (r FakeXMReader) Get(bucket string, key []byte) (*ledger.VersionedData, error) {
+	item, ok := r[string(key)]
+	if !ok {
+		return nil, nil
+	}
+	return &ledger.VersionedData{
+		PureData: &ledger.PureData{
+			Bucket: item.Bucket,
+			Key:    item.Key,
+			Value:  item.Value,
+		},
+	}, nil
+}
+
+func (r *FakeXMReader) Select(bucket string, startKey []byte, endKey []byte) (ledger.XMIterator, error) {
 	return nil, nil
 }
 

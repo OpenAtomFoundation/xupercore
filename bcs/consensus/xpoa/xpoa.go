@@ -15,6 +15,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
 
@@ -30,6 +31,8 @@ type xpoaConsensus struct {
 	config        *xpoaConfig
 	initTimestamp int64
 	status        *XpoaStatus
+
+	log logs.Logger
 }
 
 // NewXpoaConsensus 初始化实例
@@ -100,6 +103,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		config:        xconfig,
 		initTimestamp: time.Now().UnixNano(),
 		status:        status,
+		log:           cCtx.XLog,
 	}
 	if schedule.enableBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例

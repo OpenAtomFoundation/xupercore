@@ -619,6 +619,12 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 			return fmt.Errorf("get pending block failed from ledger")
 		}
 
+		valid, err := t.ctx.Ledger.VerifyBlock(block, ctx.GetLog().GetLogId())
+		if !valid {
+			ctx.GetLog().Warn("the verification of block failed.",
+				"blockId", utils.F(blkIds[index]))
+			return fmt.Errorf("the verification of block failed from ledger.")
+		}
 		blockAgent := agent.NewBlockAgent(block)
 		isMatch, err := t.ctx.Consensus.CheckMinerMatch(ctx, blockAgent)
 		if !isMatch {
