@@ -43,7 +43,7 @@ func NewConn(ctx *nctx.NetCtx, addr string) (*Conn, error) {
 
 func (c *Conn) newClient() (pb.P2PServiceClient, error) {
 	state := c.conn.GetState()
-	if state != connectivity.Ready {
+	if state == connectivity.TransientFailure || state == connectivity.Shutdown {
 		c.log.Error("newClient conn state not ready", "id", c.id, "state", state.String())
 		c.Close()
 		err := c.newConn()
@@ -187,7 +187,9 @@ func (p *ConnPool) GetAll() map[string]string {
 	p.pool.Range(func(key, value interface{}) bool {
 		addr := key.(string)
 		conn := value.(*Conn)
-		remotePeer[conn.PeerID()] = addr
+		if conn.conn.GetState() == connectivity.Ready {
+			remotePeer[conn.PeerID()] = addr
+		}
 		return true
 	})
 

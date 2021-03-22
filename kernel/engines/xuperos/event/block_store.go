@@ -3,10 +3,10 @@ package event
 import (
 	"fmt"
 
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-    pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-    "github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 )
 
 // ChainManager manage multiple block chain
@@ -54,7 +54,7 @@ type blockStore struct {
 func NewBlockStore(ledger *ledger.Ledger, state *state.State) BlockStore {
 	return &blockStore{
 		Ledger: ledger,
-		State: state,
+		State:  state,
 	}
 }
 

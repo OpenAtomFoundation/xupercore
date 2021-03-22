@@ -124,7 +124,7 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 		ctx.GetLog().Debug("HandleMessage", "bc", msg.GetHeader().GetBcname(),
 			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "timer", ctx.GetTimer().Print())
 	}()
-	
+
 	if s.handler != nil {
 		resp, err := s.handler(ctx, msg)
 		ctx.GetTimer().Mark("handle")

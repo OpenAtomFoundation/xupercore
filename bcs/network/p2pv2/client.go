@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/patrickmn/go-cache"
 	"sync"
 	"time"
 
@@ -80,7 +81,7 @@ func (p *P2PServerV2) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerI
 		wg.Add(1)
 
 		go func(peerID peer.ID) {
-			streamCtx :=  &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+			streamCtx := &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
 			defer func() {
 				wg.Done()
 				streamCtx.GetLog().Debug("SendMessage", "log_id", msg.GetHeader().GetLogid(),
@@ -170,7 +171,7 @@ func (p *P2PServerV2) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 	for _, peerID := range peerIDs {
 		wg.Add(1)
 		go func(peerID peer.ID) {
-			streamCtx :=  &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+			streamCtx := &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
 			defer func() {
 				wg.Done()
 				streamCtx.GetLog().Debug("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
@@ -307,6 +308,6 @@ func (p *P2PServerV2) GetPeerIdByAccount(account string) (peer.ID, error) {
 		return "", fmt.Errorf("address error: %s, address=%s", err, value)
 	}
 
-	p.accounts.Set(key, peerID, 0)
+	p.accounts.Set(key, peerID, cache.NoExpiration)
 	return peerID, nil
 }

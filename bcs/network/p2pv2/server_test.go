@@ -1,13 +1,13 @@
 package p2pv2
 
 import (
-    "fmt"
-    xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-    "github.com/xuperchain/xupercore/kernel/mock"
-    nctx "github.com/xuperchain/xupercore/kernel/network/context"
-    "github.com/xuperchain/xupercore/kernel/network/p2p"
-    pb "github.com/xuperchain/xupercore/protos"
-    "testing"
+	"fmt"
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	pb "github.com/xuperchain/xupercore/protos"
+	"testing"
 )
 
 func Handler(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
@@ -19,17 +19,17 @@ func Handler(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) 
 func startNode1(t *testing.T) {
 	ecfg, err := mock.NewEnvConfForTest("p2pv2/node1/conf/env.yaml")
 	if err != nil {
-	    t.Errorf("env conf error: %v", err)
-	    return
-    }
+		t.Errorf("env conf error: %v", err)
+		return
+	}
 
-    fmt.Printf("root=%s, net=%s", ecfg.RootPath, ecfg.NetConf)
+	fmt.Printf("root=%s, net=%s", ecfg.RootPath, ecfg.NetConf)
 
 	ctx, err := nctx.NewNetCtx(ecfg)
-    if err != nil {
-       t.Errorf("net ctx error: %v", err)
-       return
-    }
+	if err != nil {
+		t.Errorf("net ctx error: %v", err)
+		return
+	}
 
 	node := NewP2PServerV2()
 	if err := node.Init(ctx); err != nil {

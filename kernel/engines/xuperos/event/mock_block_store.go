@@ -1,12 +1,12 @@
 package event
 
 import (
-    "errors"
-    "sync"
+	"errors"
+	"sync"
 
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-    "github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-    lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 type mockBlockStore struct {
