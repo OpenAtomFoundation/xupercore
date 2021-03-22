@@ -28,69 +28,6 @@ import (
 // 由于三代合约读写集限制，不能针对同一个ExeInput触发并行操作，后到的tx将会出现读写集错误，即针对同一个大key的操作同一个区块只能顺序执行
 // 撤销走的是proposal合约，但目前看来proposal没有指明height
 
-type nominateValue map[string]map[string]int64
-
-func NewNominateValue() nominateValue {
-	return make(map[string]map[string]int64)
-}
-
-type voteValue map[string]int64
-
-func NewvoteValue() voteValue {
-	return make(map[string]int64)
-}
-
-type revokeValue map[string][]revokeItem
-
-type revokeItem struct {
-	revokeType string
-	ballot     int64
-	timestamp  int64
-}
-
-func NewRevokeValue() revokeValue {
-	return make(map[string][]revokeItem)
-}
-
-type termValue []termItem
-
-type termItem struct {
-	validators []string
-	term       int64
-	height     int64
-}
-
-func NewTermValue() []termItem {
-	return make([]termItem, 0)
-}
-
-func NewContractErrResponse(msg string) *contract.Response {
-	return &contract.Response{
-		Status:  StatusErr,
-		Message: msg,
-	}
-}
-
-func NewContractOKResponse(json []byte) *contract.Response {
-	return &contract.Response{
-		Status:  StatusOK,
-		Message: "success",
-		Body:    json,
-	}
-}
-
-func (tp *tdposConsensus) isAuthAddress(candidate string, initiator string, authRequire []string) bool {
-	if strings.HasSuffix(initiator, candidate) {
-		return true
-	}
-	for _, value := range authRequire {
-		if strings.HasSuffix(value, candidate) {
-			return true
-		}
-	}
-	return false
-}
-
 // runNominateCandidate 执行提名候选人
 func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*contract.Response, error) {
 	// 核查nominate合约参数有效性
@@ -209,9 +146,9 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 		revokeValue[contractCtx.Initiator()] = make([]revokeItem, 0)
 	}
 	revokeValue[contractCtx.Initiator()] = append(revokeValue[contractCtx.Initiator()], revokeItem{
-		revokeType: NOMINATETYPE,
-		ballot:     ballot,
-		timestamp:  time.Now().UnixNano(),
+		RevokeType: NOMINATETYPE,
+		Ballot:     ballot,
+		Timestamp:  time.Now().UnixNano(),
 	})
 	revokeBytes, err := json.Marshal(revokeValue)
 	if err != nil {
@@ -293,7 +230,6 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 		voteValue[contractCtx.Initiator()] = 0
 	}
 	voteValue[contractCtx.Initiator()] += amount
-	tp.log.Error("tdpos::runVote!!!!!!!!", "voteValue", voteValue)
 	voteBytes, err := json.Marshal(voteValue)
 	if err != nil {
 		return NewContractErrResponse(err.Error()), err
@@ -322,9 +258,9 @@ func (tp *tdposConsensus) refreshTerm(tipHeight int64, contractCtx contract.KCon
 		return err
 	}
 	item := termItem{
-		validators: tp.election.validators,
-		term:       tp.election.curTerm,
-		height:     tipHeight,
+		Validators: tp.election.validators,
+		Term:       tp.election.curTerm,
+		Height:     tipHeight,
 	}
 	termValue := NewTermValue()
 	// 初始化则直接push值
@@ -344,10 +280,9 @@ func (tp *tdposConsensus) refreshTerm(tipHeight int64, contractCtx contract.KCon
 	}
 	// 仅与最新的值对比，若有变化则插入新值
 	tail := termValue[len(termValue)-1]
-	if !common.AddressEqual(tail.validators, tp.election.validators) {
+	if !common.AddressEqual(tail.Validators, tp.election.validators) {
 		termValue = append(termValue, item)
 	}
-	tp.log.Error("tdpos::runVote!!!!!!!!", "termValue", termValue)
 	termBytes, err := json.Marshal(termValue)
 	if err != nil {
 		return err
@@ -421,9 +356,9 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 		revokeValue[contractCtx.Initiator()] = make([]revokeItem, 0)
 	}
 	revokeValue[contractCtx.Initiator()] = append(revokeValue[contractCtx.Initiator()], revokeItem{
-		revokeType: VOTETYPE,
-		ballot:     amount,
-		timestamp:  time.Now().UnixNano(),
+		RevokeType: VOTETYPE,
+		Ballot:     amount,
+		Timestamp:  time.Now().UnixNano(),
 	})
 	revokeBytes, err := json.Marshal(revokeValue)
 	if err != nil {
@@ -529,4 +464,67 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 	}
 	contractCtx.AddResourceUsed(delta)
 	return NewContractOKResponse([]byte(r)), nil
+}
+
+type nominateValue map[string]map[string]int64
+
+func NewNominateValue() nominateValue {
+	return make(map[string]map[string]int64)
+}
+
+type voteValue map[string]int64
+
+func NewvoteValue() voteValue {
+	return make(map[string]int64)
+}
+
+type revokeValue map[string][]revokeItem
+
+type revokeItem struct {
+	RevokeType string
+	Ballot     int64
+	Timestamp  int64
+}
+
+func NewRevokeValue() revokeValue {
+	return make(map[string][]revokeItem)
+}
+
+type termValue []*termItem
+
+type termItem struct {
+	Validators []string
+	Term       int64
+	Height     int64
+}
+
+func NewTermValue() []termItem {
+	return make([]termItem, 0)
+}
+
+func NewContractErrResponse(msg string) *contract.Response {
+	return &contract.Response{
+		Status:  StatusErr,
+		Message: msg,
+	}
+}
+
+func NewContractOKResponse(json []byte) *contract.Response {
+	return &contract.Response{
+		Status:  StatusOK,
+		Message: "success",
+		Body:    json,
+	}
+}
+
+func (tp *tdposConsensus) isAuthAddress(candidate string, initiator string, authRequire []string) bool {
+	if strings.HasSuffix(initiator, candidate) {
+		return true
+	}
+	for _, value := range authRequire {
+		if strings.HasSuffix(value, candidate) {
+			return true
+		}
+	}
+	return false
 }

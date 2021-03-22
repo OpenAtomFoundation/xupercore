@@ -1,11 +1,13 @@
 package chained_bft
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
 
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -202,90 +204,88 @@ func TestSMR(t *testing.T) {
 
 	// 检查B节点，B节点收集A发起的1轮qc，A的票应该有3张，B应该进入2轮
 	nodeBH := sB.qcTree.GetHighQC()
-	nodeBH.In.GetProposalView()
-	/*
-		if biV != 1 {
-			t.Error("update qcTree error", "biV", biV)
-			return
-		}
-		if sB.GetCurrentView() != 2 {
-			t.Error("receive B ProcessProposal error", "view", sB.GetCurrentView())
-			return
-		}
-		if sC.GetCurrentView() != 1 {
-			t.Error("receive C ProcessProposal error", "view", sC.GetCurrentView())
-			return
-		}
-		// ABC节点应该都存储了新的view=1的node，但是只有B更新了HighQC
-		if len(nodeAH.Sons) != 1 {
-			t.Error("A qcTree error")
-			return
-		}
-		nodeCH := sC.qcTree.GetHighQC()
-		if len(nodeCH.Sons) != 1 {
-			t.Error("A qcTree error")
-			return
-		}
+	biV := nodeBH.In.GetProposalView()
+	if biV != 1 {
+		t.Error("update qcTree error", "biV", biV)
+		return
+	}
+	if sB.GetCurrentView() != 2 {
+		t.Error("receive B ProcessProposal error", "view", sB.GetCurrentView())
+		return
+	}
+	if sC.GetCurrentView() != 1 {
+		t.Error("receive C ProcessProposal error", "view", sC.GetCurrentView())
+		return
+	}
+	// ABC节点应该都存储了新的view=1的node，但是只有B更新了HighQC
+	if len(nodeAH.Sons) != 1 {
+		t.Error("A qcTree error")
+		return
+	}
+	nodeCH := sC.qcTree.GetHighQC()
+	if len(nodeCH.Sons) != 1 {
+		t.Error("A qcTree error")
+		return
+	}
 
-		// 模拟第二个Proposal交互, 此时由B节点发出
-		// ABC节点应该都存储了新的view=2的node，但是只有C更新了HighQC
-		err = sB.ProcessProposal(2, []byte{2}, []string{NodeA, NodeB, NodeC})
-		if err != nil {
-			t.Error("ProcessProposal error", "error", err)
-			return
-		}
-		time.Sleep(time.Second * 30)
-		nodeAH = sA.qcTree.GetHighQC()
-		nodeBH = sB.qcTree.GetHighQC()
-		nodeCH = sC.qcTree.GetHighQC()
-		if nodeAH.In.GetProposalView() != 1 || nodeBH.In.GetProposalView() != 1 || nodeCH.In.GetProposalView() != 2 {
-			t.Error("Round2 update HighQC error", "nodeAH", nodeAH.In.GetProposalView(), "nodeBH", nodeBH.In.GetProposalView(), "nodeCH", nodeCH.In.GetProposalView())
-			return
-		}
+	// 模拟第二个Proposal交互, 此时由B节点发出
+	// ABC节点应该都存储了新的view=2的node，但是只有C更新了HighQC
+	err = sB.ProcessProposal(2, []byte{2}, []string{NodeA, NodeB, NodeC})
+	if err != nil {
+		t.Error("ProcessProposal error", "error", err)
+		return
+	}
+	time.Sleep(time.Second * 30)
+	nodeAH = sA.qcTree.GetHighQC()
+	nodeBH = sB.qcTree.GetHighQC()
+	nodeCH = sC.qcTree.GetHighQC()
+	if nodeAH.In.GetProposalView() != 1 || nodeBH.In.GetProposalView() != 1 || nodeCH.In.GetProposalView() != 2 {
+		t.Error("Round2 update HighQC error", "nodeAH", nodeAH.In.GetProposalView(), "nodeBH", nodeBH.In.GetProposalView(), "nodeCH", nodeCH.In.GetProposalView())
+		return
+	}
 
-		// 模拟第三个Proposal交互, 此时模拟一个分叉情况，除B之外，A也创建了一个高度为2的块
-		// 注意，由于本状态机支持回滚，因此round可重复
-		// 注意，为了支持回滚操作，必须调用smr的UpdateJustifyQcStatus
-		// 次数round1的全部选票在B手中
-		vote := &VoteInfo{
-			ProposalId:   []byte{1},
-			ProposalView: 1,
-			ParentId:     []byte{0},
-			ParentView:   0,
-		}
-		v, ok := sB.qcVoteMsgs.Load(utils.F(vote.ProposalId))
-		if !ok {
-			t.Error("B votesMsg error")
-		}
-		signs, ok := v.([]*chainedBftPb.QuorumCertSign)
-		if !ok {
-			t.Error("B votesMsg transfer error")
-		}
-		justi := &QuorumCert{
-			VoteInfo:  vote,
-			SignInfos: signs,
-		}
-		sA.UpdateJustifyQcStatus(justi)
-		sB.UpdateJustifyQcStatus(justi)
-		sC.UpdateJustifyQcStatus(justi)
+	// 模拟第三个Proposal交互, 此时模拟一个分叉情况，除B之外，A也创建了一个高度为2的块
+	// 注意，由于本状态机支持回滚，因此round可重复
+	// 注意，为了支持回滚操作，必须调用smr的UpdateJustifyQcStatus
+	// 次数round1的全部选票在B手中
+	vote := &VoteInfo{
+		ProposalId:   []byte{1},
+		ProposalView: 1,
+		ParentId:     []byte{0},
+		ParentView:   0,
+	}
+	v, ok := sB.qcVoteMsgs.Load(utils.F(vote.ProposalId))
+	if !ok {
+		t.Error("B votesMsg error")
+	}
+	signs, ok := v.([]*chainedBftPb.QuorumCertSign)
+	if !ok {
+		t.Error("B votesMsg transfer error")
+	}
+	justi := &QuorumCert{
+		VoteInfo:  vote,
+		SignInfos: signs,
+	}
+	sA.UpdateJustifyQcStatus(justi)
+	sB.UpdateJustifyQcStatus(justi)
+	sC.UpdateJustifyQcStatus(justi)
 
-		err = sA.ProcessProposal(2, []byte{3}, []string{NodeA, NodeB, NodeC})
-		if err != nil {
-			t.Error("ProcessProposal error", "error", err)
-			return
-		}
-		time.Sleep(time.Second * 30)
-		nodeCH = sC.qcTree.GetHighQC()
-		if !bytes.Equal(nodeCH.In.GetProposalId(), []byte{3}) {
-			t.Error("ProcessProposal error", "id", nodeCH.In.GetProposalId())
-		}
-		nodeBH = sB.qcTree.GetHighQC()
-		if len(nodeBH.Sons) != 2 {
-			t.Error("ProcessProposal error")
-		}
-		nodeAH = sA.qcTree.GetHighQC()
-		if len(nodeAH.Sons) != 2 {
-			t.Error("ProcessProposal error", "highQC", nodeAH.In.GetProposalView())
-		}
-	*/
+	err = sA.ProcessProposal(2, []byte{3}, []string{NodeA, NodeB, NodeC})
+	if err != nil {
+		t.Error("ProcessProposal error", "error", err)
+		return
+	}
+	time.Sleep(time.Second * 30)
+	nodeCH = sC.qcTree.GetHighQC()
+	if !bytes.Equal(nodeCH.In.GetProposalId(), []byte{3}) {
+		t.Error("ProcessProposal error", "id", nodeCH.In.GetProposalId())
+	}
+	nodeBH = sB.qcTree.GetHighQC()
+	if len(nodeBH.Sons) != 2 {
+		t.Error("ProcessProposal error")
+	}
+	nodeAH = sA.qcTree.GetHighQC()
+	if len(nodeAH.Sons) != 2 {
+		t.Error("ProcessProposal error", "highQC", nodeAH.In.GetProposalView())
+	}
 }
