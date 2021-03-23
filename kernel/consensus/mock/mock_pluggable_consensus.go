@@ -14,7 +14,6 @@ import (
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/utils"
-	"github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -238,14 +237,6 @@ func NewFakeKContext(args map[string][]byte, m map[string]map[string][]byte) *Fa
 
 func (c *FakeKContext) Args() map[string][]byte {
 	return c.args
-}
-
-func (c *FakeKContext) AddEvent(events ...*protos.ContractEvent) {
-	return
-}
-
-func (c *FakeKContext) Flush() error {
-	return nil
 }
 
 func (c *FakeKContext) Initiator() string {
