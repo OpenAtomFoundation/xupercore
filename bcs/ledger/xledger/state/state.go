@@ -1142,10 +1142,12 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 			showTxId = hex.EncodeToString(tx.Txid)
 			t.log.Debug("procTodoBlkForWalk", "txid", showTxId, "autogen", tx.Autogen, "coinbase", tx.Coinbase)
 			// 校验定时交易合法性
-			if t.verifyAutogenTx(tx) && len(autoTx.TxOutputsExt) > 0 && !tx.Coinbase {
-				// 校验auto tx
-				if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, false); !ok {
-					return fmt.Errorf("immediate verify auto tx error.txid:%s,err:%v", showTxId, err)
+			if t.verifyAutogenTx(tx) && autoTx != nil && !tx.Coinbase {
+				if len(autoTx.TxOutputsExt) > 0 {
+					// 校验auto tx
+					if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, false); !ok {
+						return fmt.Errorf("immediate verify auto tx error.txid:%s,err:%v", showTxId, err)
+					}
 				}
 			}
 
