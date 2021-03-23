@@ -121,10 +121,7 @@ func TestProcessBeforeMiner(t *testing.T) {
 		t.Error("NewXpoaConsensus error", "conf", getConfig())
 		return
 	}
-	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
-	if err != nil {
-		t.Error("ProcessBeforeMiner error")
-	}
+	i.ProcessBeforeMiner(time.Now().UnixNano())
 }
 
 func TestProcessConfirmBlock(t *testing.T) {
