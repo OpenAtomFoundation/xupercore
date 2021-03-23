@@ -1,11 +1,13 @@
 package chained_bft
 
 import (
+	"bytes"
 	"path/filepath"
 	"testing"
 	"time"
 
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -18,20 +20,20 @@ var (
 	LogPath  = filepath.Join(utils.GetCurFileDir(), "/main/test")
 	NodePath = filepath.Join(utils.GetCurFileDir(), "../../../../mock/p2pv2")
 
-	NodeA   = "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
-	NodeAIp = "/ip4/127.0.0.1/tcp/47101/p2p/QmVcSF4F7rTdsvUJqsik98tXRXMBUqL5DSuBpyYKVhjuG4"
-	PubKeyA = "{\"Curvname\":\"P-256\",\"X\":74695617477160058757747208220371236837474210247114418775262229497812962582435,\"Y\":51348715319124770392993866417088542497927816017012182211244120852620959209571}"
-	PriKeyA = "{\"Curvname\":\"P-256\",\"X\":74695617477160058757747208220371236837474210247114418775262229497812962582435,\"Y\":51348715319124770392993866417088542497927816017012182211244120852620959209571,\"D\":29079635126530934056640915735344231956621504557963207107451663058887647996601}"
+	NodeA   = "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
+	NodeAIp = "/ip4/127.0.0.1/tcp/38201/p2p/Qmf2HeHe4sspGkfRCTq6257Vm3UHzvh2TeQJHHvHzzuFw6"
+	PubKeyA = `{"Curvname":"P-256","X":36505150171354363400464126431978257855318414556425194490762274938603757905292,"Y":79656876957602994269528255245092635964473154458596947290316223079846501380076}`
+	PriKeyA = `{"Curvname":"P-256","X":36505150171354363400464126431978257855318414556425194490762274938603757905292,"Y":79656876957602994269528255245092635964473154458596947290316223079846501380076,"D":111497060296999106528800133634901141644446751975433315540300236500052690483486}`
 
-	NodeB   = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
-	NodeBIp = "/ip4/127.0.0.1/tcp/47102/p2p/Qmd1sJ4s7JTfHvetfjN9vNE5fhkLESs42tYHc5RYUBPnEv"
-	PubKeyB = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980}`
-	PriKeyB = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980,"D":98698032903818677365237388430412623738975596999573887926929830968230132692775}`
+	NodeB   = "SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"
+	NodeBIp = "/ip4/127.0.0.1/tcp/38202/p2p/QmQKp8pLWSgV4JiGjuULKV1JsdpxUtnDEUMP8sGaaUbwVL"
+	PubKeyB = `{"Curvname":"P-256","X":12866043091588565003171939933628544430893620588191336136713947797738961176765,"Y":82755103183873558994270855453149717093321792154549800459286614469868720031056}`
+	PriKeyB = `{"Curvname":"P-256","X":12866043091588565003171939933628544430893620588191336136713947797738961176765,"Y":82755103183873558994270855453149717093321792154549800459286614469868720031056,"D":74053182141043989390619716280199465858509830752513286817516873984288039572219}`
 
-	NodeC   = "akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"
-	PubKeyC = `{"Curvname":"P-256","X":82701086955329320728418181640262300520017105933207363210165513352476444381539,"Y":23833609129887414146586156109953595099225120577035152268521694007099206660741}`
-	PriKeyC = `{"Curvname":"P-256","X":82701086955329320728418181640262300520017105933207363210165513352476444381539,"Y":23833609129887414146586156109953595099225120577035152268521694007099206660741,"D":57537645914107818014162200570451409375770015156750200591470574847931973776404}`
-	NodeCIp = "/ip4/127.0.0.1/tcp/47103/p2p/QmUv4Jw8QbW85SHQRiXi2jffFXTXZzRxhW2H34Hq6W4d58"
+	NodeC   = "iYjtLcW6SVCiousAb5DFKWtWroahhEj4u"
+	NodeCIp = "/ip4/127.0.0.1/tcp/38203/p2p/QmZXjZibcL5hy2Ttv5CnAQnssvnCbPEGBzqk7sAnL69R1E"
+	PubKeyC = `{"Curvname":"P-256","X":71906497517774261659269469667273855852584750869988271615606376825756756449950,"Y":55040402911390674344019238894549124488349793311280846384605615474571192214233}`
+	PriKeyC = `{"Curvname":"P-256","X":71906497517774261659269469667273855852584750869988271615606376825756756449950,"Y":55040402911390674344019238894549124488349793311280846384605615474571192214233,"D":88987246094484003072412401376409995742867407472451866878930049879250160571952}`
 )
 
 type ElectionA struct {
@@ -179,7 +181,7 @@ func TestSMR(t *testing.T) {
 	go sA.Start()
 	go sB.Start()
 	go sC.Start()
-	time.Sleep(time.Second * 15)
+	time.Sleep(time.Second * 10)
 
 	// 模拟第一个Proposal交互
 	err = sA.ProcessProposal(1, []byte{1}, []string{NodeA, NodeB, NodeC})
@@ -187,7 +189,7 @@ func TestSMR(t *testing.T) {
 		t.Error("ProcessProposal error", "error", err)
 		return
 	}
-	time.Sleep(time.Second * 15)
+	time.Sleep(time.Second * 10)
 	// 检查存储
 	// A --- B --- C
 	//      收集A
@@ -202,90 +204,88 @@ func TestSMR(t *testing.T) {
 
 	// 检查B节点，B节点收集A发起的1轮qc，A的票应该有3张，B应该进入2轮
 	nodeBH := sB.qcTree.GetHighQC()
-	nodeBH.In.GetProposalView()
-	/*
-		if biV != 1 {
-			t.Error("update qcTree error", "biV", biV)
-			return
-		}
-		if sB.GetCurrentView() != 2 {
-			t.Error("receive B ProcessProposal error", "view", sB.GetCurrentView())
-			return
-		}
-		if sC.GetCurrentView() != 1 {
-			t.Error("receive C ProcessProposal error", "view", sC.GetCurrentView())
-			return
-		}
-		// ABC节点应该都存储了新的view=1的node，但是只有B更新了HighQC
-		if len(nodeAH.Sons) != 1 {
-			t.Error("A qcTree error")
-			return
-		}
-		nodeCH := sC.qcTree.GetHighQC()
-		if len(nodeCH.Sons) != 1 {
-			t.Error("A qcTree error")
-			return
-		}
+	biV := nodeBH.In.GetProposalView()
+	if biV != 1 {
+		t.Error("update qcTree error", "biV", biV)
+		return
+	}
+	if sB.GetCurrentView() != 2 {
+		t.Error("receive B ProcessProposal error", "view", sB.GetCurrentView())
+		return
+	}
+	if sC.GetCurrentView() != 1 {
+		t.Error("receive C ProcessProposal error", "view", sC.GetCurrentView())
+		return
+	}
+	// ABC节点应该都存储了新的view=1的node，但是只有B更新了HighQC
+	if len(nodeAH.Sons) != 1 {
+		t.Error("A qcTree error")
+		return
+	}
+	nodeCH := sC.qcTree.GetHighQC()
+	if len(nodeCH.Sons) != 1 {
+		t.Error("A qcTree error")
+		return
+	}
 
-		// 模拟第二个Proposal交互, 此时由B节点发出
-		// ABC节点应该都存储了新的view=2的node，但是只有C更新了HighQC
-		err = sB.ProcessProposal(2, []byte{2}, []string{NodeA, NodeB, NodeC})
-		if err != nil {
-			t.Error("ProcessProposal error", "error", err)
-			return
-		}
-		time.Sleep(time.Second * 30)
-		nodeAH = sA.qcTree.GetHighQC()
-		nodeBH = sB.qcTree.GetHighQC()
-		nodeCH = sC.qcTree.GetHighQC()
-		if nodeAH.In.GetProposalView() != 1 || nodeBH.In.GetProposalView() != 1 || nodeCH.In.GetProposalView() != 2 {
-			t.Error("Round2 update HighQC error", "nodeAH", nodeAH.In.GetProposalView(), "nodeBH", nodeBH.In.GetProposalView(), "nodeCH", nodeCH.In.GetProposalView())
-			return
-		}
+	// 模拟第二个Proposal交互, 此时由B节点发出
+	// ABC节点应该都存储了新的view=2的node，但是只有C更新了HighQC
+	err = sB.ProcessProposal(2, []byte{2}, []string{NodeA, NodeB, NodeC})
+	if err != nil {
+		t.Error("ProcessProposal error", "error", err)
+		return
+	}
+	time.Sleep(time.Second * 10)
+	nodeAH = sA.qcTree.GetHighQC()
+	nodeBH = sB.qcTree.GetHighQC()
+	nodeCH = sC.qcTree.GetHighQC()
+	if nodeAH.In.GetProposalView() != 1 || nodeBH.In.GetProposalView() != 1 || nodeCH.In.GetProposalView() != 2 {
+		t.Error("Round2 update HighQC error", "nodeAH", nodeAH.In.GetProposalView(), "nodeBH", nodeBH.In.GetProposalView(), "nodeCH", nodeCH.In.GetProposalView())
+		return
+	}
 
-		// 模拟第三个Proposal交互, 此时模拟一个分叉情况，除B之外，A也创建了一个高度为2的块
-		// 注意，由于本状态机支持回滚，因此round可重复
-		// 注意，为了支持回滚操作，必须调用smr的UpdateJustifyQcStatus
-		// 次数round1的全部选票在B手中
-		vote := &VoteInfo{
-			ProposalId:   []byte{1},
-			ProposalView: 1,
-			ParentId:     []byte{0},
-			ParentView:   0,
-		}
-		v, ok := sB.qcVoteMsgs.Load(utils.F(vote.ProposalId))
-		if !ok {
-			t.Error("B votesMsg error")
-		}
-		signs, ok := v.([]*chainedBftPb.QuorumCertSign)
-		if !ok {
-			t.Error("B votesMsg transfer error")
-		}
-		justi := &QuorumCert{
-			VoteInfo:  vote,
-			SignInfos: signs,
-		}
-		sA.UpdateJustifyQcStatus(justi)
-		sB.UpdateJustifyQcStatus(justi)
-		sC.UpdateJustifyQcStatus(justi)
+	// 模拟第三个Proposal交互, 此时模拟一个分叉情况，除B之外，A也创建了一个高度为2的块
+	// 注意，由于本状态机支持回滚，因此round可重复
+	// 注意，为了支持回滚操作，必须调用smr的UpdateJustifyQcStatus
+	// 次数round1的全部选票在B手中
+	vote := &VoteInfo{
+		ProposalId:   []byte{1},
+		ProposalView: 1,
+		ParentId:     []byte{0},
+		ParentView:   0,
+	}
+	v, ok := sB.qcVoteMsgs.Load(utils.F(vote.ProposalId))
+	if !ok {
+		t.Error("B votesMsg error")
+	}
+	signs, ok := v.([]*chainedBftPb.QuorumCertSign)
+	if !ok {
+		t.Error("B votesMsg transfer error")
+	}
+	justi := &QuorumCert{
+		VoteInfo:  vote,
+		SignInfos: signs,
+	}
+	sA.UpdateJustifyQcStatus(justi)
+	sB.UpdateJustifyQcStatus(justi)
+	sC.UpdateJustifyQcStatus(justi)
 
-		err = sA.ProcessProposal(2, []byte{3}, []string{NodeA, NodeB, NodeC})
-		if err != nil {
-			t.Error("ProcessProposal error", "error", err)
-			return
-		}
-		time.Sleep(time.Second * 30)
-		nodeCH = sC.qcTree.GetHighQC()
-		if !bytes.Equal(nodeCH.In.GetProposalId(), []byte{3}) {
-			t.Error("ProcessProposal error", "id", nodeCH.In.GetProposalId())
-		}
-		nodeBH = sB.qcTree.GetHighQC()
-		if len(nodeBH.Sons) != 2 {
-			t.Error("ProcessProposal error")
-		}
-		nodeAH = sA.qcTree.GetHighQC()
-		if len(nodeAH.Sons) != 2 {
-			t.Error("ProcessProposal error", "highQC", nodeAH.In.GetProposalView())
-		}
-	*/
+	err = sA.ProcessProposal(2, []byte{3}, []string{NodeA, NodeB, NodeC})
+	if err != nil {
+		t.Error("ProcessProposal error", "error", err)
+		return
+	}
+	time.Sleep(time.Second * 10)
+	nodeCH = sC.qcTree.GetHighQC()
+	if !bytes.Equal(nodeCH.In.GetProposalId(), []byte{3}) {
+		t.Error("ProcessProposal error", "id", nodeCH.In.GetProposalId())
+	}
+	nodeBH = sB.qcTree.GetHighQC()
+	if len(nodeBH.Sons) != 2 {
+		t.Error("ProcessProposal error")
+	}
+	nodeAH = sA.qcTree.GetHighQC()
+	if len(nodeAH.Sons) != 2 {
+		t.Error("ProcessProposal error", "highQC", nodeAH.In.GetProposalView())
+	}
 }

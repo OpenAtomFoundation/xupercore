@@ -12,6 +12,7 @@ var (
 	InvalidQC        = errors.New("QC struct is invalid.")
 	targetParamErr   = errors.New("Target paramters are invalid, please check them.")
 	tooLowHeight     = errors.New("The height should be higher than 3.")
+	aclErr           = errors.New("Xpoa needs valid acl account.")
 )
 
 const (
@@ -59,4 +60,49 @@ func loadValidatorsMultiInfo(res []byte) ([]string, error) {
 		return nil, err
 	}
 	return contractInfo.Validators, nil
+}
+
+func Find(a string, t []string) bool {
+	for _, v := range t {
+		if a != v {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func CalFault(input, sum int64) bool {
+	// 根据3f+1, 计算最大恶意节点数
+	f := (sum - 1) / 3
+	if f < 0 {
+		return false
+	}
+	if f == 0 {
+		return input >= sum/2+1
+	}
+	return input >= (sum-f)/2+1
+}
+
+// 每个地址每一轮的总票数
+type aksItem struct {
+	Address string
+	Weight  float64
+}
+
+type aksSlice []aksItem
+
+func (a aksSlice) Len() int {
+	return len(a)
+}
+
+func (a aksSlice) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+
+func (a aksSlice) Less(i, j int) bool {
+	if a[j].Weight == a[i].Weight {
+		return a[j].Address < a[i].Address
+	}
+	return a[j].Weight < a[i].Weight
 }

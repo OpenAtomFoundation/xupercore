@@ -147,9 +147,6 @@ Again:
 		tp.log.Warn("Tdpos::CompeteMaster::minerScheduling err", "term", term, "pos", pos, "blockPos", blockPos)
 		goto Again
 	}
-
-	tp.log.Debug("Tdpos::CompeteMaster!!!!!!", "term", term, "tp.election.curTerm", tp.election.curTerm)
-
 	// 根据term更新当前validators, 当投票之后，并不会在3个块后变更候选人，而是等到下个term
 	if term > tp.election.curTerm {
 		tp.election.UpdateProposers(tp.election.ledger.GetTipBlock().GetHeight() + 1)
@@ -273,6 +270,8 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
 	term, pos, blockPos := tp.election.minerScheduling(timestamp)
 	if term != tp.election.curTerm || blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
+		tp.log.Error("Tdpos::ProcessBeforeMiner::timeoutBlockErr", "term", term, "tp.election.curTerm", tp.election.curTerm,
+			"blockPos", blockPos, "tp.election.blockNum", tp.election.blockNum, "pos", pos, "tp.election.proposerNum", tp.election.proposerNum)
 		return nil, nil, timeoutBlockErr
 	}
 	if tp.election.validators[pos] != tp.election.address {
