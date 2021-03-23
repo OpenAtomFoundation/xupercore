@@ -22,8 +22,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-kad-dht"
-	noise "github.com/libp2p/go-libp2p-noise"
 	record "github.com/libp2p/go-libp2p-record"
+	secio "github.com/libp2p/go-libp2p-secio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/patrickmn/go-cache"
 )
@@ -195,8 +195,7 @@ func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		//opts = append(opts, libp2p.DefaultSecurity)
-		opts = append(opts, libp2p.Security(noise.ID, noise.New))
+		opts = append(opts, libp2p.Security(secio.ID, secio.New))
 	}
 
 	return opts, nil
