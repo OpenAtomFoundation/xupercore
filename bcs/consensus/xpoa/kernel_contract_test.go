@@ -15,12 +15,12 @@ var (
 )
 
 func TestIsAuthAddress(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getXpoaConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewXpoaConsensus(*cCtx, getConfig())
+	i := NewXpoaConsensus(*cCtx, getConfig(getXpoaConsensusConf()))
 	xpoa, ok := i.(*xpoaConsensus)
 	if !ok {
 		t.Error("transfer err.")
@@ -47,12 +47,12 @@ func NewEditM() map[string]map[string][]byte {
 }
 
 func TestMethodEditValidates(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getXpoaConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewXpoaConsensus(*cCtx, getConfig())
+	i := NewXpoaConsensus(*cCtx, getConfig(getXpoaConsensusConf()))
 	xpoa, ok := i.(*xpoaConsensus)
 	if !ok {
 		t.Error("transfer err.")
@@ -67,12 +67,12 @@ func TestMethodEditValidates(t *testing.T) {
 }
 
 func TestMethodGetValidates(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getXpoaConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewXpoaConsensus(*cCtx, getConfig())
+	i := NewXpoaConsensus(*cCtx, getConfig(getXpoaConsensusConf()))
 	xpoa, ok := i.(*xpoaConsensus)
 	if !ok {
 		t.Error("transfer err.")

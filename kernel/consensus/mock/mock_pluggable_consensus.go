@@ -40,6 +40,7 @@ type FakeBlock struct {
 	Nonce            int32
 	PublicKey        string
 	Sign             []byte
+	PreHash          []byte
 }
 
 func NewBlock(height int) *FakeBlock {
@@ -49,11 +50,20 @@ func NewBlock(height int) *FakeBlock {
 		ConsensusStorage: []byte{},
 		Timestamp:        time.Now().UnixNano(),
 		Proposer:         "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
+		PreHash:          []byte{byte(height - 1)},
 	}
 }
 
 func (b *FakeBlock) MakeBlockId() ([]byte, error) {
 	return b.Blockid, nil
+}
+
+func (b *FakeBlock) SetTimestamp(t int64) {
+	b.Timestamp = t
+}
+
+func (b *FakeBlock) SetProposer(m string) {
+	b.Proposer = m
 }
 
 func (b *FakeBlock) SetItem(param string, value interface{}) error {
@@ -76,7 +86,7 @@ func (b *FakeBlock) GetHeight() int64 {
 }
 
 func (b *FakeBlock) GetPreHash() []byte {
-	return nil
+	return b.PreHash
 }
 
 func (b *FakeBlock) GetBlockid() []byte {
@@ -241,11 +251,11 @@ func (c *FakeKContext) Args() map[string][]byte {
 }
 
 func (c *FakeKContext) Initiator() string {
-	return ""
+	return "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
 }
 
 func (c *FakeKContext) AuthRequire() []string {
-	return nil
+	return []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY", "SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"}
 }
 
 func (c *FakeKContext) GetAccountAddresses(accountName string) ([]string, error) {

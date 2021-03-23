@@ -1,18 +1,20 @@
 package tdpos
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/xuperchain/xupercore/kernel/consensus/mock"
+	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 )
 
 func TestIsAuthAddress(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewTdposConsensus(*cCtx, getConfig())
+	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	if !tdpos.isAuthAddress("A", "A", []string{"B", "C"}) {
 		t.Error("isAuthAddress error1.")
@@ -25,8 +27,21 @@ func TestIsAuthAddress(t *testing.T) {
 
 func NewNominateArgs() map[string][]byte {
 	a := make(map[string][]byte)
-	a["candidate"] = []byte(`"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"`)
+	a["candidate"] = []byte(`TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY`)
 	a["amount"] = []byte("1")
+	return a
+}
+
+func NewVoteArgs() map[string][]byte {
+	a := make(map[string][]byte)
+	a["candidate"] = []byte(`akf7qunmeaqb51Wu418d6TyPKp4jdLdpV`)
+	a["amount"] = []byte("1")
+	return a
+}
+
+func NewRevokeNominateArgs() map[string][]byte {
+	a := make(map[string][]byte)
+	a["candidate"] = []byte(`SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co`)
 	return a
 }
 
@@ -35,81 +50,202 @@ func NewM() map[string]map[string][]byte {
 	return a
 }
 
+func NominateKey2() []byte {
+	n := NewNominateValue()
+	m2 := make(map[string]int64)
+	m2["SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"] = 10
+	m2["TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"] = 10
+	n["SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"] = m2
+	m3 := make(map[string]int64)
+	m3["akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"] = 5
+	n["akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"] = m3
+	nb, err := json.Marshal(&n)
+	if err != nil {
+		return nil
+	}
+	return nb
+}
+
 func TestRunNominateCandidate(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewTdposConsensus(*cCtx, getConfig())
+	// 1. 构造term存储
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.Put(kmock.NewBlock(3))
+	l.Put(kmock.NewBlock(4))
+	l.Put(kmock.NewBlock(5))
+	l.Put(kmock.NewBlock(6))
+	// 2. 整理Block的共识存储
+	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
+	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
+	// 3. 构造nominate存储
+	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
+	// 4. 构造vote存储
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
+
+	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
 	_, err = tdpos.runNominateCandidate(fakeCtx)
-	if err == nil {
-		t.Error("runNominateCandidate error1.")
+	if err != nil {
+		t.Error("runNominateCandidate error1.", "err", err)
 		return
 	}
 }
 
 func TestRunRevokeCandidate(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewTdposConsensus(*cCtx, getConfig())
+	// 1. 构造term存储
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.Put(kmock.NewBlock(3))
+	l.Put(kmock.NewBlock(4))
+	l.Put(kmock.NewBlock(5))
+	l.Put(kmock.NewBlock(6))
+	// 2. 整理Block的共识存储
+	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
+	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
+	// 3. 构造nominate存储
+	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
+	// 4. 构造vote存储
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
+
+	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
-	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
+	fakeCtx := mock.NewFakeKContext(NewRevokeNominateArgs(), NewM())
 	_, err = tdpos.runRevokeCandidate(fakeCtx)
-	if err == nil {
-		t.Error("runRevokeCandidate error1.")
+	if err != nil {
+		t.Error("runRevokeCandidate error1.", "err", err)
 		return
 	}
 }
 
 func TestRunVote(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewTdposConsensus(*cCtx, getConfig())
+	// 1. 构造term存储
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.Put(kmock.NewBlock(3))
+	l.Put(kmock.NewBlock(4))
+	l.Put(kmock.NewBlock(5))
+	l.Put(kmock.NewBlock(6))
+	// 2. 整理Block的共识存储
+	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
+	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
+	// 3. 构造nominate存储
+	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
+	// 4. 构造vote存储
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
+
+	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
-	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
+	fakeCtx := mock.NewFakeKContext(NewVoteArgs(), NewM())
 	_, err = tdpos.runVote(fakeCtx)
-	if err == nil {
-		t.Error("runVote error1.")
+	if err != nil {
+		t.Error("runVote error1.", "err", err)
 		return
 	}
 }
 func TestRunRevokeVote(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewTdposConsensus(*cCtx, getConfig())
+	// 1. 构造term存储
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.Put(kmock.NewBlock(3))
+	l.Put(kmock.NewBlock(4))
+	l.Put(kmock.NewBlock(5))
+	l.Put(kmock.NewBlock(6))
+	// 2. 整理Block的共识存储
+	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
+	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
+	// 3. 构造nominate存储
+	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
+	// 4. 构造vote存储
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
+
+	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
 	_, err = tdpos.runRevokeVote(fakeCtx)
-	if err == nil {
-		t.Error("runRevokeVote error1.")
+	if err != nil {
+		t.Error("runRevokeVote error1.", "err", err)
 		return
 	}
 }
 
 func TestRunGetTdposInfos(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	i := NewTdposConsensus(*cCtx, getConfig())
+	// 1. 构造term存储
+	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
+	l.Put(kmock.NewBlock(3))
+	l.Put(kmock.NewBlock(4))
+	l.Put(kmock.NewBlock(5))
+	l.Put(kmock.NewBlock(6))
+	// 2. 整理Block的共识存储
+	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
+	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
+	// 3. 构造nominate存储
+	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
+	// 4. 构造vote存储
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
+	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
+
+	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
 	_, err = tdpos.runGetTdposInfos(fakeCtx)
 	if err != nil {
-		t.Error("runGetTdposInfos error1.")
+		t.Error("runGetTdposInfos error1.", "err", err)
 		return
 	}
 }
