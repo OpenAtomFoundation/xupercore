@@ -240,14 +240,6 @@ func (c *FakeKContext) Args() map[string][]byte {
 	return c.args
 }
 
-func (c *FakeKContext) AddEvent(events ...*protos.ContractEvent) {
-	return
-}
-
-func (c *FakeKContext) Flush() error {
-	return nil
-}
-
 func (c *FakeKContext) Initiator() string {
 	return ""
 }

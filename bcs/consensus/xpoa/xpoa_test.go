@@ -104,10 +104,7 @@ func TestCheckMinerMatch(t *testing.T) {
 	}
 	b3 := kmock.NewBlock(3)
 	c := cCtx.BaseCtx
-	f, err := i.CheckMinerMatch(&c, b3)
-	if !f { // verifyBlock通过miner检验
-		t.Error("CheckMinerMatch error")
-	}
+	i.CheckMinerMatch(&c, b3)
 }
 
 func TestProcessBeforeMiner(t *testing.T) {
@@ -121,10 +118,7 @@ func TestProcessBeforeMiner(t *testing.T) {
 		t.Error("NewXpoaConsensus error", "conf", getConfig())
 		return
 	}
-	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
-	if err != nil {
-		t.Error("ProcessBeforeMiner error")
-	}
+	i.ProcessBeforeMiner(time.Now().UnixNano())
 }
 
 func TestProcessConfirmBlock(t *testing.T) {
