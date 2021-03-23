@@ -1128,12 +1128,28 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 		// 将batch赋值到合约机的上下文
 		batch := t.ldb.NewBatch()
 
+		// 获取该区块触发的定时交易
+		autoTx, genErr := t.GetTimerTx(todoBlk.Height)
+		if genErr != nil {
+			t.log.Warn("get timer tasks failed", "err", genErr)
+			return genErr
+		}
+
 		// 执行区块里面的交易
 		idx, length := 0, len(todoBlk.Transactions)
 		for idx < length {
 			tx = todoBlk.Transactions[idx]
 			showTxId = hex.EncodeToString(tx.Txid)
-			// 校验交易合法性
+			t.log.Debug("procTodoBlkForWalk", "txid", showTxId, "autogen", tx.Autogen, "coinbase", tx.Coinbase)
+			// 校验定时交易合法性
+			if t.verifyAutogenTx(tx) && len(autoTx.TxOutputsExt) > 0 && !tx.Coinbase {
+				// 校验auto tx
+				if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, false); !ok {
+					return fmt.Errorf("immediate verify auto tx error.txid:%s,err:%v", showTxId, err)
+				}
+			}
+
+			// 校验普通交易合法性
 			if !tx.Autogen && !tx.Coinbase {
 				if ok, err := t.ImmediateVerifyTx(tx, false); !ok {
 					return fmt.Errorf("immediate verify tx error.txid:%s,err:%v", showTxId, err)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -649,13 +650,32 @@ func (t *State) verifyAutoTxRWSets(tx, autoTx *pb.Transaction) (bool, error) {
 	txWsets := tx.GetTxOutputsExt()
 	autoWsets := autoTx.GetTxOutputsExt()
 
-	t.log.Trace("verifyTxRWSets", "tx", txRsets, "auto", autoRsets)
-	t.log.Trace("verifyTxRWSets", "tx", txWsets, "auto", autoWsets)
-	// todo 判断读写集是否相同相等
-	//ok := xmodel.Equal(txWsets, autoWsets)
-	//if !ok {
-	//	return false, fmt.Errorf("write set not equal")
-	//}
+	t.log.Trace("verifyAutoTxRWSets", "tx", txRsets, "auto", autoRsets)
+	t.log.Trace("verifyAutoTxRWSets", "tx", txWsets, "auto", autoWsets)
+	// 判断读写集是否相同相等
+	txRsetsBytes, err := json.Marshal(txRsets)
+	if err != nil {
+		return false, err
+	}
+	autoRsetsBytes, err := json.Marshal(autoRsets)
+	if err != nil {
+		return false, err
+	}
+	txWsetsBytes, err := json.Marshal(txWsets)
+	if err != nil {
+		return false, err
+	}
+	autoWsetsBytes, err := json.Marshal(autoWsets)
+	if err != nil {
+		return false, err
+	}
+
+	if bytes.Compare(txRsetsBytes, autoRsetsBytes) != 0 {
+		return false, fmt.Errorf("read set not equal")
+	}
+	if bytes.Compare(txWsetsBytes, autoWsetsBytes) != 0 {
+		return false, fmt.Errorf("write set not equal")
+	}
 
 	return true, nil
 }
@@ -859,7 +879,7 @@ func (t *State) verifyDAGTxs(txs []*pb.Transaction, isRootTx bool, unconfirmToCo
 		}
 		txid := string(tx.GetTxid())
 		if unconfirmToConfirm[txid] == false {
-			if !t.verifyAutogenTx(tx) && autoTx != nil {
+			if t.verifyAutogenTx(tx) && autoTx != nil {
 				// 校验auto tx
 				if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, isRootTx); !ok {
 					t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
@@ -890,8 +910,7 @@ func (t *State) verifyDAGTxs(txs []*pb.Transaction, isRootTx bool, unconfirmToCo
 
 // verifyAutogenTx verify if a autogen tx is valid, return true if tx is valid.
 func (t *State) verifyAutogenTx(tx *pb.Transaction) bool {
-	if !tx.Autogen {
-		// not autogen tx, just return true
+	if tx.Autogen {
 		return true
 	}
 
