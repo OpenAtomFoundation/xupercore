@@ -2,7 +2,6 @@ package tdpos
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -35,7 +34,7 @@ func TestNewSchedule(t *testing.T) {
 	if err != nil {
 		t.Error("Config unmarshal err", "err", err)
 	}
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
@@ -51,7 +50,7 @@ func TestGetLeader(t *testing.T) {
 	if err != nil {
 		t.Error("Config unmarshal err", "err", err)
 	}
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
@@ -82,7 +81,6 @@ func TermKey1() []byte {
 
 	tt := NewTermValue()
 	err = json.Unmarshal(tb, &tt)
-	fmt.Printf("##### %v %v %v %v", t, tt[0].Validators, tt[1].Validators, tt)
 	return tb
 }
 
@@ -134,25 +132,13 @@ func VoteKey3() []byte {
 	return vb
 }
 
-func SetTdposStorage(term int64) []byte {
-	s := common.ConsensusStorage{
-		CurTerm:     term,
-		CurBlockNum: 3,
-	}
-	b, err := json.Marshal(&s)
-	if err != nil {
-		return nil
-	}
-	return b
-}
-
 func TestCalHisValidators(t *testing.T) {
 	cStr := getTdposConsensusConf()
 	tdposCfg, err := buildConfigs([]byte(cStr))
 	if err != nil {
 		t.Error("Config unmarshal err", "err", err)
 	}
-	cCtx, err := prepare()
+	cCtx, err := prepare(getTdposConsensusConf())
 	if err != nil {
 		t.Error("prepare error", "error", err)
 		return
@@ -168,12 +154,12 @@ func TestCalHisValidators(t *testing.T) {
 	l.Put(kmock.NewBlock(5))
 	l.Put(kmock.NewBlock(6))
 	// 2. 整理Block的共识存储
-	l.SetConsensusStorage(1, SetTdposStorage(1))
-	l.SetConsensusStorage(2, SetTdposStorage(1))
-	l.SetConsensusStorage(3, SetTdposStorage(1))
-	l.SetConsensusStorage(4, SetTdposStorage(2))
-	l.SetConsensusStorage(5, SetTdposStorage(2))
-	l.SetConsensusStorage(6, SetTdposStorage(3))
+	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
+	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
+	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
 	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
 	// 3. 构造nominate存储
 	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey1())

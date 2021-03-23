@@ -117,6 +117,9 @@ func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) 
 		s.log.Debug("tdpos::getSnapshotKey::reader.Get err.", "err", err)
 		return nil, err
 	}
+	if versionData == nil {
+		return nil, nil
+	}
 	return versionData.PureData.Value, nil
 }
 
