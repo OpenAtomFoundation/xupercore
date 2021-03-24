@@ -40,6 +40,7 @@ type FakeBlock struct {
 	Nonce            int32
 	PublicKey        string
 	Sign             []byte
+	PreHash          []byte
 }
 
 func NewBlock(height int) *FakeBlock {
@@ -48,11 +49,21 @@ func NewBlock(height int) *FakeBlock {
 		Blockid:          []byte{byte(height)},
 		ConsensusStorage: []byte{},
 		Timestamp:        time.Now().UnixNano(),
+		Proposer:         "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
+		PreHash:          []byte{byte(height - 1)},
 	}
 }
 
 func (b *FakeBlock) MakeBlockId() ([]byte, error) {
 	return b.Blockid, nil
+}
+
+func (b *FakeBlock) SetTimestamp(t int64) {
+	b.Timestamp = t
+}
+
+func (b *FakeBlock) SetProposer(m string) {
+	b.Proposer = m
 }
 
 func (b *FakeBlock) SetItem(param string, value interface{}) error {
@@ -75,7 +86,7 @@ func (b *FakeBlock) GetHeight() int64 {
 }
 
 func (b *FakeBlock) GetPreHash() []byte {
-	return nil
+	return b.PreHash
 }
 
 func (b *FakeBlock) GetBlockid() []byte {
@@ -117,6 +128,7 @@ type FakeLedger struct {
 	ledgerMap     map[string]*FakeBlock
 	consensusConf []byte
 	sandbox       *FakeSandBox
+	fakeReader    FakeXMReader
 }
 
 type FakeSandBox struct {
@@ -150,6 +162,7 @@ func NewFakeLedger(conf []byte) *FakeLedger {
 		consensusConf: conf,
 		sandbox:       a,
 	}
+	l.fakeReader = NewFakeXMReader()
 	for i := 0; i < 3; i++ {
 		l.Put(NewBlock(i))
 	}
@@ -177,6 +190,9 @@ func (l *FakeLedger) QueryBlock(blockId []byte) (ledger.BlockHandle, error) {
 }
 
 func (l *FakeLedger) QueryBlockByHeight(height int64) (ledger.BlockHandle, error) {
+	if int(height) > len(l.ledgerSlice)-1 {
+		return nil, blockSetItemErr
+	}
 	return l.ledgerSlice[height], nil
 }
 
@@ -196,11 +212,26 @@ func (l *FakeLedger) GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) {
 }
 
 func (l *FakeLedger) CreateSnapshot(blkId []byte) (ledger.XMReader, error) {
-	return nil, nil
+	return &l.fakeReader, nil
+}
+
+func (l *FakeLedger) SetSnapshot(bucket string, key []byte, value []byte) {
+	l.fakeReader[string(key)] = FReaderItem{
+		Bucket: bucket,
+		Key:    key,
+		Value:  value,
+	}
 }
 
 func (l *FakeLedger) GetTipSnapshot() (ledger.XMReader, error) {
 	return nil, nil
+}
+
+func (l *FakeLedger) SetConsensusStorage(height int, s []byte) {
+	if len(l.ledgerSlice)-1 < height {
+		return
+	}
+	l.ledgerSlice[height].ConsensusStorage = s
 }
 
 type FakeKContext struct {
@@ -220,11 +251,11 @@ func (c *FakeKContext) Args() map[string][]byte {
 }
 
 func (c *FakeKContext) Initiator() string {
-	return ""
+	return "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
 }
 
 func (c *FakeKContext) AuthRequire() []string {
-	return nil
+	return []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY", "SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"}
 }
 
 func (c *FakeKContext) GetAccountAddresses(accountName string) ([]string, error) {
@@ -314,6 +345,37 @@ func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contr
 }
 
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {
+	return nil, nil
+}
+
+type FReaderItem struct {
+	Bucket string
+	Key    []byte
+	Value  []byte
+}
+
+type FakeXMReader map[string]FReaderItem
+
+func NewFakeXMReader() FakeXMReader {
+	a := make(map[string]FReaderItem)
+	return a
+}
+
+func (r FakeXMReader) Get(bucket string, key []byte) (*ledger.VersionedData, error) {
+	item, ok := r[string(key)]
+	if !ok {
+		return nil, nil
+	}
+	return &ledger.VersionedData{
+		PureData: &ledger.PureData{
+			Bucket: item.Bucket,
+			Key:    item.Key,
+			Value:  item.Value,
+		},
+	}, nil
+}
+
+func (r *FakeXMReader) Select(bucket string, startKey []byte, endKey []byte) (ledger.XMIterator, error) {
 	return nil, nil
 }
 

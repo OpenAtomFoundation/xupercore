@@ -90,7 +90,7 @@ func (s *tdposSchedule) minerScheduling(timestamp int64) (term int64, pos int64,
 	// 每个矿工轮值时间
 	posTime := s.alternateInterval + s.period*(s.blockNum-1)
 	term = (T-initT)/termTime + 1
-	resTime := (T - initT) - (term-1)*termTime
+	resTime := (T - initT) - ((T-initT)/termTime)*termTime
 	pos = resTime / posTime
 	resTime = resTime - (resTime/posTime)*posTime
 	blockPos = resTime/s.period + 1
@@ -116,6 +116,9 @@ func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) 
 	if err != nil {
 		s.log.Debug("tdpos::getSnapshotKey::reader.Get err.", "err", err)
 		return nil, err
+	}
+	if versionData == nil {
+		return nil, nil
 	}
 	return versionData.PureData.Value, nil
 }
@@ -167,7 +170,6 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 	if height <= 3 {
 		return false
 	}
-	s.log.Debug("tdpos::UpdateProposers!!!!!!")
 	nextProposers, err := s.calculateProposers(height)
 	if err != nil || len(nextProposers) == 0 {
 		return false
@@ -189,7 +191,6 @@ func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 		return s.initValidators, nil
 	}
 	nowTerm, _, _ := s.minerScheduling(time.Now().UnixNano())
-	s.log.Debug("tdpos::calculateProposers!!!", "tipHeight", s.ledger.GetTipBlock().GetHeight(), "height", height)
 	// 情况一：目标height尚未产生，计算新一轮值
 	if s.ledger.GetTipBlock().GetHeight() < height {
 		if s.curTerm == nowTerm {
@@ -264,7 +265,6 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 	}
 	// 计算topK候选人
 	sort.Stable(termBallotSli)
-	s.log.Debug("tdpos::calculateTopK!!!!", "termBallotSli", termBallotSli)
 	var proposers []string
 	for i := int64(0); i < s.proposerNum; i++ {
 		proposers = append(proposers, termBallotSli[i].Address)
@@ -293,16 +293,16 @@ func (s *tdposSchedule) calHisValidators(height int64, inputTerm int64) ([]strin
 		return nil, err
 	}
 	// 如果slice最后一个值仍比当前值小，则需查找计算
-	if termV[len(termV)-1].term < inputTerm {
+	if termV[len(termV)-1].Term < inputTerm {
 		// 此时根据最后一次记录term的height向后查找，然后计算候选人值
-		beginH := termV[len(termV)-1].height
+		beginH := termV[len(termV)-1].Height
 		for {
 			beginH = beginH + 1
 			b, err := s.ledger.QueryBlockByHeight(beginH)
 			// 未找到更大的term，此时应该返回当前值
 			if err != nil {
 				s.log.Error("tdpos::calHisValidators::QueryBlockByHeight err.", "err", err)
-				return termV[len(termV)-1].validators, nil
+				return termV[len(termV)-1].Validators, nil
 			}
 			bv, _ := b.GetConsensusStorage()
 			tdposStorage, err := common.ParseOldQCStorage(bv)
@@ -310,7 +310,7 @@ func (s *tdposSchedule) calHisValidators(height int64, inputTerm int64) ([]strin
 				s.log.Error("tdpos::calHisValidators::ParseOldQCStorage err.", "err", err)
 				return nil, err
 			}
-			if tdposStorage.CurTerm > termV[len(termV)-1].term {
+			if tdposStorage.CurTerm > termV[len(termV)-1].Term {
 				return s.calTopKNominator(b.GetHeight())
 			}
 		}
@@ -318,12 +318,11 @@ func (s *tdposSchedule) calHisValidators(height int64, inputTerm int64) ([]strin
 	// 如果在历史值区间，则可直接计算结果
 	index := 0
 	for i, item := range termV {
-		if item.term <= inputTerm {
+		if item.Term <= inputTerm {
 			index = i
 			continue
 		}
 		break
 	}
-	s.log.Debug("tdpos::calHisValidators", "termV[index].validator", termV[index].validators)
-	return termV[index].validators, nil
+	return termV[index].Validators, nil
 }
