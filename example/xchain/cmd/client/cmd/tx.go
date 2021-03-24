@@ -27,6 +27,8 @@ func GetTxCmd() *TxCmd {
 	txCmdIns.Cmd.AddCommand(txcmd.GetQueryTxCmd().GetCmd())
 	// submit tx
 	//txCmdIns.Cmd.AddCommand(txcmd.GetSubmitTxCmd().GetCmd())
+	// transfer
+	txCmdIns.Cmd.AddCommand(txcmd.GetTransferTxCmd().GetCmd())
 
 	return txCmdIns
 }
