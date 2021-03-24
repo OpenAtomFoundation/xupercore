@@ -73,6 +73,12 @@ func (t *BlockAgent) SetItem(item string, value interface{}) error {
 			return fmt.Errorf("blockid type not match")
 		}
 		t.blk.Blockid = blockId
+	case "sign":
+		sign, ok := value.([]byte)
+		if !ok {
+			return fmt.Errorf("sign type not match")
+		}
+		t.blk.Sign = sign
 	default:
 		return fmt.Errorf("item not support set")
 	}
