@@ -105,6 +105,7 @@ func NewBlockWithStorage(height int, c cctx.CryptoClient, a *cctx.Address, s []b
 		ConsensusStorage: s,
 		Timestamp:        time.Now().UnixNano(),
 		PublicKey:        a.PrivateKeyStr,
+		PreHash:          []byte{byte(height - 1)},
 	}
 	s, err := c.SignECDSA(a.PrivateKey, b.Blockid)
 	if err == nil {

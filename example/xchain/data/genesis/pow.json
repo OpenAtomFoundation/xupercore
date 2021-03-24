@@ -6,21 +6,21 @@
             , "quota" : "1000000000000000"
         }
     ]
-    , "maxblocksize" : "128"
-    , "award" : "1000000"
+    , "maxblocksize" : "5"
+    , "award" : "3000000000"
     , "decimals" : "8"
     , "award_decay": {
-        "height_gap": 31536000,
+        "height_gap": 1576800,
         "ratio": 0.5
     }
     , "new_account_resource_amount": 1000
     , "genesis_consensus":{
        "name": "pow",
        "config": {
-			"defaultTarget": "545259519",
-			"adjustHeightGap": "5",
-			"expectedPeriod": "15",
-			"maxTarget": "486604799"
+			"defaultTarget": "26",
+			"adjustHeightGap": "10",
+			"expectedPeriod": "60",
+			"maxTarget": "28"
        }
     }
 }

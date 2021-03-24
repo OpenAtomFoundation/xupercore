@@ -235,7 +235,7 @@ func (t *Miner) truncateForMiner(ctx xctx.XContext, target []byte) error {
 		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.F(t.ctx.Ledger.GetMeta().TipBlockid),
 			"walkTargetBlockId", utils.F(target))
 		return err
-	}
+	}  
 
 	// 账本裁剪到这个区块
 	err = t.ctx.Ledger.Truncate(target)
