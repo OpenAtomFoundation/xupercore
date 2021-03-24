@@ -23,24 +23,34 @@ var (
 func getPoWConsensusConf() []byte {
 	j := `{
         	"defaultTarget": "419668748",
-        	"adjustHeightGap": "1",
-			"expectedPeriod":  "3000",
+        	"adjustHeightGap": "10",
+			"expectedPeriod":  "15",
 			"maxTarget":       "0"
     	}`
 	return []byte(j)
 }
 
-func prepare() (*cctx.ConsensusCtx, error) {
-	l := kmock.NewFakeLedger(getPoWConsensusConf())
+func getDefaultPoWConsensusConf() []byte {
+	j := `{
+        	"defaultTarget": "5",
+        	"adjustHeightGap": "10",
+			"expectedPeriod":  "15",
+			"maxTarget":       "10"
+    	}`
+	return []byte(j)
+}
+
+func prepare(config []byte) (*cctx.ConsensusCtx, error) {
+	l := kmock.NewFakeLedger(config) //getPoWConsensusConf
 	cCtx, err := bmock.NewConsensusCtx(l)
 	cCtx.Ledger = l
 	return cCtx, err
 }
 
-func getConsensusConf() def.ConsensusConfig {
+func getConsensusConf(config []byte) def.ConsensusConfig {
 	return def.ConsensusConfig{
 		ConsensusName: "pow",
-		Config:        string(getPoWConsensusConf()),
+		Config:        string(config),
 		StartHeight:   2,
 		Index:         0,
 	}
@@ -56,13 +66,28 @@ func getWrongConsensusConf() def.ConsensusConfig {
 }
 
 func TestNewPoWConsensus(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error")
 		return
 	}
-	conf := getConsensusConf()
+	conf := getConsensusConf(getPoWConsensusConf())
 	i := NewPoWConsensus(*cCtx, conf)
+	if i == nil {
+		t.Error("NewPoWConsensus error", "conf", conf)
+		return
+	}
+	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf()); i != nil {
+		t.Error("NewPoWConsensus check name error")
+	}
+
+	cCtx, err = prepare(getDefaultPoWConsensusConf())
+	if err != nil {
+		t.Error("prepare error")
+		return
+	}
+	conf = getConsensusConf(getDefaultPoWConsensusConf())
+	i = NewPoWConsensus(*cCtx, conf)
 	if i == nil {
 		t.Error("NewPoWConsensus error", "conf", conf)
 		return
@@ -73,12 +98,12 @@ func TestNewPoWConsensus(t *testing.T) {
 }
 
 func TestProcessBeforeMiner(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error.")
 		return
 	}
-	i := NewPoWConsensus(*cCtx, getConsensusConf())
+	i := NewPoWConsensus(*cCtx, getConsensusConf(getPoWConsensusConf()))
 	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
 	if err != nil {
 		t.Error("ProcessBeforeMiner error.")
@@ -86,12 +111,12 @@ func TestProcessBeforeMiner(t *testing.T) {
 }
 
 func TestGetConsensusStatus(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error")
 		return
 	}
-	conf := getConsensusConf()
+	conf := getConsensusConf(getPoWConsensusConf())
 	i := NewPoWConsensus(*cCtx, conf)
 	status, _ := i.GetConsensusStatus()
 	if status.GetVersion() != 0 {
@@ -131,7 +156,7 @@ func TestParseConsensusStorage(t *testing.T) {
 		t.Error("ParseConsensusStorage Unmarshal error", "error", err)
 		return
 	}
-	cCtx, err := prepare()
+	cCtx, err := prepare(getPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error", err)
 		return
@@ -141,7 +166,7 @@ func TestParseConsensusStorage(t *testing.T) {
 		t.Error("NewBlockWithStorage error", err)
 		return
 	}
-	conf := getConsensusConf()
+	conf := getConsensusConf(getPoWConsensusConf())
 	pow := NewPoWConsensus(*cCtx, conf)
 
 	i, err := pow.ParseConsensusStorage(b1)
@@ -193,12 +218,12 @@ func TestGetCompact(t *testing.T) {
 }
 
 func TestIsProofed(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error", err)
 		return
 	}
-	conf := getConsensusConf()
+	conf := getConsensusConf(getPoWConsensusConf())
 	i := NewPoWConsensus(*cCtx, conf)
 	pow, ok := i.(*PoWConsensus)
 	if !ok {
@@ -212,15 +237,34 @@ func TestIsProofed(t *testing.T) {
 	if !pow.IsProofed(blockid, pow.config.DefaultTarget) {
 		t.Error("TestIsProofed error")
 	}
-}
 
-func TestMining(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err = prepare(getDefaultPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error", err)
 		return
 	}
-	conf := getConsensusConf()
+	conf = getConsensusConf(getDefaultPoWConsensusConf())
+	i = NewPoWConsensus(*cCtx, conf)
+	pow, ok = i.(*PoWConsensus)
+	if !ok {
+		t.Error("TestIsProofed transfer error")
+		return
+	}
+	b = big.NewInt(1)
+	b.Lsh(b, uint(4))
+	blockid = b.Bytes()
+	if !pow.IsProofed(blockid, pow.config.DefaultTarget) {
+		t.Error("TestIsProofed error")
+	}
+}
+
+func TestMining(t *testing.T) {
+	cCtx, err := prepare(getPoWConsensusConf())
+	if err != nil {
+		t.Error("prepare error", err)
+		return
+	}
+	conf := getConsensusConf(getPoWConsensusConf())
 	i := NewPoWConsensus(*cCtx, conf)
 	powC, ok := i.(*PoWConsensus)
 	if !ok {
@@ -248,12 +292,12 @@ func TestMining(t *testing.T) {
 }
 
 func TestRefreshDifficulty(t *testing.T) {
-	cCtx, err := prepare()
+	cCtx, err := prepare(getPoWConsensusConf())
 	if err != nil {
 		t.Error("prepare error", err)
 		return
 	}
-	conf := getConsensusConf()
+	conf := getConsensusConf(getPoWConsensusConf())
 	i := NewPoWConsensus(*cCtx, conf)
 	powC, ok := i.(*PoWConsensus)
 	if !ok {

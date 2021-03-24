@@ -7,10 +7,10 @@ import (
 
 // PoWStatus 实现了ConsensusStatus接口
 type PoWStatus struct {
-	startHeight int64
 	mutex       sync.Mutex
-	newHeight   int64
 	index       int
+	startHeight int64
+	newHeight   int64
 	miner       ValidatorsInfo
 }
 
