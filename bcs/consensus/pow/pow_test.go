@@ -23,7 +23,7 @@ var (
 func getPoWConsensusConf() []byte {
 	j := `{
         	"defaultTarget": "419668748",
-        	"adjustHeightGap": "10",
+        	"adjustHeightGap": "2",
 			"expectedPeriod":  "15",
 			"maxTarget":       "0"
     	}`
@@ -33,7 +33,7 @@ func getPoWConsensusConf() []byte {
 func getDefaultPoWConsensusConf() []byte {
 	j := `{
         	"defaultTarget": "5",
-        	"adjustHeightGap": "10",
+        	"adjustHeightGap": "2",
 			"expectedPeriod":  "15",
 			"maxTarget":       "10"
     	}`
@@ -42,6 +42,12 @@ func getDefaultPoWConsensusConf() []byte {
 
 func prepare(config []byte) (*cctx.ConsensusCtx, error) {
 	l := kmock.NewFakeLedger(config) //getPoWConsensusConf
+	ps := PoWStorage{
+		TargetBits: minTarget,
+	}
+	by, _ := json.Marshal(ps)
+	l.SetConsensusStorage(1, by)
+	l.SetConsensusStorage(2, by)
 	cCtx, err := bmock.NewConsensusCtx(l)
 	cCtx.Ledger = l
 	return cCtx, err
@@ -56,11 +62,11 @@ func getConsensusConf(config []byte) def.ConsensusConfig {
 	}
 }
 
-func getWrongConsensusConf() def.ConsensusConfig {
+func getWrongConsensusConf(start int64) def.ConsensusConfig {
 	return def.ConsensusConfig{
 		ConsensusName: "pow2",
 		Config:        string(getPoWConsensusConf()),
-		StartHeight:   1,
+		StartHeight:   start,
 		Index:         0,
 	}
 }
@@ -77,7 +83,7 @@ func TestNewPoWConsensus(t *testing.T) {
 		t.Error("NewPoWConsensus error", "conf", conf)
 		return
 	}
-	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf()); i != nil {
+	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf(1)); i != nil {
 		t.Error("NewPoWConsensus check name error")
 	}
 
@@ -91,9 +97,6 @@ func TestNewPoWConsensus(t *testing.T) {
 	if i == nil {
 		t.Error("NewPoWConsensus error", "conf", conf)
 		return
-	}
-	if i := NewPoWConsensus(*cCtx, getWrongConsensusConf()); i != nil {
-		t.Error("NewPoWConsensus check name error")
 	}
 }
 
@@ -135,6 +138,7 @@ func TestGetConsensusStatus(t *testing.T) {
 		t.Error("GetConsensusName error")
 		return
 	}
+	status.GetCurrentTerm()
 	vb := status.GetCurrentValidatorsInfo()
 	m := ValidatorsInfo{}
 	err = json.Unmarshal(vb, &m)
@@ -358,7 +362,7 @@ func TestRefreshDifficulty(t *testing.T) {
 		return
 	}
 	ps = PoWStorage{
-		TargetBits: target,
+		TargetBits: 218104063,
 	}
 	by, _ = json.Marshal(ps)
 	B3, err := bmock.NewBlockWithStorage(5, cCtx.Crypto, cCtx.Address, by)
@@ -368,5 +372,37 @@ func TestRefreshDifficulty(t *testing.T) {
 	}
 	go powC.mining(B3)
 	powC.sigc <- false
+}
 
+func TestCheckMinerMatch(t *testing.T) {
+	cCtx, err := prepare(getPoWConsensusConf())
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	i := NewPoWConsensus(*cCtx, getConsensusConf(getPoWConsensusConf()))
+	if i == nil {
+		t.Error("NewXpoaConsensus error")
+		return
+	}
+	ps := PoWStorage{
+		TargetBits: minTarget,
+	}
+	by, _ := json.Marshal(ps)
+	b3, err := bmock.NewBlockWithStorage(3, cCtx.Crypto, cCtx.Address, by)
+	c := cCtx.BaseCtx
+	_, err = i.CheckMinerMatch(&c, b3)
+	if err != nil {
+		t.Error("CheckMinerMatch error", "err", err)
+	}
+}
+
+func TestCompeteMaster(t *testing.T) {
+	cCtx, err := prepare(getPoWConsensusConf())
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	i := NewPoWConsensus(*cCtx, getConsensusConf(getPoWConsensusConf()))
+	i.CompeteMaster(3)
 }

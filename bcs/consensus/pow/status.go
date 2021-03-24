@@ -2,12 +2,10 @@ package pow
 
 import (
 	"encoding/json"
-	"sync"
 )
 
 // PoWStatus 实现了ConsensusStatus接口
 type PoWStatus struct {
-	mutex       sync.Mutex
 	index       int
 	startHeight int64
 	newHeight   int64
@@ -40,8 +38,6 @@ func (s *PoWStatus) GetConsensusName() string {
 
 // GetCurrentTerm 获取当前状态机term
 func (s *PoWStatus) GetCurrentTerm() int64 {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	return s.newHeight
 }
 
