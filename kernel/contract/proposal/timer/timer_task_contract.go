@@ -22,13 +22,13 @@ func NewKernContractMethod(bcName string) *KernMethod {
 func (t *KernMethod) Add(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	blockHeightBuf := args["block_height"]
-	proposalIDBuf := args["proposal_id"]
+	taskIDBuf := args["task_id"]
 	triggerBuf := args["trigger"]
-	if blockHeightBuf == nil || proposalIDBuf == nil || triggerBuf == nil {
-		return nil, fmt.Errorf("add timer task failed, block_height, proposal_id or trigger is nil")
+	if blockHeightBuf == nil || taskIDBuf == nil || triggerBuf == nil {
+		return nil, fmt.Errorf("add timer task failed, block_height, task_id or trigger is nil")
 	}
 
-	key := utils.MakeTimerBlockHeightTaskKey(string(blockHeightBuf), string(proposalIDBuf))
+	key := utils.MakeTimerBlockHeightTaskKey(string(blockHeightBuf), string(taskIDBuf))
 	err := ctx.Put(utils.GetTimerBucket(), []byte(key), triggerBuf)
 	if err != nil {
 		return nil, err
@@ -91,20 +91,11 @@ func (t *KernMethod) Trigger(ctx contract.KContext, triggerBuf []byte) {
 		return
 	}
 	timerTxArgs["args"] = triggerArgsBytes
-	switch trigger.Module {
-	case "$consensus":
-		// 跨合约调用，进行共识升级
-		_, err = ctx.Call("xkernel", "$consensus", "updateConsensus", timerTxArgs)
-		if err != nil {
-			return
-		}
-	case "$proposal":
-		// 检查投票结果
-		_, err = ctx.Call("xkernel", "$proposal", "CheckVoteResult", timerTxArgs)
-		if err != nil {
-			return
-		}
-	default:
+
+	// 回调proposal trigger
+	_, err = ctx.Call("xkernel", trigger.Module, trigger.Method, timerTxArgs)
+	if err != nil {
 		return
 	}
+
 }

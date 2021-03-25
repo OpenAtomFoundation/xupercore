@@ -45,21 +45,10 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	if err != nil {
 		return nil, err
 	}
-	triggerArgs := make(map[string]interface{})
-	triggerArgs["proposal_id"] = []byte(proposalID)
-	trigger := &utils.TriggerDesc{
-		Module: utils.ProposalKernelContract,
-		Method: "CheckVoteResult",
-		Args:   triggerArgs,
-	}
-	triggerBytes, err := json.Marshal(*trigger)
+	timerArgs, err := t.makeTimerArgs(proposalID, stopVoteHeight, "CheckVoteResult")
 	if err != nil {
 		return nil, err
 	}
-	timerArgs := make(map[string][]byte)
-	timerArgs["block_height"] = stopVoteHeight
-	timerArgs["trigger"] = triggerBytes
-	timerArgs["proposal_id"] = []byte(proposalID)
 	_, err = ctx.Call("xkernel", utils.TimerTaskKernelContract, "Add", timerArgs)
 	if err != nil {
 		return nil, err
@@ -71,7 +60,7 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	governTokenArgs := make(map[string][]byte)
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = []byte(amount)
-	governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
+	governTokenArgs["lock_type"] = []byte(utils.GovernTokenTypeOrdinary)
 	_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", governTokenArgs)
 	if err != nil {
 		return nil, err
@@ -137,14 +126,9 @@ func (t *KernMethod) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 获取提案
-	proposalKey := utils.MakeProposalKey(string(proposalIDBuf))
-	proposalBuf, err := ctx.Get(utils.GetProposalBucket(), []byte(proposalKey))
+	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
 	if err != nil {
-		return nil, fmt.Errorf("vote failed, no proposal found")
-	}
-	proposal, err := t.parse(string(proposalBuf))
-	if err != nil {
-		return nil, fmt.Errorf("vote failed, parse proposal error")
+		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
 	}
 
 	// 比较投票状态
@@ -157,7 +141,7 @@ func (t *KernMethod) Vote(ctx contract.KContext) (*contract.Response, error) {
 	governTokenArgs := make(map[string][]byte)
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = amountBuf
-	governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
+	governTokenArgs["lock_type"] = []byte(utils.GovernTokenTypeOrdinary)
 	_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", governTokenArgs)
 	if err != nil {
 		return nil, err
@@ -183,11 +167,7 @@ func (t *KernMethod) Vote(ctx contract.KContext) (*contract.Response, error) {
 	amount := big.NewInt(0)
 	amount.SetString(string(amountBuf), 10)
 	proposal.VoteAmount = proposal.VoteAmount.Add(proposal.VoteAmount, amount)
-	proposalBuf, err = t.unParse(proposal)
-	if err != nil {
-		return nil, fmt.Errorf("vote failed, unparse proposal error")
-	}
-	err = ctx.Put(utils.GetProposalBucket(), []byte(proposalKey), proposalBuf)
+	err = t.updateProposal(ctx, string(proposalIDBuf), proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -213,14 +193,9 @@ func (t *KernMethod) Thaw(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 获取提案
-	proposalKey := utils.MakeProposalKey(string(proposalIDBuf))
-	proposalBuf, err := ctx.Get(utils.GetProposalBucket(), []byte(proposalKey))
+	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
 	if err != nil {
-		return nil, fmt.Errorf("vote failed, no proposal found")
-	}
-	proposal, err := t.parse(string(proposalBuf))
-	if err != nil {
-		return nil, fmt.Errorf("vote failed, parse proposal error")
+		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
 	}
 
 	// 校验提案者身份
@@ -235,11 +210,7 @@ func (t *KernMethod) Thaw(ctx contract.KContext) (*contract.Response, error) {
 
 	// 更新proposal状态为撤销
 	proposal.Status = utils.ProposalStatusCancelled
-	proposalBuf, err = t.unParse(proposal)
-	if err != nil {
-		return nil, fmt.Errorf("vote failed, unparse proposal error")
-	}
-	err = ctx.Put(utils.GetProposalBucket(), []byte(proposalKey), proposalBuf)
+	err = t.updateProposal(ctx, string(proposalIDBuf), proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +227,7 @@ func (t *KernMethod) Thaw(ctx contract.KContext) (*contract.Response, error) {
 	governTokenArgs := make(map[string][]byte)
 	governTokenArgs["from"] = []byte(from)
 	governTokenArgs["amount"] = lockAmountBuf
-	governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
+	governTokenArgs["lock_type"] = []byte(utils.GovernTokenTypeOrdinary)
 	_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", governTokenArgs)
 	if err != nil {
 		return nil, err
@@ -283,14 +254,9 @@ func (t *KernMethod) Query(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 获取提案
-	proposalKey := utils.MakeProposalKey(string(proposalIDBuf))
-	proposalBuf, err := ctx.Get(utils.GetProposalBucket(), []byte(proposalKey))
+	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
 	if err != nil {
-		return nil, fmt.Errorf("query failed, no proposal found")
-	}
-	proposal, err := t.parse(string(proposalBuf))
-	if err != nil {
-		return nil, fmt.Errorf("query failed, parse proposal error")
+		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
 	}
 
 	// todo by zl, 编解码有问题
@@ -357,67 +323,101 @@ func (t *KernMethod) CheckVoteResult(ctx contract.KContext) (*contract.Response,
 	}
 
 	// 获取提案
-	proposalKey := utils.MakeProposalKey(string(proposalIDBuf))
-	proposalBuf, err := ctx.Get(utils.GetProposalBucket(), []byte(proposalKey))
+	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
 	if err != nil {
-		return nil, fmt.Errorf("vote failed, no proposal found")
-	}
-	proposal, err := t.parse(string(proposalBuf))
-	if err != nil {
-		return nil, fmt.Errorf("vote failed, parse proposal error")
+		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
 	}
 
+	// 获取治理代币总额，以及投票阈值
+	totalSupplyRes, err := ctx.Call("xkernel", utils.GovernTokenKernelContract, "TotalSupply", nil)
+	if err != nil {
+		return nil, fmt.Errorf("CheckVoteResult failed, query govern token totalsupply error")
+	}
+	threadTickets := big.NewInt(0)
+	threadTickets.SetString(string(totalSupplyRes.Body), 10)
+	threadTickets = threadTickets.Mul(threadTickets, big.NewInt(51)).Div(threadTickets, big.NewInt(100))
+
 	// 统计投票结果
-	if proposal.VoteAmount.Cmp(big.NewInt(1000)) == -1 {
-		proposal.Status = utils.ProposalStatusFailure
+	if proposal.VoteAmount.Cmp(threadTickets) == -1 {
+		proposal.Status = utils.ProposalStatusRejected
 	} else {
-		proposal.Status = utils.ProposalStatusSuccess
-		// 增加定时任务
-		timerArgs := make(map[string][]byte)
-		triggerBytes, err := json.Marshal(*proposal.Trigger)
+		proposal.Status = utils.ProposalStatusPassed
+		// 增加定时任务，回调proposal.Trigger
+		timerArgs, err := t.makeTimerArgs(string(proposalIDBuf), []byte(strconv.FormatInt(proposal.Trigger.Height, 10)), "Trigger")
 		if err != nil {
 			return nil, err
 		}
-		timerArgs["block_height"] = []byte(strconv.FormatInt(proposal.Trigger.Height, 10))
-		timerArgs["trigger"] = triggerBytes
-		timerArgs["proposal_id"] = proposalIDBuf
 		_, err = ctx.Call("xkernel", utils.TimerTaskKernelContract, "Add", timerArgs)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// 解锁提案提交时和投票锁定的治理代币
-	startKey := utils.MakeProposalLockPrefix(string(proposalIDBuf))
-	prefix := utils.MakeProposalLockPrefixSeparator(string(proposalIDBuf))
-	endKey := utils.PrefixRange([]byte(prefix))
-	iter, err := ctx.Select(utils.GetProposalBucket(), []byte(startKey), endKey)
-	defer iter.Close()
-	if err != nil {
-		return nil, fmt.Errorf("CheckVoteResult failed, generate proposal lock key iterator error")
-	}
-	for iter.Next() {
-		// 解锁锁仓
-		account := iter.Key()[(len(prefix) + len(utils.GetProposalBucket())):]
-		unLockAmount := iter.Value()
-
-		// 撤销治理token的锁定
-		governTokenArgs := make(map[string][]byte)
-		governTokenArgs["from"] = account
-		governTokenArgs["amount"] = unLockAmount
-		governTokenArgs["lock_type"] = []byte(utils.ProposalTypeOrdinary)
-		_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", governTokenArgs)
-		if err != nil {
-			continue
+	// 提案表决未通过，则解锁提案提交时和投票锁定的治理代币
+	if proposal.Status == utils.ProposalStatusRejected {
+		// 解锁提案提交时和投票锁定的治理代币
+		if t.unlockGovernTokensForProposal(ctx, string(proposalIDBuf)) != nil {
+			return nil, fmt.Errorf("proposal trigger failed, unlock govern token error")
 		}
 	}
 
 	// 保存提案
-	proposalBuf, err = t.unParse(proposal)
+	err = t.updateProposal(ctx, string(proposalIDBuf), proposal)
 	if err != nil {
-		return nil, fmt.Errorf("check vote result failed, unparse proposal error")
+		return nil, err
 	}
-	err = ctx.Put(utils.GetProposalBucket(), []byte(proposalKey), proposalBuf)
+
+	return &contract.Response{
+		Status:  utils.StatusOK,
+		Message: "success",
+		Body:    nil,
+	}, nil
+}
+
+func (t *KernMethod) Trigger(ctx contract.KContext) (*contract.Response, error) {
+	args := ctx.Args()
+
+	// 调用权限校验
+	if ctx.Caller() != utils.TimerTaskKernelContract {
+		return nil, fmt.Errorf("caller %s no authority to Trigger", ctx.Caller())
+	}
+
+	proposalID := &ProposalID{}
+	err := json.Unmarshal(args["args"], proposalID)
+	if err != nil {
+		return nil, fmt.Errorf("parse proposal id from args error")
+	}
+
+	proposalIDBuf, err := base64.StdEncoding.DecodeString(proposalID.ProposalID)
+	if err != nil {
+		return nil, fmt.Errorf("parse proposal id error")
+	}
+
+	// 获取提案
+	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
+	if err != nil {
+		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
+	}
+
+	// 执行提案trigger任务
+	triggerTxArgs := make(map[string][]byte)
+	triggerArgsBytes, _ := json.Marshal(proposal.Trigger.Args)
+	triggerTxArgs["args"] = triggerArgsBytes
+	_, err = ctx.Call("xkernel", proposal.Trigger.Module, proposal.Trigger.Method, triggerTxArgs)
+	fmt.Println("proposal.trigger, error:%v", err.Error())
+	if err != nil {
+		proposal.Status = utils.ProposalStatusCompletedAndFailure
+	} else {
+		proposal.Status = utils.ProposalStatusCompletedAndSuccess
+	}
+
+	// 解锁提案提交时和投票锁定的治理代币
+	if t.unlockGovernTokensForProposal(ctx, string(proposalIDBuf)) != nil {
+		return nil, fmt.Errorf("proposal trigger failed, unlock govern token error")
+	}
+
+	// 保存提案
+	err = t.updateProposal(ctx, string(proposalIDBuf), proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -440,6 +440,82 @@ func (t *KernMethod) getNextProposalID(ctx contract.KContext) (string, error) {
 		proposalID.SetString(string(latestProposalID), 10)
 		return proposalID.Add(proposalID, big.NewInt(1)).String(), nil
 	}
+}
+
+func (t *KernMethod) unlockGovernTokensForProposal(ctx contract.KContext, proposalID string) error {
+	startKey := utils.MakeProposalLockPrefix(proposalID)
+	prefix := utils.MakeProposalLockPrefixSeparator(proposalID)
+	endKey := utils.PrefixRange([]byte(prefix))
+	iter, err := ctx.Select(utils.GetProposalBucket(), []byte(startKey), endKey)
+	defer iter.Close()
+	if err != nil {
+		return fmt.Errorf("unlockGovernTokensForProposal failed, generate proposal lock key iterator error")
+	}
+	for iter.Next() {
+		// 解锁锁仓
+		account := iter.Key()[(len(prefix) + len(utils.GetProposalBucket())):]
+		unLockAmount := iter.Value()
+
+		// 撤销治理token的锁定
+		governTokenArgs := make(map[string][]byte)
+		governTokenArgs["from"] = account
+		governTokenArgs["amount"] = unLockAmount
+		governTokenArgs["lock_type"] = []byte(utils.GovernTokenTypeOrdinary)
+		_, err = ctx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", governTokenArgs)
+		if err != nil {
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (t *KernMethod) getProposal(ctx contract.KContext, proposalID string) (*utils.Proposal, error) {
+	proposalKey := utils.MakeProposalKey(proposalID)
+	proposalBuf, err := ctx.Get(utils.GetProposalBucket(), []byte(proposalKey))
+	if err != nil {
+		return nil, fmt.Errorf("get proposal failed, no proposal found")
+	}
+	proposal, err := t.parse(string(proposalBuf))
+	if err != nil {
+		return nil, fmt.Errorf("get proposal failed, parse proposal error")
+	}
+
+	return proposal, nil
+}
+
+func (t *KernMethod) updateProposal(ctx contract.KContext, proposalID string, proposal *utils.Proposal) error {
+	proposalKey := utils.MakeProposalKey(proposalID)
+	proposalBuf, err := t.unParse(proposal)
+	if err != nil {
+		return fmt.Errorf("update proposal failed, unparse proposal error")
+	}
+	err = ctx.Put(utils.GetProposalBucket(), []byte(proposalKey), proposalBuf)
+	if err != nil {
+		return fmt.Errorf("update proposal failed, save proposal error")
+	}
+
+	return nil
+}
+
+func (t *KernMethod) makeTimerArgs(proposalID string, triggerHeight []byte, method string) (map[string][]byte, error) {
+	triggerArgs := make(map[string]interface{})
+	triggerArgs["proposal_id"] = []byte(proposalID)
+	trigger := &utils.TriggerDesc{
+		Module: utils.ProposalKernelContract,
+		Method: method,
+		Args:   triggerArgs,
+	}
+	triggerBytes, err := json.Marshal(*trigger)
+	if err != nil {
+		return nil, fmt.Errorf("makeTimerArgs error: %v", err.Error())
+	}
+	timerArgs := make(map[string][]byte)
+	timerArgs["block_height"] = triggerHeight
+	timerArgs["trigger"] = triggerBytes
+	timerArgs["task_id"] = []byte(proposalID)
+
+	return timerArgs, nil
 }
 
 func (t *KernMethod) parse(proposalStr string) (*utils.Proposal, error) {

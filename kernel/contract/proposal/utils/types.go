@@ -6,13 +6,15 @@ import (
 )
 
 const (
-	ProposalTypeOrdinary = "ordinary"
-	ProposalTypeTDPOS    = "TDPOS"
+	GovernTokenTypeOrdinary = "ordinary"
+	GovernTokenTypeTDPOS    = "tdpos"
 
-	ProposalStatusVoting    = "voting"
-	ProposalStatusCancelled = "cancelled"
-	ProposalStatusFailure   = "failure"
-	ProposalStatusSuccess   = "success"
+	ProposalStatusVoting              = "voting"
+	ProposalStatusCancelled           = "cancelled"
+	ProposalStatusRejected            = "rejected"
+	ProposalStatusPassed              = "passed"
+	ProposalStatusCompletedAndFailure = "completed_failure"
+	ProposalStatusCompletedAndSuccess = "completed_success"
 )
 
 const (
@@ -23,14 +25,17 @@ const (
 )
 
 // Govern Token Balance
-// TotalBalance = AvailableBalanceForTDPOS + LockedBalanceForTDPOS = AvailableBalanceForProposal + LockedBalanceForProposal
-// 用户的可转账余额是min(AvailableBalanceForTDPOS, AvailableBalanceForProposal)
+// TotalBalance = AvailableBalance + LockedBalance
+// 目前包括tdpos和oridinary两种场景
+// 用户的可转账余额是min(AvailableBalances)
 type GovernTokenBalance struct {
-	TotalBalance                *big.Int `json:"total_balance"`
-	AvailableBalanceForTDPOS    *big.Int `json:"available_balance_for_tdpos"`
-	LockedBalanceForTDPOS       *big.Int `json:"locked_balance_for_tdpos"`
-	AvailableBalanceForProposal *big.Int `json:"available_balance_for_proposal"`
-	LockedBalanceForProposal    *big.Int `json:"locked_balance_for_proposal"`
+	TotalBalance *big.Int           `json:"total_balance"`
+	Balances     map[string]Balance `json:"balances"`
+}
+
+type Balance struct {
+	AvailableBalance *big.Int `json:"available_balance"`
+	LockedBalance    *big.Int `json:"locked_balance"`
 }
 
 // Proposal
@@ -54,13 +59,15 @@ type TriggerDesc struct {
 }
 
 func NewGovernTokenBalance() *GovernTokenBalance {
-	return &GovernTokenBalance{
-		TotalBalance:                big.NewInt(0),
-		AvailableBalanceForTDPOS:    big.NewInt(0),
-		LockedBalanceForTDPOS:       big.NewInt(0),
-		AvailableBalanceForProposal: big.NewInt(0),
-		LockedBalanceForProposal:    big.NewInt(0),
+	balance := &GovernTokenBalance{
+		TotalBalance: big.NewInt(0),
+		Balances:     make(map[string]Balance),
 	}
+
+	balance.Balances[GovernTokenTypeOrdinary] = Balance{big.NewInt(0), big.NewInt(0)}
+	balance.Balances[GovernTokenTypeTDPOS] = Balance{big.NewInt(0), big.NewInt(0)}
+
+	return balance
 }
 
 // Parse

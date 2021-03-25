@@ -35,6 +35,7 @@ func NewGovManager(ctx *GovCtx) (GovManager, error) {
 	register.RegisterKernMethod(utils.GovernTokenKernelContract, "Lock", t.LockGovernTokens)
 	register.RegisterKernMethod(utils.GovernTokenKernelContract, "UnLock", t.UnLockGovernTokens)
 	register.RegisterKernMethod(utils.GovernTokenKernelContract, "Query", t.QueryAccountGovernTokens)
+	register.RegisterKernMethod(utils.GovernTokenKernelContract, "TotalSupply", t.TotalSupply)
 
 	mg := &Manager{
 		Ctx: ctx,
@@ -57,11 +58,11 @@ func (mgr *Manager) GetGovTokenBalance(accountName string) (*pb.GovernTokenBalan
 	}
 
 	balanceRes := &pb.GovernTokenBalance{
-		TotalBalance:                balance.TotalBalance.String(),
-		AvailableBalanceForTdpos:    balance.AvailableBalanceForTDPOS.String(),
-		LockedBalanceForTdpos:       balance.LockedBalanceForTDPOS.String(),
-		AvailableBalanceForProposal: balance.AvailableBalanceForProposal.String(),
-		LockedBalanceForProposal:    balance.LockedBalanceForProposal.String(),
+		TotalBalance: balance.TotalBalance.String(),
+		//AvailableBalanceForTdpos:    balance.AvailableBalanceForTDPOS.String(),
+		//LockedBalanceForTdpos:       balance.LockedBalanceForTDPOS.String(),
+		//AvailableBalanceForProposal: balance.AvailableBalanceForProposal.String(),
+		//LockedBalanceForProposal:    balance.LockedBalanceForProposal.String(),
 	}
 
 	return balanceRes, nil

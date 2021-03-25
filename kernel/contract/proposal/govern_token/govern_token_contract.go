@@ -3,7 +3,6 @@ package govern_token
 import (
 	"encoding/json"
 	"fmt"
-	pb "github.com/xuperchain/xupercore/protos"
 	"math/big"
 
 	xledger "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
@@ -35,13 +34,11 @@ func (t *KernMethod) InitGovernTokens(ctx contract.KContext) (*contract.Response
 			return nil, fmt.Errorf("init gov tokens failed, parse genesis account error, negative amount")
 		}
 
-		balance := utils.GovernTokenBalance{
-			TotalBalance:                amount,
-			AvailableBalanceForTDPOS:    amount,
-			LockedBalanceForTDPOS:       big.NewInt(0),
-			AvailableBalanceForProposal: amount,
-			LockedBalanceForProposal:    big.NewInt(0),
-		}
+		balance := utils.NewGovernTokenBalance()
+		balance.TotalBalance = amount
+		balance.Balances[utils.GovernTokenTypeOrdinary] = utils.Balance{amount, big.NewInt(0)}
+		balance.Balances[utils.GovernTokenTypeTDPOS] = utils.Balance{amount, big.NewInt(0)}
+
 		balanceBuf, err := json.Marshal(balance)
 		if err != nil {
 			return nil, err
@@ -108,25 +105,43 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 	}
 
 	// 比较并更新sender余额
-	if senderBalance.TotalBalance.Cmp(amount) < 0 || senderBalance.AvailableBalanceForTDPOS.Cmp(amount) < 0 ||
-		senderBalance.AvailableBalanceForProposal.Cmp(amount) < 0 {
-		return nil, fmt.Errorf("transfer gov tokens failed, sender's insufficient balance")
+	for _, v := range senderBalance.Balances {
+		if v.AvailableBalance.Cmp(amount) < 0 {
+			return nil, fmt.Errorf("transfer gov tokens failed, sender's insufficient balance")
+		}
 	}
-	senderBalance.TotalBalance = senderBalance.TotalBalance.Sub(senderBalance.TotalBalance, amount)
-	senderBalance.AvailableBalanceForTDPOS = senderBalance.AvailableBalanceForTDPOS.Sub(senderBalance.AvailableBalanceForTDPOS, amount)
-	senderBalance.AvailableBalanceForProposal = senderBalance.AvailableBalanceForProposal.Sub(senderBalance.AvailableBalanceForProposal, amount)
 
-	// 查询receiver余额
+	senderBalance.TotalBalance = senderBalance.TotalBalance.Sub(senderBalance.TotalBalance, amount)
+	for k, v := range senderBalance.Balances {
+		senderBalance.Balances[k] = utils.Balance{
+			AvailableBalance: v.AvailableBalance.Sub(v.AvailableBalance, amount),
+			LockedBalance:    v.LockedBalance,
+		}
+	}
+
+	// 设置receiver余额
 	receiverBalance := utils.NewGovernTokenBalance()
+	receiverBalance.TotalBalance.Set(amount)
+	for k, _ := range senderBalance.Balances {
+		receiverBalance.Balances[k] = utils.Balance{
+			AvailableBalance: big.NewInt(0).Set(amount),
+			LockedBalance:    big.NewInt(0),
+		}
+	}
+
+	// 查询receiver余额并更新
 	receiverKey := utils.MakeAccountBalanceKey(string(receiverBuf))
 	receiverBalanceBuf, err := ctx.Get(utils.GetGovernTokenBucket(), []byte(receiverKey))
 	if err == nil {
 		receiverBalanceOld := &utils.GovernTokenBalance{}
 		json.Unmarshal(receiverBalanceBuf, receiverBalanceOld)
-		receiverBalance.TotalBalance = receiverBalance.TotalBalance.Add(receiverBalanceOld.TotalBalance, amount)
-		receiverBalance.AvailableBalanceForTDPOS = receiverBalance.AvailableBalanceForTDPOS.Add(receiverBalanceOld.AvailableBalanceForTDPOS, amount)
-		receiverBalance.AvailableBalanceForProposal = receiverBalance.AvailableBalanceForProposal.Add(receiverBalanceOld.AvailableBalanceForProposal, amount)
-
+		receiverBalance.TotalBalance.Add(receiverBalance.TotalBalance, receiverBalanceOld.TotalBalance)
+		for k, v := range receiverBalanceOld.Balances {
+			receiverBalance.Balances[k] = utils.Balance{
+				AvailableBalance: receiverBalance.Balances[k].AvailableBalance.Add(v.AvailableBalance, amount),
+				LockedBalance:    v.LockedBalance,
+			}
+		}
 	}
 
 	// 更新sender余额
@@ -139,7 +154,7 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 
 	// 更新receiver余额
 	receiverBalanceBuf, _ = json.Marshal(receiverBalance)
-	err = ctx.Put(utils.GetGovernTokenBucket(), receiverBuf, receiverBalanceBuf)
+	err = ctx.Put(utils.GetGovernTokenBucket(), []byte(receiverKey), receiverBalanceBuf)
 	if err != nil {
 		return nil, fmt.Errorf("transfer gov tokens failed, update receriver's balance")
 	}
@@ -177,25 +192,18 @@ func (t *KernMethod) LockGovernTokens(ctx contract.KContext) (*contract.Response
 	amountLock := big.NewInt(0)
 	amountLock.SetString(string(amountBuf), 10)
 	// 锁定account balance amount
-	switch string(lockTypeBuf) {
-	case utils.ProposalTypeOrdinary:
-		if accountBalance.TotalBalance.Cmp(amountLock) < 0 || accountBalance.AvailableBalanceForProposal.Cmp(amountLock) < 0 {
+	for _, v := range accountBalance.Balances {
+		if v.AvailableBalance.Cmp(amountLock) < 0 {
 			return nil, fmt.Errorf("lock gov tokens failed, account available balance insufficient")
 		}
-		// 更新余额
-		accountBalance.AvailableBalanceForProposal = accountBalance.AvailableBalanceForProposal.Sub(accountBalance.AvailableBalanceForProposal, amountLock)
-		accountBalance.LockedBalanceForProposal = accountBalance.LockedBalanceForProposal.Add(accountBalance.LockedBalanceForProposal, amountLock)
-
-	case utils.ProposalTypeTDPOS:
-		if accountBalance.TotalBalance.Cmp(amountLock) < 0 || accountBalance.AvailableBalanceForTDPOS.Cmp(amountLock) < 0 {
-			return nil, fmt.Errorf("lock gov tokens failed, account available balance insufficient")
-		}
-		// 更新余额
-		accountBalance.AvailableBalanceForTDPOS = accountBalance.AvailableBalanceForTDPOS.Sub(accountBalance.AvailableBalanceForTDPOS, amountLock)
-		accountBalance.LockedBalanceForTDPOS = accountBalance.LockedBalanceForTDPOS.Add(accountBalance.LockedBalanceForTDPOS, amountLock)
-
-	default:
-		return nil, fmt.Errorf("lock gov tokens failed, lock_type invalid: %s", string(lockTypeBuf))
+	}
+	lockType := string(lockTypeBuf)
+	if lockType != utils.GovernTokenTypeOrdinary && lockType != utils.GovernTokenTypeTDPOS {
+		return nil, fmt.Errorf("lock gov tokens failed, lock_type invalid: %s", lockType)
+	}
+	accountBalance.Balances[lockType] = utils.Balance{
+		AvailableBalance: accountBalance.Balances[lockType].AvailableBalance.Sub(accountBalance.Balances[lockType].AvailableBalance, amountLock),
+		LockedBalance:    accountBalance.Balances[lockType].LockedBalance.Add(accountBalance.Balances[lockType].LockedBalance, amountLock),
 	}
 
 	// 更新account余额
@@ -239,25 +247,13 @@ func (t *KernMethod) UnLockGovernTokens(ctx contract.KContext) (*contract.Respon
 	amountLock := big.NewInt(0)
 	amountLock.SetString(string(amountBuf), 10)
 	// 解锁account balance amount
-	switch string(lockTypeBuf) {
-	case utils.ProposalTypeOrdinary:
-		if accountBalance.LockedBalanceForProposal.Cmp(amountLock) < 0 {
-			return nil, fmt.Errorf("lock gov tokens failed, account locked balance insufficient")
-		}
-		// 更新余额
-		accountBalance.LockedBalanceForProposal = accountBalance.LockedBalanceForProposal.Sub(accountBalance.LockedBalanceForProposal, amountLock)
-		accountBalance.AvailableBalanceForProposal = accountBalance.AvailableBalanceForProposal.Add(accountBalance.AvailableBalanceForProposal, amountLock)
-
-	case utils.ProposalTypeTDPOS:
-		if accountBalance.LockedBalanceForTDPOS.Cmp(amountLock) < 0 {
-			return nil, fmt.Errorf("lock gov tokens failed, account locked balance insufficient")
-		}
-		// 更新余额
-		accountBalance.LockedBalanceForTDPOS = accountBalance.LockedBalanceForTDPOS.Sub(accountBalance.LockedBalanceForTDPOS, amountLock)
-		accountBalance.AvailableBalanceForTDPOS = accountBalance.AvailableBalanceForTDPOS.Add(accountBalance.AvailableBalanceForTDPOS, amountLock)
-
-	default:
-		return nil, fmt.Errorf("lock gov tokens failed, lock_type invalid: %s", string(lockTypeBuf))
+	lockType := string(lockTypeBuf)
+	if lockType != utils.GovernTokenTypeOrdinary && lockType != utils.GovernTokenTypeTDPOS {
+		return nil, fmt.Errorf("unlock gov tokens failed, lock_type invalid: %s", lockType)
+	}
+	accountBalance.Balances[lockType] = utils.Balance{
+		AvailableBalance: accountBalance.Balances[lockType].AvailableBalance.Add(accountBalance.Balances[lockType].AvailableBalance, amountLock),
+		LockedBalance:    accountBalance.Balances[lockType].LockedBalance.Sub(accountBalance.Balances[lockType].LockedBalance, amountLock),
 	}
 
 	// 更新account余额
@@ -290,15 +286,7 @@ func (t *KernMethod) QueryAccountGovernTokens(ctx contract.KContext) (*contract.
 		return nil, fmt.Errorf("unlock gov tokens failed, query account balance error")
 	}
 
-	balanceRes := &pb.GovernTokenBalance{
-		TotalBalance:                balance.TotalBalance.String(),
-		AvailableBalanceForTdpos:    balance.AvailableBalanceForTDPOS.String(),
-		LockedBalanceForTdpos:       balance.LockedBalanceForTDPOS.String(),
-		AvailableBalanceForProposal: balance.AvailableBalanceForProposal.String(),
-		LockedBalanceForProposal:    balance.LockedBalanceForProposal.String(),
-	}
-
-	balanceResBuf, err := json.Marshal(balanceRes)
+	balanceResBuf, err := json.Marshal(balance)
 	if err != nil {
 		return nil, fmt.Errorf("query account gov tokens balance failed, error:%s", err.Error())
 	}
@@ -308,6 +296,24 @@ func (t *KernMethod) QueryAccountGovernTokens(ctx contract.KContext) (*contract.
 		Message: "success",
 		Body:    balanceResBuf,
 	}, nil
+}
+
+func (t *KernMethod) TotalSupply(ctx contract.KContext) (*contract.Response, error) {
+	key := utils.MakeTotalSupplyKey()
+	totalSupplyBuf, err := ctx.Get(utils.GetGovernTokenBucket(), []byte(key))
+	if err != nil {
+		return nil, err
+	}
+
+	totalSupply := big.NewInt(0)
+	totalSupply.SetString(string(totalSupplyBuf), 10)
+
+	return &contract.Response{
+		Status:  utils.StatusOK,
+		Message: "success",
+		Body:    []byte(totalSupply.String()),
+	}, nil
+
 }
 
 func (t *KernMethod) balanceOf(ctx contract.KContext, account string) (*utils.GovernTokenBalance, error) {
