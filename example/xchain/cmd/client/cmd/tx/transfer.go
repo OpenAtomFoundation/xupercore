@@ -39,7 +39,6 @@ type TransferTxCmd struct {
 	To           string
 	Amount       string
 	FrozenHeight int64
-	KeyPath      string
 }
 
 func GetTransferTxCmd() *TransferTxCmd {
