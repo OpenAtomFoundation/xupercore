@@ -32,7 +32,23 @@ func NewXchainClient() (*XchainClient, error) {
 }
 
 func (t *XchainClient) SubmitTx(tx *xldgpb.Transaction) (*xchainpb.BaseResp, error) {
-	return nil, fmt.Errorf("not impl")
+	ctx := context.TODO()
+	req := &xchainpb.SubmitTxReq{
+		Header: t.genReqHeader(),
+		Bcname: global.GFlagBCName,
+		Txid:   tx.Txid,
+		Tx:     tx,
+	}
+	resp, err := t.xclient.SubmitTx(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetHeader().GetErrCode() != 0 {
+		return nil, fmt.Errorf("ErrCode:%d ErrMsg:%s LogId:%s TraceId:%s", resp.GetHeader().GetErrCode(),
+			resp.GetHeader().GetErrMsg(), resp.GetHeader().GetLogId(), resp.GetHeader().GetTraceId())
+	}
+
+	return resp, nil
 }
 
 func (t *XchainClient) PreExec() (*xchainpb.PreExecResp, error) {
