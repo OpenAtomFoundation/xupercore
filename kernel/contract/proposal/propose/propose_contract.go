@@ -404,7 +404,6 @@ func (t *KernMethod) Trigger(ctx contract.KContext) (*contract.Response, error) 
 	triggerArgsBytes, _ := json.Marshal(proposal.Trigger.Args)
 	triggerTxArgs["args"] = triggerArgsBytes
 	_, err = ctx.Call("xkernel", proposal.Trigger.Module, proposal.Trigger.Method, triggerTxArgs)
-	fmt.Println("proposal.trigger, error:%v", err.Error())
 	if err != nil {
 		proposal.Status = utils.ProposalStatusCompletedAndFailure
 	} else {
