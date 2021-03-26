@@ -40,8 +40,6 @@ type Balance struct {
 
 // Proposal
 type Proposal struct {
-	Module  string                 `json:"module"`
-	Method  string                 `json:"method"`
 	Args    map[string]interface{} `json:"args"`
 	Trigger *TriggerDesc           `json:"trigger"`
 

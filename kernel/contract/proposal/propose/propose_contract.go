@@ -452,7 +452,7 @@ func (t *KernMethod) unlockGovernTokensForProposal(ctx contract.KContext, propos
 	}
 	for iter.Next() {
 		// 解锁锁仓
-		account := iter.Key()[(len(prefix) + len(utils.GetProposalBucket())):]
+		account := iter.Key()[(len(startKey)):]
 		unLockAmount := iter.Value()
 
 		// 撤销治理token的锁定

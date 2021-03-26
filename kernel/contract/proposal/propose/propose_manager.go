@@ -56,8 +56,8 @@ func (mgr *Manager) GetProposalByID(proposalID string) (*pb.Proposal, error) {
 
 	triggerDesc := &pb.TriggerDesc{
 		Height: proposal.Trigger.Height,
-		Module: proposal.Module,
-		Method: proposal.Method,
+		Module: proposal.Trigger.Module,
+		Method: proposal.Trigger.Method,
 		Args:   triggerArgs,
 	}
 
@@ -67,8 +67,6 @@ func (mgr *Manager) GetProposalByID(proposalID string) (*pb.Proposal, error) {
 	}
 
 	proposalRes := &pb.Proposal{
-		Module:     proposal.Module,
-		Method:     proposal.Method,
 		Args:       proposalArgs,
 		Trigger:    triggerDesc,
 		VoteAmount: proposal.VoteAmount.String(),
