@@ -18,7 +18,7 @@ func TestXModelIterator(t *testing.T) {
 
 	m := NewMemXModel()
 	for i := 0; i < N; i++ {
-		m.Put("test", []byte(keys[i]), nil)
+		putVersionedData(m, "test", []byte(keys[i]), []byte(keys[i]))
 	}
 
 	sort.Slice(keys, func(i, j int) bool {
@@ -51,7 +51,7 @@ func TestXModelRangeIterator(t *testing.T) {
 
 	m := NewMemXModel()
 	for i := 0; i < N; i++ {
-		m.Put("test", []byte(keys[i]), nil)
+		putVersionedData(m, "test", []byte(keys[i]), []byte(keys[i]))
 	}
 
 	sort.Slice(keys, func(i, j int) bool {
