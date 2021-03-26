@@ -446,10 +446,10 @@ func (t *KernMethod) unlockGovernTokensForProposal(ctx contract.KContext, propos
 	prefix := utils.MakeProposalLockPrefixSeparator(proposalID)
 	endKey := utils.PrefixRange([]byte(prefix))
 	iter, err := ctx.Select(utils.GetProposalBucket(), []byte(startKey), endKey)
-	defer iter.Close()
 	if err != nil {
 		return fmt.Errorf("unlockGovernTokensForProposal failed, generate proposal lock key iterator error")
 	}
+	defer iter.Close()
 	for iter.Next() {
 		// 解锁锁仓
 		account := iter.Key()[(len(startKey)):]

@@ -57,10 +57,10 @@ func (t *KernMethod) Do(ctx contract.KContext) (*contract.Response, error) {
 	prefix := utils.MakeTimerBlockHeightPrefixSeparator(string(blockHeightBuf))
 	endKey := utils.PrefixRange([]byte(prefix))
 	iter, err := ctx.Select(utils.GetTimerBucket(), []byte(startKey), endKey)
-	defer iter.Close()
 	if err != nil {
 		return nil, fmt.Errorf("do timer tasks failed, generate proposals iterator error")
 	}
+	defer iter.Close()
 	for iter.Next() {
 		// 触发交易
 		triggerBuf := iter.Value()
