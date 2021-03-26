@@ -3,6 +3,7 @@ package timer
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
@@ -22,14 +23,18 @@ func NewKernContractMethod(bcName string) *KernMethod {
 func (t *KernMethod) Add(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	blockHeightBuf := args["block_height"]
-	taskIDBuf := args["task_id"]
 	triggerBuf := args["trigger"]
-	if blockHeightBuf == nil || taskIDBuf == nil || triggerBuf == nil {
+	if blockHeightBuf == nil || triggerBuf == nil {
 		return nil, fmt.Errorf("add timer task failed, block_height, task_id or trigger is nil")
 	}
 
-	key := utils.MakeTimerBlockHeightTaskKey(string(blockHeightBuf), string(taskIDBuf))
-	err := ctx.Put(utils.GetTimerBucket(), []byte(key), triggerBuf)
+	taskID, err := t.getNextTaskID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("add timer task failed, get task_id err")
+	}
+
+	key := utils.MakeTimerBlockHeightTaskKey(string(blockHeightBuf), taskID)
+	err = ctx.Put(utils.GetTimerBucket(), []byte(key), triggerBuf)
 	if err != nil {
 		return nil, err
 	}
@@ -98,4 +103,17 @@ func (t *KernMethod) Trigger(ctx contract.KContext, triggerBuf []byte) {
 		return
 	}
 
+}
+
+func (t *KernMethod) getNextTaskID(ctx contract.KContext) (string, error) {
+	latestTaskID, err := ctx.Get(utils.GetTimerBucket(), utils.GetTaskIDKey())
+	if err != nil {
+		// 没找到，从1开始
+		return big.NewInt(1).String(), nil
+	} else {
+		// 找到了，自增1
+		taskID := big.NewInt(0)
+		taskID.SetString(string(latestTaskID), 10)
+		return taskID.Add(taskID, big.NewInt(1)).String(), nil
+	}
 }

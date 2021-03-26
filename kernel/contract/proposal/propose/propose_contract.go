@@ -1,9 +1,7 @@
 package propose
 
 import (
-	"bytes"
 	"encoding/base64"
-	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -41,10 +39,14 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	if err != nil {
 		return nil, err
 	}
-	stopVoteHeight, err := json.Marshal(proposal.Args["stop_vote_height"])
+
+	// 校验参数
+	err = checkProposalArgs(proposal.Args)
 	if err != nil {
 		return nil, err
 	}
+
+	stopVoteHeight := []byte(proposal.Args["stop_vote_height"].(string))
 	timerArgs, err := t.makeTimerArgs(proposalID, stopVoteHeight, "CheckVoteResult")
 	if err != nil {
 		return nil, err
@@ -258,34 +260,6 @@ func (t *KernMethod) Query(ctx contract.KContext) (*contract.Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
 	}
-
-	// todo by zl, 编解码有问题
-	//triggerArgs := make(map[string][]byte)
-	//for k, v := range proposal.Trigger.Args {
-	//	fmt.Println("in the Query", reflect.TypeOf(v))
-	//	triggerArgs[k], _ = getBytes(v)
-	//}
-	//
-	//triggerDesc := &pb.TriggerDesc{
-	//	Height: proposal.Trigger.Height,
-	//	Module: proposal.Module,
-	//	Method: proposal.Method,
-	//	Args:   triggerArgs,
-	//}
-	//
-	//proposalArgs := make(map[string][]byte)
-	//for k, v := range proposal.Args {
-	//	proposalArgs[k], _ = getBytes(v)
-	//}
-	//
-	//proposalRes := &pb.Proposal{
-	//	Module:     proposal.Module,
-	//	Method:     proposal.Method,
-	//	Args:       proposalArgs,
-	//	Trigger:    triggerDesc,
-	//	VoteAmount: proposal.VoteAmount.String(),
-	//	Status:     pb.ProposalStatus(pb.ProposalStatus_value[proposal.Status]),
-	//}
 
 	proposalResBuf, err := json.Marshal(proposal)
 	if err != nil {
@@ -512,7 +486,6 @@ func (t *KernMethod) makeTimerArgs(proposalID string, triggerHeight []byte, meth
 	timerArgs := make(map[string][]byte)
 	timerArgs["block_height"] = triggerHeight
 	timerArgs["trigger"] = triggerBytes
-	timerArgs["task_id"] = []byte(proposalID)
 
 	return timerArgs, nil
 }
@@ -535,12 +508,43 @@ func (t *KernMethod) unParse(proposal *utils.Proposal) ([]byte, error) {
 	return proposalBuf, nil
 }
 
-func getBytes(key interface{}) ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(key)
-	if err != nil {
-		return nil, err
+func checkProposalArgs(args map[string]interface{}) error {
+	if args["min_vote_percent"] == "" || args["stop_vote_height"] == "" {
+		return fmt.Errorf("no min_vote_percent or stop_vote_height found")
 	}
-	return buf.Bytes(), nil
+
+	err := checkVoteThread(args["min_vote_percent"].(string))
+	if err != nil {
+		return err
+	}
+
+	err = checkVoteStopHeight(args["stop_vote_height"].(string))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func checkVoteThread(voteThreadStr string) error {
+	voteThread := big.NewInt(0)
+	_, ok := voteThread.SetString(voteThreadStr, 10)
+	if !ok {
+		return fmt.Errorf("min_vote_percent parse, %s", voteThreadStr)
+	}
+	if voteThread.Cmp(big.NewInt(100)) == 1 || voteThread.Cmp(big.NewInt(50)) == -1 {
+		return fmt.Errorf("min_vote_percent err, %s", voteThread.String())
+	}
+
+	return nil
+}
+
+func checkVoteStopHeight(voteStopHeightStr string) error {
+	voteThread := big.NewInt(0)
+	_, ok := voteThread.SetString(voteStopHeightStr, 10)
+	if !ok {
+		return fmt.Errorf("vote_stop_height err, %s", voteStopHeightStr)
+	}
+
+	return nil
 }

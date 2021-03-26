@@ -59,10 +59,6 @@ func (mgr *Manager) GetGovTokenBalance(accountName string) (*pb.GovernTokenBalan
 
 	balanceRes := &pb.GovernTokenBalance{
 		TotalBalance: balance.TotalBalance.String(),
-		//AvailableBalanceForTdpos:    balance.AvailableBalanceForTDPOS.String(),
-		//LockedBalanceForTdpos:       balance.LockedBalanceForTDPOS.String(),
-		//AvailableBalanceForProposal: balance.AvailableBalanceForProposal.String(),
-		//LockedBalanceForProposal:    balance.LockedBalanceForProposal.String(),
 	}
 
 	return balanceRes, nil

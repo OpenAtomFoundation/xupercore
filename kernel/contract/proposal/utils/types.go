@@ -29,13 +29,8 @@ const (
 // 目前包括tdpos和oridinary两种场景
 // 用户的可转账余额是min(AvailableBalances)
 type GovernTokenBalance struct {
-	TotalBalance *big.Int           `json:"total_balance"`
-	Balances     map[string]Balance `json:"balances"`
-}
-
-type Balance struct {
-	AvailableBalance *big.Int `json:"available_balance"`
-	LockedBalance    *big.Int `json:"locked_balance"`
+	TotalBalance  *big.Int            `json:"total_balance"`
+	LockedBalance map[string]*big.Int `json:"locked_balances"`
 }
 
 // Proposal
@@ -58,12 +53,12 @@ type TriggerDesc struct {
 
 func NewGovernTokenBalance() *GovernTokenBalance {
 	balance := &GovernTokenBalance{
-		TotalBalance: big.NewInt(0),
-		Balances:     make(map[string]Balance),
+		TotalBalance:  big.NewInt(0),
+		LockedBalance: make(map[string]*big.Int),
 	}
 
-	balance.Balances[GovernTokenTypeOrdinary] = Balance{big.NewInt(0), big.NewInt(0)}
-	balance.Balances[GovernTokenTypeTDPOS] = Balance{big.NewInt(0), big.NewInt(0)}
+	balance.LockedBalance[GovernTokenTypeOrdinary] = big.NewInt(0)
+	balance.LockedBalance[GovernTokenTypeTDPOS] = big.NewInt(0)
 
 	return balance
 }

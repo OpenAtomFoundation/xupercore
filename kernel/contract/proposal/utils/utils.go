@@ -11,6 +11,7 @@ const (
 	distributedKey    = "distributed"
 
 	timerBucket = "timer"
+	taskIDKey   = "id"
 
 	separator = "_"
 
@@ -42,6 +43,11 @@ func MakeAccountBalanceKey(account string) string {
 // GetTimerBucket return the balance bucket name
 func GetTimerBucket() string {
 	return timerBucket
+}
+
+// GetTaskIDKey return the task_id key name
+func GetTaskIDKey() []byte {
+	return []byte(taskIDKey)
 }
 
 // MakeTimerBlockHeightKey generate timer and blockHeight mapping key
