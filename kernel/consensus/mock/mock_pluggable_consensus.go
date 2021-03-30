@@ -348,6 +348,9 @@ func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMeth
 	return nil, nil
 }
 
+func (r *FakeRegistry) RegisterShortcut(oldmethod, contract, method string) {
+}
+
 type FReaderItem struct {
 	Bucket string
 	Key    []byte
