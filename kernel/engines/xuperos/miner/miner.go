@@ -256,22 +256,6 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	}
 	ctx.GetLog().Debug("pack block get max size succ", "sizeLimit", sizeLimit)
 
-	// 0.判断是否分配治理token
-	distributed, err := t.ctx.GovernToken.DetermineGovTokenIfInitialized()
-	if err != nil {
-		return nil, err
-	}
-	distributeGovernTokenTx := &lpb.Transaction{}
-	if !distributed {
-		distributeGovernTokenTx, err = t.getDistributeGovernTokenTx()
-		if err != nil {
-			return nil, err
-		}
-	}
-	if len(distributeGovernTokenTx.TxOutputsExt) > 0 {
-		sizeLimit -= proto.Size(distributeGovernTokenTx)
-	}
-
 	// 1.生成timer交易
 	autoTx, err := t.getTimerTx(height)
 	if err != nil {
@@ -282,7 +266,6 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	}
 
 	ctx.GetLog().Debug("pack block get timer tx succ", "auto tx", autoTx)
-	ctx.GetLog().Debug("pack block get timer tx succ", "distribute govern token tx", distributeGovernTokenTx)
 
 	// 2.选择本次要打包的tx
 	generalTxList, err := t.getUnconfirmedTx(sizeLimit)
@@ -300,9 +283,6 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 
 	txList := make([]*lpb.Transaction, 0)
 	txList = append(txList, awardTx)
-	if len(distributeGovernTokenTx.TxOutputsExt) > 0 {
-		txList = append(txList, distributeGovernTokenTx)
-	}
 	if len(autoTx.TxOutputsExt) > 0 {
 		txList = append(txList, autoTx)
 	}
@@ -344,16 +324,6 @@ func (t *Miner) convertConsData(data []byte) (*agent.ConsensusStorage, error) {
 
 func (t *Miner) getTimerTx(height int64) (*lpb.Transaction, error) {
 	autoTx, err := t.ctx.State.GetTimerTx(height)
-	if err != nil {
-		t.log.Error("Get timer tx error", "error", err)
-		return nil, common.ErrGenerateTimerTxFailed
-	}
-
-	return autoTx, nil
-}
-
-func (t *Miner) getDistributeGovernTokenTx() (*lpb.Transaction, error) {
-	autoTx, err := t.ctx.State.GetDistributeGovernTokenTx()
 	if err != nil {
 		t.log.Error("Get timer tx error", "error", err)
 		return nil, common.ErrGenerateTimerTxFailed
