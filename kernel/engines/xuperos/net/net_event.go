@@ -296,7 +296,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
 		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
-		return resp, err
+		return resp, nil
 	}
 
 	err := p2p.Unmarshal(request, &input)
@@ -335,7 +335,7 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
 		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
-		return resp, err
+		return resp, nil
 	}
 
 	chain, err := t.engine.Get(bcName)
@@ -366,7 +366,7 @@ func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.X
 			p2p.WithLogId(request.GetHeader().GetLogid()),
 		}
 		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
-		return resp, err
+		return resp, nil
 	}
 
 	err := p2p.Unmarshal(request, &input)
