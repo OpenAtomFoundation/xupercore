@@ -145,6 +145,9 @@ func (s *tdposSchedule) GetLeader(round int64) string {
 		nTime += s.period * int64(time.Millisecond)
 	}
 	_, pos, _ := s.minerScheduling(nTime)
+	if pos >= s.proposerNum {
+		return ""
+	}
 	return proposers[pos]
 }
 
