@@ -10,9 +10,15 @@ import (
 
 type XLedgerConf struct {
 	// kv storage type
-	KVEngineType string   `yaml:"kvEngineType,omitempty"`
-	OtherPaths   []string `yaml:"otherPaths,omitempty"`
-	StorageType  string   `yaml:"storageType,omitempty"`
+	KVEngineType string     `yaml:"kvEngineType,omitempty"`
+	OtherPaths   []string   `yaml:"otherPaths,omitempty"`
+	StorageType  string     `yaml:"storageType,omitempty"`
+	Utxo         UtxoConfig `yaml:"utxo,omitempty"`
+}
+
+type UtxoConfig struct {
+	CacheSize      int `yaml:"cachesize,omitempty"`
+	TmpLockSeconds int `yaml:"tmplockSeconds,omitempty"`
 }
 
 func LoadLedgerConf(cfgFile string) (*XLedgerConf, error) {
@@ -30,6 +36,10 @@ func GetDefLedgerConf() *XLedgerConf {
 		KVEngineType: "leveldb",
 		OtherPaths:   nil,
 		StorageType:  "",
+		Utxo: UtxoConfig{
+			CacheSize:      1000,
+			TmpLockSeconds: 60,
+		},
 	}
 }
 

@@ -1,10 +1,8 @@
 package meta
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"html/template"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -37,17 +35,6 @@ var (
 // reservedArgs used to get contractnames from InvokeRPCRequest
 type reservedArgs struct {
 	ContractNames string
-}
-
-func genArgs(req []*protos.InvokeRequest) *reservedArgs {
-	ra := &reservedArgs{}
-	for i, v := range req {
-		ra.ContractNames += v.GetContractName()
-		if i < len(req)-1 {
-			ra.ContractNames += ","
-		}
-	}
-	return ra
 }
 
 func NewMeta(sctx *context.StateCtx, stateDB kvdb.Database) (*Meta, error) {
@@ -531,41 +518,4 @@ func (t *Meta) UpdateGasPrice(nextGasPrice *protos.GasPrice, batch kvdb.Batch) e
 	defer t.MutexMeta.Unlock()
 	t.MetaTmp.GasPrice = nextGasPrice
 	return nil
-}
-
-func (t *Meta) GetReservedContractRequests(req []*protos.InvokeRequest, isPreExec bool) ([]*protos.InvokeRequest, error) {
-	MetaReservedContracts := t.GetReservedContracts()
-	if MetaReservedContracts == nil {
-		return nil, nil
-	}
-	reservedContractstpl := MetaReservedContracts
-	t.log.Info("MetaReservedContracts", "reservedContracts", reservedContractstpl)
-
-	// if all reservedContracts have not been updated, return nil, nil
-	ra := &reservedArgs{}
-	if isPreExec || len(reservedContractstpl) == 0 {
-		ra = genArgs(req)
-	} else {
-		// req should contrain reservedContracts, so the len of req should no less than reservedContracts
-		if len(req) < len(reservedContractstpl) {
-			t.log.Warn("req should contain reservedContracts")
-			return nil, ErrGetReservedContracts
-		} else if len(req) > len(reservedContractstpl) {
-			ra = genArgs(req[len(reservedContractstpl):])
-		}
-	}
-
-	reservedContracts := []*protos.InvokeRequest{}
-	for _, rc := range reservedContractstpl {
-		rctmp := *rc
-		rctmp.Args = make(map[string][]byte)
-		for k, v := range rc.GetArgs() {
-			buf := new(bytes.Buffer)
-			tpl := template.Must(template.New("value").Parse(string(v)))
-			tpl.Execute(buf, ra)
-			rctmp.Args[k] = buf.Bytes()
-		}
-		reservedContracts = append(reservedContracts, &rctmp)
-	}
-	return reservedContracts, nil
 }

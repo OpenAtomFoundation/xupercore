@@ -2,6 +2,7 @@ package xmodel
 
 import (
 	"fmt"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -216,6 +217,21 @@ func TestBaiscFunc(t *testing.T) {
 	} else {
 		t.Log(vData)
 	}
+	version := MakeVersion(tx2.Txid, 0)
+	txid := GetTxidFromVersion(version)
+	t.Log("txid", txid)
+	vDatas := make([]*kledger.VersionedData, 0, 1)
+	vDatas = append(vDatas, vData)
+	GetTxInputs(vDatas)
+
+	pds := []*kledger.PureData{
+		&kledger.PureData{
+			Bucket: "bucket1",
+			Key:    []byte("key1"),
+			Value:  []byte("value1"),
+		},
+	}
+	GetTxOutputs(pds)
 	vData, exists, err := xModel.GetWithTxStatus("bucket1", []byte("hello"))
 	if err != nil {
 		t.Fatal(err)
@@ -227,5 +243,6 @@ func TestBaiscFunc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	ledger.Close()
 }

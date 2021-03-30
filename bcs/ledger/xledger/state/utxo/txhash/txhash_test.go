@@ -8,6 +8,12 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+)
+
+var (
+	AliceAddress    = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
+	AlicePrivateKey = `{"Curvname":"P-256","X":38583161743450819602965472047899931736724287060636876073116809140664442044200,"Y":73385020193072990307254305974695788922719491565637982722155178511113463088980,"D":98698032903818677365237388430412623738975596999573887926929830968230132692775}`
 )
 
 func readTxFile(tb testing.TB, name string) *pb.Transaction {
@@ -59,4 +65,17 @@ func TestTxHashVersion(t *testing.T) {
 		}
 	}
 
+}
+
+func TestTestSignTx(t *testing.T) {
+	tx := &pb.Transaction{}
+	_, err := MakeTxDigestHash(tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cc, _ := crypto_client.CreateCryptoClientFromJSONPrivateKey([]byte(AlicePrivateKey))
+	_, err = ProcessSignTx(cc, tx, []byte(AlicePrivateKey))
+	if err != nil {
+		t.Fatal(err)
+	}
 }

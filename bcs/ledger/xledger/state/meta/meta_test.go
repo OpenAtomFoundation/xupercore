@@ -176,6 +176,10 @@ func TestMetaGetFunc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = metaHadler.UpdateNextIrreversibleBlockHeight(3, 3, 1, batch)
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = metaHadler.UpdateIrreversibleSlideWindow(2, batch)
 	if err != nil {
 		t.Fatal(err)
