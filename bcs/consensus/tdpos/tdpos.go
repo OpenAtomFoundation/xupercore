@@ -153,6 +153,7 @@ Again:
 	}
 	// 查当前term 和 pos是否是自己
 	tp.election.curTerm = term
+	tp.election.miner = tp.election.validators[pos]
 	// master check
 	if tp.election.validators[pos] == tp.election.address {
 		tp.log.Debug("Tdpos::CompeteMaster::now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.GetTipBlock().GetHeight())
