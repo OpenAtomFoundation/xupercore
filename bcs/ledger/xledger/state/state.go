@@ -459,15 +459,8 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 		return err
 	}
 
-	// 获取定时任务
-	autoGenTx, genErr := t.GetTimerTx(block.Height)
-	if genErr != nil {
-		t.log.Warn("get timer tasks failed", "err", genErr)
-		return genErr
-	}
-
 	// parallel verify
-	verifyErr := t.verifyBlockTxs(block, isRootTx, unconfirmToConfirm, autoGenTx)
+	verifyErr := t.verifyBlockTxs(block, isRootTx, unconfirmToConfirm)
 	if verifyErr != nil {
 		t.log.Warn("verifyBlockTx error ", "err", verifyErr)
 		return verifyErr
@@ -591,74 +584,6 @@ func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 	}
 
 	t.log.Trace("GetTimerTx", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
-
-	return autoTx, nil
-}
-
-func (t *State) GetDistributeGovernTokenTx() (*pb.Transaction, error) {
-	stateConfig := &contract.SandboxConfig{
-		XMReader: t.CreateXMReader(),
-	}
-	if !t.sctx.IsInit() {
-		return nil, nil
-	}
-	t.log.Info("GetDistributeGovernTokenTx")
-	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(stateConfig)
-	if err != nil {
-		t.log.Error("PreExec new state sandbox error", "error", err)
-		return nil, err
-	}
-
-	contextConfig := &contract.ContextConfig{
-		State:       sandBox,
-		Initiator:   "",
-		AuthRequire: nil,
-	}
-
-	req := protos.InvokeRequest{
-		ModuleName:   "xkernel",
-		ContractName: "$govern_token",
-		MethodName:   "Init",
-	}
-
-	contextConfig.ResourceLimits = contract.MaxLimits
-	contextConfig.Module = req.ModuleName
-	contextConfig.ContractName = req.GetContractName()
-
-	ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
-	if err != nil {
-		t.log.Error("GetDistributeGovernTokenTx NewContext error", "err", err, "contractName", req.GetContractName())
-		return nil, err
-	}
-
-	ctxResponse, ctxErr := ctx.Invoke(req.MethodName, req.Args)
-	if ctxErr != nil {
-		ctx.Release()
-		t.log.Error("GetDistributeGovernTokenTx Invoke error", "error", ctxErr, "contractName", req.GetContractName())
-		return nil, ctxErr
-	}
-	// 判断合约调用的返回码
-	if ctxResponse.Status >= 400 {
-		ctx.Release()
-		t.log.Error("GetDistributeGovernTokenTx Invoke error", "status", ctxResponse.Status, "contractName", req.GetContractName())
-		return nil, errors.New(ctxResponse.Message)
-	}
-
-	ctx.Release()
-
-	rwSet := sandBox.RWSet()
-	if rwSet == nil {
-		return nil, nil
-	}
-	inputs := xmodel.GetTxInputs(rwSet.RSet)
-	outputs := xmodel.GetTxOutputs(rwSet.WSet)
-
-	autoTx, err := tx.GenerateAutoTxWithRWSets(inputs, outputs)
-	if err != nil {
-		return nil, err
-	}
-
-	t.log.Trace("GetDistributeGovernTokenTx", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
 
 	return autoTx, nil
 }
@@ -1128,26 +1053,17 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 		// 将batch赋值到合约机的上下文
 		batch := t.ldb.NewBatch()
 
-		// 获取该区块触发的定时交易
-		autoTx, genErr := t.GetTimerTx(todoBlk.Height)
-		if genErr != nil {
-			t.log.Warn("get timer tasks failed", "err", genErr)
-			return genErr
-		}
-
 		// 执行区块里面的交易
 		idx, length := 0, len(todoBlk.Transactions)
 		for idx < length {
 			tx = todoBlk.Transactions[idx]
 			showTxId = hex.EncodeToString(tx.Txid)
-			t.log.Debug("procTodoBlkForWalk", "txid", showTxId, "autogen", tx.Autogen, "coinbase", tx.Coinbase)
+			t.log.Debug("procTodoBlkForWalk", "txid", showTxId, "autogen", t.verifyAutogenTxValid(tx), "coinbase", tx.Coinbase)
 			// 校验定时交易合法性
-			if t.verifyAutogenTx(tx) && autoTx != nil && !tx.Coinbase {
-				if len(autoTx.TxOutputsExt) > 0 {
-					// 校验auto tx
-					if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, false); !ok {
-						return fmt.Errorf("immediate verify auto tx error.txid:%s,err:%v", showTxId, err)
-					}
+			if t.verifyAutogenTxValid(tx) && !tx.Coinbase {
+				// 校验auto tx
+				if ok, err := t.ImmediateVerifyAutoTx(todoBlk.Height, tx, false); !ok {
+					return fmt.Errorf("immediate verify auto tx error.txid:%s,err:%v", showTxId, err)
 				}
 			}
 

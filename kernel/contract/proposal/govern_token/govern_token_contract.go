@@ -26,6 +26,16 @@ func NewKernContractMethod(bcName string, NewGovResourceAmount int64, Predistrib
 }
 
 func (t *KernMethod) InitGovernTokens(ctx contract.KContext) (*contract.Response, error) {
+	// 判断是否已经初始化
+	res, err := ctx.Get(utils.GetGovernTokenBucket(), []byte(utils.GetDistributedKey()))
+	if err == nil && string(res) == "true" {
+		return &contract.Response{
+			Status:  utils.StatusOK,
+			Message: "success",
+			Body:    []byte("Govern tokens has been initialized"),
+		}, fmt.Errorf("Govern tokens has been initialized.")
+	}
+
 	totalSupply := big.NewInt(0)
 	for _, ps := range t.Predistribution {
 		amount := big.NewInt(0)
@@ -55,7 +65,7 @@ func (t *KernMethod) InitGovernTokens(ctx contract.KContext) (*contract.Response
 
 	// 保存总额
 	key := utils.MakeTotalSupplyKey()
-	err := ctx.Put(utils.GetGovernTokenBucket(), []byte(key), []byte(totalSupply.String()))
+	err = ctx.Put(utils.GetGovernTokenBucket(), []byte(key), []byte(totalSupply.String()))
 	if err != nil {
 		return nil, err
 	}

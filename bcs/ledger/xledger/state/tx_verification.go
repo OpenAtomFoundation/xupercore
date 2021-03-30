@@ -142,7 +142,17 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 //   1. verify transaction ID is the same with data hash
 //   2. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
 //      operation, keep it at last)
-func (t *State) ImmediateVerifyAutoTx(tx *pb.Transaction, autoTx *pb.Transaction, isRootTx bool) (bool, error) {
+func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isRootTx bool) (bool, error) {
+	// 获取该区块触发的定时交易
+	autoTx, genErr := t.GetTimerTx(blockHeight)
+	if genErr != nil || autoTx == nil {
+		t.log.Warn("get timer tasks failed", "err", genErr)
+		return false, genErr
+	}
+	if len(autoTx.TxOutputsExt) == 0 {
+		return false, fmt.Errorf("get timer tasks failed, no tx outputs ext")
+	}
+
 	// Pre processing of tx data
 	if !isRootTx && tx.Version == RootTxVersion {
 		return false, ErrVersionInvalid
@@ -849,7 +859,7 @@ func (t *State) queryAccountACL(accountName string) (*protos.Acl, error) {
 	return t.sctx.AclMgr.GetAccountACL(accountName)
 }
 
-func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirmToConfirm map[string]bool, autoTx *pb.Transaction) error {
+func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirmToConfirm map[string]bool) error {
 	var err error
 	var once sync.Once
 	wg := sync.WaitGroup{}
@@ -858,7 +868,7 @@ func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirm
 		wg.Add(1)
 		go func(txs []*pb.Transaction) {
 			defer wg.Done()
-			verifyErr := t.verifyDAGTxs(txs, isRootTx, unconfirmToConfirm, autoTx)
+			verifyErr := t.verifyDAGTxs(block.Height, txs, isRootTx, unconfirmToConfirm)
 			onceBody := func() {
 				err = verifyErr
 			}
@@ -872,16 +882,16 @@ func (t *State) verifyBlockTxs(block *pb.InternalBlock, isRootTx bool, unconfirm
 	return err
 }
 
-func (t *State) verifyDAGTxs(txs []*pb.Transaction, isRootTx bool, unconfirmToConfirm map[string]bool, autoTx *pb.Transaction) error {
+func (t *State) verifyDAGTxs(blockHeight int64, txs []*pb.Transaction, isRootTx bool, unconfirmToConfirm map[string]bool) error {
 	for _, tx := range txs {
 		if tx == nil {
 			return errors.New("verifyTx error, tx is nil")
 		}
 		txid := string(tx.GetTxid())
 		if unconfirmToConfirm[txid] == false {
-			if t.verifyAutogenTx(tx) && autoTx != nil {
+			if t.verifyAutogenTxValid(tx) {
 				// 校验auto tx
-				if ok, err := t.ImmediateVerifyAutoTx(tx, autoTx, isRootTx); !ok {
+				if ok, err := t.ImmediateVerifyAutoTx(blockHeight, tx, isRootTx); !ok {
 					t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
 					return errors.New("dotx failed to ImmediateVerifyAutoTx error")
 				}
@@ -908,24 +918,16 @@ func (t *State) verifyDAGTxs(txs []*pb.Transaction, isRootTx bool, unconfirmToCo
 	return nil
 }
 
-// verifyAutogenTx verify if a autogen tx is valid, return true if tx is valid.
-func (t *State) verifyAutogenTx(tx *pb.Transaction) bool {
-	if tx.Autogen {
-		return true
+// verifyAutogenTxValid verify if a autogen tx is valid, return true if tx is valid.
+func (t *State) verifyAutogenTxValid(tx *pb.Transaction) bool {
+	if !tx.Autogen {
+		return false
 	}
 
-	// autogen tx have tx inputs/outputs
-	// autogen tx must have tx inputs/outputs extend
-
-	//if len(tx.TxInputs) > 0 || len(tx.TxOutputs) > 0 {
-	//	// autogen tx must have no tx inputs/outputs
-	//	return false
-	//}
-	//
-	//if len(tx.TxInputsExt) > 0 || len(tx.TxOutputsExt) > 0 {
-	//	// autogen tx must have no tx inputs/outputs extend
-	//	return false
-	//}
+	if len(tx.TxInputsExt) == 0 && len(tx.TxOutputsExt) == 0 {
+		// autogen tx must have  tx inputs/outputs extend
+		return false
+	}
 
 	return true
 }

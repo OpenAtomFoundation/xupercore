@@ -45,10 +45,11 @@ type Proposal struct {
 
 // TriggerDesc is the description to trigger a event used by proposal
 type TriggerDesc struct {
-	Height int64                  `json:"height"`
-	Module string                 `json:"module"`
-	Method string                 `json:"method"`
-	Args   map[string]interface{} `json:"args"`
+	Height   int64                  `json:"height"`
+	Module   string                 `json:"module"`
+	Contract string                 `json:"contract"`
+	Method   string                 `json:"method"`
+	Args     map[string]interface{} `json:"args"`
 }
 
 func NewGovernTokenBalance() *GovernTokenBalance {

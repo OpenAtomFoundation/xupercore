@@ -379,7 +379,7 @@ func (t *KernMethod) Trigger(ctx contract.KContext) (*contract.Response, error) 
 	triggerTxArgs := make(map[string][]byte)
 	triggerArgsBytes, _ := json.Marshal(proposal.Trigger.Args)
 	triggerTxArgs["args"] = triggerArgsBytes
-	_, err = ctx.Call("xkernel", proposal.Trigger.Module, proposal.Trigger.Method, triggerTxArgs)
+	_, err = ctx.Call(proposal.Trigger.Module, proposal.Trigger.Contract, proposal.Trigger.Method, triggerTxArgs)
 	if err != nil {
 		proposal.Status = utils.ProposalStatusCompletedAndFailure
 	} else {
@@ -477,9 +477,10 @@ func (t *KernMethod) makeTimerArgs(proposalID string, triggerHeight []byte, meth
 	triggerArgs := make(map[string]interface{})
 	triggerArgs["proposal_id"] = []byte(proposalID)
 	trigger := &utils.TriggerDesc{
-		Module: utils.ProposalKernelContract,
-		Method: method,
-		Args:   triggerArgs,
+		Module:   "xkernel",
+		Contract: utils.ProposalKernelContract,
+		Method:   method,
+		Args:     triggerArgs,
 	}
 	triggerBytes, err := json.Marshal(*trigger)
 	if err != nil {

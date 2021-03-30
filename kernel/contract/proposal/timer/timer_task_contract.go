@@ -98,7 +98,7 @@ func (t *KernMethod) Trigger(ctx contract.KContext, triggerBuf []byte) {
 	timerTxArgs["args"] = triggerArgsBytes
 
 	// 回调proposal trigger
-	_, err = ctx.Call("xkernel", trigger.Module, trigger.Method, timerTxArgs)
+	_, err = ctx.Call(trigger.Module, trigger.Contract, trigger.Method, timerTxArgs)
 	if err != nil {
 		return
 	}
