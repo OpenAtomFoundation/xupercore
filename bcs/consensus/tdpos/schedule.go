@@ -33,6 +33,7 @@ type tdposSchedule struct {
 	validators     []string
 	initValidators []string
 	curTerm        int64
+	miner          string
 
 	log    logs.Logger
 	ledger cctx.LedgerRely
@@ -259,6 +260,9 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 		}
 		for _, ballot := range voteValue {
 			candidateBallot.Ballots += ballot
+		}
+		if candidateBallot.Ballots <= 0 {
+			continue
 		}
 		termBallotSli = append(termBallotSli, candidateBallot)
 	}

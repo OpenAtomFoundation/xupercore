@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 )
 
-type ValidatorsInfo []string
+type ValidatorsInfo struct {
+	Validators []string `json:"validators"`
+	Miner      string   `json:"miner"`
+	Curterm    int64    `json:"curterm"`
+}
 
 // tdposStatus 实现了ConsensusStatus接口
 type TdposStatus struct {
@@ -19,7 +23,6 @@ func (t *TdposStatus) GetVersion() int64 {
 	return t.Version
 }
 
-// 共识起始高度
 func (t *TdposStatus) GetConsensusBeginInfo() int64 {
 	return t.StartHeight
 }
@@ -41,10 +44,15 @@ func (t *TdposStatus) GetCurrentTerm() int64 {
 
 // 获取当前矿工信息
 func (t *TdposStatus) GetCurrentValidatorsInfo() []byte {
-	var addrs ValidatorsInfo
+	var validators []string
 	for _, a := range t.election.validators {
-		addrs = append(addrs, a)
+		validators = append(validators, a)
 	}
-	b, _ := json.Marshal(addrs)
+	v := ValidatorsInfo{
+		Validators: validators,
+		Curterm:    t.election.curTerm,
+		Miner:      t.election.miner,
+	}
+	b, _ := json.Marshal(&v)
 	return b
 }
