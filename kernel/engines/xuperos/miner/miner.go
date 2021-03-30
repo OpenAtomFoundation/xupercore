@@ -551,8 +551,6 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 			ctx.GetLog().Error("the genesis block is different",
 				"genesisBlockId", utils.F(ledger.GetMeta().RootBlockid),
 				"syncGenesisBlockId", utils.F(beginBlock.Blockid))
-			// TODO: 捕获异常
-			panic(common.ErrGenesisBlockDiff)
 			return nil, common.ErrGenesisBlockDiff
 		}
 
