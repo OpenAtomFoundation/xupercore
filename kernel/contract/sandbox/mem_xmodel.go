@@ -63,7 +63,6 @@ type treeIterator struct {
 	tree *redblacktree.Tree
 	iter *redblacktree.Iterator
 	end  []byte
-	key  []byte
 	err  error
 
 	iterDone bool
@@ -121,13 +120,6 @@ func (t *treeIterator) Next() bool {
 		t.iterDone = true
 		return false
 	}
-	_, key, err := parseRawKey(rawkey.([]byte))
-	if err != nil {
-		t.err = err
-		t.iterDone = true
-		return false
-	}
-	t.key = key
 	return true
 }
 
@@ -136,7 +128,7 @@ func (t *treeIterator) Key() []byte {
 	if t.iterDone {
 		return nil
 	}
-	return t.key
+	return t.Value().GetPureData().GetKey()
 }
 
 // 如果迭代器结束则Value返回nil

@@ -130,12 +130,17 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 		ctx.GetTimer().Mark("handle")
 		if err != nil {
 			ctx.GetLog().Error("subscriber: call user handler error", "err", err)
-			return ErrHandlerError
 		}
 
-		if resp == nil {
-			ctx.GetLog().Error("subscriber: handler response is nil", "log_id", msg.GetHeader().GetLogid())
-			return ErrResponseNil
+		if resp == nil || resp.Header == nil {
+			ctx.GetLog().Error("subscriber: handler response is nil")
+
+			opts := []MessageOption{
+				WithBCName(msg.Header.Bcname),
+				WithErrorType(pb.XuperMessage_UNKNOW_ERROR),
+				WithLogId(msg.Header.Logid),
+			}
+			resp = NewMessage(GetRespMessageType(msg.Header.Type), nil, opts...)
 		}
 
 		resp.Header.Logid = msg.Header.Logid

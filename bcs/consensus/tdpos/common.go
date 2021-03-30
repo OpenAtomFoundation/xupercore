@@ -61,6 +61,7 @@ var (
 	repeatNominateErr = errors.New("The candidate had been nominate.")
 	emptyNominateKey  = errors.New("No valid candidate key when revoke.")
 	notFoundErr       = errors.New("Value not found, please check your input parameters.")
+	scheduleErr       = errors.New("minerScheduling overflow")
 )
 
 // tdpos 共识机制的配置

@@ -1,7 +1,6 @@
 package xmodel
 
 import (
-	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
@@ -11,32 +10,38 @@ type XMIterator struct {
 	bucket string
 	iter   kvdb.Iterator
 	model  *XModel
+	value  *kledger.VersionedData
 	err    error
 }
 
 // Data get data pointer to VersionedData for XMIterator
 func (di *XMIterator) Value() *kledger.VersionedData {
-	version := di.iter.Value()
-	verData, err := di.model.fetchVersionedData(di.bucket, string(version))
-	di.err = err
-	return verData
+	return di.value
 }
 
 // Next check if next element exist
 func (di *XMIterator) Next() bool {
-	return di.iter.Next()
-}
-
-// First ...
-func (di *XMIterator) First() bool {
-	return di.iter.First()
+	ok := di.iter.Next()
+	if !ok {
+		return false
+	}
+	version := di.iter.Value()
+	verData, err := di.model.fetchVersionedData(di.bucket, string(version))
+	if err != nil {
+		di.err = err
+		return false
+	}
+	di.value = verData
+	return true
 }
 
 // Key get key for XMIterator
 func (di *XMIterator) Key() []byte {
-	tablePrefixLen := len(pb.ExtUtxoTablePrefix)
-	kvdbKey := di.iter.Key()
-	return kvdbKey[tablePrefixLen:len(kvdbKey)]
+	v := di.Value()
+	if v == nil {
+		return nil
+	}
+	return v.GetPureData().GetKey()
 }
 
 // Error return error info for XMIterator
@@ -51,4 +56,5 @@ func (di *XMIterator) Error() error {
 // Release release XMIterator
 func (di *XMIterator) Close() {
 	di.iter.Release()
+	di.value = nil
 }

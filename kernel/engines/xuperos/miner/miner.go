@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -31,6 +32,8 @@ type Miner struct {
 	log logs.Logger
 	// 矿工锁，用来确保矿工出块和同步操作串行进行
 	minerMutex sync.Mutex
+	// 矿工处理区块的队列
+	minerQueue int64
 	// 记录同步中任务目标区块高度
 	inSyncHeight       int64
 	inSyncTargetHeight int64
@@ -80,6 +83,15 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 				"txid", utils.F(tx.Txid), "blockId", utils.F(block.Blockid))
 			return common.ErrForbidden.More("%s", "invalid tx got from the block")
 		}
+	}
+
+	atomic.AddInt64(&t.minerQueue, 1)
+	defer atomic.AddInt64(&t.minerQueue, -1)
+	if t.minerQueue >= t.ctx.EngCtx.EngCfg.MaxBlockQueueSize {
+		ctx.GetLog().Warn("forbidden proc block because miner queue full", "minerQueue", t.minerQueue,
+			"recvHeight", block.GetHeight(), "recvBlockId", utils.F(block.GetBlockid()),
+			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
+		return common.ErrForbidden.More("miner queue full")
 	}
 
 	ctx.GetLog().Debug("recv new block,try sync block", "recvHeight", block.Height,
@@ -535,6 +547,13 @@ func (t *Miner) downloadMissBlock(ctx xctx.XContext,
 
 	beginBlock := targetBlock
 	for !ledger.ExistBlock(beginBlock.PreHash) {
+		if len(beginBlock.PreHash) <= 0 || beginBlock.Height == 0 {
+			ctx.GetLog().Error("the genesis block is different",
+				"genesisBlockId", utils.F(ledger.GetMeta().RootBlockid),
+				"syncGenesisBlockId", utils.F(beginBlock.Blockid))
+			return nil, common.ErrGenesisBlockDiff
+		}
+
 		block, _ := ledger.GetPendingBlock(beginBlock.PreHash)
 		if block != nil {
 			beginBlock = block
