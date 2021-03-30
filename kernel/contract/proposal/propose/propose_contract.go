@@ -309,7 +309,9 @@ func (t *KernMethod) CheckVoteResult(ctx contract.KContext) (*contract.Response,
 	}
 	threadTickets := big.NewInt(0)
 	threadTickets.SetString(string(totalSupplyRes.Body), 10)
-	threadTickets = threadTickets.Mul(threadTickets, big.NewInt(51)).Div(threadTickets, big.NewInt(100))
+	voteThread := big.NewInt(0)
+	voteThread.SetString(proposal.Args["min_vote_percent"].(string), 10)
+	threadTickets = threadTickets.Mul(threadTickets, voteThread).Div(threadTickets, big.NewInt(100))
 
 	// 统计投票结果
 	if proposal.VoteAmount.Cmp(threadTickets) == -1 {
