@@ -185,7 +185,11 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	tp.log.Debug("Tdpos::CheckMinerMatch", "tdposStorage", tdposStorage)
 
 	// 1 判断当前区块生产者是否合法
-	term, pos, _ := tp.election.minerScheduling(block.GetTimestamp())
+	term, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
+	if blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
+		tp.log.Warn("Tdpos::CheckMinerMatch::minerScheduling overflow.")
+		return false, scheduleErr
+	}
 	curHeight := block.GetHeight()
 	var wantProposers []string
 	wantProposers, err = tp.election.calculateProposers(curHeight)
@@ -370,7 +374,11 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 		tp.smr.UpdateJustifyQcStatus(justify)
 	}
 	// 查看本地是否是最新round的生产者
-	_, pos, _ := tp.election.minerScheduling(block.GetTimestamp())
+	_, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
+	if blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
+		tp.log.Warn("Tdpos::smr::ProcessConfirmBlock::minerScheduling overflow.")
+		return scheduleErr
+	}
 	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
 	if tp.election.validators[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {
 		validators := tp.election.GetValidators(block.GetHeight())
