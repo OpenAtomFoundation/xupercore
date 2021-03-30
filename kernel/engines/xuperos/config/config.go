@@ -23,6 +23,8 @@ type EngineConf struct {
 	TxIdCacheExpiredTime time.Duration `yaml:"txidCacheExpiredTime,omitempty"`
 	// TxIdCacheGCInterval clean up interval for tx cache
 	TxIdCacheGCInterval time.Duration `yaml:"txIdCacheGCInterval,omitempty"`
+	// MaxBlockQueueSize the queue size of the processing block
+	MaxBlockQueueSize int64 `yaml:"maxBlockQueueSize,omitempty"`
 }
 
 func LoadEngineConf(cfgFile string) (*EngineConf, error) {
@@ -41,6 +43,7 @@ func GetDefEngineConf() *EngineConf {
 		BlockBroadcastMode:   0,
 		TxIdCacheExpiredTime: 180 * time.Second,
 		TxIdCacheGCInterval:  300 * time.Second,
+		MaxBlockQueueSize:    100,
 	}
 }
 

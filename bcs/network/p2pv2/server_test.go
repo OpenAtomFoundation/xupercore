@@ -16,6 +16,10 @@ func Handler(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) 
 	return resp, nil
 }
 
+func HandlerError(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
+	return nil, fmt.Errorf("handler error")
+}
+
 func startNode1(t *testing.T) {
 	ecfg, err := mock.NewEnvConfForTest("p2pv2/node1/conf/env.yaml")
 	if err != nil {
@@ -70,7 +74,7 @@ func startNode2(t *testing.T) {
 		t.Errorf("register subscriber error: %v", err)
 	}
 
-	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, p2p.HandleFunc(Handler))); err != nil {
+	if err := node.Register(p2p.NewSubscriber(ctx, pb.XuperMessage_GET_BLOCK, p2p.HandleFunc(HandlerError))); err != nil {
 		t.Errorf("register subscriber error: %v", err)
 	}
 }
