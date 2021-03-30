@@ -70,6 +70,8 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	registry := &m.kregistry
 	registry.RegisterKernMethod("$contract", "deployContract", m.deployContract)
 	registry.RegisterKernMethod("$contract", "upgradeContract", m.upgradeContract)
+	registry.RegisterShortcut("Deploy", "$contract", "deployContract")
+	registry.RegisterShortcut("Upgrade", "$contract", "upgradeContract")
 	return m, nil
 }
 

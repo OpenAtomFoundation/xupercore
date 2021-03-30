@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
@@ -31,6 +32,9 @@ func NewACLManager(ctx *actx.AclCtx) (base.AclManager, error) {
 	register.RegisterKernMethod(utils.SubModName, "NewAccount", t.NewAccount)
 	register.RegisterKernMethod(utils.SubModName, "SetAccountAcl", t.SetAccountACL)
 	register.RegisterKernMethod(utils.SubModName, "SetMethodAcl", t.SetMethodACL)
+	register.RegisterShortcut("NewAccount", utils.SubModName, "NewAccount")
+	register.RegisterShortcut("SetAccountAcl", utils.SubModName, "SetAccountAcl")
+	register.RegisterShortcut("SetMethodAcl", utils.SubModName, "SetMethodAcl")
 
 	mg := &Manager{
 		Ctx: ctx,
