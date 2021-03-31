@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/big"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -22,6 +23,9 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
+	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -157,6 +161,18 @@ func (t *State) SetContractMG(contractMgr contract.Manager) {
 	t.sctx.SetContractMG(contractMgr)
 }
 
+func (t *State) SetGovernTokenMG(governTokenMgr governToken.GovManager) {
+	t.sctx.SetGovernTokenMG(governTokenMgr)
+}
+
+func (t *State) SetProposalMG(proposalMgr propose.ProposeManager) {
+	t.sctx.SetProposalMG(proposalMgr)
+}
+
+func (t *State) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
+	t.sctx.SetTimerTaskMG(timerTaskMgr)
+}
+
 // 选择足够金额的utxo
 func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
 	return t.utxo.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
@@ -220,6 +236,10 @@ func (t *State) QueryContractMethodACL(contractName string, methodName string) (
 
 func (t *State) QueryAccountContainAK(address string) ([]string, error) {
 	return t.utxo.QueryAccountContainAK(address)
+}
+
+func (t *State) QueryAccountGovernTokenBalance(accountName string) (*protos.GovernTokenBalance, error) {
+	return t.sctx.GovernTokenMgr.GetGovTokenBalance(accountName)
 }
 
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供
@@ -384,7 +404,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 	}()
 	for _, tx := range block.Transactions {
 		txid := string(tx.Txid)
-		if tx.Coinbase {
+		if tx.Coinbase || tx.Autogen {
 			err = t.doTxInternal(tx, batch, nil)
 			if err != nil {
 				t.log.Warn("dotx failed when PlayForMiner", "txid", utils.F(tx.Txid), "err", err)
@@ -496,6 +516,77 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.log.Debug("paly and repost succ", "blockId", utils.F(block.Blockid))
 
 	return nil
+}
+
+func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
+	stateConfig := &contract.SandboxConfig{
+		XMReader: t.CreateXMReader(),
+	}
+	if !t.sctx.IsInit() {
+		return nil, nil
+	}
+	t.log.Info("GetTimerTx", "blockHeight", blockHeight)
+	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(stateConfig)
+	if err != nil {
+		t.log.Error("PreExec new state sandbox error", "error", err)
+		return nil, err
+	}
+
+	contextConfig := &contract.ContextConfig{
+		State:       sandBox,
+		Initiator:   "",
+		AuthRequire: nil,
+	}
+
+	args := make(map[string][]byte)
+	args["block_height"] = []byte(strconv.FormatInt(blockHeight, 10))
+	req := protos.InvokeRequest{
+		ModuleName:   "xkernel",
+		ContractName: "$timer_task",
+		MethodName:   "Do",
+		Args:         args,
+	}
+
+	contextConfig.ResourceLimits = contract.MaxLimits
+	contextConfig.Module = req.ModuleName
+	contextConfig.ContractName = req.GetContractName()
+
+	ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
+	if err != nil {
+		t.log.Error("GetTimerTx NewContext error", "err", err, "contractName", req.GetContractName())
+		return nil, err
+	}
+
+	ctxResponse, ctxErr := ctx.Invoke(req.MethodName, req.Args)
+	if ctxErr != nil {
+		ctx.Release()
+		t.log.Error("GetTimerTx Invoke error", "error", ctxErr, "contractName", req.GetContractName())
+		return nil, ctxErr
+	}
+	// 判断合约调用的返回码
+	if ctxResponse.Status >= 400 {
+		ctx.Release()
+		t.log.Error("GetTimerTx Invoke error", "status", ctxResponse.Status, "contractName", req.GetContractName())
+		return nil, errors.New(ctxResponse.Message)
+	}
+
+	ctx.Release()
+
+	rwSet := sandBox.RWSet()
+	if rwSet == nil {
+		return nil, nil
+	}
+	inputs := xmodel.GetTxInputs(rwSet.RSet)
+	outputs := xmodel.GetTxOutputs(rwSet.WSet)
+
+	autoTx, err := tx.GenerateAutoTxWithRWSets(inputs, outputs)
+	if err != nil {
+		return nil, err
+	}
+
+	t.log.Trace("GetTimerTx", "readSet", rwSet.RSet, "writeSet", rwSet.WSet)
+
+	return autoTx, nil
 }
 
 // 回滚全部未确认交易
@@ -968,7 +1059,16 @@ func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 		for idx < length {
 			tx = todoBlk.Transactions[idx]
 			showTxId = hex.EncodeToString(tx.Txid)
-			// 校验交易合法性
+			t.log.Debug("procTodoBlkForWalk", "txid", showTxId, "autogen", t.verifyAutogenTxValid(tx), "coinbase", tx.Coinbase)
+			// 校验定时交易合法性
+			if t.verifyAutogenTxValid(tx) && !tx.Coinbase {
+				// 校验auto tx
+				if ok, err := t.ImmediateVerifyAutoTx(todoBlk.Height, tx, false); !ok {
+					return fmt.Errorf("immediate verify auto tx error.txid:%s,err:%v", showTxId, err)
+				}
+			}
+
+			// 校验普通交易合法性
 			if !tx.Autogen && !tx.Coinbase {
 				if ok, err := t.ImmediateVerifyTx(tx, false); !ok {
 					return fmt.Errorf("immediate verify tx error.txid:%s,err:%v", showTxId, err)

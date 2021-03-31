@@ -254,6 +254,10 @@ func (c *FakeKContext) Initiator() string {
 	return "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
 }
 
+func (c *FakeKContext) Caller() string {
+	return ""
+}
+
 func (c *FakeKContext) AuthRequire() []string {
 	return []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY", "SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"}
 }

@@ -13,6 +13,7 @@ type KContext interface {
 	// 交易相关数据
 	Args() map[string][]byte
 	Initiator() string
+	Caller() string
 	AuthRequire() []string
 
 	// 状态修改接口
