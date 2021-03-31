@@ -8,6 +8,7 @@ import (
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 )
@@ -47,7 +48,17 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 	if ok := tp.isAuthAddress(candidateName, contractCtx.Initiator(), contractCtx.AuthRequire()); !ok {
 		return NewContractErrResponse(authErr.Error()), authErr
 	}
-	// TODO: 调用冻结接口，Args: FromAddr, amount
+
+	// 调用冻结接口
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", amount)),
+		"lock_type": []byte(utils.GovernTokenTypeOrdinary),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
 
 	// 1. 读取提名候选人key，改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -98,7 +109,6 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	if candidateName == "" {
 		return NewContractErrResponse(nominateAddrErr.Error()), nominateAddrErr
 	}
-	// TODO: 调用解冻接口，Args: FromAddr, amount
 
 	// 1. 提名候选人改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -125,6 +135,17 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	ballot, ok := v[contractCtx.Initiator()]
 	if !ok {
 		return NewContractErrResponse(notFoundErr.Error()), notFoundErr
+	}
+
+	// 查询到amount之后，再调用解冻接口，Args: FromAddr, amount
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", ballot)),
+		"lock_type": []byte(utils.GovernTokenTypeOrdinary),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
 	}
 
 	// 2. 读取撤销记录
@@ -190,7 +211,17 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	if amount <= 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
-	// TODO: 调用冻结接口，Args: FromAddr, amount
+
+	// 调用冻结接口
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", amount)),
+		"lock_type": []byte(utils.GovernTokenTypeOrdinary),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
 
 	// 1. 检查vote的地址是否在候选人池中，快照读取候选人池，vote相关参数一定是会在nominate列表中显示
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -310,7 +341,17 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 	if amount <= 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
-	// TODO: 调用解冻接口，Args: FromAddr, amount
+
+	// 调用解冻接口，Args: FromAddr, amount
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", amount)),
+		"lock_type": []byte(utils.GovernTokenTypeOrdinary),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
 
 	// 1. 检查是否在vote池子里面，读取vote存储
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
