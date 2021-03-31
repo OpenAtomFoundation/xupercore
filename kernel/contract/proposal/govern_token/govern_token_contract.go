@@ -94,10 +94,10 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 	}
 	args := ctx.Args()
 	sender := ctx.Initiator()
-	receiverBuf := args["receiver"]
+	receiverBuf := args["to"]
 	amountBuf := args["amount"]
 	if receiverBuf == nil || amountBuf == nil {
-		return nil, fmt.Errorf("transfer gov tokens failed, receiver is nil or amount is nil")
+		return nil, fmt.Errorf("transfer gov tokens failed, to is nil or amount is nil")
 	}
 
 	amount := big.NewInt(0)
