@@ -2,12 +2,10 @@ package xmodel
 
 import (
 	"bytes"
-	"fmt"
 	"sort"
 
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
-	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 
 	"github.com/golang/protobuf/proto"
@@ -36,16 +34,6 @@ func makeRawKey(bucket string, key []byte) []byte {
 	return append(k, key...)
 }
 
-func parseRawKey(rawKey []byte) (string, []byte, error) {
-	idx := bytes.Index(rawKey, []byte(BucketSeperator))
-	if idx < 0 {
-		return "", nil, fmt.Errorf("parseRawKey failed, invalid raw key:%s", string(rawKey))
-	}
-	bucket := string(rawKey[:idx])
-	key := rawKey[idx+1 : len(rawKey)]
-	return bucket, key, nil
-}
-
 func queryUnconfirmTx(txid []byte, table kvdb.Database) (*pb.Transaction, error) {
 	pbBuf, findErr := table.Get(txid)
 	if findErr != nil {
@@ -67,24 +55,6 @@ func saveUnconfirmTx(tx *pb.Transaction, batch kvdb.Batch) error {
 	rawKey := append([]byte(pb.UnconfirmedTablePrefix), []byte(tx.Txid)...)
 	batch.Put(rawKey, buf)
 	return nil
-}
-
-func openDB(dbPath string, logger logs.Logger) (kvdb.Database, error) {
-	// new kvdb instance
-	kvParam := &kvdb.KVParameter{
-		DBPath:                dbPath,
-		KVEngineType:          "default",
-		MemCacheSize:          128,
-		FileHandlersCacheSize: 512,
-		//StorageType
-		OtherPaths: []string{},
-	}
-	baseDB, err := kvdb.CreateKVInstance(kvParam)
-	if err != nil {
-		logger.Warn("xmodel::openDB failed to open db", "dbPath", dbPath, "err", err)
-		return nil, err
-	}
-	return baseDB, nil
 }
 
 // 快速对写集合排序

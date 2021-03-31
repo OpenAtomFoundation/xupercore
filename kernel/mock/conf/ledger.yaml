@@ -4,3 +4,6 @@
 kvEngineType: leveldb
 # 数据存储方式
 storageType: single
+utxo:
+  cachesize: 1000
+  tmplockSeconds: 60

@@ -204,6 +204,11 @@ func TestBasicFunc(t *testing.T) {
 	total = utxoHandle.GetTotal()
 	t.Log("total", total.String())
 
+	txInputs, _, utxoTotal, err = utxoHandle.SelectUtxosBySize(BobAddress, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	accounts, err := utxoHandle.QueryAccountContainAK(BobAddress)
 	if err != nil {
 		t.Fatal(err)
@@ -212,4 +217,22 @@ func TestBasicFunc(t *testing.T) {
 	}
 
 	utxoHandle.SubBalance([]byte(BobAddress), big.NewInt(100))
+
+	_, err = utxoHandle.QueryContractStatData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keys := utxo.MakeUtxoKey([]byte("U_TEST"), "1000")
+	t.Log("keys", keys)
+
+	cs, err := utxoHandle.GetAccountContracts("XC1111111111111111@xuper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("contracts", cs)
+	record, err := utxoHandle.QueryUtxoRecord("XC1111111111111111@xuper", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("records", record)
 }

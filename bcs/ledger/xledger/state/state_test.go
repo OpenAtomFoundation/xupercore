@@ -7,21 +7,33 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/mock"
-	"github.com/xuperchain/xupercore/lib/logs"
 	"io/ioutil"
 	"math/big"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
+	_ "github.com/xuperchain/xupercore/bcs/contract/native"
+	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
 	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	txn "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
+	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	"github.com/xuperchain/xupercore/kernel/permission/acl"
+	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
+	actx "github.com/xuperchain/xupercore/kernel/permission/acl/context"
 	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/logs"
 	_ "github.com/xuperchain/xupercore/lib/storage/kvdb/leveldb"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/protos"
@@ -140,7 +152,7 @@ func transfer(from string, to string, t *testing.T, stateHandle *State, ledger *
 	tx.Txid, _ = txhash.MakeTransactionID(tx)
 
 	timer.Mark("GenerateTx")
-	verifyOK, vErr := stateHandle.ImmediateVerifyTx(tx, false)
+	verifyOK, vErr := stateHandle.VerifyTx(tx)
 	t.Log("VerifyTX", timer.Print())
 	if !verifyOK || vErr != nil {
 		t.Log("verify tx fail, ignore in unit test here", vErr)
@@ -382,7 +394,48 @@ func TestStateWorkWithLedger(t *testing.T) {
 	for iter.Next() {
 		t.Log("ScanWithPrefix  ", iter.Key())
 	}
+	_, err = stateHandle.QueryContractStatData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stateHandle.GetAccountContracts("XC1111111111111111@xuper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stateHandle.QueryUtxoRecord("XC1111111111111111@xuper", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err = stateHandle.SelectUtxosBySize(AliceAddress, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lagent, err := NewLedgerAgent(stateHandle, ledger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractMgr, err := CreateContract(lagent.CreateXMReader(), lagent.state, econf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aclMgr, err := NewAcl(lagent, contractMgr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateHandle.SetAclMG(aclMgr)
+	stateHandle.SetContractMG(contractMgr)
+	_, err = stateHandle.QueryAccountACL("XC1111111111111111@xuper")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = stateHandle.QueryContractMethodACL("$acl", "SetAccountACL")
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	stateHandle.WaitBlockHeight(1)
+	stateHandle.GetLDB()
+	stateHandle.Close()
 	ledger.Close()
 }
 
@@ -477,6 +530,10 @@ func TestFrozenHeight(t *testing.T) {
 	if bobBalance.String() != "100" || aliceBalance.String() != "200" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
+	_, err = stateHandle.GetBalanceDetail(BobAddress)
+	if err != nil {
+		t.Fatal("get balance detail fail", err)
+	}
 	metaInfo := stateHandle.GetMeta()
 	if metaInfo == nil {
 		fmt.Errorf("nil meta")
@@ -549,11 +606,11 @@ func TestGetSnapShotWithBlock(t *testing.T) {
         , "predistribution":[
                 {
                         "address" : "` + BobAddress + `",
-                        "quota" : "100"
+                        "quota" : "10000000"
                 },
 				{
                         "address" : "` + AliceAddress + `",
-                        "quota" : "200"
+                        "quota" : "20000000"
                 }
 
         ]
@@ -607,4 +664,62 @@ func TestGetSnapShotWithBlock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+type LedgerAgent struct {
+	state  *State
+	ledger *ledger_pkg.Ledger
+}
+
+func NewLedgerAgent(state *State, ledger *ledger_pkg.Ledger) (*LedgerAgent, error) {
+	if state == nil || ledger == nil {
+		return nil, fmt.Errorf("new ledgerAgent fail")
+	}
+	return &LedgerAgent{
+		state:  state,
+		ledger: ledger,
+	}, nil
+}
+
+func (l *LedgerAgent) GetNewAccountGas() (int64, error) {
+	return l.ledger.GetNewAccountResourceAmount(), nil
+}
+
+func (l *LedgerAgent) GetTipXMSnapshotReader() (kledger.XMSnapshotReader, error) {
+	return l.state.GetTipXMSnapshotReader()
+}
+
+func (l *LedgerAgent) CreateXMReader() kledger.XMReader {
+	return l.state.CreateXMReader()
+}
+
+func CreateContract(xmreader kledger.XMReader, state *State, envcfg *xconf.EnvConf) (contract.Manager, error) {
+	basedir := filepath.Join(envcfg.GenDataAbsPath(envcfg.ChainDir), "xuper")
+
+	mgCfg := &contract.ManagerConfig{
+		BCName:   "xuper",
+		Basedir:  basedir,
+		EnvConf:  envcfg,
+		Core:     state,
+		XMReader: xmreader,
+	}
+	contractObj, err := contract.CreateManager("default", mgCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create contract manager failed.err:%v", err)
+	}
+
+	return contractObj, nil
+}
+
+func NewAcl(legAgent *LedgerAgent, cmg contract.Manager) (aclBase.AclManager, error) {
+	aclCtx, err := actx.NewAclCtx("xuper", legAgent, cmg)
+	if err != nil {
+		return nil, fmt.Errorf("create acl ctx failed.err:%v", err)
+	}
+
+	aclObj, err := acl.NewACLManager(aclCtx)
+	if err != nil {
+		return nil, fmt.Errorf("create acl failed.err:%v", err)
+	}
+	return aclObj, nil
 }

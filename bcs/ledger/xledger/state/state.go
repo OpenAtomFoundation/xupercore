@@ -119,7 +119,8 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 		return nil, fmt.Errorf("create state failed because create meta error:%s", err)
 	}
 
-	obj.utxo, err = utxo.NewUtxo(sctx, obj.meta, obj.ldb)
+	obj.utxo, err = utxo.MakeUtxo(sctx, obj.meta, sctx.LedgerCfg.Utxo.CacheSize,
+		sctx.LedgerCfg.Utxo.TmpLockSeconds, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create utxo error:%s", err)
 	}
@@ -1264,8 +1265,4 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 // WaitBlockHeight wait util the height of current block >= target
 func (t *State) WaitBlockHeight(target int64) int64 {
 	return t.heightNotifier.WaitHeight(target)
-}
-
-func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
-	return xmodel.GenWriteKeyWithPrefix(txOutputExt)
 }
