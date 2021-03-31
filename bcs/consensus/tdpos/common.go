@@ -19,11 +19,11 @@ const (
 	contractRevokeVote        = "revokeVote"
 	contractGetTdposInfos     = "getTdposInfos"
 
-	contractBucket  = "$tdpos"
-	nominateKey     = "nominate"
-	voteKeyPrefix   = "vote_"
-	revokeKeyPrefix = "revoke_"
-	termKey         = "term"
+	contractBucket = "$tdpos"
+	nominateKey    = "nominate"
+	voteKeyPrefix  = "vote_"
+	revokeKey      = "revoke"
+	termKey        = "term"
 
 	StatusOK  = 200
 	StatusErr = 500
