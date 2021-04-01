@@ -14,7 +14,7 @@ const (
 	MAXHISPROPOSERSSIZE = 100
 
 	contractNominateCandidate = "nominateCandidate"
-	contractRevokeCandidata   = "revokeNominate"
+	contractRevokeCandidate   = "revokeNominate"
 	contractVote              = "voteCandidate"
 	contractRevokeVote        = "revokeVote"
 	contractGetTdposInfos     = "getTdposInfos"
@@ -24,9 +24,6 @@ const (
 	voteKeyPrefix  = "vote_"
 	revokeKey      = "revoke"
 	termKey        = "term"
-
-	StatusOK  = 200
-	StatusErr = 500
 
 	NOMINATETYPE = "nominate"
 	VOTETYPE     = "vote"
