@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
+	"github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 )
@@ -40,14 +40,24 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 	amountBytes := txArgs["amount"]
 	amountStr := string(amountBytes)
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
-	if amount == 0 || err != nil {
+	if amount <= 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
 	// 是否按照要求多签
 	if ok := tp.isAuthAddress(candidateName, contractCtx.Initiator(), contractCtx.AuthRequire()); !ok {
 		return NewContractErrResponse(authErr.Error()), authErr
 	}
-	// TODO: 调用冻结接口，Args: FromAddr, amount
+
+	// 调用冻结接口
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", amount)),
+		"lock_type": []byte(utils.GovernTokenTypeTDPOS),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
 
 	// 1. 读取提名候选人key，改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -98,7 +108,6 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	if candidateName == "" {
 		return NewContractErrResponse(nominateAddrErr.Error()), nominateAddrErr
 	}
-	// TODO: 调用解冻接口，Args: FromAddr, amount
 
 	// 1. 提名候选人改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -127,8 +136,18 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 		return NewContractErrResponse(notFoundErr.Error()), notFoundErr
 	}
 
+	// 查询到amount之后，再调用解冻接口，Args: FromAddr, amount
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", ballot)),
+		"lock_type": []byte(utils.GovernTokenTypeTDPOS),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
+
 	// 2. 读取撤销记录
-	revokeKey := revokeKeyPrefix + candidateName
 	res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
 	if err != nil {
 		return NewContractErrResponse("Internal error."), err
@@ -146,9 +165,9 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 		revokeValue[contractCtx.Initiator()] = make([]revokeItem, 0)
 	}
 	revokeValue[contractCtx.Initiator()] = append(revokeValue[contractCtx.Initiator()], revokeItem{
-		RevokeType: NOMINATETYPE,
-		Ballot:     ballot,
-		Timestamp:  time.Now().UnixNano(),
+		RevokeType:    NOMINATETYPE,
+		Ballot:        ballot,
+		TargetAddress: candidateName,
 	})
 	revokeBytes, err := json.Marshal(revokeValue)
 	if err != nil {
@@ -187,10 +206,20 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	amountBytes := txArgs["amount"]
 	amountStr := string(amountBytes)
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
-	if amount == 0 || err != nil {
+	if amount <= 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
-	// TODO: 调用冻结接口，Args: FromAddr, amount
+
+	// 调用冻结接口
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", amount)),
+		"lock_type": []byte(utils.GovernTokenTypeTDPOS),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "Lock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
 
 	// 1. 检查vote的地址是否在候选人池中，快照读取候选人池，vote相关参数一定是会在nominate列表中显示
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -307,10 +336,20 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 	amountBytes := txArgs["amount"]
 	amountStr := string(amountBytes)
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
-	if amount == 0 || err != nil {
+	if amount <= 0 || err != nil {
 		return NewContractErrResponse(amountErr.Error()), amountErr
 	}
-	// TODO: 调用解冻接口，Args: FromAddr, amount
+
+	// 调用解冻接口，Args: FromAddr, amount
+	tokenArgs := map[string][]byte{
+		"from":      []byte(contractCtx.Initiator()),
+		"amount":    []byte(fmt.Sprintf("%d", amount)),
+		"lock_type": []byte(utils.GovernTokenTypeTDPOS),
+	}
+	_, err = contractCtx.Call("xkernel", utils.GovernTokenKernelContract, "UnLock", tokenArgs)
+	if err != nil {
+		return NewContractErrResponse(err.Error()), err
+	}
 
 	// 1. 检查是否在vote池子里面，读取vote存储
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
@@ -338,7 +377,6 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 	}
 
 	// 2. 读取撤销记录，后续改写用
-	revokeKey := revokeKeyPrefix + candidateName
 	res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
 	if err != nil {
 		return NewContractErrResponse("Internal error."), err
@@ -356,9 +394,9 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 		revokeValue[contractCtx.Initiator()] = make([]revokeItem, 0)
 	}
 	revokeValue[contractCtx.Initiator()] = append(revokeValue[contractCtx.Initiator()], revokeItem{
-		RevokeType: VOTETYPE,
-		Ballot:     amount,
-		Timestamp:  time.Now().UnixNano(),
+		RevokeType:    VOTETYPE,
+		Ballot:        amount,
+		TargetAddress: candidateName,
 	})
 	revokeBytes, err := json.Marshal(revokeValue)
 	if err != nil {
@@ -386,6 +424,11 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 
 // runGetTdposInfos 读接口
 func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*contract.Response, error) {
+	delta := contract.Limits{
+		XFee: fee,
+	}
+	contractCtx.AddResourceUsed(delta)
+
 	initValue := `{
 		"validators": ` + fmt.Sprintf("%s", tp.election.initValidators) + ` 
 	}`
@@ -406,8 +449,7 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 	if err := json.Unmarshal(res, &nominateValue); err != nil {
 		return NewContractErrResponse("tdpos::GetTdposInfos::load nominates read set err."), err
 	}
-
-	tp.log.Error("tdpos::GetTdposInfos", "nominateValue", nominateValue)
+	tp.log.Debug("tdpos::GetTdposInfos", "nominateValue", nominateValue)
 
 	// vote信息
 	voteMap := make(map[string]voteValue)
@@ -428,41 +470,29 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 		}
 		voteMap[candidate] = voteValue
 	}
-
-	tp.log.Error("tdpos::GetTdposInfos", "voteMap", voteMap)
+	tp.log.Debug("tdpos::GetTdposInfos", "voteMap", voteMap)
 
 	// revoke信息
-	revokeMap := make(map[string]revokeValue)
-	for candidate, _ := range nominateValue {
-		revokeKey := revokeKeyPrefix + candidate
-		res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
-		if err != nil {
-			tp.log.Error("tdpos::GetTdposInfos::load revoke read set err when get key.", "key", revokeKey)
-			continue
-		}
-		revokeValue := NewRevokeValue()
-		if res == nil {
-			continue
-		}
+	res, err = tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(revokeKey))
+	if err != nil {
+		tp.log.Error("tdpos::GetTdposInfos::load revoke read set err when get key.", "key", revokeKey)
+		return NewContractErrResponse("load revoke mem error."), err
+	}
+	revokeValue := NewRevokeValue()
+	if res != nil {
 		if err := json.Unmarshal(res, &revokeValue); err != nil {
 			tp.log.Error("tdpos::GetTdposInfos::load revoke read set err.", "res", res, "err", err)
-			continue
+			return NewContractErrResponse("load revoke mem error."), err
 		}
-		revokeMap[candidate] = revokeValue
 	}
-
-	tp.log.Error("tdpos::GetTdposInfos", "revokeMap", revokeMap)
+	tp.log.Debug("tdpos::GetTdposInfos", "revokeValue", revokeValue)
 
 	r := `{
 		"validators": ` + fmt.Sprintf("%s", tp.election.validators) + `,
 		"nominate":` + fmt.Sprintf("%v", nominateValue) + `,
 		"vote":` + fmt.Sprintf("%v", voteMap) + `,
-		"revoke":` + fmt.Sprintf("%v", revokeMap) + `
+		"revoke":` + fmt.Sprintf("%v", revokeValue) + `
 	}`
-	delta := contract.Limits{
-		XFee: fee,
-	}
-	contractCtx.AddResourceUsed(delta)
 	return NewContractOKResponse([]byte(r)), nil
 }
 
@@ -481,9 +511,9 @@ func NewvoteValue() voteValue {
 type revokeValue map[string][]revokeItem
 
 type revokeItem struct {
-	RevokeType string
-	Ballot     int64
-	Timestamp  int64
+	RevokeType    string
+	Ballot        int64
+	TargetAddress string
 }
 
 func NewRevokeValue() revokeValue {

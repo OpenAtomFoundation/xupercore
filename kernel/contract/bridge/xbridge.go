@@ -154,6 +154,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 	ctx.Module = ctxCfg.Module
 	ctx.ContractName = ctxCfg.ContractName
 	ctx.Initiator = ctxCfg.Initiator
+	ctx.Caller = ctxCfg.Caller
 	ctx.AuthRequire = ctxCfg.AuthRequire
 	ctx.ResourceLimits = ctxCfg.ResourceLimits
 	ctx.CanInitialize = ctxCfg.CanInitialize

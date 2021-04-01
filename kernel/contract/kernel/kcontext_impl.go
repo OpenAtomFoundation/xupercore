@@ -35,6 +35,10 @@ func (k *kcontextImpl) Initiator() string {
 	return k.ctx.Initiator
 }
 
+func (k *kcontextImpl) Caller() string {
+	return k.ctx.Caller
+}
+
 func (k *kcontextImpl) AuthRequire() []string {
 	return k.ctx.AuthRequire
 }

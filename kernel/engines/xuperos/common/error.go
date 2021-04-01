@@ -89,11 +89,12 @@ var (
 	ErrGenesisBlockDiff= &Error{ErrStatusInternalErr, 50302, "genesis block diff"}
 
 	// tx
-	ErrTxVerifyFailed = &Error{ErrStatusInternalErr, 50400, "verify tx failed"}
-	ErrTxAlreadyExist = &Error{ErrStatusInternalErr, 50401, "tx already exist"}
-	ErrTxNotExist     = &Error{ErrStatusInternalErr, 50402, "tx not exist"}
-	ErrTxNotEnough    = &Error{ErrStatusInternalErr, 50403, "tx not enough"}
-	ErrSubmitTxFailed = &Error{ErrStatusInternalErr, 50404, "submit tx failed"}
+	ErrTxVerifyFailed        = &Error{ErrStatusInternalErr, 50400, "verify tx failed"}
+	ErrTxAlreadyExist        = &Error{ErrStatusInternalErr, 50401, "tx already exist"}
+	ErrTxNotExist            = &Error{ErrStatusInternalErr, 50402, "tx not exist"}
+	ErrTxNotEnough           = &Error{ErrStatusInternalErr, 50403, "tx not enough"}
+	ErrSubmitTxFailed        = &Error{ErrStatusInternalErr, 50404, "submit tx failed"}
+	ErrGenerateTimerTxFailed = &Error{ErrStatusInternalErr, 50405, "generate timer tx failed"}
 
 	// contract
 	ErrContractNewCtxFailed     = &Error{ErrStatusInternalErr, 50500, "contract new context failed"}
