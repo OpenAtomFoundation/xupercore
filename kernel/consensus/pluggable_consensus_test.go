@@ -1,9 +1,9 @@
 package consensus
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -237,13 +237,18 @@ func GetWrongConsensusConf() []byte {
 }
 
 func NewUpdateArgs() map[string][]byte {
-	a := make(map[string][]byte)
-	a["name"] = []byte("another")
-	var buf = make([]byte, 8)
-	binary.BigEndian.PutUint64(buf, uint64(3))
-	a["height"] = buf
-	a["config"] = GetNewConsensusConf()
-	return a
+	a := make(map[string]interface{})
+	a["name"] = "another"
+	a["config"] = map[string]interface{}{
+		"miner":  "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+		"period": "3000",
+	}
+	ab, _ := json.Marshal(&a)
+	r := map[string][]byte{
+		"args":   ab,
+		"height": []byte(strconv.FormatInt(8, 10)),
+	}
+	return r
 }
 
 func NewUpdateM() map[string]map[string][]byte {
