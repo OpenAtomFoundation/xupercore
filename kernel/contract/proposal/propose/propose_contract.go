@@ -379,6 +379,7 @@ func (t *KernMethod) Trigger(ctx contract.KContext) (*contract.Response, error) 
 	triggerTxArgs := make(map[string][]byte)
 	triggerArgsBytes, _ := json.Marshal(proposal.Trigger.Args)
 	triggerTxArgs["args"] = triggerArgsBytes
+	triggerTxArgs["height"] = []byte(strconv.FormatInt(proposal.Trigger.Height, 10))
 	_, err = ctx.Call(proposal.Trigger.Module, proposal.Trigger.Contract, proposal.Trigger.Method, triggerTxArgs)
 	if err != nil {
 		proposal.Status = utils.ProposalStatusCompletedAndFailure

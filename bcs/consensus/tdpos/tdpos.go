@@ -14,6 +14,7 @@ import (
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
@@ -111,14 +112,21 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		tdpos.smr = smr
 		cCtx.XLog.Debug("Tdpos::NewTdposConsensus::load chained-bft successfully.")
 	}
-	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.", "tdpos", tdpos)
 
 	// 注册合约方法
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractNominateCandidate, tdpos.runNominateCandidate)
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractRevokeCandidata, tdpos.runRevokeCandidate)
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractVote, tdpos.runVote)
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractRevokeVote, tdpos.runRevokeVote)
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractGetTdposInfos, tdpos.runGetTdposInfos)
+	tdposKMethods := map[string]contract.KernMethod{
+		contractNominateCandidate: tdpos.runNominateCandidate,
+		contractRevokeCandidate:   tdpos.runRevokeCandidate,
+		contractVote:              tdpos.runVote,
+		contractRevokeVote:        tdpos.runRevokeVote,
+		contractGetTdposInfos:     tdpos.runGetTdposInfos,
+	}
+	for method, f := range tdposKMethods {
+		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(contractBucket, method); err != nil {
+			cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, method, f)
+		}
+	}
+	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.", "tdpos", tdpos)
 	return tdpos
 }
 
@@ -226,7 +234,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 			return false, invalidTermErr
 		}
 		// 减少矿工50%概率恶意地输入时间
-		if preTdposStorage.CurTerm > term {
+		if preTdposStorage.CurTerm > term && block.GetHeight() > tp.status.StartHeight {
 			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, preBlock.CurTerm is bigger than the new received.",
 				"preBlock", preTdposStorage.CurTerm, "have", term)
 			return false, invalidTermErr
