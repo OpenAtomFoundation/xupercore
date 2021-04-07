@@ -32,9 +32,6 @@ const (
 )
 
 var (
-	InitProposerNeturlErr         = errors.New("Init proposer neturl is invalid.")
-	ProposerNumErr                = errors.New("Proposer num isn't equal to proposer neturl.")
-	NeedNetURLErr                 = errors.New("Init proposer neturl must be mentioned.")
 	invalidProposerErr            = errors.New("Invalid proposer.")
 	invalidTermErr                = errors.New("Invalid term.")
 	proposeBlockMoreThanConfigErr = errors.New("Propose block more than config num error.")
@@ -79,11 +76,8 @@ type tdposConfig struct {
 	// 初始时间
 	InitTimestamp int64 `json:"timestamp"`
 	// 系统指定的前两轮的候选人名单
-	InitProposer       map[string][]string `json:"init_proposer"`
-	InitProposerNeturl map[string][]string `json:"init_proposer_neturl"`
-	// json支持两种格式的解析形式
-	NeedNetURL bool            `json:"need_neturl"`
-	EnableBFT  map[string]bool `json:"bft_config,omitempty"`
+	InitProposer map[string][]string `json:"init_proposer"`
+	EnableBFT    map[string]bool     `json:"bft_config,omitempty"`
 }
 
 func (tp *tdposConsensus) needSync() bool {
@@ -104,19 +98,6 @@ func unmarshalTdposConfig(input []byte) (*tdposConfig, error) {
 	xconfig, err := buildConfigs(input)
 	if err != nil {
 		return nil, err
-	}
-
-	if xconfig.InitProposerNeturl != nil {
-		if _, ok := (xconfig.InitProposerNeturl)["1"]; !ok {
-			return nil, InitProposerNeturlErr
-		}
-		if int64(len((xconfig.InitProposerNeturl)["1"])) != xconfig.ProposerNum {
-			return nil, ProposerNumErr
-		}
-		return xconfig, nil
-	}
-	if xconfig.NeedNetURL {
-		return nil, NeedNetURLErr
 	}
 	return xconfig, nil
 }
@@ -172,10 +153,8 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 	tdposCfg.VoteUnitPrice = voteUnitPrice
 
 	type tempStruct struct {
-		InitProposer       map[string][]string `json:"init_proposer"`
-		InitProposerNeturl map[string][]string `json:"init_proposer_neturl"`
-		EnableBFT          map[string]bool     `json:"bft_config,omitempty"`
-		NeedNetURL         bool                `json:"need_neturl"`
+		InitProposer map[string][]string `json:"init_proposer"`
+		EnableBFT    map[string]bool     `json:"bft_config,omitempty"`
 	}
 	var temp tempStruct
 	err = json.Unmarshal(input, &temp)
@@ -183,9 +162,7 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 		return nil, fmt.Errorf("unmarshal to temp struct failed.err:%v", err)
 	}
 	tdposCfg.InitProposer = temp.InitProposer
-	tdposCfg.InitProposerNeturl = temp.InitProposerNeturl
 	tdposCfg.EnableBFT = temp.EnableBFT
-	tdposCfg.NeedNetURL = temp.NeedNetURL
 
 	return tdposCfg, nil
 }

@@ -60,10 +60,6 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		cCtx.XLog.Error("Tdpos::NewTdposConsensus::tdpos struct unmarshal error", "error", err)
 		return nil
 	}
-	if len((xconfig.InitProposer)["1"]) != len((xconfig.InitProposerNeturl)["1"]) {
-		cCtx.XLog.Error("Tdpos::NewTdposConsensus::initProposer should be mapped into initProposerNeturl", "error", InitProposerNeturlErr)
-		return nil
-	}
 	// 新建schedule实例，该实例包含smr中election的接口实现
 	schedule := NewSchedule(xconfig, cCtx.XLog, cCtx.Ledger)
 	if schedule == nil {
@@ -151,8 +147,8 @@ Again:
 
 	// 查当前时间的term 和 pos
 	term, pos, blockPos := tp.election.minerScheduling(time.Now().UnixNano())
-	if blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
-		tp.log.Warn("Tdpos::CompeteMaster::minerScheduling err", "term", term, "pos", pos, "blockPos", blockPos)
+	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
+		tp.log.Debug("Tdpos::CompeteMaster::minerScheduling err", "term", term, "pos", pos, "blockPos", blockPos)
 		goto Again
 	}
 	// 根据term更新当前validators, 当投票之后，并不会在3个块后变更候选人，而是等到下个term
@@ -188,14 +184,14 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	}
 	tdposStorage, err := common.ParseOldQCStorage(bv)
 	if err != nil {
-		tp.log.Error("Tdpos::CheckMinerMatch::ParseOldQCStorage error.", "err", err)
+		tp.log.Warn("Tdpos::CheckMinerMatch::ParseOldQCStorage error.", "err", err)
 		return false, err
 	}
 	tp.log.Debug("Tdpos::CheckMinerMatch", "tdposStorage", tdposStorage)
 
 	// 1 判断当前区块生产者是否合法
 	term, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
-	if blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
+	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Warn("Tdpos::CheckMinerMatch::minerScheduling overflow.")
 		return false, scheduleErr
 	}
@@ -226,7 +222,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		}
 		preTdposStorage, err := common.ParseOldQCStorage(pv)
 		if err != nil {
-			tp.log.Error("Tdpos::CheckMinerMatch::ParseOldQCStorage pre-storage transfer error", "err", err)
+			tp.log.Warn("Tdpos::CheckMinerMatch::ParseOldQCStorage pre-storage transfer error", "err", err)
 			return false, err
 		}
 		if tdposStorage.CurTerm != term {
@@ -282,8 +278,8 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
 func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
 	term, pos, blockPos := tp.election.minerScheduling(timestamp)
-	if term != tp.election.curTerm || blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
-		tp.log.Error("Tdpos::ProcessBeforeMiner::timeoutBlockErr", "term", term, "tp.election.curTerm", tp.election.curTerm,
+	if blockPos < 0 || term != tp.election.curTerm || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
+		tp.log.Warn("Tdpos::ProcessBeforeMiner::timeoutBlockErr", "term", term, "tp.election.curTerm", tp.election.curTerm,
 			"blockPos", blockPos, "tp.election.blockNum", tp.election.blockNum, "pos", pos, "tp.election.proposerNum", tp.election.proposerNum)
 		return nil, nil, timeoutBlockErr
 	}
@@ -341,12 +337,12 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	qc := tp.smr.GetCompleteHighQC()
 	qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
 	if !ok {
-		tp.log.Warn("Tdpos::ProcessBeforeMiner::qc transfer err", "qc", qc)
+		tp.log.Error("Tdpos::ProcessBeforeMiner::qc transfer err", "qc", qc)
 		return nil, nil, InvalidQC
 	}
 	oldQC, err := common.NewToOldQC(qcQuorumCert)
 	if err != nil {
-		tp.log.Warn("Tdpos::ProcessBeforeMiner::NewToOldQC error", "error", err)
+		tp.log.Error("Tdpos::ProcessBeforeMiner::NewToOldQC error", "error", err)
 		return nil, nil, err
 	}
 	storage.Justify = oldQC
@@ -377,15 +373,15 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	if bv != nil && block.GetHeight() > tp.status.StartHeight {
 		justify, err := common.OldQCToNew(bv)
 		if err != nil {
-			tp.log.Warn("Tdpos::ProcessConfirmBlock::OldQCToNew error", "err", err, "blockId", utils.F(block.GetBlockid()))
+			tp.log.Error("Tdpos::ProcessConfirmBlock::OldQCToNew error", "err", err, "blockId", utils.F(block.GetBlockid()))
 			return err
 		}
 		tp.smr.UpdateJustifyQcStatus(justify)
 	}
 	// 查看本地是否是最新round的生产者
 	_, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
-	if blockPos > tp.election.blockNum || pos >= tp.election.proposerNum {
-		tp.log.Warn("Tdpos::smr::ProcessConfirmBlock::minerScheduling overflow.")
+	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
+		tp.log.Debug("Tdpos::smr::ProcessConfirmBlock::minerScheduling overflow.")
 		return scheduleErr
 	}
 	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
@@ -428,7 +424,7 @@ func (tp *tdposConsensus) ParseConsensusStorage(block cctx.BlockInterface) (inte
 	}
 	justify, err := common.ParseOldQCStorage(b)
 	if err != nil {
-		tp.log.Error("Tdpos::ParseConsensusStorage invalid consensus storage", "err", err)
+		tp.log.Warn("Tdpos::ParseConsensusStorage invalid consensus storage", "err", err)
 		return nil, err
 	}
 	return justify, nil
