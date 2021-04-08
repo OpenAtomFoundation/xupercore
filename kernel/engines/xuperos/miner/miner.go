@@ -70,7 +70,7 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	}
 
 	if block.GetHeight() < t.inSyncTargetHeight || bytes.Equal(block.GetBlockid(), t.inSyncTargetBlockId) {
-		ctx.GetLog().Warn("forbidden proc block because recv block height lower than in sync height",
+		ctx.GetLog().Trace("forbidden proc block because recv block height lower than in sync height",
 			"recvHeight", block.GetHeight(), "recvBlockId", utils.F(block.GetBlockid()),
 			"inSyncTargetHeight", t.inSyncTargetHeight, "inSyncTargetBlockId",
 			utils.F(t.inSyncTargetBlockId))
@@ -247,7 +247,7 @@ func (t *Miner) truncateForMiner(ctx xctx.XContext, target []byte) error {
 		ctx.GetLog().Warn("truncate failed because state walk error", "ledgerTipId", utils.F(t.ctx.Ledger.GetMeta().TipBlockid),
 			"walkTargetBlockId", utils.F(target))
 		return err
-	}  
+	}
 
 	// 账本裁剪到这个区块
 	err = t.ctx.Ledger.Truncate(target)
