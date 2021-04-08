@@ -3,7 +3,6 @@ package tdpos
 import (
 	"bytes"
 	"encoding/json"
-	"sync"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -32,10 +31,6 @@ type tdposConsensus struct {
 	status    *TdposStatus
 	smr       *chainedBft.Smr
 	log       logs.Logger
-
-	// 记录某一轮内某个候选人出块是否大于系统限制, 以此避免矿工恶意出块, 切轮时进行初始化 map[term_num]map[proposer]map[blockid]bool
-	curTermProposerProduceNumCache map[int64]map[string]map[string]bool
-	mutex                          sync.Mutex
 }
 
 func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
@@ -75,12 +70,11 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		election:    schedule,
 	}
 	tdpos := &tdposConsensus{
-		config:                         xconfig,
-		isProduce:                      make(map[int64]bool),
-		election:                       schedule,
-		status:                         status,
-		log:                            cCtx.XLog,
-		curTermProposerProduceNumCache: make(map[int64]map[string]map[string]bool),
+		config:    xconfig,
+		isProduce: make(map[int64]bool),
+		election:  schedule,
+		status:    status,
+		log:       cCtx.XLog,
 	}
 	if schedule.enableChainedBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
@@ -254,24 +248,6 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 			return false, err
 		}
 	}
-
-	// 4 根据term信息，以及历史信息，判断该矿工是否多生产了区块，这种行为为恶意出块行为
-	tp.mutex.Lock()
-	defer tp.mutex.Unlock()
-	// 判断某个矿工是否恶意出块
-	if _, ok := tp.curTermProposerProduceNumCache[tdposStorage.CurTerm]; !ok {
-		tp.curTermProposerProduceNumCache[tdposStorage.CurTerm] = make(map[string]map[string]bool)
-	}
-	if _, ok := tp.curTermProposerProduceNumCache[tdposStorage.CurTerm][string(block.GetProposer())]; !ok {
-		tp.curTermProposerProduceNumCache[tdposStorage.CurTerm][string(block.GetProposer())] = make(map[string]bool)
-	}
-	tp.curTermProposerProduceNumCache[tdposStorage.CurTerm][string(block.GetProposer())][utils.F(block.GetBlockid())] = true
-	if int64(len(tp.curTermProposerProduceNumCache[tdposStorage.CurTerm][string(block.GetProposer())])) >= tp.election.blockNum+1 {
-		tp.log.Warn("Tdpos::CheckMinerMatch::check failed, proposer produce more than config blockNum.", "blockNum",
-			len(tp.curTermProposerProduceNumCache[tdposStorage.CurTerm][string(block.GetProposer())]))
-		return false, proposeBlockMoreThanConfigErr
-	}
-
 	return true, nil
 }
 

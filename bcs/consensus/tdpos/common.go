@@ -32,10 +32,9 @@ const (
 )
 
 var (
-	invalidProposerErr            = errors.New("Invalid proposer.")
-	invalidTermErr                = errors.New("Invalid term.")
-	proposeBlockMoreThanConfigErr = errors.New("Propose block more than config num error.")
-	timeoutBlockErr               = errors.New("New block is out of date.")
+	invalidProposerErr = errors.New("Invalid proposer.")
+	invalidTermErr     = errors.New("Invalid term.")
+	timeoutBlockErr    = errors.New("New block is out of date.")
 
 	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
 	EmptyValidors    = errors.New("Current validators is empty.")
