@@ -129,8 +129,12 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, 
 	}
 
 	// 新qc至少要在本地qcTree挂上, 那么justify的节点需要在本地
+	// 或者新qc目前为孤儿节点，有可能未来切换成HighQC，此时仅需要proposal在[root+1, root+6]
+	// 是+6不是+3的原因是考虑到重起的时候的情况，重起时，root为tipId-3，而外界状态最多到tipId+3，此处简化处理
 	if parentNode := s.QcTree.DFSQueryNode(parent.GetProposalId()); parentNode == nil {
-		return EmptyParentNode
+		if proposal.GetProposalView() <= s.QcTree.Root.In.GetParentView() || proposal.GetProposalView() > s.QcTree.Root.In.GetProposalView()+6 {
+			return EmptyParentNode
+		}
 	}
 
 	// 检查justify的所有vote签名

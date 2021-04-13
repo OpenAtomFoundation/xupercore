@@ -72,7 +72,7 @@ type Smr struct {
 }
 
 func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus, cryptoClient *cCrypto.CBFTCrypto, pacemaker PacemakerInterface,
-	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree, justifySigns []*chainedBftPb.QuorumCertSign) *Smr {
+	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree) *Smr {
 	s := &Smr{
 		bcName:        bcName,
 		log:           log,
@@ -91,19 +91,18 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 	}
 	// smr初始值装载
 	s.localProposal.Store(utils.F(qcTree.Root.In.GetProposalId()), true)
-	v := &VoteInfo{
-		ProposalView: qcTree.Root.In.GetProposalView(),
-		ProposalId:   qcTree.Root.In.GetProposalId(),
-	}
-	if justifySigns != nil {
-		s.qcVoteMsgs.Store(utils.F(v.ProposalId), justifySigns)
-	}
 	return s
 }
 
 var (
 	RegisterErr = errors.New("Register to p2p error")
 )
+
+func (s *Smr) LoadVotes(proposalId []byte, signs []*chainedBftPb.QuorumCertSign) {
+	if signs != nil {
+		s.qcVoteMsgs.Store(utils.F(proposalId), signs)
+	}
+}
 
 // RegisterToNetwork register msg handler to p2p network
 func (s *Smr) RegisterToNetwork() error {
@@ -340,7 +339,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			VoteInfo:  newVote,
 			SignInfos: []*chainedBftPb.QuorumCertSign{newProposalMsg.GetSign()},
 		}, parentQC, s.Election.GetValidators(parentQC.GetProposalView())); err != nil {
-			s.log.Error("smr::handleReceivedProposal::CheckProposal error", "error", err,
+			s.log.Debug("smr::handleReceivedProposal::CheckProposal error", "error", err,
 				"parentView", parentQC.GetProposalView(), "parentId", utils.F(parentQC.GetProposalId()))
 			return
 		}
@@ -363,20 +362,12 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		}
 	}
 
-	// 获取parentQC对应的本地节点, 新qc至少要在本地qcTree挂上, 那么justify的节点需要在本地
-	parentNode := s.qcTree.DFSQueryNode(parentQC.GetProposalId())
-	if parentNode == nil {
-		s.log.Error("smr::handleReceivedProposal::cannot find parent node.", "parentQC Height", parentQC.GetProposalView(), "parentQC id", parentQC.GetProposalId())
-		return
-	}
 	// 3.本地safetyrules更新, 如有可以commit的QC，执行commit操作并更新本地rootQC
-	valid := s.saftyrules.UpdatePreferredRound(parentQC.GetProposalView())
-	if parentQC.LedgerCommitInfo != nil && parentQC.LedgerCommitInfo.CommitStateId != nil && valid && parentNode != nil {
-		if parentNode.Parent != nil && parentNode.Parent.Parent != nil {
-			s.qcTree.updateCommit(parentNode.Parent.Parent.In)
-		}
+	if parentQC.LedgerCommitInfo != nil && parentQC.LedgerCommitInfo.CommitStateId != nil &&
+		s.saftyrules.UpdatePreferredRound(parentQC.GetProposalView()) {
+		s.qcTree.updateCommit(parentQC.GetProposalId())
 	}
-	// 4.查看收到的view是否符合要求
+	// 4.查看收到的view是否符合要求, 此处接受孤儿节点
 	if !s.saftyrules.CheckPacemaker(newProposalMsg.GetProposalView(), s.pacemaker.GetCurrentView()) {
 		s.log.Error("smr::handleReceivedProposal::error", "error", TooLowNewProposal, "local want", s.pacemaker.GetCurrentView(),
 			"proposal have", newProposalMsg.GetProposalView())
@@ -399,7 +390,6 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			VoteInfo:         newVote,
 			LedgerCommitInfo: newLedgerInfo,
 		},
-		Parent: parentNode,
 	}
 	// 5.与proposal.ParentId相比，更新本地qcTree，insert新节点, 包括更新CommitQC等等
 	if err := s.qcTree.updateQcStatus(newNode); err != nil {
@@ -550,21 +540,15 @@ func (s *Smr) BlockToProposalNode(block cctx.BlockInterface) *ProposalNode {
 	if node := s.qcTree.DFSQueryNode(targetId); node != nil {
 		return node
 	}
-	preId := block.GetPreHash()
-	parentNode := s.qcTree.DFSQueryNode(preId)
-	if parentNode == nil {
-		return nil
-	}
 	return &ProposalNode{
 		In: &QuorumCert{
 			VoteInfo: &VoteInfo{
 				ProposalId:   block.GetBlockid(),
 				ProposalView: block.GetHeight(),
-				ParentId:     parentNode.In.GetProposalId(),
-				ParentView:   parentNode.In.GetProposalView(),
+				ParentId:     block.GetPreHash(),
+				ParentView:   block.GetHeight() - 1,
 			},
 		},
-		Parent: parentNode,
 	}
 }
 

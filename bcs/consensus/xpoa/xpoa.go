@@ -90,6 +90,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	schedule.validators = validators
 	// 创建status实例
 	status := &XpoaStatus{
+		Name:        "poa",
 		Version:     xconfig.Version,
 		StartHeight: cCfg.StartHeight,
 		Index:       cCfg.Index,
@@ -115,21 +116,31 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 			return nil
 		}
 		pacemaker := &chainedBft.DefaultPaceMaker{
-			StartView: cCfg.StartHeight,
+			CurrentView: cCfg.StartHeight,
+		}
+		// 重启状态检查1，pacemaker需要重置
+		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+			pacemaker.CurrentView = cCtx.Ledger.GetTipBlock().GetHeight() - 1
 		}
 		saftyrules := &chainedBft.DefaultSaftyRules{
 			Crypto: cryptoClient,
 			QcTree: qcTree,
 			Log:    cCtx.XLog,
 		}
-		// 重启状态下需重做tipBlock，此时需重装载justify签名
-		var justifySigns []*chainedBftPb.QuorumCertSign
+		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
+		// 重启状态检查2，重做tipBlock，此时需重装载justify签名
 		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-			justifySigns = xpoa.GetJustifySigns(cCtx.Ledger.GetTipBlock())
+			for i := int64(0); i < 3; i++ {
+				b, err := cCtx.Ledger.QueryBlockByHeight(cCtx.Ledger.GetTipBlock().GetHeight() - i)
+				if err != nil {
+					break
+				}
+				smr.LoadVotes(b.GetPreHash(), xpoa.GetJustifySigns(b))
+			}
 		}
-		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree, justifySigns)
 		go smr.Start()
 		xpoa.smr = smr
+		status.Name = "xpoa"
 		cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::load chained-bft successfully.")
 	}
 
@@ -143,7 +154,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 			cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, method, f)
 		}
 	}
-	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a xpoa instance successfully!", "xpoa", xpoa)
+	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a xpoa instance successfully!")
 	return xpoa
 }
 
@@ -187,7 +198,6 @@ func (x *xpoaConsensus) CalculateBlock(block cctx.BlockInterface) error {
 }
 
 // CheckMinerMatch 查看block是否合法
-// ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
 func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	// 验证矿工身份
 	proposer := x.election.GetLocalLeader(block.GetTimestamp(), block.GetHeight())
@@ -216,11 +226,6 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 		return false, err
 	}
 	pNode := x.smr.BlockToProposalNode(block)
-	if pNode == nil {
-		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::BlockToProposalNode error.", "logid", ctx.GetLog().GetLogId(),
-			"blockId", utils.F(block.GetBlockid()), "preBlockId", utils.F(block.GetPreHash()))
-		return false, err
-	}
 	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify, x.election.GetValidators(justify.GetProposalView()))
 	if err != nil {
 		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "logid", ctx.GetLog().GetLogId(),

@@ -6,8 +6,7 @@ import (
 
 func TestPaceMaker(t *testing.T) {
 	p := &DefaultPaceMaker{
-		StartView:   0,
-		currentView: 0,
+		CurrentView: 0,
 	}
 	qc := &QuorumCert{
 		VoteInfo: &VoteInfo{

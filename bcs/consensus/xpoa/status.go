@@ -11,6 +11,7 @@ type ValidatorsInfo struct {
 
 // xpoaStatus 实现了ConsensusStatus接口
 type XpoaStatus struct {
+	Name        string
 	Version     int64 `json:"version"`
 	StartHeight int64 `json:"startHeight"`
 	Index       int   `json:"index"`
@@ -34,7 +35,7 @@ func (x *XpoaStatus) GetStepConsensusIndex() int {
 
 // 获取共识类型
 func (x *XpoaStatus) GetConsensusName() string {
-	return "xpoa"
+	return x.Name
 }
 
 // 获取当前状态机term

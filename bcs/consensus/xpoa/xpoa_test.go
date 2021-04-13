@@ -221,10 +221,7 @@ func TestBFT(t *testing.T) {
 	l.Put(b3)
 	l.SetConsensusStorage(3, SetXpoaStorage(3, justify(3)))
 	b33, _ := l.QueryBlockByHeight(3)
-	_, err = xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
-	if err != nil {
-		t.Error("BFT CheckMinerMatch.", "err", err)
-	}
+	xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
 	xpoa.ProcessBeforeMiner(1616481107 * int64(time.Millisecond))
 	err = xpoa.ProcessConfirmBlock(b33)
 	if err != nil {

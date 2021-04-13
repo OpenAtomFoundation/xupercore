@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"container/list"
 	"encoding/json"
 	"errors"
 	"time"
@@ -58,7 +59,6 @@ func AddressEqual(a []string, b []string) bool {
 // initQCTree 创建了smr需要的QC树存储，该Tree存储了目前待commit的QC信息
 func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *chainedBft.QCPendingTree {
 	// 初始状态应该是start高度的前一个区块为genesisQC，即tipBlock
-	// 由于重启后对于smr的内存存储(如qcVoteMap)将会清空，因此只能拿tipBlock获取tipHeight - 1高度的签名，重做tipBlock
 	g, err := ledger.QueryBlockByHeight(startHeight - 1)
 	if err != nil {
 		return nil
@@ -75,40 +75,92 @@ func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *cha
 	gNode := &chainedBft.ProposalNode{
 		In: gQC,
 	}
-	r := ledger.GetTipBlock()
+	tip := ledger.GetTipBlock()
 	// 当前为初始状态
-	if r.GetHeight() == startHeight-1 {
+	if tip.GetHeight() == startHeight-1 {
 		return &chainedBft.QCPendingTree{
-			Genesis:  gNode,
-			Root:     gNode,
-			HighQC:   gNode,
-			CommitQC: gNode,
-			Log:      log,
+			Genesis:    gNode,
+			Root:       gNode,
+			HighQC:     gNode,
+			CommitQC:   gNode,
+			Log:        log,
+			OrphanList: list.New(),
+			OrphanMap:  make(map[string]bool),
 		}
 	}
-	// 重启状态时将tipBlock-1装载到HighQC中
-	r, err = ledger.QueryBlock(r.GetPreHash())
+	// 重启状态时将root->tipBlock-3, generic->tipBlock-2, highQC->tipBlock-1
+	// 若tipBlock<=2, root->genesisBlock, highQC->tipBlock-1
+	tipNode := makeTreeNode(ledger, tip.GetHeight())
+	if tip.GetHeight() < 3 {
+		tree := &chainedBft.QCPendingTree{
+			Genesis:    gNode,
+			Root:       makeTreeNode(ledger, 0),
+			Log:        log,
+			OrphanList: list.New(),
+			OrphanMap:  make(map[string]bool),
+		}
+		switch tip.GetHeight() {
+		case 0:
+			tree.HighQC = tree.Root
+			return tree
+		case 1:
+			tree.HighQC = tree.Root
+			tree.HighQC.Sons = append(tree.HighQC.Sons, tipNode)
+			return tree
+		case 2:
+			tree.HighQC = makeTreeNode(ledger, 1)
+			tree.HighQC.Sons = append(tree.HighQC.Sons, tipNode)
+			tree.Root.Sons = append(tree.Root.Sons, tree.HighQC)
+		}
+		return tree
+	}
+	tree := &chainedBft.QCPendingTree{
+		Genesis:    gNode,
+		Root:       makeTreeNode(ledger, tip.GetHeight()-3),
+		GenericQC:  makeTreeNode(ledger, tip.GetHeight()-2),
+		HighQC:     makeTreeNode(ledger, tip.GetHeight()-1),
+		Log:        log,
+		OrphanList: list.New(),
+		OrphanMap:  make(map[string]bool),
+	}
+	// 手动组装Tree结构
+	tree.Root.Sons = append(tree.Root.Sons, tree.GenericQC)
+	tree.GenericQC.Sons = append(tree.GenericQC.Sons, tree.HighQC)
+	tree.HighQC.Sons = append(tree.HighQC.Sons, tipNode)
+	return tree
+}
+
+func makeTreeNode(ledger cctx.LedgerRely, height int64) *chainedBft.ProposalNode {
+	b, err := ledger.QueryBlockByHeight(height)
 	if err != nil {
 		return nil
 	}
-	rQC := &chainedBft.QuorumCert{
-		VoteInfo: &chainedBft.VoteInfo{
-			ProposalId:   r.GetBlockid(),
-			ProposalView: r.GetHeight(),
-		},
-		LedgerCommitInfo: &chainedBft.LedgerCommitInfo{
-			CommitStateId: r.GetBlockid(),
-		},
+	pre, err := ledger.QueryBlockByHeight(height - 1)
+	if err != nil {
+		return &chainedBft.ProposalNode{
+			In: &chainedBft.QuorumCert{
+				VoteInfo: &chainedBft.VoteInfo{
+					ProposalId:   b.GetBlockid(),
+					ProposalView: b.GetHeight(),
+				},
+				LedgerCommitInfo: &chainedBft.LedgerCommitInfo{
+					CommitStateId: b.GetBlockid(),
+				},
+			},
+		}
 	}
-	rNode := &chainedBft.ProposalNode{
-		In: rQC,
-	}
-	return &chainedBft.QCPendingTree{
-		Genesis:  gNode,
-		Root:     rNode,
-		HighQC:   rNode,
-		CommitQC: rNode,
-		Log:      log,
+	return &chainedBft.ProposalNode{
+		In: &chainedBft.QuorumCert{
+			VoteInfo: &chainedBft.VoteInfo{
+				ProposalId:   b.GetBlockid(),
+				ProposalView: b.GetHeight(),
+				ParentId:     pre.GetBlockid(),
+				ParentView:   pre.GetHeight(),
+			},
+			LedgerCommitInfo: &chainedBft.LedgerCommitInfo{
+				CommitStateId: b.GetBlockid(),
+			},
+		},
 	}
 }
 
@@ -126,8 +178,7 @@ func CleanProduceMap(isProduce map[int64]bool, period int64) {
 	}
 }
 
-/////////// lpb兼容逻辑 //////////
-
+///////////////////// lpb兼容逻辑 /////////////////////
 // 历史共识存储字段
 type ConsensusStorage struct {
 	Justify     *lpb.QuorumCert `json:"justify,omitempty"`

@@ -68,6 +68,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		StartHeight: cCfg.StartHeight,
 		Index:       cCfg.Index,
 		election:    schedule,
+		Name:        "tdpos",
 	}
 	tdpos := &tdposConsensus{
 		config:    xconfig,
@@ -85,21 +86,31 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 			return nil
 		}
 		pacemaker := &chainedBft.DefaultPaceMaker{
-			StartView: cCfg.StartHeight,
+			CurrentView: cCfg.StartHeight,
+		}
+		// 重启状态检查1，pacemaker需要重置
+		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+			pacemaker.CurrentView = cCtx.Ledger.GetTipBlock().GetHeight() - 1
 		}
 		saftyrules := &chainedBft.DefaultSaftyRules{
 			Crypto: cryptoClient,
 			QcTree: qcTree,
 			Log:    cCtx.XLog,
 		}
-		// 重启状态下需重做tipBlock，此时需重装载justify签名
-		var justifySigns []*chainedBftPb.QuorumCertSign
+		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
+		// 重启状态检查2，重做tipBlock，此时需重装载justify签名
 		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-			justifySigns = tdpos.GetJustifySigns(cCtx.Ledger.GetTipBlock())
+			for i := int64(0); i < 3; i++ {
+				b, err := cCtx.Ledger.QueryBlockByHeight(cCtx.Ledger.GetTipBlock().GetHeight() - i)
+				if err != nil {
+					break
+				}
+				smr.LoadVotes(b.GetPreHash(), tdpos.GetJustifySigns(b))
+			}
 		}
-		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree, justifySigns)
 		go smr.Start()
 		tdpos.smr = smr
+		status.Name = "xpos"
 		cCtx.XLog.Debug("Tdpos::NewTdposConsensus::load chained-bft successfully.")
 	}
 
@@ -116,7 +127,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 			cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, method, f)
 		}
 	}
-	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.", "tdpos", tdpos)
+	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.")
 	return tdpos
 }
 
@@ -168,7 +179,6 @@ func (tp *tdposConsensus) CalculateBlock(block cctx.BlockInterface) error {
 }
 
 // CheckMinerMatch 查看block是否合法
-// ATTENTION: TODO: 上层需要先检查VerifyBlock(block)
 func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
 	// 获取当前共识存储
 	bv, err := block.GetConsensusStorage()
@@ -181,7 +191,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Warn("Tdpos::CheckMinerMatch::ParseOldQCStorage error.", "err", err)
 		return false, err
 	}
-	tp.log.Debug("Tdpos::CheckMinerMatch", "tdposStorage", tdposStorage)
+	tp.log.Debug("Tdpos::CheckMinerMatch", "blockid", utils.F(block.GetBlockid()), "height", block.GetHeight())
 
 	// 1 判断当前区块生产者是否合法
 	term, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
@@ -360,8 +370,8 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 		tp.log.Debug("Tdpos::smr::ProcessConfirmBlock::minerScheduling overflow.")
 		return scheduleErr
 	}
-	// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
 	if tp.election.validators[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {
+		// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
 		validators := tp.election.GetValidators(block.GetHeight())
 		if err := tp.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), validators); err != nil {
 			tp.log.Warn("Tdpos::smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
