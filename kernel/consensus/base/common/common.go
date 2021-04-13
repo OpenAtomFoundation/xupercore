@@ -10,6 +10,7 @@ import (
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	bftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
@@ -20,7 +21,26 @@ var (
 	InvalidJustify   = errors.New("Justify structure is invalid.")
 
 	MaxMapSize = 1000
+
+	StatusOK         = 200
+	StatusBadRequest = 400
+	StatusErr        = 500
 )
+
+func NewContractOKResponse(json []byte) *contract.Response {
+	return &contract.Response{
+		Status:  StatusOK,
+		Message: "success",
+		Body:    json,
+	}
+}
+
+func NewContractErrResponse(status int, msg string) *contract.Response {
+	return &contract.Response{
+		Status:  status,
+		Message: msg,
+	}
+}
 
 // AddressEqual 判断两个validators地址是否相等
 func AddressEqual(a []string, b []string) bool {

@@ -108,7 +108,7 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 	if f == 0 {
 		return input+1 >= sum
 	}
-	return input >= sum-f
+	return input+1 >= sum-f
 }
 
 // CheckProposalMsg 原IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法

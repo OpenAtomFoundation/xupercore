@@ -15,6 +15,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
@@ -131,9 +132,17 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		xpoa.smr = smr
 		cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::load chained-bft successfully.")
 	}
+
 	// 注册合约方法
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractEditValidate, xpoa.methodEditValidates)
-	cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, contractGetValidates, xpoa.methodGetValidates)
+	xpoaKMethods := map[string]contract.KernMethod{
+		contractEditValidate: xpoa.methodEditValidates,
+		contractGetValidates: xpoa.methodGetValidates,
+	}
+	for method, f := range xpoaKMethods {
+		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(contractBucket, method); err != nil {
+			cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, method, f)
+		}
+	}
 	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a xpoa instance successfully!", "xpoa", xpoa)
 	return xpoa
 }

@@ -23,10 +23,6 @@ const (
 
 	fee = 1000
 
-	statusOK         = 200
-	statusBadRequest = 400
-	statusErr        = 500
-
 	MAXSLEEPTIME = 1000
 	MAXMAPSIZE   = 1000
 )

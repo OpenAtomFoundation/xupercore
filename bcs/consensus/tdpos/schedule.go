@@ -77,6 +77,7 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) 
 }
 
 // miner 调度算法, 依据时间进行矿工节点调度
+// s.alternateInterval >= s.period  &&  s.termInterval >= s.alternateInterval
 func (s *tdposSchedule) minerScheduling(timestamp int64) (term int64, pos int64, blockPos int64) {
 	// timstamp单位为unixnano, 配置文件中均为毫秒
 	if timestamp < s.initTimestamp {
@@ -89,12 +90,18 @@ func (s *tdposSchedule) minerScheduling(timestamp int64) (term int64, pos int64,
 	// |................|NODE1......................|.....................|NODE2.....
 	termTime := s.termInterval + (s.blockNum-1)*s.proposerNum*s.period + (s.proposerNum-1)*s.alternateInterval
 	// 每个矿工轮值时间
-	posTime := s.alternateInterval + s.period*(s.blockNum-1)
 	term = (T-initT)/termTime + 1
-	resTime := (T - initT) - ((T-initT)/termTime)*termTime
-	pos = resTime / posTime
-	resTime = resTime - (resTime/posTime)*posTime
-	blockPos = resTime/s.period + 1
+	termBegin := initT + (term-1)*termTime + s.termInterval - s.alternateInterval
+	if termBegin >= T {
+		return term, 0, -1
+	}
+	posTime := s.alternateInterval + s.period*(s.blockNum-1)
+	pos = (T - termBegin) / posTime
+	proposerBegin := termBegin + pos*posTime + s.alternateInterval - s.period
+	if proposerBegin >= T {
+		return term, pos, -1
+	}
+	blockPos = (T - proposerBegin) / s.period
 	return
 }
 
@@ -178,7 +185,6 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 	if err != nil || len(nextProposers) == 0 {
 		return false
 	}
-	s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "proposers", nextProposers)
 	if !common.AddressEqual(nextProposers, s.validators) {
 		s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "proposers", nextProposers)
 		s.validators = nextProposers
@@ -267,7 +273,7 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 		termBallotSli = append(termBallotSli, candidateBallot)
 	}
 	if int64(termBallotSli.Len()) < s.proposerNum {
-		s.log.Error("tdpos::calculateTopK::Term publish proposer num less than config", "termVotes", termBallotSli)
+		s.log.Debug("tdpos::calculateTopK::Term publish proposer num less than config", "termVotes", termBallotSli)
 		return s.initValidators, nil
 	}
 	// 计算topK候选人
@@ -308,7 +314,7 @@ func (s *tdposSchedule) calHisValidators(height int64, inputTerm int64) ([]strin
 			b, err := s.ledger.QueryBlockByHeight(beginH)
 			// 未找到更大的term，此时应该返回当前值
 			if err != nil {
-				s.log.Error("tdpos::calHisValidators::QueryBlockByHeight err.", "err", err)
+				s.log.Warn("tdpos::calHisValidators::QueryBlockByHeight err.", "err", err)
 				return termV[len(termV)-1].Validators, nil
 			}
 			bv, _ := b.GetConsensusStorage()
