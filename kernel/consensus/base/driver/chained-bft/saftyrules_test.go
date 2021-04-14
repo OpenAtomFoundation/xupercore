@@ -57,9 +57,7 @@ func TestCheckProposal(t *testing.T) {
 		Address:      &a,
 		CryptoClient: cc,
 	}
-	generic := CreateQC([]byte{1}, 1)
-	generic.VoteInfo.ParentId = []byte{0}
-	generic.VoteInfo.ParentView = 0
+	generic := CreateQC([]byte{1}, 1, []byte{0}, 01)
 	msg := &chainedBftPb.ProposalMsg{
 		ProposalView: 1,
 		ProposalId:   []byte{1},
@@ -71,16 +69,14 @@ func TestCheckProposal(t *testing.T) {
 	}
 	generic.SignInfos = []*chainedBftPb.QuorumCertSign{r.Sign}
 	node1 := &ProposalNode{
-		In:     generic,
-		Parent: s.QcTree.Root,
+		In: generic,
 	}
 	if err := s.QcTree.updateQcStatus(node1); err != nil {
 		t.Error("TestUpdateQcStatus empty parent error")
 		return
 	}
-	proposal := CreateQC([]byte{2}, 2)
+	proposal := CreateQC([]byte{2}, 2, []byte{1}, 1)
 	proposal.VoteInfo.ParentId = []byte{1}
-	proposal.VoteInfo.ParentView = 1
 	s.CheckProposal(proposal, generic, []string{"gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"})
 	s.VoteProposal([]byte{2}, 2, generic)
 	s.CheckVote(generic, "123", []string{"gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"})

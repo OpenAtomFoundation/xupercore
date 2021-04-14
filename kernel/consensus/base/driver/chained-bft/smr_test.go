@@ -2,6 +2,7 @@ package chained_bft
 
 import (
 	"bytes"
+	"container/list"
 	"path/filepath"
 	"testing"
 	"time"
@@ -98,11 +99,13 @@ func InitQcTee(log logs.Logger) *QCPendingTree {
 		In: initQC,
 	}
 	return &QCPendingTree{
-		Genesis:  rootNode,
-		Root:     rootNode,
-		HighQC:   rootNode,
-		CommitQC: rootNode,
-		Log:      log,
+		Genesis:    rootNode,
+		Root:       rootNode,
+		HighQC:     rootNode,
+		CommitQC:   rootNode,
+		Log:        log,
+		OrphanList: list.New(),
+		OrphanMap:  make(map[string]bool),
 	}
 }
 
@@ -154,7 +157,7 @@ func NewSMR(node string, log logs.Logger, p2p network.Network, t *testing.T) *Sm
 	election := &ElectionA{
 		addrs: []string{NodeA, NodeB, NodeC},
 	}
-	s := NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q, nil)
+	s := NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q)
 	if s == nil {
 		t.Error("NewSmr1 error")
 		return nil

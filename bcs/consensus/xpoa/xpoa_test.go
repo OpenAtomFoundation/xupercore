@@ -14,7 +14,13 @@ import (
 )
 
 func TestUnmarshalConfig(t *testing.T) {
-	cStr := "{\"period\": 3000,\"block_num\": 10,\"init_proposer\": [{\"address\": \"f3prTg9itaZY6m48wXXikXdcxiByW7zgk\",\"neturl\": \"127.0.0.1:47102\"},{\"address\": \"U9sKwFmgJVfzgWcfAG47dKn1kLQTqeZN3\",\"neturl\": \"127.0.0.1:47103\"},{\"address\": \"RUEMFGDEnLBpnYYggnXukpVfR9Skm59ph\",\"neturl\": \"127.0.0.1:47104\"}]}"
+	cStr := `{
+		"period": 3000,
+		"block_num": 10,
+		"init_proposer": {
+			"address": ["f3prTg9itaZY6m48wXXikXdcxiByW7zgk", "U9sKwFmgJVfzgWcfAG47dKn1kLQTqeZN3", "RUEMFGDEnLBpnYYggnXukpVfR9Skm59ph"]
+		}
+	}`
 	config := &xpoaConfig{}
 	err := json.Unmarshal([]byte(cStr), config)
 	if err != nil {
@@ -31,15 +37,9 @@ func getXpoaConsensusConf() string {
         "block_num":10,
         "contract_name":"xpoa_validates",
         "method_name":"get_validates",
-        "init_proposer": [{
-            	"address" : "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
-				"neturl" : "/ip4/127.0.0.1/tcp/47101/p2p/QmVcSF4F7rTdsvUJqsik98tXRXMBUqL5DSuBpyYKVhjuG4"
-            },
-            {
-                "address" : "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT", 
-				"neturl" : "/ip4/127.0.0.1/tcp/47102/p2p/Qmd1sJ4s7JTfHvetfjN9vNE5fhkLESs42tYHc5RYUBPnEv"
-            }
-        ]
+        "init_proposer": {
+            "address" : ["dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN", "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"]
+        }
 	}`
 }
 
@@ -49,15 +49,9 @@ func getBFTXpoaConsensusConf() string {
         "block_num":10,
         "contract_name":"xpoa_validates",
         "method_name":"get_validates",
-        "init_proposer": [{
-            	"address" : "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN",
-				"neturl" : "/ip4/127.0.0.1/tcp/47101/p2p/QmVcSF4F7rTdsvUJqsik98tXRXMBUqL5DSuBpyYKVhjuG4"
-            },
-            {
-                "address" : "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT", 
-				"neturl" : "/ip4/127.0.0.1/tcp/47102/p2p/Qmd1sJ4s7JTfHvetfjN9vNE5fhkLESs42tYHc5RYUBPnEv"
-            }
-        ],
+        "init_proposer": {
+            "address" : ["dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN", "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"]
+        },
 		"bft_config":{}
 	}`
 }
@@ -221,10 +215,7 @@ func TestBFT(t *testing.T) {
 	l.Put(b3)
 	l.SetConsensusStorage(3, SetXpoaStorage(3, justify(3)))
 	b33, _ := l.QueryBlockByHeight(3)
-	_, err = xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
-	if err != nil {
-		t.Error("BFT CheckMinerMatch.", "err", err)
-	}
+	xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
 	xpoa.ProcessBeforeMiner(1616481107 * int64(time.Millisecond))
 	err = xpoa.ProcessConfirmBlock(b33)
 	if err != nil {

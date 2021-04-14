@@ -188,7 +188,7 @@ func NewSMR(node string, log logs.Logger, p2p network.Network) *chainedBft.Smr {
 	election := &ElectionA{
 		addrs: []string{NodeA, NodeB, NodeC},
 	}
-	s := chainedBft.NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q, nil)
+	s := chainedBft.NewSmr("xuper", a.Address, log, p2p, cryptoClient, pacemaker, saftyrules, election, q)
 	if s == nil {
 		return nil
 	}

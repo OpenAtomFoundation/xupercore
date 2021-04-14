@@ -16,19 +16,18 @@ type PacemakerInterface interface {
 // The Pacemaker keeps track of votes and of time.
 // TODO:  the Pacemaker broadcasts a TimeoutMsg notification.
 type DefaultPaceMaker struct {
-	StartView   int64
-	currentView int64
+	CurrentView int64
 	// timeout int64
 }
 
 func (p *DefaultPaceMaker) AdvanceView(qc QuorumCertInterface) (bool, error) {
 	r := qc.GetProposalView()
-	if r+1 > p.currentView {
-		p.currentView = r + 1
+	if r+1 > p.CurrentView {
+		p.CurrentView = r + 1
 	}
 	return true, nil
 }
 
 func (p *DefaultPaceMaker) GetCurrentView() int64 {
-	return p.currentView
+	return p.CurrentView
 }

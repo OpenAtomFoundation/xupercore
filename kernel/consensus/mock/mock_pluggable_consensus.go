@@ -190,6 +190,9 @@ func (l *FakeLedger) QueryBlock(blockId []byte) (ledger.BlockHandle, error) {
 }
 
 func (l *FakeLedger) QueryBlockByHeight(height int64) (ledger.BlockHandle, error) {
+	if height < 0 {
+		return nil, blockSetItemErr
+	}
 	if int(height) > len(l.ledgerSlice)-1 {
 		return nil, blockSetItemErr
 	}

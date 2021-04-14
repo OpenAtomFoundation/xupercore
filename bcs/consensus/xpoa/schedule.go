@@ -18,6 +18,7 @@ type xpoaSchedule struct {
 	blockNum int64
 	// 当前validators的address
 	validators []string
+	miner      string
 	// 存储初始值
 	initValidators []string
 
