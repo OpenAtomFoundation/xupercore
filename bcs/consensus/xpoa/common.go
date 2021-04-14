@@ -32,15 +32,14 @@ type xpoaConfig struct {
 	// 每个候选人每轮出块个数
 	BlockNum int64 `json:"block_num"`
 	// 单位为毫秒
-	Period       int64          `json:"period"`
-	InitProposer []ProposerInfo `json:"init_proposer"`
+	Period       int64        `json:"period"`
+	InitProposer ProposerInfo `json:"init_proposer"`
 
 	EnableBFT map[string]bool `json:"bft_config,omitempty"`
 }
 
 type ProposerInfo struct {
-	Address string `json:"address"`
-	Neturl  string `json:"neturl"`
+	Address []string `json:"address"`
 }
 
 // LoadValidatorsMultiInfo

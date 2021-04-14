@@ -78,8 +78,8 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	// xpoaSchedule 实现了ProposerElectionInterface接口，接口定义了validators操作
 	// 重启时需要使用最新的validator数据，而不是initValidators数据
 	var validators []string
-	for _, v := range xconfig.InitProposer {
-		validators = append(validators, v.Address)
+	for _, v := range xconfig.InitProposer.Address {
+		validators = append(validators, v)
 	}
 	schedule.initValidators = validators
 	reader, _ := schedule.ledger.GetTipXMSnapshotReader()
@@ -182,6 +182,7 @@ Again:
 		x.bctx.GetLog().Debug("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
 	}
 	leader := x.election.GetLocalLeader(time.Now().UnixNano(), height)
+	x.election.miner = leader
 	if leader == x.election.address {
 		x.bctx.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", true, "height", height)
 		// TODO: 首次切换为矿工时SyncBlcok, Bug: 可能会导致第一次出块失败

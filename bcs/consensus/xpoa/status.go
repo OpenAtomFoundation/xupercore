@@ -7,6 +7,7 @@ import (
 
 type ValidatorsInfo struct {
 	Validators []string `json:"validators"`
+	Miner      string   `json:"miner"`
 }
 
 // xpoaStatus 实现了ConsensusStatus接口
@@ -48,6 +49,7 @@ func (x *XpoaStatus) GetCurrentTerm() int64 {
 func (x *XpoaStatus) GetCurrentValidatorsInfo() []byte {
 	i := ValidatorsInfo{
 		Validators: x.election.validators,
+		Miner:      x.election.miner,
 	}
 	b, _ := json.Marshal(i)
 	return b
