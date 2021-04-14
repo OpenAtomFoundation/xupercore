@@ -56,7 +56,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		return nil
 	}
 	// 新建schedule实例，该实例包含smr中election的接口实现
-	schedule := NewSchedule(xconfig, cCtx.XLog, cCtx.Ledger)
+	schedule := NewSchedule(xconfig, cCtx.XLog, cCtx.Ledger, cCfg.StartHeight)
 	if schedule == nil {
 		cCtx.XLog.Error("Tdpos::NewTdposConsensus::new schedule err.")
 		return nil
@@ -404,16 +404,7 @@ func (tp *tdposConsensus) Start() error {
 
 // 共识占用blockinterface的专有存储，特定共识需要提供parse接口，在此作为接口高亮
 func (tp *tdposConsensus) ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
-	b, err := block.GetConsensusStorage()
-	if err != nil {
-		return nil, err
-	}
-	justify, err := common.ParseOldQCStorage(b)
-	if err != nil {
-		tp.log.Warn("Tdpos::ParseConsensusStorage invalid consensus storage", "err", err)
-		return nil, err
-	}
-	return justify, nil
+	return ParseConsensusStorage(block)
 }
 
 func (tp *tdposConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {

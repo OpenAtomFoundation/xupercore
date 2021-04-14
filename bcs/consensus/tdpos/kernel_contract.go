@@ -21,8 +21,6 @@ import (
 //                value = <${from_addr}, ${ballot_count}>
 // 3. 撤销动作相关  key = "revoke_${candi_addr}"
 //                value = <${from_addr}, <(${TYPE_VOTE/TYPE_NOMINATE}, ${ballot_count})>>
-// 4. term存储相关，仅在vote操作后上报 key = "term"
-//                               value = <${term}, ${Validators}, ${height}> (仅记录变化值)
 // 以上所有的数据读通过快照读取, 快照读取的是当前区块的前三个区块的值
 // 以上所有数据都更新到各自的链上存储中，直接走三代合约写入，去除原Finalize的最后写入更新机制
 // 由于三代合约读写集限制，不能针对同一个ExeInput触发并行操作，后到的tx将会出现读写集错误，即针对同一个大key的操作同一个区块只能顺序执行
@@ -61,7 +59,7 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 
 	// 1. 读取提名候选人key，改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight <= 3 {
+	if tipHeight < tp.status.StartHeight+3 {
 		return common.NewContractErrResponse(common.StatusErr, "Cannot nominate candidators when block height <= 3."), tooLowHeight
 	}
 	res, err := tp.election.getSnapshotKey(tipHeight-3, contractBucket, []byte(nominateKey))
@@ -111,7 +109,7 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 
 	// 1. 提名候选人改写
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight <= 3 {
+	if tipHeight < tp.status.StartHeight+3 {
 		tp.log.Debug("tdpos::getSnapshotKey::TipHeight <= 3, use init parameters.")
 		return common.NewContractErrResponse(common.StatusErr, "Cannot revoke candidators when block height < 3."), tooLowHeight
 	}
@@ -223,7 +221,7 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 
 	// 1. 检查vote的地址是否在候选人池中，快照读取候选人池，vote相关参数一定是会在nominate列表中显示
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight <= 3 {
+	if tipHeight < tp.status.StartHeight+3 {
 		tp.log.Debug("tdpos::getSnapshotKey::TipHeight <= 3, use init parameters.")
 		return common.NewContractErrResponse(common.StatusErr, "Cannot vote candidators when block height < 3."), tooLowHeight
 	}
@@ -266,60 +264,11 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	if err := contractCtx.Put(contractBucket, []byte(voteKey), voteBytes); err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-
-	// 4. 顺带更新term索引
-	if err := tp.refreshTerm(tipHeight, contractCtx); err != nil {
-		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
-	}
-
 	delta := contract.Limits{
 		XFee: fee,
 	}
 	contractCtx.AddResourceUsed(delta)
 	return common.NewContractOKResponse([]byte("ok")), nil
-}
-
-// refreshTerm 被动触发更新term列表，当且仅当当前候选人集合和
-func (tp *tdposConsensus) refreshTerm(tipHeight int64, contractCtx contract.KContext) error {
-	// 此处不并需要tipheight-3
-	res, err := tp.election.getSnapshotKey(tipHeight, contractBucket, []byte(termKey))
-	if err != nil {
-		return err
-	}
-	item := termItem{
-		Validators: tp.election.validators,
-		Term:       tp.election.curTerm,
-		Height:     tipHeight,
-	}
-	termValue := NewTermValue()
-	// 初始化则直接push值
-	if res == nil {
-		termValue = append(termValue, item)
-		termBytes, err := json.Marshal(termValue)
-		if err != nil {
-			return err
-		}
-		if err := contractCtx.Put(contractBucket, []byte(termKey), termBytes); err != nil {
-			return err
-		}
-		return nil
-	}
-	if err := json.Unmarshal(res, &termValue); err != nil {
-		return err
-	}
-	// 仅与最新的值对比，若有变化则插入新值
-	tail := termValue[len(termValue)-1]
-	if !common.AddressEqual(tail.Validators, tp.election.validators) {
-		termValue = append(termValue, item)
-	}
-	termBytes, err := json.Marshal(termValue)
-	if err != nil {
-		return err
-	}
-	if err := contractCtx.Put(contractBucket, []byte(termKey), termBytes); err != nil {
-		return err
-	}
-	return nil
 }
 
 // runRevokeVote 执行选票撤销
@@ -353,7 +302,7 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 
 	// 1. 检查是否在vote池子里面，读取vote存储
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight <= 3 {
+	if tipHeight < tp.status.StartHeight+3 {
 		tp.log.Debug("tdpos::getSnapshotKey::TipHeight <= 3, use init parameters.")
 		return common.NewContractErrResponse(common.StatusErr, "Cannot revoke vote when block height < 3."), tooLowHeight
 	}
@@ -433,7 +382,7 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 		"validators": ` + fmt.Sprintf("%s", tp.election.initValidators) + ` 
 	}`
 	tipHeight := tp.election.ledger.GetTipBlock().GetHeight()
-	if tipHeight <= 3 {
+	if tipHeight < tp.status.StartHeight+3 {
 		return common.NewContractOKResponse([]byte(initValue)), nil
 	}
 
@@ -518,18 +467,6 @@ type revokeItem struct {
 
 func NewRevokeValue() revokeValue {
 	return make(map[string][]revokeItem)
-}
-
-type termValue []*termItem
-
-type termItem struct {
-	Validators []string
-	Term       int64
-	Height     int64
-}
-
-func NewTermValue() []termItem {
-	return make([]termItem, 0)
 }
 
 func (tp *tdposConsensus) isAuthAddress(candidate string, initiator string, authRequire []string) bool {

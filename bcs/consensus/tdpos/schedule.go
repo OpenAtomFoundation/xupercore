@@ -34,13 +34,14 @@ type tdposSchedule struct {
 	initValidators []string
 	curTerm        int64
 	miner          string
+	startHeight    int64
 
 	log    logs.Logger
 	ledger cctx.LedgerRely
 }
 
 // NewSchedule 新建schedule实例
-func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) *tdposSchedule {
+func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely, startHeight int64) *tdposSchedule {
 	schedule := &tdposSchedule{
 		period:            xconfig.Period,
 		blockNum:          xconfig.BlockNum,
@@ -49,6 +50,7 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely) 
 		termInterval:      xconfig.TermInterval,
 		initTimestamp:     xconfig.InitTimestamp,
 		validators:        (xconfig.InitProposer)["1"],
+		startHeight:       startHeight,
 		log:               log,
 		ledger:            ledger,
 	}
@@ -125,7 +127,7 @@ func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) 
 		s.log.Debug("tdpos::getSnapshotKey::reader.Get err.", "err", err)
 		return nil, err
 	}
-	if versionData == nil {
+	if versionData == nil || versionData.PureData == nil {
 		return nil, nil
 	}
 	return versionData.PureData.Value, nil
@@ -161,7 +163,7 @@ func (s *tdposSchedule) GetLeader(round int64) string {
 
 // GetValidators election接口实现，获取指定round的候选人节点Address
 func (s *tdposSchedule) GetValidators(round int64) []string {
-	if round <= 3 {
+	if round < s.startHeight+3 {
 		return s.initValidators
 	}
 	proposers, err := s.calculateProposers(round)
@@ -178,7 +180,7 @@ func (s *tdposSchedule) GetIntAddress(address string) string {
 
 // updateProposers 根据各合约存储计算当前proposers
 func (s *tdposSchedule) UpdateProposers(height int64) bool {
-	if height <= 3 {
+	if height < s.startHeight+3 {
 		return false
 	}
 	nextProposers, err := s.calculateProposers(height)
@@ -195,9 +197,8 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 
 // calculateProposers 根据vote选票信息计算最新的topK proposer, 调用方需检查height > 3
 // 若提案投票人数总和小于指定数目，则统一仍使用初始值
-// 或者根据历史termKey获取历史候选人集合
 func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
-	if height <= 3 {
+	if height < s.startHeight+3 {
 		return s.initValidators, nil
 	}
 	nowTerm, _, _ := s.minerScheduling(time.Now().UnixNano())
@@ -218,17 +219,14 @@ func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
 		return p, nil
 	}
 	// 情况二：读取历史值，此时分成历史Key读取和计算差值两部分
-	b, err := s.ledger.QueryBlockByHeight(height)
-	if err != nil {
-		s.log.Error("tdpos::calculateProposers::QueryBlockByHeight err.", "err", err)
-		return nil, err
-	}
-	term, _, _ := s.minerScheduling(b.GetTimestamp())
-	return s.calHisValidators(height, term)
+	return s.calHisValidators(height)
 }
 
 // calTopKNominator 计算最新的投票的topK候选人并返回
 func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
+	if height < s.startHeight+3 {
+		return s.initValidators, nil
+	}
 	// 获取nominate信息
 	res, err := s.getSnapshotKey(height-3, contractBucket, []byte(nominateKey))
 	if err != nil {
@@ -285,57 +283,67 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 	return proposers, nil
 }
 
-// calHisValidators 根据termKey计算历史候选人信息
-// ...｜<----termK---->｜...｜<----termK+N---->｜...|<----termK+M---->|<---termK+M+1--->
-// ...|..VoteA....VoteB|....|......VoteC......|....|.....VoteD.......|................
-// ...|B1|B2|..........|Bn..|Bm|Bm+1|.........|Bk|.|Bv|Bv+1|.........|Bx|Bx+1|Bx+2|...
-// ..........term1.....|term2|.....term3......|term4|.....term5......|......term6+....
-func (s *tdposSchedule) calHisValidators(height int64, inputTerm int64) ([]string, error) {
-	// 获取term信息
-	res, err := s.getSnapshotKey(height, contractBucket, []byte(termKey))
+// calHisValidators 根据term计算历史候选人信息
+func (s *tdposSchedule) calHisValidators(height int64) ([]string, error) {
+	// 设最近一次bucket vote变更的高度为H，所在term为T，候选人仅会在term+1的第一个高度H+M，试图变更候选人(不一定vote会引起变更)
+	// 因此在输入一个height时，拿到当前term，查询当前term的第一个区块高度height-Z，通过height-Z获取TopK即可
+	block, err := s.ledger.QueryBlockByHeight(height)
 	if err != nil {
-		s.log.Error("tdpos::calHisValidators::getSnapshotKey err.", "err", err)
+		s.log.Error("tdpos::calculateProposers::QueryBlockByHeight err.", "err", err)
 		return nil, err
 	}
-	if res == nil {
-		return s.initValidators, nil
+	term, pos, blockPos := s.minerScheduling(block.GetTimestamp())
+	// 往前回溯的最远距离为internal，即该轮term之前最多生产过多少个区块
+	internal := pos*s.blockNum + blockPos
+	begin := block.GetHeight() - internal
+	if begin <= s.startHeight {
+		begin = s.startHeight
 	}
-	termV := NewTermValue()
-	if err := json.Unmarshal(res, &termV); err != nil {
-		s.log.Error("tdpos::calHisValidators::Unmarshal err.", "err", err)
+	// 二分法实现快速查找
+	targetHeight, err := s.binarySearch(begin, block.GetHeight(), term)
+	if err != nil {
 		return nil, err
 	}
-	// 如果slice最后一个值仍比当前值小，则需查找计算
-	if termV[len(termV)-1].Term < inputTerm {
-		// 此时根据最后一次记录term的height向后查找，然后计算候选人值
-		beginH := termV[len(termV)-1].Height
-		for {
-			beginH = beginH + 1
-			b, err := s.ledger.QueryBlockByHeight(beginH)
-			// 未找到更大的term，此时应该返回当前值
-			if err != nil {
-				s.log.Warn("tdpos::calHisValidators::QueryBlockByHeight err.", "err", err)
-				return termV[len(termV)-1].Validators, nil
-			}
-			bv, _ := b.GetConsensusStorage()
-			tdposStorage, err := common.ParseOldQCStorage(bv)
-			if err != nil {
-				s.log.Error("tdpos::calHisValidators::ParseOldQCStorage err.", "err", err)
-				return nil, err
-			}
-			if tdposStorage.CurTerm > termV[len(termV)-1].Term {
-				return s.calTopKNominator(b.GetHeight())
-			}
+	s.log.Debug("tdpos::calculateProposers::target height.", "height", height, "targetHeight", targetHeight, "term", term)
+	return s.calTopKNominator(targetHeight)
+}
+
+// binarySearch 二分法快速查找
+func (s *tdposSchedule) binarySearch(begin int64, end int64, term int64) (int64, error) {
+	for begin < end {
+		mid := begin + (end-begin)/2
+		midTerm, err := s.getTerm(mid)
+		if err != nil {
+			return -1, err
+		}
+		nextMidTerm, err := s.getTerm(mid + 1)
+		if err != nil {
+			return -1, err
+		}
+		if midTerm < term && nextMidTerm == term {
+			return mid + 1, nil
+		}
+		if midTerm < term {
+			begin = mid + 1
+		} else {
+			end = mid
 		}
 	}
-	// 如果在历史值区间，则可直接计算结果
-	index := 0
-	for i, item := range termV {
-		if item.Term <= inputTerm {
-			index = i
-			continue
-		}
-		break
+	return begin, nil
+}
+
+func (s *tdposSchedule) getTerm(pos int64) (int64, error) {
+	b, err := s.ledger.QueryBlockByHeight(pos)
+	if err != nil {
+		return -1, err
 	}
-	return termV[index].Validators, nil
+	in, err := ParseConsensusStorage(b)
+	if err != nil {
+		return -1, err
+	}
+	storage, ok := in.(*common.ConsensusStorage)
+	if !ok {
+		return -1, notFoundErr
+	}
+	return storage.CurTerm, nil
 }

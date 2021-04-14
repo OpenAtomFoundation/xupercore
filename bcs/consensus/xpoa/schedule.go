@@ -21,6 +21,7 @@ type xpoaSchedule struct {
 	miner      string
 	// 存储初始值
 	initValidators []string
+	startHeight    int64
 
 	ledger    cctx.LedgerRely
 	enableBFT bool
@@ -86,7 +87,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		return nil, err
 	}
 	res, err := reader.Get(contractBucket, []byte(validateKeys))
-	if res != nil && res.PureData.Value == nil {
+	if res == nil || res.PureData == nil || res.PureData.Value == nil {
 		// 即合约还未被调用，未有变量更新
 		return s.initValidators, nil
 	}
@@ -103,7 +104,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 }
 
 func (s *xpoaSchedule) getValidates(height int64) ([]string, error) {
-	if height <= 3 {
+	if height < s.startHeight+3 {
 		return s.validators, nil
 	}
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
