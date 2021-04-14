@@ -12,6 +12,7 @@ type ValidatorsInfo struct {
 
 // tdposStatus 实现了ConsensusStatus接口
 type TdposStatus struct {
+	Name        string
 	Version     int64 `json:"version"`
 	StartHeight int64 `json:"startHeight"`
 	Index       int   `json:"index"`
@@ -34,7 +35,7 @@ func (t *TdposStatus) GetStepConsensusIndex() int {
 
 // 获取共识类型
 func (t *TdposStatus) GetConsensusName() string {
-	return "tdpos"
+	return t.Name
 }
 
 // 获取当前状态机term
