@@ -66,11 +66,12 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	// create xpoaSchedule
 	schedule := &xpoaSchedule{
-		address:  cCtx.Network.PeerInfo().Account,
-		period:   xconfig.Period,
-		blockNum: xconfig.BlockNum,
-		ledger:   cCtx.Ledger,
-		log:      cCtx.XLog,
+		address:     cCtx.Network.PeerInfo().Account,
+		period:      xconfig.Period,
+		blockNum:    xconfig.BlockNum,
+		startHeight: cCfg.StartHeight,
+		ledger:      cCtx.Ledger,
+		log:         cCtx.XLog,
 	}
 	if xconfig.EnableBFT != nil {
 		schedule.enableBFT = true

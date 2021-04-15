@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"math/big"
 	"strconv"
+
+	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
+	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 )
 
 const (
@@ -23,7 +26,6 @@ const (
 	nominateKey    = "nominate"
 	voteKeyPrefix  = "vote_"
 	revokeKey      = "revoke"
-	termKey        = "term"
 
 	NOMINATETYPE = "nominate"
 	VOTETYPE     = "vote"
@@ -164,6 +166,18 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 	tdposCfg.EnableBFT = temp.EnableBFT
 
 	return tdposCfg, nil
+}
+
+func ParseConsensusStorage(block cctx.BlockInterface) (interface{}, error) {
+	b, err := block.GetConsensusStorage()
+	if err != nil {
+		return nil, err
+	}
+	justify, err := common.ParseOldQCStorage(b)
+	if err != nil {
+		return nil, err
+	}
+	return justify, nil
 }
 
 // 每个地址每一轮的总票数
