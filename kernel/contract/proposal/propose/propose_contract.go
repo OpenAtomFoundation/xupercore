@@ -41,7 +41,7 @@ func (t *KernMethod) Propose(ctx contract.KContext) (*contract.Response, error) 
 	}
 
 	// 校验参数
-	err = checkProposalArgs(proposal.Args)
+	err = checkProposalArgs(proposal)
 	if err != nil {
 		return nil, err
 	}
@@ -512,19 +512,30 @@ func (t *KernMethod) unParse(proposal *utils.Proposal) ([]byte, error) {
 	return proposalBuf, nil
 }
 
-func checkProposalArgs(args map[string]interface{}) error {
-	if args["min_vote_percent"] == "" || args["stop_vote_height"] == "" {
+func checkProposalArgs(proposal *utils.Proposal) error {
+	if proposal.Args["min_vote_percent"] == "" || proposal.Args["stop_vote_height"] == "" {
 		return fmt.Errorf("no min_vote_percent or stop_vote_height found")
 	}
 
-	err := checkVoteThread(args["min_vote_percent"].(string))
+	err := checkVoteThread(proposal.Args["min_vote_percent"].(string))
 	if err != nil {
 		return err
 	}
 
-	err = checkVoteStopHeight(args["stop_vote_height"].(string))
+	voteStopHeight, err := checkVoteStopHeight(proposal.Args["stop_vote_height"].(string))
 	if err != nil {
 		return err
+	}
+
+	// 判断 voteStopHeight 大于当前高度
+	// todo
+
+	// 判断 trigger.Height 大于 voteStopHeight
+	if proposal.Trigger.Height != 0 {
+		triggerHeight := big.NewInt(proposal.Trigger.Height)
+		if triggerHeight.Cmp(voteStopHeight) != 1 {
+			return fmt.Errorf("trigger_height must be bigger than stop_vote_height")
+		}
 	}
 
 	return nil
@@ -536,19 +547,19 @@ func checkVoteThread(voteThreadStr string) error {
 	if !ok {
 		return fmt.Errorf("min_vote_percent parse, %s", voteThreadStr)
 	}
-	if voteThread.Cmp(big.NewInt(100)) == 1 || voteThread.Cmp(big.NewInt(50)) == -1 {
+	if voteThread.Cmp(big.NewInt(100)) == 1 || voteThread.Cmp(big.NewInt(51)) == -1 {
 		return fmt.Errorf("min_vote_percent err, %s", voteThread.String())
 	}
 
 	return nil
 }
 
-func checkVoteStopHeight(voteStopHeightStr string) error {
-	voteThread := big.NewInt(0)
-	_, ok := voteThread.SetString(voteStopHeightStr, 10)
+func checkVoteStopHeight(voteStopHeightStr string) (*big.Int, error) {
+	voteStopHeight := big.NewInt(0)
+	_, ok := voteStopHeight.SetString(voteStopHeightStr, 10)
 	if !ok {
-		return fmt.Errorf("vote_stop_height err, %s", voteStopHeightStr)
+		return voteStopHeight, fmt.Errorf("vote_stop_height err, %s", voteStopHeightStr)
 	}
 
-	return nil
+	return voteStopHeight, nil
 }
