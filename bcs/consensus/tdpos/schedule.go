@@ -61,11 +61,12 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely, 
 		index++
 	}
 	// 重启时需要使用最新的validator数据，而不是initValidators数据
-	s, err := schedule.ledger.GetTipBlock().GetConsensusStorage()
+	tipBlock := schedule.ledger.GetTipBlock()
+	s, err := tipBlock.GetConsensusStorage()
 	if err != nil {
 		return nil
 	}
-	refresh, err := schedule.CalOldProposers(schedule.ledger.GetTipBlock().GetHeight(), schedule.ledger.GetTipBlock().GetTimestamp(), s)
+	refresh, err := schedule.CalOldProposers(tipBlock.GetHeight(), tipBlock.GetTimestamp(), s)
 	if err != nil && err != heightTooLow {
 		schedule.log.Error("Tdpos::NewSchedule error", "err", err)
 		return nil

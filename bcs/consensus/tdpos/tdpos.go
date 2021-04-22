@@ -78,7 +78,8 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		log:       cCtx.XLog,
 	}
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
-	tdpos.isProduce[time.Now().UnixNano()/int64(time.Millisecond)/tdpos.config.Period] = true
+	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
+	tdpos.isProduce[timeKey] = true
 	if schedule.enableChainedBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
@@ -91,8 +92,9 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 			CurrentView: cCfg.StartHeight,
 		}
 		// 重启状态检查1，pacemaker需要重置
+		tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
 		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-			pacemaker.CurrentView = cCtx.Ledger.GetTipBlock().GetHeight() - 1
+			pacemaker.CurrentView = tipHeight - 1
 		}
 		saftyrules := &chainedBft.DefaultSaftyRules{
 			Crypto: cryptoClient,
@@ -103,7 +105,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		// 重启状态检查2，重做tipBlock，此时需重装载justify签名
 		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 			for i := int64(0); i < 3; i++ {
-				b, err := cCtx.Ledger.QueryBlockByHeight(cCtx.Ledger.GetTipBlock().GetHeight() - i)
+				b, err := cCtx.Ledger.QueryBlockByHeight(tipHeight - i)
 				if err != nil {
 					break
 				}
@@ -293,11 +295,12 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 		return nil, storageBytes, nil
 	}
 
+	tipBlock := tp.election.ledger.GetTipBlock()
 	// 根据BFT配置判断是否需要加入Chained-BFT相关存储，及变更smr状态
 	var truncateT []byte
 	var err error
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
-	if !bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tp.election.ledger.GetTipBlock().GetBlockid()) {
+	if !bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
 		// 单个节点不存在投票验证的hotstuff流程，因此返回true
 		if len(tp.election.validators) == 1 {
 			return nil, nil, nil
@@ -305,16 +308,16 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 		truncateT, err = func() ([]byte, error) {
 			// 1. 比对HighQC与ledger高度
 			b, err := tp.election.ledger.QueryBlock(tp.smr.GetHighQC().GetProposalId())
-			if err != nil || b.GetHeight() > tp.election.ledger.GetTipBlock().GetHeight() {
+			if err != nil || b.GetHeight() > tipBlock.GetHeight() {
 				// 不存在时需要把本地HighQC回滚到ledger; HighQC高度高于账本高度，本地HighQC回滚到ledger
-				if err := tp.smr.EnforceUpdateHighQC(tp.election.ledger.GetTipBlock().GetBlockid()); err != nil {
+				if err := tp.smr.EnforceUpdateHighQC(tipBlock.GetBlockid()); err != nil {
 					// 本地HighQC回滚错误直接退出
 					return nil, err
 				}
 				return nil, nil
 			}
 			// 高度相等时，应统一回滚到上一高度，此时genericQC一定存在
-			if b.GetHeight() == tp.election.ledger.GetTipBlock().GetHeight() {
+			if b.GetHeight() == tipBlock.GetHeight() {
 				if err := tp.smr.EnforceUpdateHighQC(tp.smr.GetGenericQC().GetProposalId()); err != nil {
 					// 本地HighQC回滚错误直接退出
 					return nil, err
@@ -343,8 +346,8 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncateT != nil {
 		tp.log.Debug("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
-			"ledger", tp.election.ledger.GetTipBlock().GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
-		storage.TargetBits = int32(tp.election.ledger.GetTipBlock().GetHeight())
+			"ledger", tipBlock.GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
+		storage.TargetBits = int32(tipBlock.GetHeight())
 	}
 	storageBytes, err := json.Marshal(storage)
 	if err != nil {
