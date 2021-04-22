@@ -77,46 +77,6 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		status:    status,
 		log:       cCtx.XLog,
 	}
-	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
-	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
-	tdpos.isProduce[timeKey] = true
-	if schedule.enableChainedBFT {
-		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
-		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-		qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
-		if qcTree == nil {
-			cCtx.XLog.Error("Tdpos::NewTdposConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
-			return nil
-		}
-		pacemaker := &chainedBft.DefaultPaceMaker{
-			CurrentView: cCfg.StartHeight,
-		}
-		// 重启状态检查1，pacemaker需要重置
-		tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
-		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-			pacemaker.CurrentView = tipHeight - 1
-		}
-		saftyrules := &chainedBft.DefaultSaftyRules{
-			Crypto: cryptoClient,
-			QcTree: qcTree,
-			Log:    cCtx.XLog,
-		}
-		smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
-		// 重启状态检查2，重做tipBlock，此时需重装载justify签名
-		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-			for i := int64(0); i < 3; i++ {
-				b, err := cCtx.Ledger.QueryBlockByHeight(tipHeight - i)
-				if err != nil {
-					break
-				}
-				smr.LoadVotes(b.GetPreHash(), tdpos.GetJustifySigns(b))
-			}
-		}
-		go smr.Start()
-		tdpos.smr = smr
-		status.Name = "xpos"
-		cCtx.XLog.Debug("Tdpos::NewTdposConsensus::load chained-bft successfully.")
-	}
 
 	// 注册合约方法
 	tdposKMethods := map[string]contract.KernMethod{
@@ -131,7 +91,50 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 			cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, method, f)
 		}
 	}
-	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.")
+
+	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
+	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
+	tdpos.isProduce[timeKey] = true
+	if !schedule.enableChainedBFT {
+		cCtx.XLog.Debug("Tdpos::NewTdposConsensus::create a tdpos instance successfully.")
+		return tdpos
+	}
+
+	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
+	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
+	qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
+	if qcTree == nil {
+		cCtx.XLog.Error("Tdpos::NewTdposConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
+		return nil
+	}
+	pacemaker := &chainedBft.DefaultPaceMaker{
+		CurrentView: cCfg.StartHeight,
+	}
+	// 重启状态检查1，pacemaker需要重置
+	tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
+	if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+		pacemaker.CurrentView = tipHeight - 1
+	}
+	saftyrules := &chainedBft.DefaultSaftyRules{
+		Crypto: cryptoClient,
+		QcTree: qcTree,
+		Log:    cCtx.XLog,
+	}
+	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
+	// 重启状态检查2，重做tipBlock，此时需重装载justify签名
+	if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+		for i := int64(0); i < 3; i++ {
+			b, err := cCtx.Ledger.QueryBlockByHeight(tipHeight - i)
+			if err != nil {
+				break
+			}
+			smr.LoadVotes(b.GetPreHash(), tdpos.GetJustifySigns(b))
+		}
+	}
+	go smr.Start()
+	tdpos.smr = smr
+	status.Name = "xpos"
+	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::load chained-bft successfully.")
 	return tdpos
 }
 
@@ -216,57 +219,36 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	}
 
 	// 2 验证轮数信息, 判断curTerm是否合法
-	if tdposStorage.CurTerm > 0 {
-		// 获取上一区块共识存储
-		preBlock, err := tp.election.ledger.QueryBlock(block.GetPreHash())
-		if err != nil {
-			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, get preblock error")
-			return false, err
-		}
-		pv, err := preBlock.GetConsensusStorage()
-		if err != nil {
-			tp.log.Warn("Tdpos::CheckMinerMatch::parse pre-storage error", "err", err)
-			return false, err
-		}
-		preTdposStorage, err := common.ParseOldQCStorage(pv)
-		if err != nil {
-			tp.log.Warn("Tdpos::CheckMinerMatch::ParseOldQCStorage pre-storage transfer error", "err", err)
-			return false, err
-		}
-		if tdposStorage.CurTerm != term {
-			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, invalid term.", "want", term, "have", tdposStorage.CurTerm)
-			return false, invalidTermErr
-		}
-		// 减少矿工50%概率恶意地输入时间
-		if preTdposStorage.CurTerm > term && block.GetHeight() > tp.status.StartHeight {
-			tp.log.Warn("Tdpos::CheckMinerMatch::check failed, preBlock.CurTerm is bigger than the new received.",
-				"preBlock", preTdposStorage.CurTerm, "have", term)
-			return false, invalidTermErr
-		}
+	if tdposStorage.CurTerm > 0 && tdposStorage.CurTerm != term {
+		tp.log.Warn("Tdpos::CheckMinerMatch::check failed, invalid term.", "want", term, "have", tdposStorage.CurTerm)
+		return false, invalidTermErr
 	}
-
-	// 3 验证bft相关信息, 除开初始化后的第一个block验证
-	if tp.election.enableChainedBFT && block.GetHeight() > tp.status.StartHeight {
-		// 兼容老的结构
-		justify, err := common.OldQCToNew(bv)
-		if err != nil {
-			tp.log.Warn("Tdpos::CheckMinerMatch::OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err, "blockId", utils.F(block.GetBlockid()))
-			return false, err
-		}
-		pNode := tp.smr.BlockToProposalNode(block)
-		preBlock, _ := tp.election.ledger.QueryBlock(block.GetPreHash())
-		storage, _ := preBlock.GetConsensusStorage()
-		validators, err := tp.election.CalOldProposers(preBlock.GetHeight(), preBlock.GetTimestamp(), storage)
-		if err != nil {
-			return false, err
-		}
-		err = tp.smr.GetSaftyRules().CheckProposal(pNode.In, justify, validators)
-		if err != nil {
-			tp.log.Debug("Tdpos::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
-				"proposalQC:[id]", utils.F(pNode.In.GetProposalId()), "justifyQC:[height]", justify.GetProposalView(),
-				"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
-			return false, err
-		}
+	if !tp.election.enableChainedBFT {
+		return true, nil
+	}
+	// 验证BFT时，需要除开初始化后的第一个block验证，此时没有justify值
+	if block.GetHeight() <= tp.status.StartHeight {
+		return true, nil
+	}
+	// 兼容老的结构
+	justify, err := common.OldQCToNew(bv)
+	if err != nil {
+		tp.log.Warn("Tdpos::CheckMinerMatch::OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err, "blockId", utils.F(block.GetBlockid()))
+		return false, err
+	}
+	pNode := tp.smr.BlockToProposalNode(block)
+	preBlock, _ := tp.election.ledger.QueryBlock(block.GetPreHash())
+	prestorage, _ := preBlock.GetConsensusStorage()
+	validators, err := tp.election.CalOldProposers(preBlock.GetHeight(), preBlock.GetTimestamp(), prestorage)
+	if err != nil {
+		return false, err
+	}
+	err = tp.smr.GetSaftyRules().CheckProposal(pNode.In, justify, validators)
+	if err != nil {
+		tp.log.Debug("Tdpos::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
+			"proposalQC:[id]", utils.F(pNode.In.GetProposalId()), "justifyQC:[height]", justify.GetProposalView(),
+			"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
+		return false, err
 	}
 	return true, nil
 }

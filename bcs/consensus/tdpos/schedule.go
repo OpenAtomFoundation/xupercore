@@ -298,44 +298,44 @@ func (s *tdposSchedule) CalOldProposers(height int64, timestamp int64, storage [
 	if height < s.startHeight+3 {
 		return s.initValidators, nil
 	}
-	// 情况一：height对应区块不存在于账本中，即当前是一个节点追块逻辑，追一个新块
 	tipHeight := s.ledger.GetTipBlock().GetHeight()
-	if tipHeight <= height {
-		tipTerm, err := s.getTerm(tipHeight)
-		if err != nil {
-			return nil, err
-		}
-		inputTerm, _, _ := s.minerScheduling(timestamp)
-		// 最高高度的term仍然有效，则获取tipTerm开始的第一个高度的快照，然后获取历史候选人节点
-		if tipTerm == inputTerm {
-			return s.calHisValidators(tipHeight)
-		}
-		if tipTerm > inputTerm {
-			return nil, invalidTermErr
-		}
-		targetHeight := tipHeight
-		if s.enableChainedBFT && storage != nil {
-			// 获取该block的ConsensusStorage
-			justify, err := common.ParseOldQCStorage(storage)
-			if err != nil {
-				return nil, err
-			}
-			if justify.TargetBits != 0 {
-				s.log.Debug("tdpos::CalOldProposers::use rollback target.")
-				targetHeight = int64(justify.TargetBits)
-			}
-		}
-		// 否则按照当前高度计算投票的top K
-		p, err := s.calTopKNominator(targetHeight)
-		if err != nil {
-			s.log.Error("tdpos::CalOldProposers::calculateTopK err.", "err", err)
-			return nil, err
-		}
-		s.log.Debug("tdpos::CalOldProposers::calTopKNominator", "p", p, "target height", targetHeight)
-		return p, nil
+	if tipHeight > height {
+		// 情况一：读取历史值，height对应区块存在于账本中，此时分成历史Key读取和计算差值两部分
+		return s.calHisValidators(height)
 	}
-	// 情况二：读取历史值，height对应区块存在于账本中，此时分成历史Key读取和计算差值两部分
-	return s.calHisValidators(height)
+	// 情况二：height对应区块不存在于账本中，即当前是一个节点追块逻辑，追一个新块
+	tipTerm, err := s.getTerm(tipHeight)
+	if err != nil {
+		return nil, err
+	}
+	inputTerm, _, _ := s.minerScheduling(timestamp)
+	// 最高高度的term仍然有效，则获取tipTerm开始的第一个高度的快照，然后获取历史候选人节点
+	if tipTerm == inputTerm {
+		return s.calHisValidators(tipHeight)
+	}
+	if tipTerm > inputTerm {
+		return nil, invalidTermErr
+	}
+	targetHeight := tipHeight
+	if s.enableChainedBFT && storage != nil {
+		// 获取该block的ConsensusStorage
+		justify, err := common.ParseOldQCStorage(storage)
+		if err != nil {
+			return nil, err
+		}
+		if justify.TargetBits != 0 {
+			s.log.Debug("tdpos::CalOldProposers::use rollback target.")
+			targetHeight = int64(justify.TargetBits)
+		}
+	}
+	// 否则按照当前高度计算投票的top K
+	p, err := s.calTopKNominator(targetHeight)
+	if err != nil {
+		s.log.Error("tdpos::CalOldProposers::calculateTopK err.", "err", err)
+		return nil, err
+	}
+	s.log.Debug("tdpos::CalOldProposers::calTopKNominator", "p", p, "target height", targetHeight)
+	return p, nil
 }
 
 // calHisValidators 根据term计算历史候选人信息
