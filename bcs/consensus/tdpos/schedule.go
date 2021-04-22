@@ -298,20 +298,21 @@ func (s *tdposSchedule) CalOldProposers(height int64, timestamp int64, storage [
 		return s.initValidators, nil
 	}
 	// 情况一：height对应区块不存在于账本中，即当前是一个节点追块逻辑，追一个新块
-	if s.ledger.GetTipBlock().GetHeight() <= height {
-		tipTerm, err := s.getTerm(s.ledger.GetTipBlock().GetHeight())
+	tipHeight := s.ledger.GetTipBlock().GetHeight()
+	if tipHeight <= height {
+		tipTerm, err := s.getTerm(tipHeight)
 		if err != nil {
 			return nil, err
 		}
 		inputTerm, _, _ := s.minerScheduling(timestamp)
 		// 最高高度的term仍然有效，则获取tipTerm开始的第一个高度的快照，然后获取历史候选人节点
 		if tipTerm == inputTerm {
-			return s.calHisValidators(s.ledger.GetTipBlock().GetHeight())
+			return s.calHisValidators(tipHeight)
 		}
 		if tipTerm > inputTerm {
 			return nil, invalidTermErr
 		}
-		targetHeight := s.ledger.GetTipBlock().GetHeight()
+		targetHeight := tipHeight
 		if s.enableChainedBFT && storage != nil {
 			// 获取该block的ConsensusStorage
 			justify, err := common.ParseOldQCStorage(storage)
