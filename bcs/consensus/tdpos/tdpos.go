@@ -77,6 +77,8 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		status:    status,
 		log:       cCtx.XLog,
 	}
+	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
+	tdpos.isProduce[time.Now().UnixNano()/int64(time.Millisecond)/tdpos.config.Period] = true
 	if schedule.enableChainedBFT {
 		// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 		cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
@@ -156,9 +158,9 @@ Again:
 		tp.log.Debug("Tdpos::CompeteMaster::minerScheduling err", "term", term, "pos", pos, "blockPos", blockPos)
 		goto Again
 	}
-	// 根据term更新当前validators, 当投票之后，并不会在3个块后变更候选人，而是等到下个term
+	// 即现在有可能发生候选人变更，此时需要拿tipHeight-3=H高度的稳定高度当作快照，故input时的高度一定是TipHeight
 	if term > tp.election.curTerm {
-		tp.election.UpdateProposers(tp.election.ledger.GetTipBlock().GetHeight() + 1)
+		tp.election.UpdateProposers(tp.election.ledger.GetTipBlock().GetHeight())
 	}
 	// 查当前term 和 pos是否是自己
 	tp.election.curTerm = term
@@ -199,15 +201,15 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Warn("Tdpos::CheckMinerMatch::minerScheduling overflow.")
 		return false, scheduleErr
 	}
-	curHeight := block.GetHeight()
 	var wantProposers []string
-	wantProposers, err = tp.election.calculateProposers(curHeight)
+	storage, _ := block.GetConsensusStorage()
+	wantProposers, err = tp.election.CalOldProposers(block.GetHeight(), block.GetTimestamp(), storage)
 	if err != nil {
-		tp.log.Warn("Tdpos::CheckMinerMatch::calculateProposers error", "err", err)
+		tp.log.Debug("Tdpos::CheckMinerMatch::CalculateProposers error", "err", err)
 		return false, err
 	}
 	if wantProposers[pos] != string(block.GetProposer()) {
-		tp.log.Warn("Tdpos::CheckMinerMatch::invalid proposer", "want", wantProposers[pos], "have", string(block.GetProposer()))
+		tp.log.Debug("Tdpos::CheckMinerMatch::invalid proposer", "want", wantProposers[pos], "have", string(block.GetProposer()))
 		return false, invalidProposerErr
 	}
 
@@ -250,9 +252,15 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 			return false, err
 		}
 		pNode := tp.smr.BlockToProposalNode(block)
-		err = tp.smr.GetSaftyRules().CheckProposal(pNode.In, justify, tp.election.GetValidators(block.GetHeight()))
+		preBlock, _ := tp.election.ledger.QueryBlock(block.GetPreHash())
+		storage, _ := preBlock.GetConsensusStorage()
+		validators, err := tp.election.CalOldProposers(preBlock.GetHeight(), preBlock.GetTimestamp(), storage)
 		if err != nil {
-			tp.log.Warn("Tdpos::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
+			return false, err
+		}
+		err = tp.smr.GetSaftyRules().CheckProposal(pNode.In, justify, validators)
+		if err != nil {
+			tp.log.Debug("Tdpos::CheckMinerMatch::bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
 				"proposalQC:[id]", utils.F(pNode.In.GetProposalId()), "justifyQC:[height]", justify.GetProposalView(),
 				"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
 			return false, err
@@ -332,15 +340,17 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 		return nil, nil, err
 	}
 	storage.Justify = oldQC
+	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
+	if truncateT != nil {
+		tp.log.Debug("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
+			"ledger", tp.election.ledger.GetTipBlock().GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
+		storage.TargetBits = int32(tp.election.ledger.GetTipBlock().GetHeight())
+	}
 	storageBytes, err := json.Marshal(storage)
 	if err != nil {
 		return nil, nil, err
 	}
 	tp.log.Debug("Tdpos::ProcessBeforeMiner", "res", storage)
-	if truncateT != nil {
-		tp.log.Debug("smr::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
-			"ledger", tp.election.ledger.GetTipBlock().GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
-	}
 	return truncateT, storageBytes, nil
 }
 
@@ -372,7 +382,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	}
 	if tp.election.validators[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {
 		// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
-		validators := tp.election.GetValidators(block.GetHeight())
+		validators := tp.election.GetValidators(block.GetHeight() + 1)
 		if err := tp.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), validators); err != nil {
 			tp.log.Warn("Tdpos::smr::ProcessConfirmBlock::bft next proposal failed", "error", err)
 			return err

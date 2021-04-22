@@ -77,7 +77,7 @@ func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *cha
 	}
 	tip := ledger.GetTipBlock()
 	// 当前为初始状态
-	if tip.GetHeight() == startHeight-1 {
+	if tip.GetHeight() <= startHeight {
 		return &chainedBft.QCPendingTree{
 			Genesis:    gNode,
 			Root:       gNode,
@@ -184,6 +184,9 @@ type ConsensusStorage struct {
 	Justify     *lpb.QuorumCert `json:"justify,omitempty"`
 	CurTerm     int64           `json:"curTerm,omitempty"`
 	CurBlockNum int64           `json:"curBlockNum,omitempty"`
+	// TargetBits 是一个trick实现
+	// 1. 在bcs层作为一个复用字段，记录ChainedBFT发生回滚时，当前的TipHeight，此处用int32代替int64，理论上可能造成错误
+	TargetBits int32 `json:"targetBits,omitempty"`
 }
 
 // ParseOldQCStorage 将有Justify结构的老共识结构解析出来

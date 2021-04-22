@@ -60,15 +60,16 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely, 
 		schedule.initValidators = append(schedule.initValidators, key)
 		index++
 	}
-
 	// 重启时需要使用最新的validator数据，而不是initValidators数据
-	tipHeight := schedule.ledger.GetTipBlock().GetHeight()
-	refresh, err := schedule.calculateProposers(tipHeight)
+	s, err := schedule.ledger.GetTipBlock().GetConsensusStorage()
+	if err != nil {
+		return nil
+	}
+	refresh, err := schedule.CalOldProposers(schedule.ledger.GetTipBlock().GetHeight(), schedule.ledger.GetTipBlock().GetTimestamp(), s)
 	if err != nil && err != heightTooLow {
 		schedule.log.Error("Tdpos::NewSchedule error", "err", err)
 		return nil
 	}
-
 	if !common.AddressEqual(schedule.validators, refresh) && len(refresh) != 0 {
 		schedule.validators = refresh
 	}
@@ -135,30 +136,37 @@ func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) 
 
 // GetLeader 根据输入的round，计算应有的proposer，实现election接口
 // 该方法主要为了支撑smr扭转和矿工挖矿，在handleReceivedProposal阶段会调用该方法
-// 由于xpoa主逻辑包含回滚逻辑，因此回滚逻辑必须在ProcessProposal进行
+// 由于主逻辑包含回滚逻辑，因此回滚逻辑必须在ProcessProposal进行
 // ATTENTION: tipBlock是一个隐式依赖状态
-// ATTENTION: 由于GetLeader()永远在GetIntAddress()之前，故在GetLeader时更新schedule的addrToNet Map，可以保证能及时提供Addr到NetUrl的映射
 func (s *tdposSchedule) GetLeader(round int64) string {
 	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
 	if b, err := s.ledger.QueryBlockByHeight(round); err == nil {
 		return string(b.GetProposer())
 	}
-	tipBlock := s.ledger.GetTipBlock()
-	tipHeight := tipBlock.GetHeight()
 	proposers := s.GetValidators(round)
 	if proposers == nil {
 		return ""
 	}
-	nTime := time.Now().UnixNano()
-	if round > tipHeight {
-		// s.period为毫秒单位
-		nTime += s.period * int64(time.Millisecond)
-	}
-	_, pos, _ := s.minerScheduling(nTime)
+	addTime := s.calAddTime(round, s.ledger.GetTipBlock().GetHeight())
+	_, pos, _ := s.minerScheduling(time.Now().UnixNano() + addTime)
 	if pos >= s.proposerNum {
 		return ""
 	}
 	return proposers[pos]
+}
+
+func (s *tdposSchedule) calAddTime(round int64, tipHeight int64) int64 {
+	_, nowPos, nowBlockPos := s.minerScheduling(time.Now().UnixNano())
+	if round <= tipHeight {
+		return 0
+	}
+	if nowPos == s.proposerNum-1 && nowBlockPos == s.blockNum-1 { // 下一轮换term
+		return s.termInterval * int64(time.Millisecond)
+	}
+	if nowBlockPos == s.blockNum-1 { // 下一轮换proposer
+		return s.alternateInterval * int64(time.Millisecond)
+	}
+	return s.period * int64(time.Millisecond)
 }
 
 // GetValidators election接口实现，获取指定round的候选人节点Address
@@ -166,8 +174,17 @@ func (s *tdposSchedule) GetValidators(round int64) []string {
 	if round < s.startHeight+3 {
 		return s.initValidators
 	}
-	proposers, err := s.calculateProposers(round)
+	var calErr error
+	var proposers []string
+	block, err := s.ledger.QueryBlockByHeight(round)
 	if err != nil {
+		proposers, calErr = s.CalculateProposers(round)
+	} else {
+		storage, _ := block.GetConsensusStorage()
+		proposers, calErr = s.CalOldProposers(round, block.GetTimestamp(), storage)
+	}
+	if calErr != nil {
+		s.log.Debug("tdpos::GetValidators::CalculateProposers err", "err", calErr)
 		return nil
 	}
 	return proposers
@@ -183,7 +200,7 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 	if height < s.startHeight+3 {
 		return false
 	}
-	nextProposers, err := s.calculateProposers(height)
+	nextProposers, err := s.CalculateProposers(height)
 	if err != nil || len(nextProposers) == 0 {
 		return false
 	}
@@ -195,31 +212,23 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 	return false
 }
 
-// calculateProposers 根据vote选票信息计算最新的topK proposer, 调用方需检查height > 3
-// 若提案投票人数总和小于指定数目，则统一仍使用初始值
-func (s *tdposSchedule) calculateProposers(height int64) ([]string, error) {
+// CalculateProposers 用于计算下一个Round候选人的值，仅在updateProposers和smr接口时使用
+func (s *tdposSchedule) CalculateProposers(height int64) ([]string, error) {
 	if height < s.startHeight+3 {
 		return s.initValidators, nil
 	}
-	nowTerm, _, _ := s.minerScheduling(time.Now().UnixNano())
-	// 情况一：目标height尚未产生，计算新一轮值
-	if s.ledger.GetTipBlock().GetHeight() < height {
-		if s.curTerm == nowTerm {
-			// 当前并不需要更新候选人
-			s.log.Debug("tdpos::calculateProposers::s.curTerm == nowTerm")
-			return s.validators, nil
-		}
-		// 更新候选人时需要读取快照，并计算投票的top K
-		p, err := s.calTopKNominator(height)
-		if err != nil {
-			s.log.Error("tdpos::calculateProposers::calculateTopK err.", "err", err)
-			return nil, err
-		}
-		s.log.Debug("tdpos::calculateProposers::calTopKNominator", "p", p)
-		return p, nil
+	addTime := s.calAddTime(height, s.ledger.GetTipBlock().GetHeight())
+	inputTerm, _, _ := s.minerScheduling(time.Now().UnixNano() + addTime)
+	if s.curTerm == inputTerm {
+		return s.validators, nil
 	}
-	// 情况二：读取历史值，此时分成历史Key读取和计算差值两部分
-	return s.calHisValidators(height)
+	// 更新候选人时需要读取快照，并计算投票的top K
+	p, err := s.calTopKNominator(height)
+	if err != nil {
+		s.log.Error("tdpos::CalculateProposers::calculateTopK err.", "err", err)
+		return nil, err
+	}
+	return p, nil
 }
 
 // calTopKNominator 计算最新的投票的topK候选人并返回
@@ -283,13 +292,57 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 	return proposers, nil
 }
 
+// CalHisProposers 主要用于追块时、计算历史高度所对应的候选人值
+func (s *tdposSchedule) CalOldProposers(height int64, timestamp int64, storage []byte) ([]string, error) {
+	if height < s.startHeight+3 {
+		return s.initValidators, nil
+	}
+	// 情况一：height对应区块不存在于账本中，即当前是一个节点追块逻辑，追一个新块
+	if s.ledger.GetTipBlock().GetHeight() <= height {
+		tipTerm, err := s.getTerm(s.ledger.GetTipBlock().GetHeight())
+		if err != nil {
+			return nil, err
+		}
+		inputTerm, _, _ := s.minerScheduling(timestamp)
+		// 最高高度的term仍然有效，则获取tipTerm开始的第一个高度的快照，然后获取历史候选人节点
+		if tipTerm == inputTerm {
+			return s.calHisValidators(s.ledger.GetTipBlock().GetHeight())
+		}
+		if tipTerm > inputTerm {
+			return nil, invalidTermErr
+		}
+		targetHeight := s.ledger.GetTipBlock().GetHeight()
+		if s.enableChainedBFT && storage != nil {
+			// 获取该block的ConsensusStorage
+			justify, err := common.ParseOldQCStorage(storage)
+			if err != nil {
+				return nil, err
+			}
+			if justify.TargetBits != 0 {
+				s.log.Debug("tdpos::CalOldProposers::use rollback target.")
+				targetHeight = int64(justify.TargetBits)
+			}
+		}
+		// 否则按照当前高度计算投票的top K
+		p, err := s.calTopKNominator(targetHeight)
+		if err != nil {
+			s.log.Error("tdpos::CalOldProposers::calculateTopK err.", "err", err)
+			return nil, err
+		}
+		s.log.Debug("tdpos::CalOldProposers::calTopKNominator", "p", p, "target height", targetHeight)
+		return p, nil
+	}
+	// 情况二：读取历史值，height对应区块存在于账本中，此时分成历史Key读取和计算差值两部分
+	return s.calHisValidators(height)
+}
+
 // calHisValidators 根据term计算历史候选人信息
 func (s *tdposSchedule) calHisValidators(height int64) ([]string, error) {
 	// 设最近一次bucket vote变更的高度为H，所在term为T，候选人仅会在term+1的第一个高度H+M，试图变更候选人(不一定vote会引起变更)
 	// 因此在输入一个height时，拿到当前term，查询当前term的第一个区块高度height-Z，通过height-Z获取TopK即可
 	block, err := s.ledger.QueryBlockByHeight(height)
 	if err != nil {
-		s.log.Error("tdpos::calculateProposers::QueryBlockByHeight err.", "err", err)
+		s.log.Error("tdpos::CalculateProposers::QueryBlockByHeight err.", "err", err)
 		return nil, err
 	}
 	term, pos, blockPos := s.minerScheduling(block.GetTimestamp())
@@ -304,7 +357,7 @@ func (s *tdposSchedule) calHisValidators(height int64) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.log.Debug("tdpos::calculateProposers::target height.", "height", height, "targetHeight", targetHeight, "term", term)
+	s.log.Debug("tdpos::CalculateProposers::target height.", "height", height, "targetHeight", targetHeight, "term", term)
 	return s.calTopKNominator(targetHeight)
 }
 

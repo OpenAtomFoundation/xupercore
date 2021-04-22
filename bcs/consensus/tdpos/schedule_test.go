@@ -3,6 +3,7 @@ package tdpos
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
@@ -199,6 +200,44 @@ func TestCalHisValidators(t *testing.T) {
 	target, _ = s.binarySearch(int64(5), int64(11), int64(5))
 	if target != 8 {
 		t.Error("binarySearch cal err.", "target", target)
+		return
+	}
+}
+
+func TestMinerScheduling(t *testing.T) {
+	cCtx, err := prepare(getTdposConsensusConf())
+	if err != nil {
+		t.Error("prepare error", "error", err)
+		return
+	}
+	s1 := &tdposSchedule{
+		period:            3000,
+		blockNum:          20,
+		proposerNum:       2,
+		alternateInterval: 3000,
+		termInterval:      6000,
+		initTimestamp:     1559021720000000000,
+		log:               cCtx.XLog,
+	}
+	input := 1618895169 * int64(time.Second)
+	term, pos, blockPos := s1.minerScheduling(input)
+	if pos != -1 && blockPos != -1 {
+		t.Error("minerScheduling cal err.", "term", term, "pos", pos, "blockPos", blockPos)
+	}
+
+	input2 := 1618909557 * int64(time.Second)
+	s2 := &tdposSchedule{
+		period:            3000,
+		blockNum:          20,
+		proposerNum:       4,
+		alternateInterval: 3000,
+		termInterval:      6000,
+		initTimestamp:     1559021720000000000,
+		log:               cCtx.XLog,
+	}
+	term, pos, blockPos = s2.minerScheduling(input2)
+	if pos != -1 && blockPos != -1 {
+		t.Error("minerScheduling cal err.", "term", term, "pos", pos, "blockPos", blockPos)
 		return
 	}
 }
