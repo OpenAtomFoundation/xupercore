@@ -522,7 +522,7 @@ func checkProposalArgs(proposal *utils.Proposal) error {
 		return err
 	}
 
-	voteStopHeight, err := checkVoteStopHeight(proposal.Args["stop_vote_height"].(string))
+	voteStopHeight, err := parseVoteStopHeight(proposal.Args["stop_vote_height"].(string))
 	if err != nil {
 		return err
 	}
@@ -554,7 +554,7 @@ func checkVoteThread(voteThreadStr string) error {
 	return nil
 }
 
-func checkVoteStopHeight(voteStopHeightStr string) (*big.Int, error) {
+func parseVoteStopHeight(voteStopHeightStr string) (*big.Int, error) {
 	voteStopHeight := big.NewInt(0)
 	_, ok := voteStopHeight.SetString(voteStopHeightStr, 10)
 	if !ok {
