@@ -2,6 +2,7 @@ package tdpos
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -28,34 +29,22 @@ import (
 
 // runNominateCandidate 执行提名候选人
 func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*contract.Response, error) {
-	// 核查nominate合约参数有效性
-	txArgs := contractCtx.Args()
-	candidateBytes := txArgs["candidate"]
-	candidateName := string(candidateBytes)
-	if candidateName == "" {
-		return common.NewContractErrResponse(common.StatusErr, nominateAddrErr.Error()), nominateAddrErr
+	// 1.1 核查nominate合约参数有效性
+	candidateName, height, err := tp.checkArgs(contractCtx.Args())
+	if err != nil {
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	amountBytes := txArgs["amount"]
+	amountBytes := contractCtx.Args()["amount"]
 	amountStr := string(amountBytes)
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
 	if amount <= 0 || err != nil {
 		return common.NewContractErrResponse(common.StatusErr, amountErr.Error()), amountErr
 	}
-	heightBytes := txArgs["height"]
-	heightStr := string(heightBytes)
-	height, err := strconv.ParseInt(heightStr, 10, 64)
-	if err != nil {
-		return common.NewContractErrResponse(common.StatusErr, notFoundErr.Error()), notFoundErr
-	}
-	if height <= tp.status.StartHeight || height > tp.election.ledger.GetTipBlock().GetHeight() {
-		return common.NewContractErrResponse(common.StatusErr, "Input height invalid. Pls wait seconds."), tooLowHeight
-	}
-	// 是否按照要求多签
+	// 1.2 是否按照要求多签
 	if ok := tp.isAuthAddress(candidateName, contractCtx.Initiator(), contractCtx.AuthRequire()); !ok {
 		return common.NewContractErrResponse(common.StatusErr, authErr.Error()), authErr
 	}
-
-	// 调用冻结接口
+	// 1.3 调用冻结接口
 	tokenArgs := map[string][]byte{
 		"from":      []byte(contractCtx.Initiator()),
 		"amount":    []byte(fmt.Sprintf("%d", amount)),
@@ -66,7 +55,7 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
 
-	// 1. 读取提名候选人key，改写
+	// 2. 读取提名候选人key
 	res, err := tp.election.getSnapshotKey(height, contractBucket, []byte(nominateKey))
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, "Internal error."), err
@@ -85,7 +74,7 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 	record[contractCtx.Initiator()] = amount
 	nominateValue[candidateName] = record
 
-	// 2. 候选人改写
+	// 3. 候选人改写
 	returnBytes, err := json.Marshal(nominateValue)
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
@@ -105,22 +94,10 @@ func (tp *tdposConsensus) runNominateCandidate(contractCtx contract.KContext) (*
 // Args: candidate::候选人钱包地址
 func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*contract.Response, error) {
 	// 核查撤销nominate合约参数有效性
-	txArgs := contractCtx.Args()
-	candidateBytes := txArgs["candidate"]
-	candidateName := string(candidateBytes)
-	if candidateName == "" {
-		return common.NewContractErrResponse(common.StatusErr, nominateAddrErr.Error()), nominateAddrErr
-	}
-	heightBytes := txArgs["height"]
-	heightStr := string(heightBytes)
-	height, err := strconv.ParseInt(heightStr, 10, 64)
+	candidateName, height, err := tp.checkArgs(contractCtx.Args())
 	if err != nil {
-		return common.NewContractErrResponse(common.StatusErr, notFoundErr.Error()), notFoundErr
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	if height <= tp.status.StartHeight || height > tp.election.ledger.GetTipBlock().GetHeight() {
-		return common.NewContractErrResponse(common.StatusErr, "Input height invalid. Pls wait seconds."), tooLowHeight
-	}
-
 	// 1. 提名候选人改写
 	res, err := tp.election.getSnapshotKey(height, contractBucket, []byte(nominateKey))
 	if err != nil {
@@ -133,7 +110,7 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 			return common.NewContractErrResponse(common.StatusErr, notFoundErr.Error()), err
 		}
 	}
-	// 查看是否有历史投票
+	// 1.1 查看是否有历史投票
 	v, ok := nominateValue[candidateName]
 	if !ok {
 		return common.NewContractErrResponse(common.StatusErr, emptyNominateKey.Error()), emptyNominateKey
@@ -142,8 +119,7 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 	if !ok {
 		return common.NewContractErrResponse(common.StatusErr, notFoundErr.Error()), notFoundErr
 	}
-
-	// 查询到amount之后，再调用解冻接口，Args: FromAddr, amount
+	// 1.2 查询到amount之后，再调用解冻接口，Args: FromAddr, amount
 	tokenArgs := map[string][]byte{
 		"from":      []byte(contractCtx.Initiator()),
 		"amount":    []byte(fmt.Sprintf("%d", ballot)),
@@ -204,29 +180,18 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 // Args: candidate::候选人钱包地址
 //       amount::投票者票数
 func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Response, error) {
-	txArgs := contractCtx.Args()
-	candidateBytes := txArgs["candidate"]
-	candidateName := string(candidateBytes)
-	if candidateName == "" {
-		return common.NewContractErrResponse(common.StatusErr, nominateAddrErr.Error()), nominateAddrErr
+	// 1.1 验证合约参数是否正确
+	candidateName, height, err := tp.checkArgs(contractCtx.Args())
+	if err != nil {
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	amountBytes := txArgs["amount"]
+	amountBytes := contractCtx.Args()["amount"]
 	amountStr := string(amountBytes)
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
 	if amount <= 0 || err != nil {
 		return common.NewContractErrResponse(common.StatusErr, amountErr.Error()), amountErr
 	}
-	heightBytes := txArgs["height"]
-	heightStr := string(heightBytes)
-	height, err := strconv.ParseInt(heightStr, 10, 64)
-	if err != nil {
-		return common.NewContractErrResponse(common.StatusErr, notFoundErr.Error()), notFoundErr
-	}
-	if height <= tp.status.StartHeight || height > tp.election.ledger.GetTipBlock().GetHeight() {
-		return common.NewContractErrResponse(common.StatusErr, "Input height invalid. Pls wait seconds."), tooLowHeight
-	}
-
-	// 调用冻结接口
+	// 1.2 调用冻结接口
 	tokenArgs := map[string][]byte{
 		"from":      []byte(contractCtx.Initiator()),
 		"amount":    []byte(fmt.Sprintf("%d", amount)),
@@ -236,8 +201,7 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-
-	// 1. 检查vote的地址是否在候选人池中，快照读取候选人池，vote相关参数一定是会在nominate列表中显示
+	// 1.3 检查vote的地址是否在候选人池中，快照读取候选人池，vote相关参数一定是会在nominate列表中显示
 	res, err := tp.election.getSnapshotKey(height, contractBucket, []byte(nominateKey))
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, "Internal error."), err
@@ -289,29 +253,18 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 // Args: candidate::候选人钱包地址
 //       amount: 投票数
 func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contract.Response, error) {
-	txArgs := contractCtx.Args()
-	candidateBytes := txArgs["candidate"]
-	candidateName := string(candidateBytes)
-	if candidateName == "" {
-		return common.NewContractErrResponse(common.StatusErr, nominateAddrErr.Error()), nominateAddrErr
+	// 1.1 验证合约参数
+	candidateName, height, err := tp.checkArgs(contractCtx.Args())
+	if err != nil {
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	amountBytes := txArgs["amount"]
+	amountBytes := contractCtx.Args()["amount"]
 	amountStr := string(amountBytes)
 	amount, err := strconv.ParseInt(amountStr, 10, 64)
 	if amount <= 0 || err != nil {
 		return common.NewContractErrResponse(common.StatusErr, amountErr.Error()), amountErr
 	}
-	heightBytes := txArgs["height"]
-	heightStr := string(heightBytes)
-	height, err := strconv.ParseInt(heightStr, 10, 64)
-	if err != nil {
-		return common.NewContractErrResponse(common.StatusErr, notFoundErr.Error()), notFoundErr
-	}
-	if height <= tp.status.StartHeight || height > tp.election.ledger.GetTipBlock().GetHeight() {
-		return common.NewContractErrResponse(common.StatusErr, "Input height invalid. Pls wait seconds."), tooLowHeight
-	}
-
-	// 调用解冻接口，Args: FromAddr, amount
+	// 1.2 调用解冻接口，Args: FromAddr, amount
 	tokenArgs := map[string][]byte{
 		"from":      []byte(contractCtx.Initiator()),
 		"amount":    []byte(fmt.Sprintf("%d", amount)),
@@ -321,8 +274,7 @@ func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contrac
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-
-	// 1. 检查是否在vote池子里面，读取vote存储
+	// 1.3 检查是否在vote池子里面，读取vote存储
 	voteKey := voteKeyPrefix + candidateName
 	res, err := tp.election.getSnapshotKey(height, contractBucket, []byte(voteKey))
 	if err != nil {
@@ -465,6 +417,24 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 		"revoke":` + fmt.Sprintf("%v", revokeValue) + `
 	}`
 	return common.NewContractOKResponse([]byte(r)), nil
+}
+
+func (tp *tdposConsensus) checkArgs(txArgs map[string][]byte) (string, int64, error) {
+	candidateBytes := txArgs["candidate"]
+	candidateName := string(candidateBytes)
+	if candidateName == "" {
+		return "", 0, nominateAddrErr
+	}
+	heightBytes := txArgs["height"]
+	heightStr := string(heightBytes)
+	height, err := strconv.ParseInt(heightStr, 10, 64)
+	if err != nil {
+		return "", 0, notFoundErr
+	}
+	if height <= tp.status.StartHeight || height > tp.election.ledger.GetTipBlock().GetHeight() {
+		return "", 0, errors.New("Input height invalid. Pls wait seconds.")
+	}
+	return candidateName, height, nil
 }
 
 type nominateValue map[string]map[string]int64

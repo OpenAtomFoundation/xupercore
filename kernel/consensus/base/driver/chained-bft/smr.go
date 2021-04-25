@@ -346,10 +346,8 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		}
 	}
 	/*
-		// 新的proposal需要严格保证在HighQC下面，否则不参与投票
 		if !bytes.Equal(parentQC.GetProposalId(), s.qcTree.GetHighQC().In.GetProposalId()) {
-			s.log.Error("smr::handleReceivedProposal::invalid new proposal.", "new's parent", utils.F(parentQC.GetProposalId()), "highQC", utils.F(s.qcTree.GetHighQC().In.GetProposalId()))
-			return
+			return	// TODO: 新的proposal需要严格保证在HighQC下面，否则不参与投票
 		}
 	*/
 	// 1.检查账本状态和收到新round是否符合要求
