@@ -107,8 +107,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (ConsensusInterface, error) {
 		config := c[i]
 		oldConsensus, err := pc.makeConsensusItem(cCtx, config)
 		if err != nil {
-			cCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::make old consensus item error!", "error", err.Error())
-			return nil, err
+			cCtx.XLog.Warn("Pluggable Consensus::NewPluggableConsensus::make old consensus item error!", "error", err.Error())
 		}
 		pc.stepConsensus.put(oldConsensus)
 		// 最近一次共识实例吊起
@@ -185,8 +184,8 @@ func (pc *PluggableConsensus) proposalArgsUnmarshal(ctxArgs map[string][]byte) (
 	return &def.ConsensusConfig{
 		ConsensusName: consensusName,
 		Config:        string(consensusConfigBytes),
-		Index:         pc.stepConsensus.len(),
-		StartHeight:   consensusHeight + 1,
+		Index:         pc.stepConsensus.len() - 1,
+		StartHeight:   consensusHeight,
 	}, nil
 }
 
@@ -217,11 +216,11 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		// 尚未写入过任何值，此时需要先写入genesisConfig，即初始共识配置值, 此处不存在err情况
 		consensusBuf, _ := pc.ctx.Ledger.GetConsensusConf()
 		// 解析提取字段生成ConsensusConfig
-		cfg := def.ConsensusConfig{}
-		_ = json.Unmarshal(consensusBuf, &cfg)
-		cfg.StartHeight = 1
-		cfg.Index = 0
-		c[0] = cfg
+		config := def.ConsensusConfig{}
+		_ = json.Unmarshal(consensusBuf, &config)
+		config.StartHeight = 1
+		config.Index = 0
+		c[0] = config
 	} else {
 		err = json.Unmarshal(pluggableConfig, &c)
 		if err != nil {

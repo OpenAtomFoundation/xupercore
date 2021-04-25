@@ -11,7 +11,7 @@ type ConsensusConfig struct {
 	// 获取本次共识专属属性
 	Config string `json:"config"`
 	// 获取本次共识的起始高度
-	StartHeight int64 `json:"-"`
+	StartHeight int64 `json:"height,omitempty"`
 	// 本次共识在consensus slice中的index
-	Index int `json:"-"`
+	Index int `json:"index,omitempty"`
 }

@@ -120,8 +120,9 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 			CurrentView: cCfg.StartHeight,
 		}
 		// 重启状态检查1，pacemaker需要重置
+		tipBlockHeight := cCtx.Ledger.GetTipBlock().GetHeight()
 		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-			pacemaker.CurrentView = cCtx.Ledger.GetTipBlock().GetHeight() - 1
+			pacemaker.CurrentView = tipBlockHeight - 1
 		}
 		saftyrules := &chainedBft.DefaultSaftyRules{
 			Crypto: cryptoClient,
@@ -132,7 +133,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		// 重启状态检查2，重做tipBlock，此时需重装载justify签名
 		if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 			for i := int64(0); i < 3; i++ {
-				b, err := cCtx.Ledger.QueryBlockByHeight(cCtx.Ledger.GetTipBlock().GetHeight() - i)
+				b, err := cCtx.Ledger.QueryBlockByHeight(tipBlockHeight - i)
 				if err != nil {
 					break
 				}
@@ -187,7 +188,8 @@ Again:
 	if leader == x.election.address {
 		x.bctx.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", true, "height", height)
 		// TODO: 首次切换为矿工时SyncBlcok, Bug: 可能会导致第一次出块失败
-		needSync := x.election.ledger.GetTipBlock().GetHeight() == 0 || string(x.election.ledger.GetTipBlock().GetProposer()) != leader
+		tipBlock := x.election.ledger.GetTipBlock()
+		needSync := tipBlock.GetHeight() == 0 || string(tipBlock.GetProposer()) != leader
 		return true, needSync, nil
 	}
 	x.bctx.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", false, "height", height)
@@ -250,9 +252,10 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 		return nil, nil, nil
 	}
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
+	tipBlock := x.election.ledger.GetTipBlock()
 	var truncateT []byte
 	var err error
-	if !bytes.Equal(x.smr.GetHighQC().GetProposalId(), x.election.ledger.GetTipBlock().GetBlockid()) {
+	if !bytes.Equal(x.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
 		// 单个节点不存在投票验证的hotstuff流程，因此返回true
 		if len(x.election.validators) == 1 {
 			return nil, nil, nil
@@ -260,16 +263,16 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 		truncateT, err = func() ([]byte, error) {
 			// 1. 比对HighQC与ledger高度
 			b, err := x.election.ledger.QueryBlock(x.smr.GetHighQC().GetProposalId())
-			if err != nil || b.GetHeight() > x.election.ledger.GetTipBlock().GetHeight() {
+			if err != nil || b.GetHeight() > tipBlock.GetHeight() {
 				// 不存在时需要把本地HighQC回滚到ledger; HighQC高度高于账本高度，本地HighQC回滚到ledger
-				if err := x.smr.EnforceUpdateHighQC(x.election.ledger.GetTipBlock().GetBlockid()); err != nil {
+				if err := x.smr.EnforceUpdateHighQC(tipBlock.GetBlockid()); err != nil {
 					// 本地HighQC回滚错误直接退出
 					return nil, err
 				}
 				return nil, nil
 			}
 			// 高度相等时，应统一回滚到上一高度，此时genericQC一定存在
-			if b.GetHeight() == x.election.ledger.GetTipBlock().GetHeight() {
+			if b.GetHeight() == tipBlock.GetHeight() {
 				if err := x.smr.EnforceUpdateHighQC(x.smr.GetGenericQC().GetProposalId()); err != nil {
 					// 本地HighQC回滚错误直接退出
 					return nil, err
@@ -299,7 +302,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	bytes, _ := json.Marshal(map[string]interface{}{"justify": oldQC})
 	if truncateT != nil {
 		x.bctx.GetLog().Debug("Xpoa::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
-			"ledger", x.election.ledger.GetTipBlock().GetHeight(), "HighQC", x.smr.GetHighQC().GetProposalView())
+			"ledger", tipBlock.GetHeight(), "HighQC", x.smr.GetHighQC().GetProposalView())
 	}
 	return truncateT, bytes, nil
 }

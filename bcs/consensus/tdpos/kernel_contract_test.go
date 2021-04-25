@@ -29,6 +29,7 @@ func NewNominateArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["candidate"] = []byte(`TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY`)
 	a["amount"] = []byte("1")
+	a["height"] = []byte("6")
 	return a
 }
 
@@ -36,12 +37,14 @@ func NewVoteArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["candidate"] = []byte(`akf7qunmeaqb51Wu418d6TyPKp4jdLdpV`)
 	a["amount"] = []byte("1")
+	a["height"] = []byte("6")
 	return a
 }
 
 func NewRevokeNominateArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["candidate"] = []byte(`SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co`)
+	a["height"] = []byte("6")
 	return a
 }
 

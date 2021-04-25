@@ -248,7 +248,6 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 
 	// 防止重复提交交易
 	if _, exist := t.txIdCache.Get(string(tx.GetTxid())); exist {
-		log.Warn("tx already exist,ignore", "txid", utils.F(tx.GetTxid()))
 		return common.ErrTxAlreadyExist
 	}
 	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
