@@ -271,7 +271,7 @@ func (t *KernMethod) QueryAccountGovernTokens(ctx contract.KContext) (*contract.
 	// 查询account余额
 	balance, err := t.balanceOf(ctx, string(accountBuf))
 	if err != nil {
-		return nil, fmt.Errorf("unlock gov tokens failed, query account balance error")
+		return nil, fmt.Errorf("query account gov tokens balance failed, query account balance error:%s", err.Error())
 	}
 
 	balanceResBuf, err := json.Marshal(balance)
