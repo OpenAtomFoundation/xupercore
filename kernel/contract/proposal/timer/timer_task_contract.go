@@ -33,6 +33,12 @@ func (t *KernMethod) Add(ctx contract.KContext) (*contract.Response, error) {
 		return nil, fmt.Errorf("add timer task failed, get task_id err")
 	}
 
+	// 更新taskID
+	err = ctx.Put(utils.GetTimerBucket(), utils.GetTaskIDKey(), []byte(taskID))
+	if err != nil {
+		return nil, err
+	}
+
 	key := utils.MakeTimerBlockHeightTaskKey(string(blockHeightBuf), taskID)
 	err = ctx.Put(utils.GetTimerBucket(), []byte(key), triggerBuf)
 	if err != nil {
