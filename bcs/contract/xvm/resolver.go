@@ -43,6 +43,10 @@ func (s *syscallResolver) ResolveFunc(module, name string) (interface{}, bool) {
 		return s.goCallMethod, true
 	case "go.github.com/xuperchain/xuperunion/contractsdk/go/driver/wasm.fetchResponse":
 		return s.goFetchResponse, true
+	case "go.github.com/xuperchain/contract-sdk-go/driver/wasm.callMethod":
+		return s.goCallMethod, true
+	case "go.github.com/xuperchain/contract-sdk-go/driver/wasm.fetchResponse":
+		return s.goFetchResponse, true
 	case "go.github.com/xuperchain/xuperchain/core/contractsdk/go/driver/wasm.callMethod":
 		return s.goCallMethod, true
 	case "go.github.com/xuperchain/xuperchain/core/contractsdk/go/driver/wasm.fetchResponse":
