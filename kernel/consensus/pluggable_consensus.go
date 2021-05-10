@@ -184,7 +184,7 @@ func (pc *PluggableConsensus) proposalArgsUnmarshal(ctxArgs map[string][]byte) (
 	return &def.ConsensusConfig{
 		ConsensusName: consensusName,
 		Config:        string(consensusConfigBytes),
-		Index:         pc.stepConsensus.len() - 1,
+		Index:         pc.stepConsensus.len(),
 		StartHeight:   consensusHeight,
 	}, nil
 }
@@ -227,6 +227,11 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 			pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::unmarshal error", "error", err)
 			return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
 		}
+	}
+	// 检查新共识，仅允许共识升级为老共识实例，不允许升级为同名新共识实例，如Tdpos升级成Xpos升级成Tdpos，两个Tdpos配置必须相同
+	if checkSameNameConsensus(c, cfg) {
+		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::same name consensus.")
+		return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
 	}
 	c[len(c)] = *cfg
 	newBytes, err := json.Marshal(c)
@@ -331,6 +336,8 @@ func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error)
 	return con.GetConsensusStatus()
 }
 
+/////////////////// stepConsensus //////////////////
+
 // stepConsensus 封装了可插拔共识需要的共识数组
 type stepConsensus struct {
 	cons []ConsensusInterface
@@ -391,4 +398,36 @@ func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) (base.
 		return f(cCtx, cCfg), nil
 	}
 	return nil, ConsensusNotRegister
+}
+
+// checkSameNameConsensus 不允许同名但配置文件不同的共识新组件
+func checkSameNameConsensus(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) bool {
+	for k, v := range hisMap {
+		if v.ConsensusName != cfg.ConsensusName {
+			continue
+		}
+		if v.Config == cfg.Config {
+			if k != len(hisMap)-1 { // 允许回到历史共识实例
+				return false
+			}
+			return true // 不允许相同共识配置的升级，无意义
+		}
+		// 比对Version和bft组件是否一致即可
+		type tempStruct struct {
+			EnableBFT map[string]bool `json:"bft_config,omitempty"`
+		}
+		var newConf tempStruct
+		if err := json.Unmarshal([]byte(cfg.Config), &newConf); err != nil {
+			return true
+		}
+		var oldConf tempStruct
+		if err := json.Unmarshal([]byte(v.Config), &oldConf); err != nil {
+			return true
+		}
+		// 共识名称相同，注意: xpos和tdpos在name上都称为tdpos，但xpos的enableBFT!=nil
+		if (newConf.EnableBFT != nil && oldConf.EnableBFT != nil) || (newConf.EnableBFT == nil && oldConf.EnableBFT == nil) {
+			return true // 不允许同一共识名称的升级，如Tdpos不可以做配置升级，只能做配置回滚，如升级到xpos再升级回原来的tdpos
+		}
+	}
+	return false
 }
