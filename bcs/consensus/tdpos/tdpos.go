@@ -70,6 +70,9 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		election:    schedule,
 		Name:        "tdpos",
 	}
+	if schedule.enableChainedBFT {
+		status.Name = "xpos"
+	}
 	tdpos := &tdposConsensus{
 		config:    xconfig,
 		isProduce: make(map[int64]bool),
@@ -77,18 +80,16 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		status:    status,
 		log:       cCtx.XLog,
 	}
-
 	// 注册合约方法
 	tdposKMethods := map[string]contract.KernMethod{
 		contractNominateCandidate: tdpos.runNominateCandidate,
 		contractRevokeCandidate:   tdpos.runRevokeCandidate,
 		contractVote:              tdpos.runVote,
 		contractRevokeVote:        tdpos.runRevokeVote,
-		contractGetTdposInfos:     tdpos.runGetTdposInfos,
 	}
 	for method, f := range tdposKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(contractBucket, method); err != nil {
-			cCtx.Contract.GetKernRegistry().RegisterKernMethod(contractBucket, method, f)
+		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod("$"+status.Name, method); err != nil {
+			cCtx.Contract.GetKernRegistry().RegisterKernMethod("$"+status.Name, method, f)
 		}
 	}
 
@@ -133,7 +134,6 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	}
 	go smr.Start()
 	tdpos.smr = smr
-	status.Name = "xpos"
 	cCtx.XLog.Debug("Tdpos::NewTdposConsensus::load chained-bft successfully.")
 	return tdpos
 }

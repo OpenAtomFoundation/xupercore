@@ -164,7 +164,7 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 
 func (t *KernMethod) LockGovernTokens(ctx contract.KContext) (*contract.Response, error) {
 	// 调用权限校验
-	if ctx.Caller() != utils.ProposalKernelContract && ctx.Caller() != utils.TDPOSKernelContract {
+	if ctx.Caller() != utils.ProposalKernelContract && ctx.Caller() != utils.TDPOSKernelContract && ctx.Caller() != utils.XPOSKernelContract{
 		return nil, fmt.Errorf("caller %s no authority to LockGovernTokens", ctx.Caller())
 	}
 	args := ctx.Args()
@@ -219,7 +219,7 @@ func (t *KernMethod) LockGovernTokens(ctx contract.KContext) (*contract.Response
 
 func (t *KernMethod) UnLockGovernTokens(ctx contract.KContext) (*contract.Response, error) {
 	// 调用权限校验
-	if ctx.Caller() != utils.ProposalKernelContract && ctx.Caller() != utils.TDPOSKernelContract {
+	if ctx.Caller() != utils.ProposalKernelContract && ctx.Caller() != utils.TDPOSKernelContract && ctx.Caller() != utils.XPOSKernelContract {
 		return nil, fmt.Errorf("caller %s no authority to UnLockGovernTokens", ctx.Caller())
 	}
 	args := ctx.Args()
