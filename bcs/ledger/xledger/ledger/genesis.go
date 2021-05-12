@@ -194,10 +194,12 @@ func NewGenesisBlock(genesisCfg []byte) (*GenesisBlock, error) {
 	if config.NoFee {
 		config.Award = "0"
 		config.NewAccountResourceAmount = 0
-		config.Predistribution = []struct {
-			Address string `json:"address"`
-			Quota   string `json:"quota"`
-		}{}
+		// nofee场景下，不需要原生代币xuper
+		// 但是治理代币，会从此配置中进行初始代币发行，故而保留config.Predistribution内容
+		//config.Predistribution = []struct {
+		//	Address string `json:"address"`
+		//	Quota   string `json:"quota"`
+		//}{}
 		config.GasPrice.CpuRate = 0
 		config.GasPrice.DiskRate = 0
 		config.GasPrice.MemRate = 0

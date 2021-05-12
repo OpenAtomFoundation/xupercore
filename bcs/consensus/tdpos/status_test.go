@@ -16,7 +16,7 @@ func TestGetCurrentValidatorsInfo(t *testing.T) {
 		t.Error("prepare error", "error", err)
 		return
 	}
-	s := NewSchedule(tdposCfg, cCtx.XLog, cCtx.Ledger)
+	s := NewSchedule(tdposCfg, cCtx.XLog, cCtx.Ledger, 1)
 	status := TdposStatus{
 		Version:     1,
 		StartHeight: 1,

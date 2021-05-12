@@ -220,8 +220,9 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, validatesIpIn
 	if validatesIpInfo == nil {
 		return EmptyTarget
 	}
-	if s.qcTree.GetLockedQC() != nil && s.pacemaker.GetCurrentView() < s.qcTree.GetLockedQC().In.GetProposalView() {
-		s.log.Error("smr::ProcessProposal error", "error", TooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
+	if s.pacemaker.GetCurrentView() != s.qcTree.Genesis.In.GetProposalView()+1 &&
+		s.qcTree.GetLockedQC() != nil && s.pacemaker.GetCurrentView() < s.qcTree.GetLockedQC().In.GetProposalView() {
+		s.log.Debug("smr::ProcessProposal error", "error", TooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
 			s.qcTree.GetLockedQC().In.GetProposalView())
 		return TooLowNewProposal
 	}
@@ -344,6 +345,11 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 			return
 		}
 	}
+	/*
+		if !bytes.Equal(parentQC.GetProposalId(), s.qcTree.GetHighQC().In.GetProposalId()) {
+			return	// TODO: 新的proposal需要严格保证在HighQC下面，否则不参与投票
+		}
+	*/
 	// 1.检查账本状态和收到新round是否符合要求
 	if s.ledgerState+3 < newVote.ProposalView {
 		s.log.Error("smr::handleReceivedProposal::local ledger hasn't been updated.", "LedgerState", s.ledgerState, "ProposalView", newVote.ProposalView)

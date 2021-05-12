@@ -83,8 +83,9 @@ func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 		pow.bitcoinFlag = true
 	}
 	// 重启时需要重新更新目标target
-	if cCtx.Ledger.GetTipBlock().GetHeight() > cCfg.StartHeight {
-		bits, err := pow.refreshDifficulty(cCtx.Ledger.GetTipBlock().GetBlockid(), cCtx.Ledger.GetTipBlock().GetHeight()+1)
+	tipBlock := cCtx.Ledger.GetTipBlock()
+	if tipBlock.GetHeight() > cCfg.StartHeight {
+		bits, err := pow.refreshDifficulty(tipBlock.GetBlockid(), tipBlock.GetHeight()+1)
 		if err != nil {
 			cCtx.XLog.Error("PoW::NewPoWConsensus::refreshDifficulty err", "error", err)
 			return nil

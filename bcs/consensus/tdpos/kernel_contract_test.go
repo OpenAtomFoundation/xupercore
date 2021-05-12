@@ -29,6 +29,7 @@ func NewNominateArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["candidate"] = []byte(`TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY`)
 	a["amount"] = []byte("1")
+	a["height"] = []byte("6")
 	return a
 }
 
@@ -36,12 +37,14 @@ func NewVoteArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["candidate"] = []byte(`akf7qunmeaqb51Wu418d6TyPKp4jdLdpV`)
 	a["amount"] = []byte("1")
+	a["height"] = []byte("6")
 	return a
 }
 
 func NewRevokeNominateArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["candidate"] = []byte(`SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co`)
+	a["height"] = []byte("6")
 	return a
 }
 
@@ -85,7 +88,6 @@ func TestRunNominateCandidate(t *testing.T) {
 	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
-	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
 	// 3. 构造nominate存储
 	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
 	// 4. 构造vote存储
@@ -122,7 +124,6 @@ func TestRunRevokeCandidate(t *testing.T) {
 	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
-	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
 	// 3. 构造nominate存储
 	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
 	// 4. 构造vote存储
@@ -159,7 +160,6 @@ func TestRunVote(t *testing.T) {
 	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
-	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
 	// 3. 构造nominate存储
 	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
 	// 4. 构造vote存储
@@ -195,7 +195,6 @@ func TestRunRevokeVote(t *testing.T) {
 	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
-	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
 	// 3. 构造nominate存储
 	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
 	// 4. 构造vote存储
@@ -232,7 +231,6 @@ func TestRunGetTdposInfos(t *testing.T) {
 	l.SetConsensusStorage(4, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(5, SetTdposStorage(2, nil))
 	l.SetConsensusStorage(6, SetTdposStorage(3, nil))
-	l.SetSnapshot(contractBucket, []byte(termKey), TermKey1())
 	// 3. 构造nominate存储
 	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey2())
 	// 4. 构造vote存储
