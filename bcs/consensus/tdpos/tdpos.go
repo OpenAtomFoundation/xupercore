@@ -88,8 +88,8 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		contractRevokeVote:        tdpos.runRevokeVote,
 	}
 	for method, f := range tdposKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod("$"+status.Name, method); err != nil {
-			cCtx.Contract.GetKernRegistry().RegisterKernMethod("$"+status.Name, method, f)
+		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
+			cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
 		}
 	}
 

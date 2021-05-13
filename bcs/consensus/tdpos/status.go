@@ -65,7 +65,7 @@ func (t *TdposStatus) GetCurrentValidatorsInfo() []byte {
 func (t *TdposStatus) getTdposInfos() string {
 	height := t.election.ledger.GetTipBlock().GetHeight()
 	// nominate信息
-	res, err := t.election.getSnapshotKey(height, "$"+t.Name, []byte(fmt.Sprintf("%s_%d_%s", t.Name, t.Version, nominateKey)))
+	res, err := t.election.getSnapshotKey(height, t.election.bindContractBucket, []byte(fmt.Sprintf("%s_%d_%s", t.Name, t.Version, nominateKey)))
 	if res == nil || err != nil {
 		return ""
 	}
@@ -84,7 +84,7 @@ func (t *TdposStatus) getTdposInfos() string {
 	for candidate, _ := range nominateValue {
 		// 读取投票存储
 		voteKey := fmt.Sprintf("%s_%d_%s%s", t.Name, t.Version, voteKeyPrefix, candidate)
-		res, err = t.election.getSnapshotKey(height, "$"+t.Name, []byte(voteKey))
+		res, err = t.election.getSnapshotKey(height, t.election.bindContractBucket, []byte(voteKey))
 		if err != nil {
 			t.election.log.Error("TdposStatus::getTdposInfos::load vote read set err when get key.", "key", voteKey)
 			continue
@@ -101,7 +101,7 @@ func (t *TdposStatus) getTdposInfos() string {
 	}
 
 	// revoke信息
-	res, err = t.election.getSnapshotKey(height, "$"+t.Name, []byte(fmt.Sprintf("%s_%d_%s", t.Name, t.Version, revokeKey)))
+	res, err = t.election.getSnapshotKey(height, t.election.bindContractBucket, []byte(fmt.Sprintf("%s_%d_%s", t.Name, t.Version, revokeKey)))
 	if err != nil {
 		t.election.log.Error("TdposStatus::getTdposInfos::load revoke read set err when get key.")
 		return ""

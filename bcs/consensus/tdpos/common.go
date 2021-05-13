@@ -22,10 +22,11 @@ const (
 	contractRevokeVote        = "revokeVote"
 	contractGetTdposInfos     = "getTdposInfos"
 
-	contractBucket = "$tdpos"
-	nominateKey    = "nominate"
-	voteKeyPrefix  = "vote_"
-	revokeKey      = "revoke"
+	tdposBucket   = "$tdpos"
+	xposBucket    = "$xpos"
+	nominateKey   = "nominate"
+	voteKeyPrefix = "vote_"
+	revokeKey     = "revoke"
 
 	NOMINATETYPE = "nominate"
 	VOTETYPE     = "vote"
