@@ -139,17 +139,19 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, 
 
 	// 检查justify的所有vote签名
 	justifySigns := parent.GetSignsInfo()
-	if !s.CalVotesThreshold(len(justifySigns), len(justifyValidators)) {
-		return NoEnoughVotes
-	}
+	validCnt := 0
 	for _, v := range justifySigns {
 		if !isInSlice(v.GetAddress(), justifyValidators) {
-			return InvalidVoteAddr
+			continue
 		}
 		// 签名和公钥是否匹配
 		if ok, _ := s.Crypto.VerifyVoteMsgSign(v, parent.GetProposalId()); !ok {
 			return InvalidVoteSign
 		}
+		validCnt++
+	}
+	if !s.CalVotesThreshold(validCnt, len(justifyValidators)) {
+		return NoEnoughVotes
 	}
 	return nil
 }

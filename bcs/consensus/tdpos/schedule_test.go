@@ -153,11 +153,11 @@ func TestCalHisValidators(t *testing.T) {
 	// [1,2,3,4,4,4,4]
 
 	// 3. 构造nominate存储
-	l.SetSnapshot(contractBucket, []byte(nominateKey), NominateKey1())
+	l.SetSnapshot(tdposBucket, []byte(nominateKey), NominateKey1())
 	// 4. 构造vote存储
-	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
-	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
-	l.SetSnapshot(contractBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
+	l.SetSnapshot(tdposBucket, []byte(voteKeyPrefix+"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"), VoteKey1())
+	l.SetSnapshot(tdposBucket, []byte(voteKeyPrefix+"SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"), VoteKey2())
+	l.SetSnapshot(tdposBucket, []byte(voteKeyPrefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
 	// 5. 调用查看
 	v1, err := s.calHisValidators(1)
 	if err != nil {
