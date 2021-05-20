@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
@@ -18,6 +19,7 @@ import (
 	cryptoClient "github.com/xuperchain/xupercore/lib/crypto/client"
 	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -127,6 +129,7 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool, genesisCfg []byte) (*Ledge
 		return nil, err
 	}
 
+	ledger.ctx = lctx
 	ledger.baseDB = baseDB
 	ledger.metaTable = kvdb.NewTable(baseDB, pb.MetaTablePrefix)
 	ledger.confirmedTable = kvdb.NewTable(baseDB, pb.ConfirmedTablePrefix)
@@ -555,10 +558,22 @@ func (l *Ledger) parallelCheckTx(txs []*pb.Transaction, block *pb.InternalBlock)
 // ConfirmBlock submit a block to ledger
 func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatus {
 	l.mutex.Lock()
-	defer l.mutex.Unlock()
+	tm := time.Now()
+	var confirmStatus ConfirmStatus
+	defer func() {
+		l.mutex.Unlock()
+		bcName := l.ctx.BCName
+		metrics.CallMethodHistogram.WithLabelValues(bcName, "ConfirmBlock").Observe(time.Since(tm).Seconds())
+		if confirmStatus.Succ {
+			metrics.LedgerConfirmTxCounter.WithLabelValues(bcName).Add(float64(block.TxCount))
+		}
+		if confirmStatus.TrunkSwitch {
+			metrics.LedgerSwitchBranchCounter.WithLabelValues(bcName).Inc()
+		}
+	}()
+
 	blkTimer := timer.NewXTimer()
 	l.xlog.Info("start to confirm block", "blockid", utils.F(block.Blockid), "txCount", len(block.Transactions))
-	var confirmStatus ConfirmStatus
 	dummyTransactions := []*pb.Transaction{}
 	realTransactions := block.Transactions // 真正的交易转存到局部变量
 	block.Transactions = dummyTransactions // block表不保存transaction详情
@@ -812,7 +827,7 @@ func (l *Ledger) QueryBlock(blockid []byte) (*pb.InternalBlock, error) {
 
 // QueryBlockHeader query a block by blockID in the ledger and return only block header
 func (l *Ledger) QueryBlockHeader(blockid []byte) (*pb.InternalBlock, error) {
-	return l.queryBlock(blockid, false)
+	return l.fetchBlock(blockid)
 }
 
 // HasTransaction check if a transaction exists in the ledger

@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/patrickmn/go-cache"
@@ -21,6 +22,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/def"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
@@ -156,7 +158,6 @@ func (p *P2PServerV1) serve() {
 
 // SendP2PMessage implement the SendP2PMessageServer
 func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) error {
-	stream.Context()
 	msg, err := stream.Recv()
 	if err != nil {
 		p.log.Warn("SendP2PMessage Recv msg error", "error", err)
@@ -167,14 +168,12 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				"bcname": msg.GetHeader().GetBcname(),
-				"type":   msg.GetHeader().GetType().String(),
-				"method": "SendP2PMessage",
+				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
-
-			p2p.Metrics.QPS.With(labels).Inc()
-			p2p.Metrics.Cost.With(labels).Add(float64(time.Since(tm).Microseconds()))
-			// p2p.Metrics.Packet.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkMsgReceivedCounter.With(labels).Inc()
+			metrics.NetworkMsgReceivedBytesCounter.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkServerHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
 		}()
 	}
 

@@ -155,7 +155,7 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 			uBinary, findErr := uv.utxoTable.Get([]byte(utxoKey))
 			if findErr != nil {
 				if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
-					uv.log.Info("not found utxo key:", "utxoKey", utxoKey)
+					uv.log.Error("not found utxo key:", "utxoKey", utxoKey)
 					return ErrUTXONotFound
 				}
 				uv.log.Warn("unexpected leveldb error when do checkInputEqualOutput", "findErr", findErr)

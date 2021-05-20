@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
@@ -21,6 +22,7 @@ import (
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
@@ -39,6 +41,9 @@ import (
 //   6. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
 //      operation, keep it at last)
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
+	tm := time.Now()
+	defer metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(tm).Seconds())
+	metrics.CallMethodCounter.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Inc()
 	// Pre processing of tx data
 	if !isRootTx && tx.Version == RootTxVersion {
 		return false, ErrVersionInvalid

@@ -21,6 +21,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
@@ -133,11 +134,13 @@ func (t *Miner) Start() {
 		// 2.通过共识检查矿工身份
 		if err == nil {
 			isMiner, isSync, err = t.ctx.Consensus.CompeteMaster(ledgerTipHeight + 1)
+			ctx.Timer.Mark("CompeteMaster")
 			ctx.GetLog().Trace("compete master result", "height", ledgerTipHeight+1, "isMiner", isMiner, "isSync", isSync, "err", err)
 		}
 		// 3.如需要同步，尝试同步网络最新区块
 		if err == nil && isMiner && isSync {
 			err = t.trySyncBlock(ctx, nil)
+			ctx.Timer.Mark("SyncBlock")
 		}
 		// 4.如果是矿工，出块
 		if err == nil && isMiner {
@@ -188,6 +191,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 				"stateTipId", utils.F(stateTipId))
 			return fmt.Errorf("mining walk failed")
 		}
+		ctx.GetTimer().Mark("walk")
 		stateTipId = t.ctx.State.GetLatestBlockid()
 	}
 
@@ -195,6 +199,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	height := t.ctx.Ledger.GetMeta().TrunkHeight + 1
 	now := time.Now()
 	truncateTarget, extData, err := t.ctx.Consensus.ProcessBeforeMiner(now.UnixNano())
+	ctx.GetTimer().Mark("ProcessBeforeMiner")
 	if err != nil {
 		ctx.GetLog().Warn("consensus process before miner failed", "err", err)
 		return fmt.Errorf("consensus process before miner failed")
@@ -210,7 +215,10 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	}
 
 	// 4.打包区块
+	tm := time.Now()
 	block, err := t.packBlock(ctx, height, now, extData)
+	ctx.GetTimer().Mark("PackBlock")
+	metrics.CallMethodHistogram.WithLabelValues(t.ctx.BCName, "PackBlock").Observe(time.Since(tm).Seconds())
 	if err != nil {
 		ctx.GetLog().Warn("pack block error", "err", err)
 		return err
@@ -228,8 +236,8 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
 
-	ctx.GetLog().Trace("complete new block generation", "blockId", utils.F(block.GetBlockid()),
-		"height", height, "costs", ctx.GetTimer().Print())
+	ctx.GetLog().Trace("finish new block generation", "blockId", utils.F(block.GetBlockid()),
+		"height", height, "size", proto.Size(block), "costs", ctx.GetTimer().Print())
 	return nil
 }
 
@@ -382,6 +390,7 @@ func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock
 	origBlkId := block.Blockid
 	blkAgent := agent.NewBlockAgent(block)
 	err := t.ctx.Consensus.CalculateBlock(blkAgent)
+	ctx.GetTimer().Mark("CalculateBlock")
 	if err != nil {
 		ctx.GetLog().Warn("consensus calculate block failed", "err", err,
 			"blockId", utils.F(block.Blockid))
@@ -392,6 +401,7 @@ func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock
 
 	// 账本确认区块
 	confirmStatus := t.ctx.Ledger.ConfirmBlock(block, false)
+	ctx.GetTimer().Mark("ConfirmBlock")
 	if confirmStatus.Succ {
 		if confirmStatus.Orphan {
 			ctx.GetLog().Trace("the mined blocked was attached to branch,no need to play",
@@ -408,6 +418,7 @@ func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock
 
 	// 状态机确认区块
 	err = t.ctx.State.PlayForMiner(block.Blockid)
+	ctx.GetTimer().Mark("PlayForMiner")
 	if err != nil {
 		ctx.GetLog().Warn("state play error ", "error", err, "blockId", utils.F(block.Blockid))
 		return err
@@ -415,6 +426,7 @@ func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock
 
 	// 共识确认区块
 	err = t.ctx.Consensus.ProcessConfirmBlock(blkAgent)
+	ctx.GetTimer().Mark("ProcessConfirmBlock")
 	if err != nil {
 		ctx.GetLog().Warn("consensus confirm block error", "err", err,
 			"blockId", utils.F(block.Blockid))
@@ -641,19 +653,23 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 	}
 
 	for index := len(blkIds) - 1; index >= 0; index-- {
+		timer := timer.NewXTimer()
 		block, err := t.ctx.Ledger.GetPendingBlock(blkIds[index])
 		if err != nil {
 			ctx.GetLog().Warn("ledger get pending block error",
 				"blockId", utils.F(blkIds[index]), "err", err)
 			return fmt.Errorf("get pending block failed from ledger")
 		}
+		timer.Mark("GetPendingBlock")
 
 		valid, err := t.ctx.Ledger.VerifyBlock(block, ctx.GetLog().GetLogId())
 		if !valid {
 			ctx.GetLog().Warn("the verification of block failed.",
 				"blockId", utils.F(blkIds[index]))
-			return fmt.Errorf("the verification of block failed from ledger.")
+			return fmt.Errorf("the verification of block failed from ledger")
 		}
+		timer.Mark("VerifyBlock")
+
 		blockAgent := agent.NewBlockAgent(block)
 		isMatch, err := t.ctx.Consensus.CheckMinerMatch(ctx, blockAgent)
 		if !isMatch {
@@ -661,12 +677,24 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 				"blockId", utils.F(blkIds[index]), "err", err)
 			return errors.New("consensus check miner match failed")
 		}
+		timer.Mark("CheckMinerMatch")
 
 		status := t.ctx.Ledger.ConfirmBlock(block, false)
 		if !status.Succ {
 			ctx.GetLog().Warn("ledger confirm block failed",
 				"blockId", utils.F(blkIds[index]), "err", status.Error)
 			return errors.New("ledger confirm block failed")
+		}
+		timer.Mark("ConfirmBlock")
+
+		// 状态机确认区块
+		if bytes.Equal(t.ctx.State.GetLatestBlockid(), block.PreHash) {
+			err = t.ctx.State.PlayAndRepost(block.Blockid, false, false)
+			if err != nil {
+				ctx.GetLog().Warn("state play error", "error", err, "height", block.Height, "blockId", utils.F(block.Blockid))
+				return err
+			}
+			timer.Mark("PlayAndRepost")
 		}
 
 		err = t.ctx.Consensus.ProcessConfirmBlock(blockAgent)
@@ -675,6 +703,8 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 				"blockId", utils.F(blkIds[index]), "err", err)
 			return errors.New("consensus process confirm block failed")
 		}
+
+		ctx.GetLog().Trace("confirm block finish", "height", block.Height, "blockId", utils.F(block.Blockid), "size", proto.Size(block), "costs", timer.Print())
 	}
 
 	ctx.GetLog().Trace("batch confirm block to ledger succ", "blockCount", len(blkIds))

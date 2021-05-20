@@ -2,14 +2,15 @@ package p2pv1
 
 import (
 	"errors"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	prom "github.com/prometheus/client_golang/prometheus"
 
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
@@ -24,14 +25,12 @@ func (p *P2PServerV1) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage, optFu
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				"bcname": msg.GetHeader().GetBcname(),
-				"type":   msg.GetHeader().GetType().String(),
-				"method": "SendMessage",
+				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
-
-			p2p.Metrics.QPS.With(labels).Inc()
-			p2p.Metrics.Cost.With(labels).Add(float64(time.Since(tm).Microseconds()))
-			p2p.Metrics.Packet.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkMsgSendCounter.With(labels).Inc()
+			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkClientHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
 		}()
 	}
 
@@ -86,14 +85,12 @@ func (p *P2PServerV1) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				"bcname": msg.GetHeader().GetBcname(),
-				"type":   msg.GetHeader().GetType().String(),
-				"method": "SendMessageWithResponse",
+				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
-
-			p2p.Metrics.QPS.With(labels).Inc()
-			p2p.Metrics.Cost.With(labels).Add(float64(time.Since(tm).Microseconds()))
-			p2p.Metrics.Packet.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkMsgSendCounter.With(labels).Inc()
+			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkClientHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
 		}()
 	}
 

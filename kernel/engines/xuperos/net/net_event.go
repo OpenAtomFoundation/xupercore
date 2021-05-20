@@ -3,6 +3,7 @@ package xuperos
 import (
 	"bytes"
 	"fmt"
+	"time"
 
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -11,6 +12,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
@@ -132,7 +134,9 @@ func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 		Timer: timer.NewXTimer(),
 	}
 	if handle, ok := AsyncMsgList[request.GetHeader().GetType()]; ok {
+		tm := time.Now()
 		handle(ctx, request)
+		metrics.CallMethodHistogram.WithLabelValues(request.Header.Bcname, request.Header.Type.String()).Observe(time.Since(tm).Seconds())
 	} else {
 		log.Warn("received unregister request", "type", request.GetHeader().GetType())
 		return
