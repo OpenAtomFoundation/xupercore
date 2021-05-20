@@ -2,6 +2,7 @@ package xpoa
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -43,14 +44,15 @@ func (x *xpoaConsensus) methodEditValidates(contractCtx contract.KContext) (*con
 		return common.NewContractErrResponse(common.StatusBadRequest, targetParamErr.Error()), targetParamErr
 	}
 	validators := strings.Split(validatesAddrs, ";")
-	rawV := &ValidatorsInfo{
-		Validators: validators,
+	rawV := &ProposerInfo{
+		Address: validators,
 	}
 	rawBytes, err := json.Marshal(rawV)
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	if err := contractCtx.Put(contractBucket, []byte(validateKeys), rawBytes); err != nil {
+	if err := contractCtx.Put(x.election.bindContractBucket,
+		[]byte(fmt.Sprintf("%d_%s", x.election.consensusVersion, validateKeys)), rawBytes); err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
 	delta := contract.Limits{
@@ -64,11 +66,11 @@ func (x *xpoaConsensus) methodEditValidates(contractCtx contract.KContext) (*con
 // Return: validates::候选人钱包地址
 func (x *xpoaConsensus) methodGetValidates(contractCtx contract.KContext) (*contract.Response, error) {
 	var jsonBytes []byte
-	validatesBytes, err := contractCtx.Get(contractBucket, []byte(validateKeys))
+	validatesBytes, err := contractCtx.Get(x.election.bindContractBucket,
+		[]byte(fmt.Sprintf("%d_%s", x.election.consensusVersion, validateKeys)))
 	if err != nil {
-		originValidators := x.election.GetValidators(x.election.ledger.GetTipBlock().GetHeight())
 		returnV := map[string][]string{
-			"validators": originValidators,
+			"validators": x.election.initValidators,
 		}
 		jsonBytes, err = json.Marshal(returnV)
 		if err != nil {

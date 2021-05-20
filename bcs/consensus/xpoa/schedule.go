@@ -1,9 +1,11 @@
 package xpoa
 
 import (
+	"fmt"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
+	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
@@ -23,10 +25,49 @@ type xpoaSchedule struct {
 	initValidators []string
 	startHeight    int64
 
-	ledger    cctx.LedgerRely
-	enableBFT bool
+	enableBFT          bool
+	consensusName      string
+	consensusVersion   int64
+	bindContractBucket string
 
-	log logs.Logger
+	log    logs.Logger
+	ledger cctx.LedgerRely
+}
+
+func NewXpoaSchedule(xconfig *xpoaConfig, cCtx context.ConsensusCtx, startHeight int64) *xpoaSchedule {
+	s := xpoaSchedule{
+		address:            cCtx.Network.PeerInfo().Account,
+		period:             xconfig.Period,
+		blockNum:           xconfig.BlockNum,
+		startHeight:        startHeight,
+		consensusName:      "poa",
+		consensusVersion:   xconfig.Version,
+		bindContractBucket: poaBucket,
+		ledger:             cCtx.Ledger,
+		log:                cCtx.XLog,
+	}
+	if xconfig.EnableBFT != nil {
+		s.enableBFT = true
+		s.consensusName = "xpoa"
+		s.bindContractBucket = xpoaBucket
+	}
+	// xpoaSchedule 实现了ProposerElectionInterface接口，接口定义了validators操作
+	// 重启时需要使用最新的validator数据，而不是initValidators数据
+	var validators []string
+	for _, v := range xconfig.InitProposer.Address {
+		validators = append(validators, v)
+	}
+	s.initValidators = validators
+	reader, _ := s.ledger.GetTipXMSnapshotReader()
+	res, err := reader.Get(s.bindContractBucket, []byte(fmt.Sprintf("%d_%s", s.consensusVersion, validateKeys)))
+	if err != nil {
+		return nil
+	}
+	if snapshotValidators, _ := loadValidatorsMultiInfo(res); snapshotValidators != nil {
+		validators = snapshotValidators
+	}
+	s.validators = validators
+	return &s
 }
 
 // minerScheduling 按照时间调度计算目标候选人轮换数term, 目标候选人index和候选人生成block的index
@@ -53,19 +94,26 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 	if b, err := s.ledger.QueryBlockByHeight(round); err == nil {
 		return string(b.GetProposer())
 	}
-	tipBlock := s.ledger.GetTipBlock()
-	tipHeight := tipBlock.GetHeight()
 	v := s.GetValidators(round)
 	if v == nil {
 		return ""
 	}
 	// 计算round对应的timestamp大致区间
 	nTime := time.Now().UnixNano()
-	if round > tipHeight {
+	if round > s.ledger.GetTipBlock().GetHeight() {
 		nTime += s.period * int64(time.Millisecond)
 	}
 	_, pos, _ := s.minerScheduling(nTime, len(v))
 	return v[pos]
+}
+
+// GetValidators 用于计算目标round候选人信息，同时更新schedule address到internet地址映射
+func (s *xpoaSchedule) GetValidators(round int64) []string {
+	validators, err := s.getValidates(round)
+	if err != nil {
+		return nil
+	}
+	return validators
 }
 
 // GetLocalLeader 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
@@ -75,8 +123,15 @@ func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
 	if localValidators == nil {
 		return ""
 	}
-	_, pos, _ := s.minerScheduling(timestamp, len(localValidators))
+	_, pos, blockPos := s.minerScheduling(timestamp, len(localValidators))
+	if blockPos < 0 || blockPos > s.blockNum || pos >= int64(len(localValidators)) {
+		return ""
+	}
 	return localValidators[pos]
+}
+
+func (s *xpoaSchedule) GetIntAddress(addr string) string {
+	return ""
 }
 
 // getValidatesByBlockId 根据当前输入blockid，用快照的方式在xmodel中寻找<=当前blockid的最新的候选人值，若无则使用xuper.json中指定的初始值
@@ -86,14 +141,13 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		s.log.Error("Xpoa::getValidatesByBlockId::createSnapshot error.", "err", err)
 		return nil, err
 	}
-	res, err := reader.Get(contractBucket, []byte(validateKeys))
-	if res == nil || res.PureData == nil || res.PureData.Value == nil {
-		// 即合约还未被调用，未有变量更新
-		return s.initValidators, nil
-	}
+	res, err := reader.Get(s.bindContractBucket, []byte(fmt.Sprintf("%d_%s", s.consensusVersion, validateKeys)))
 	if err != nil {
 		s.log.Error("Xpoa::getValidatesByBlockId::reader Get error.", "err", err)
 		return nil, err
+	}
+	if res == nil || res.PureData == nil || res.PureData.Value == nil {
+		return s.initValidators, nil
 	}
 	validators, err := loadValidatorsMultiInfo(res.PureData.Value)
 	if err != nil {
@@ -105,7 +159,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 
 func (s *xpoaSchedule) getValidates(height int64) ([]string, error) {
 	if height < s.startHeight+3 {
-		return s.validators, nil
+		return s.initValidators, nil
 	}
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
 	b, err := s.ledger.QueryBlockByHeight(height - 3)
@@ -119,19 +173,6 @@ func (s *xpoaSchedule) getValidates(height int64) ([]string, error) {
 		return nil, err
 	}
 	return validators, nil
-}
-
-// GetValidators 用于计算目标round候选人信息，同时更新schedule address到internet地址映射
-func (s *xpoaSchedule) GetValidators(round int64) []string {
-	validators, err := s.getValidates(round)
-	if err != nil {
-		return nil
-	}
-	return validators
-}
-
-func (s *xpoaSchedule) GetIntAddress(addr string) string {
-	return ""
 }
 
 func (s *xpoaSchedule) UpdateValidator(height int64) bool {
