@@ -44,8 +44,8 @@ func SetXpoaStorage(term int64, justify *lpb.QuorumCert) []byte {
 }
 
 func ValidateKey1() []byte {
-	rawV := &ValidatorsInfo{
-		Validators: newValidators,
+	rawV := &ProposerInfo{
+		Address: newValidators,
 	}
 	rawBytes, err := json.Marshal(rawV)
 	if err != nil {
@@ -90,7 +90,7 @@ func TestGetValidates(t *testing.T) {
 	l.SetConsensusStorage(4, SetXpoaStorage(2, nil))
 	l.SetConsensusStorage(5, SetXpoaStorage(2, nil))
 	l.SetConsensusStorage(6, SetXpoaStorage(3, nil))
-	l.SetSnapshot(xpoaBucket, []byte(fmt.Sprintf("0_%s", validateKeys)), ValidateKey1())
+	l.SetSnapshot(poaBucket, []byte(fmt.Sprintf("0_%s", validateKeys)), ValidateKey1())
 	v, err := s.getValidates(6)
 	if !common.AddressEqual(v, newValidators) {
 		t.Error("AddressEqual error1.", "v", v)

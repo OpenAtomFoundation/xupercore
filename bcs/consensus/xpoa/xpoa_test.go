@@ -35,8 +35,6 @@ func getXpoaConsensusConf() string {
 	return `{
         "period":3000,
         "block_num":10,
-        "contract_name":"xpoa_validates",
-        "method_name":"get_validates",
         "init_proposer": {
             "address" : ["dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN", "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"]
         }
@@ -47,8 +45,6 @@ func getBFTXpoaConsensusConf() string {
 	return `{
         "period":3000,
         "block_num":10,
-        "contract_name":"xpoa_validates",
-        "method_name":"get_validates",
         "init_proposer": {
             "address" : ["dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN", "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"]
         },
