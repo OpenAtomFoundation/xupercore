@@ -19,6 +19,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
@@ -222,4 +223,20 @@ func (t *ChainRelyAgentImpl) CreateTimerTask() (timerTask.TimerManager, error) {
 	}
 
 	return timerObj, nil
+}
+
+// 创建平行链实例
+func (t *ChainRelyAgentImpl) CreateParaChain() error {
+	ctx := t.chain.Context()
+	paraChainCtx, err := parachain.NewParaChainCtx(ctx.BCName, ctx)
+	if err != nil {
+		return fmt.Errorf("create parachain ctx failed.err:%v", err)
+	}
+
+	_, err = parachain.NewParaChainManager(paraChainCtx)
+	if err != nil {
+		return fmt.Errorf("create parachain instance failed.err:%v", err)
+	}
+
+	return nil
 }

@@ -84,9 +84,9 @@ var (
 	ErrChainAlreadyExist = &Error{ErrStatusInternalErr, 50206, "chain already exist"}
 
 	// block
-	ErrBlockNotExist   = &Error{ErrStatusInternalErr, 50300, "block not exist"}
-	ErrProcBlockFailed = &Error{ErrStatusInternalErr, 50301, "process block failed"}
-	ErrGenesisBlockDiff= &Error{ErrStatusInternalErr, 50302, "genesis block diff"}
+	ErrBlockNotExist    = &Error{ErrStatusInternalErr, 50300, "block not exist"}
+	ErrProcBlockFailed  = &Error{ErrStatusInternalErr, 50301, "process block failed"}
+	ErrGenesisBlockDiff = &Error{ErrStatusInternalErr, 50302, "genesis block diff"}
 
 	// tx
 	ErrTxVerifyFailed        = &Error{ErrStatusInternalErr, 50400, "verify tx failed"}
