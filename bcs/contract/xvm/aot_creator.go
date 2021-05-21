@@ -2,6 +2,7 @@ package xvm
 
 import (
 	"fmt"
+	"github.com/xuperchain/xvm/runtime/wasi"
 	"io/ioutil"
 	"os"
 	osexec "os/exec"
@@ -104,6 +105,7 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, error) {
 		emscripten.NewResolver(),
 		newSyscallResolver(x.config.SyscallService),
 		builtinResolver,
+		wasi.NewResolver(),
 	}
 	//AOT only for experiment;
 	// if x.vmconfig.TEEConfig.Enable {
