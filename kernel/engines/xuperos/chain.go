@@ -258,10 +258,16 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	}
 	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
 
+	code := "OK"
+	defer func() {
+		metrics.CallMethodCounter.WithLabelValues(t.ctx.BCName, "SubmitTx", code).Inc()
+	}()
+
 	// 验证交易
 	_, err := t.ctx.State.VerifyTx(tx)
 	if err != nil {
 		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
+		code = "VerifyTxFailed"
 		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
@@ -272,6 +278,7 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 		if err == state.ErrAlreadyInUnconfirmed {
 			t.txIdCache.Delete(string(tx.GetTxid()))
 		}
+		code = "SubmitTxFailed"
 		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 

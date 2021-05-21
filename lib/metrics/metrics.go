@@ -5,54 +5,38 @@ import prom "github.com/prometheus/client_golang/prometheus"
 const (
 	Namespace = "xuperos"
 
-	SubsystemNetwork = "network"
-	SubsystemEngine = "engine"
-	SubsystemMiner = "miner"
-	SubsystemContract = "contract"
+	SubsystemCommon = "common"
 	SubsystemLedger = "ledger"
+	SubsystemContract = "contract"
 	SubsystemState = "state"
-	SubsystemTimer = "timer"
+	SubsystemNetwork = "network"
 
 	LabelBCName = "bcname"
+	LabelMessageType = "message"
+	LabelCallMethod = "method"
+	LabelHeight = "height"
+	LabelErrorCode = "code"
 	LabelContractModuleName = "contract_module"
 	LabelContractName = "contract_name"
 	LabelContractMethod = "contract_method"
-	LabelContractCode = "contract_code"
-
-	LabelLockType = "lock"
-	LabelLockState = "state"
-
-	LabelMessageType = "message"
-
-	LabelTimerMark = "mark"
-	LabelCallMethod = "method"
 )
 
 // common
 var (
-	// 锁
-	LockCounter = prom.NewCounterVec(
-		prom.CounterOpts{
-			Namespace: Namespace,
-			Subsystem: SubsystemEngine,
-			Name: "lock_total",
-			Help: "Total number of lock.",
-		},
-		[]string{LabelBCName, LabelLockType})
 	// 函数调用
 	CallMethodCounter = prom.NewCounterVec(
 		prom.CounterOpts{
 			Namespace: Namespace,
-			Subsystem: LabelCallMethod,
-			Name: "call_total",
+			Subsystem: SubsystemCommon,
+			Name: "call_method_total",
 			Help: "Total number of call method.",
 		},
-		[]string{LabelBCName, LabelCallMethod})
+		[]string{LabelBCName, LabelCallMethod, LabelErrorCode})
 	CallMethodHistogram = prom.NewHistogramVec(
 		prom.HistogramOpts{
 			Namespace: Namespace,
-			Subsystem: LabelCallMethod,
-			Name: "cost_seconds",
+			Subsystem: SubsystemCommon,
+			Name: "call_method_seconds",
 			Help: "Histogram of call method cost latency.",
 			Buckets: prom.DefBuckets,
 		},
@@ -68,25 +52,43 @@ var (
 			Name: "invoke_total",
 			Help: "Total number of invoke contract latency.",
 		},
-		[]string{LabelBCName, LabelContractModuleName, LabelContractName, LabelContractMethod, LabelContractCode})
+		[]string{LabelBCName, LabelContractModuleName, LabelContractName, LabelContractMethod, LabelErrorCode})
 	ContractInvokeHistogram = prom.NewHistogramVec(
 		prom.HistogramOpts{
 			Namespace: Namespace,
 			Subsystem: SubsystemContract,
 			Name: "invoke_seconds",
 			Help: "Histogram of invoke contract latency.",
+			Buckets: prom.DefBuckets,
 		},
 		[]string{LabelBCName, LabelContractModuleName, LabelContractName, LabelContractMethod})
 )
 
 // ledger
 var (
+	TxPerBlockHistogram = prom.NewHistogramVec(
+		prom.HistogramOpts{
+			Namespace: Namespace,
+			Subsystem: SubsystemLedger,
+			Name: "tx_per_block",
+			Help: "Histogram of tx_per_block.",
+			Buckets: prom.LinearBuckets(0, 500, 10),
+		},
+		[]string{LabelBCName})
 	LedgerConfirmTxCounter = prom.NewCounterVec(
 		prom.CounterOpts{
 			Namespace: Namespace,
 			Subsystem: SubsystemLedger,
 			Name: "confirmed_tx_total",
 			Help: "Total number of ledger confirmed tx.",
+		},
+		[]string{LabelBCName})
+	LedgerHeightGauge = prom.NewGaugeVec(
+		prom.GaugeOpts{
+			Namespace: Namespace,
+			Subsystem: SubsystemLedger,
+			Name: "height_total",
+			Help: "Total number of ledger height.",
 		},
 		[]string{LabelBCName})
 	LedgerSwitchBranchCounter = prom.NewCounterVec(
@@ -171,13 +173,14 @@ func RegisterMetrics() {
 	// common
 	prom.MustRegister(CallMethodCounter)
 	prom.MustRegister(CallMethodHistogram)
-	prom.MustRegister(LockCounter)
 	// contract
 	prom.MustRegister(ContractInvokeCounter)
 	prom.MustRegister(ContractInvokeHistogram)
 	// ledger
 	prom.MustRegister(LedgerConfirmTxCounter)
+	prom.MustRegister(TxPerBlockHistogram)
 	prom.MustRegister(LedgerSwitchBranchCounter)
+	prom.MustRegister(LedgerHeightGauge)
 	// state
 	prom.MustRegister(StateUnconfirmedTxGauge)
 	// network

@@ -42,8 +42,12 @@ import (
 //      operation, keep it at last)
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
 	tm := time.Now()
-	defer metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(tm).Seconds())
-	metrics.CallMethodCounter.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Inc()
+	code := "InvalidTx"
+	defer func(){
+		metrics.CallMethodCounter.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx", code).Inc()
+		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(tm).Seconds())
+	}()
+
 	// Pre processing of tx data
 	if !isRootTx && tx.Version == RootTxVersion {
 		return false, ErrVersionInvalid
@@ -138,6 +142,8 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 			return ok, ErrRWSetInvalid
 		}
 	}
+
+	code = "OK"
 	return true, nil
 }
 
