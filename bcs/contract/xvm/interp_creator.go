@@ -1,6 +1,7 @@
 package xvm
 
 import (
+	"github.com/xuperchain/xvm/runtime/wasi"
 	"io/ioutil"
 
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
@@ -40,6 +41,7 @@ func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, error) {
 		gowasm.NewResolver(),
 		emscripten.NewResolver(),
 		newSyscallResolver(x.config.SyscallService),
+		wasi.NewResolver(),
 		builtinResolver,
 	)
 	return exec.NewInterpCode(codebuf, resolver)
