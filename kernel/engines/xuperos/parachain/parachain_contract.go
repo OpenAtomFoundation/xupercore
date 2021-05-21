@@ -68,7 +68,7 @@ type createChainMessage struct {
 }*/
 
 func (t *KernMethod) CreateBlockChain(ctx contract.KContext) (*contract.Response, error) {
-	if t.BcName != "xuper" {
+	if t.BcName != t.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}
 	/*bcName, bcData, err := t.validateCreateBC(ctx.Args())

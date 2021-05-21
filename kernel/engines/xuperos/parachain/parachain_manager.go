@@ -24,7 +24,7 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	if ctx == nil || ctx.Contract == nil || ctx.BcName == "" {
 		return nil, fmt.Errorf("parachain ctx set error")
 	}
-	if ctx.BcName != "xuper" {
+	if ctx.BcName != ctx.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, fmt.Errorf("Permission denied to register this contract")
 	}
 	conf, err := loadConfig(ctx.ChainCtx.EngCtx.EnvCfg.GenConfFilePath(ConfigName))
