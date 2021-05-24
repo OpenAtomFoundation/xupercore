@@ -88,7 +88,6 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 // 该方法主要为了支撑smr扭转和矿工挖矿，在handleReceivedProposal阶段会调用该方法
 // 由于xpoa主逻辑包含回滚逻辑，因此回滚逻辑必须在ProcessProposal进行
 // ATTENTION: tipBlock是一个隐式依赖状态
-// ATTENTION: 由于GetLeader()永远在GetIntAddress()之前，故在GetLeader时更新schedule的addrToNet Map，可以保证能及时提供Addr到NetUrl的映射
 func (s *xpoaSchedule) GetLeader(round int64) string {
 	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
 	if b, err := s.ledger.QueryBlockByHeight(round); err == nil {
@@ -130,6 +129,7 @@ func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
 	return localValidators[pos]
 }
 
+// GetIntAddress: for unit test
 func (s *xpoaSchedule) GetIntAddress(addr string) string {
 	return ""
 }

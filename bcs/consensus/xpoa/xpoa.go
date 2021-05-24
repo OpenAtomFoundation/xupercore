@@ -174,7 +174,7 @@ Again:
 	}
 	_, pos, blockPos := x.election.minerScheduling(time.Now().UnixNano(), len(x.election.validators))
 	if blockPos > x.election.blockNum || pos >= int64(len(x.election.validators)) {
-		x.GetLog().Debug("Tdpos::CompeteMaster::minerScheduling err", "pos", pos, "blockPos", blockPos)
+		x.GetLog().Debug("Xpoa::CompeteMaster::minerScheduling err", "pos", pos, "blockPos", blockPos)
 		goto Again
 	}
 	x.election.miner = x.election.validators[pos]
@@ -315,7 +315,7 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	// 查看本地是否是最新round的生产者
 	_, pos, blockPos := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
 	if blockPos > x.election.blockNum || pos >= int64(len(x.election.validators)) {
-		x.GetLog().Debug("Tdpos::smr::ProcessConfirmBlock::minerScheduling overflow.")
+		x.GetLog().Debug("Xpoa::smr::ProcessConfirmBlock::minerScheduling overflow.")
 		return scheduleErr
 	}
 	// 如果是当前矿工，则发送Proposal消息
