@@ -26,6 +26,7 @@ type Lvl int
 // List of predefined log Levels
 const (
 	LvCrital Lvl = iota
+	LvlError
 	LvlWarn
 	LvlInfo
 	LvlTrace
