@@ -5,6 +5,6 @@ type ProposerElectionInterface interface {
 	GetLeader(round int64) string
 	// 获取指定round的候选人节点Address
 	GetValidators(round int64) []string
-	// 获取候选人地址到网络地址的映射
+	// 获取候选人地址到网络地址的映射, for unit test
 	GetIntAddress(string) string
 }

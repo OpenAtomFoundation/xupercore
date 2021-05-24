@@ -200,7 +200,7 @@ func (s *tdposSchedule) GetValidators(round int64) []string {
 	return proposers
 }
 
-// GetIntAddress election接口实现，获取候选人地址到网络地址的映射
+// GetIntAddress election接口实现，获取候选人地址到网络地址的映射，for unit test
 func (s *tdposSchedule) GetIntAddress(address string) string {
 	return ""
 }
