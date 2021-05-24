@@ -25,7 +25,7 @@ type Lvl int
 
 // List of predefined log Levels
 const (
-	LvCrital Lvl = iota
+	LvlCrit Lvl = iota
 	LvlError
 	LvlWarn
 	LvlInfo
@@ -37,6 +37,8 @@ const (
 // Useful for parsing command line args and configuration files.
 func LvlFromString(lvlString string) Lvl {
 	switch lvlString {
+	case "crit":
+		return LvlCrit
 	case "debug":
 		return LvlDebug
 	case "trace":
