@@ -169,7 +169,7 @@ Again:
 	}
 	// update validates
 	tipBlock := x.election.ledger.GetTipBlock()
-	if x.election.UpdateValidator(tipBlock.GetHeight() + 1) {
+	if x.election.UpdateValidator(tipBlock.GetHeight()) {
 		x.GetLog().Debug("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
 	}
 	_, pos, blockPos := x.election.minerScheduling(time.Now().UnixNano(), len(x.election.validators))
@@ -194,8 +194,10 @@ func (x *xpoaConsensus) CalculateBlock(block cctx.BlockInterface) error {
 
 // CheckMinerMatch 查看block是否合法
 func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockInterface) (bool, error) {
+	// 获取block中共识专有存储, 检查justify是否符合要求
+	conStoreBytes, _ := block.GetConsensusStorage()
 	// 验证矿工身份
-	proposer := x.election.GetLocalLeader(block.GetTimestamp(), block.GetHeight())
+	proposer := x.election.GetLocalLeader(block.GetTimestamp(), block.GetHeight(), conStoreBytes)
 	if proposer != string(block.GetProposer()) {
 		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::calculate proposer error", "logid", ctx.GetLog().GetLogId(), "want", proposer,
 			"have", string(block.GetProposer()), "blockId", utils.F(block.GetBlockid()))
@@ -208,21 +210,18 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	if block.GetHeight() <= x.status.StartHeight {
 		return true, nil
 	}
-	// 获取block中共识专有存储, 检查justify是否符合要求
-	justifyBytes, err := block.GetConsensusStorage()
-	if err != nil {
-		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::justify bytes nil", "logid", ctx.GetLog().GetLogId(), "blockId", utils.F(block.GetBlockid()))
-		return false, err
-	}
 	// 兼容老的结构
-	justify, err := common.OldQCToNew(justifyBytes)
+	justify, err := common.OldQCToNew(conStoreBytes)
 	if err != nil {
 		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err,
 			"blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
 	pNode := x.smr.BlockToProposalNode(block)
-	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify, x.election.GetValidators(justify.GetProposalView()))
+	preBlock, _ := x.election.ledger.QueryBlock(block.GetPreHash())
+	preConStoreBytes, _ := preBlock.GetConsensusStorage()
+	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify,
+		x.election.GetLocalValidates(preBlock.GetTimestamp(), justify.GetProposalView(), preConStoreBytes))
 	if err != nil {
 		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "logid", ctx.GetLog().GetLogId(),
 			"proposalQC:[height]", pNode.In.GetProposalView(), "proposalQC:[id]", utils.F(pNode.In.GetProposalId()),
@@ -284,11 +283,16 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 		x.GetLog().Warn("Xpoa::ProcessBeforeMiner::NewToOldQC error", "error", err)
 		return nil, nil, err
 	}
-	bytes, _ := json.Marshal(map[string]interface{}{"justify": oldQC})
+	storage := common.ConsensusStorage{
+		Justify: oldQC,
+	}
+	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncateT != nil {
 		x.GetLog().Debug("Xpoa::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
 			"ledger", tipBlock.GetHeight(), "HighQC", x.smr.GetHighQC().GetProposalView())
+		storage.TargetBits = int32(tipBlock.GetHeight())
 	}
+	bytes, _ := json.Marshal(storage)
 	return truncateT, bytes, nil
 }
 
