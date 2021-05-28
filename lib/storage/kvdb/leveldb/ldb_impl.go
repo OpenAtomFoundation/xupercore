@@ -4,7 +4,13 @@ import (
 	"fmt"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
+)
+
+var (
+	//ldbp = pprof.NewProfile("ldb")
+	//pcounter int64
 )
 
 // LDBDatabase define data structure of storage
@@ -72,17 +78,24 @@ func (db *LDBDatabase) Path() string {
 func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	// Generate the data to write to disk, update the meter and write
 	//value = rle.Compress(value)
-
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "Put", "OK").Inc()
+	metrics.BytesCounter.WithLabelValues("levelDB", "Put", "key").Add(float64(len(key)))
+	metrics.BytesCounter.WithLabelValues("levelDB", "Put", "value").Add(float64(len(value)))
 	return db.db.Put(key, value, nil)
 }
 
 // Has if the given key exists
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "Has", "OK").Inc()
 	return db.db.Has(key, nil)
 }
 
 // Get returns the given key if it's present.
 func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "Get", "OK").Inc()
 	// Retrieve the key and increment the miss counter if not found
 	dat, err := db.db.Get(key, nil)
 	if err != nil {
@@ -93,6 +106,8 @@ func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 
 // Delete deletes the key from the queue and database
 func (db *LDBDatabase) Delete(key []byte) error {
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "Delete", "OK").Inc()
 	// Execute the actual operation
 	return db.db.Delete(key, nil)
 }
@@ -136,12 +151,18 @@ type ldbBatch struct {
 }
 
 func (b *ldbBatch) Put(key, value []byte) error {
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "BatchPut", "OK").Inc()
+	metrics.BytesCounter.WithLabelValues("levelDB", "BatchPut", "key").Add(float64(len(key)))
+	metrics.BytesCounter.WithLabelValues("levelDB", "BatchPut", "value").Add(float64(len(value)))
 	b.b.Put(key, value)
 	b.size += len(value)
 	return nil
 }
 
 func (b *ldbBatch) Delete(key []byte) error {
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "BatchDelete", "OK").Inc()
 	b.b.Delete(key)
 	b.size += len(key)
 	return nil
@@ -158,10 +179,13 @@ func (b *ldbBatch) PutIfAbsent(key, value []byte) error {
 }
 
 func (b *ldbBatch) Exist(key []byte) bool {
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "BatchExist", "OK").Inc()
 	return b.keys[string(key)]
 }
 
 func (b *ldbBatch) Write() error {
+	//ldbp.Add(atomic.AddInt64(&pcounter, 1), 1)
+	metrics.CallMethodCounter.WithLabelValues("levelDB", "BatchWrite", "OK").Inc()
 	return b.db.Write(b.b, nil)
 }
 

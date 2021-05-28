@@ -30,6 +30,7 @@ import (
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -384,6 +385,8 @@ func (t *State) Play(blockid []byte) error {
 }
 
 func (t *State) PlayForMiner(blockid []byte) error {
+	beginTime:= time.Now()
+	timer := timer.NewXTimer()
 	batch := t.NewBatch()
 	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
 	if blockErr != nil {
@@ -395,7 +398,12 @@ func (t *State) PlayForMiner(blockid []byte) error {
 		return ErrPreBlockMissMatch
 	}
 	t.utxo.Mutex.Lock()
-	defer t.utxo.Mutex.Unlock() // lock guard
+	timer.Mark("lock")
+	defer func() {
+		t.utxo.Mutex.Unlock()
+		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
+		metrics.CallMethodHistogram.WithLabelValues("miner", "PlayForMiner").Observe(time.Since(beginTime).Seconds())
+	}()
 	var err error
 	defer func() {
 		if err != nil {
@@ -419,6 +427,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 			return err
 		}
 	}
+	timer.Mark("do_tx")
 	// 更新不可逆区块高度
 	curIrreversibleBlockHeight := t.meta.GetIrreversibleBlockHeight()
 	curIrreversibleSlideWindow := t.meta.GetIrreversibleSlideWindow()
@@ -428,6 +437,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 	}
 	//更新latestBlockid
 	err = t.updateLatestBlockid(block.Blockid, batch, "failed to save block")
+	timer.Mark("persist_tx")
 	if err != nil {
 		return err
 	}
@@ -437,9 +447,10 @@ func (t *State) PlayForMiner(blockid []byte) error {
 	}
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
-	defer t.meta.MutexMeta.Unlock()
 	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 	t.meta.Meta = newMeta
+	t.meta.MutexMeta.Unlock()
+	t.log.Info("play for miner", "height", block.Height, "blockId", utils.F(block.Blockid), "costs", timer.Print())
 	return nil
 }
 
@@ -447,21 +458,31 @@ func (t *State) PlayForMiner(blockid []byte) error {
 // PlayAndRepost 执行一个新收到的block，要求block的pre_hash必须是当前vm的latest_block
 // 执行后会更新latestBlockid
 func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) error {
+	beginTime := time.Now()
+	timer := timer.NewXTimer()
 	batch := t.ldb.NewBatch()
 	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
 	if blockErr != nil {
 		return blockErr
 	}
 	t.utxo.Mutex.Lock()
-	defer t.utxo.Mutex.Unlock()
+	defer func() {
+		t.utxo.Mutex.Unlock()
+		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
+		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "PlayAndRepost").Observe(time.Since(beginTime).Seconds())
+	}()
+	timer.Mark("get_utxo_lock")
+
 	// 下面开始处理unconfirmed的交易
 	unconfirmToConfirm, undoDone, err := t.processUnconfirmTxs(block, batch, needRepost)
+	timer.Mark("process_unconfirmed_txs")
 	if err != nil {
 		return err
 	}
 
 	// parallel verify
 	verifyErr := t.verifyBlockTxs(block, isRootTx, unconfirmToConfirm)
+	timer.Mark("verify_block_txs")
 	if verifyErr != nil {
 		t.log.Warn("verifyBlockTx error ", "err", verifyErr)
 		return verifyErr
@@ -486,6 +507,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 			return feeErr
 		}
 	}
+	timer.Mark("do_tx")
 	// 更新不可逆区块高度
 	curIrreversibleBlockHeight := t.meta.GetIrreversibleBlockHeight()
 	curIrreversibleSlideWindow := t.meta.GetIrreversibleSlideWindow()
@@ -495,6 +517,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	}
 	//更新latestBlockid
 	persistErr := t.updateLatestBlockid(block.Blockid, batch, "failed to save block")
+	timer.Mark("persist_tx")
 	if persistErr != nil {
 		return persistErr
 	}
@@ -505,16 +528,13 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	for txid := range undoDone {
 		t.tx.UnconfirmTxInMem.Delete(txid)
 	}
-	t.log.Debug("write to state succ")
-
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
 	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 	t.meta.Meta = newMeta
 	t.meta.MutexMeta.Unlock()
 
-	t.log.Debug("paly and repost succ", "blockId", utils.F(block.Blockid))
-
+	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "undo", len(undoDone), "costs", timer.Print())
 	return nil
 }
 
@@ -628,14 +648,21 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 
 // 同步账本和状态机
 func (t *State) Walk(blockid []byte, ledgerPrune bool) error {
-	t.log.Info("utxoVM start walk.", "dest_block", hex.EncodeToString(blockid),
-		"latest_blockid", hex.EncodeToString(t.latestBlockid))
+	t.log.Info("state walk", "ledger_block_id", hex.EncodeToString(blockid),
+		"state_block_id", hex.EncodeToString(t.latestBlockid))
+	beginTime := time.Now()
+	defer func() {
+		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "Walk").Observe(time.Since(beginTime).Seconds())
+	}()
 
 	xTimer := timer.NewXTimer()
 
 	// 获取全局锁
 	t.utxo.Mutex.Lock()
 	defer t.utxo.Mutex.Unlock()
+	if bytes.Equal(blockid, t.latestBlockid) {
+		return nil
+	}
 	xTimer.Mark("walk_get_lock")
 
 	// 首先先把所有的unconfirm回滚，记录被回滚的交易，然后walk结束后恢复被回滚的合法未确认交易
@@ -721,17 +748,18 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		t.log.Warn("    fail to marshal tx", "pbErr", pbErr)
 		return pbErr
 	}
-	recvTime := time.Now().Unix()
+	recvTime := time.Now()
 	t.utxo.Mutex.RLock()
 	defer t.utxo.Mutex.RUnlock() //lock guard
 	spLockKeys := t.utxo.SpLock.ExtractLockKeys(tx)
 	succLockKeys, lockOK := t.utxo.SpLock.TryLock(spLockKeys)
 	defer t.utxo.SpLock.Unlock(succLockKeys)
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "doTxLock").Observe(time.Since(recvTime).Seconds())
 	if !lockOK {
 		t.log.Info("failed to lock", "txid", utils.F(tx.Txid))
 		return ErrDoubleSpent
 	}
-	waitTime := time.Now().Unix() - recvTime
+	waitTime := time.Now().Unix() - recvTime.Unix()
 	if waitTime > TxWaitTimeout {
 		t.log.Warn("dotx wait too long!", "waitTime", waitTime, "txid", utils.F(tx.Txid))
 	}
@@ -742,21 +770,27 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	}
 	batch := t.ldb.NewBatch()
 	cacheFiller := &utxo.CacheFiller{}
+	beginTime := time.Now()
 	doErr := t.doTxInternal(tx, batch, cacheFiller)
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "doTxInternal").Observe(time.Since(beginTime).Seconds())
 	if doErr != nil {
 		t.log.Info("doTxInternal failed, when DoTx", "doErr", doErr)
 		return doErr
 	}
 	batch.Put(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...), pbTxBuf)
 	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", utils.F(tx.Txid))
+	beginTime = time.Now()
 	writeErr := batch.Write()
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "batchWrite").Observe(time.Since(beginTime).Seconds())
 	if writeErr != nil {
 		t.ClearCache()
 		t.log.Warn("fail to save to ldb", "writeErr", writeErr)
 		return writeErr
 	}
+	beginTime = time.Now()
 	t.tx.UnconfirmTxInMem.Store(string(tx.Txid), tx)
 	cacheFiller.Commit()
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "cacheFiller").Observe(time.Since(beginTime).Seconds())
 	return nil
 }
 
@@ -767,7 +801,9 @@ func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *
 		}
 	}
 
+	beginTime := time.Now()
 	err := t.xmodel.DoTx(tx, batch)
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "xmodelDoTx").Observe(time.Since(beginTime).Seconds())
 	if err != nil {
 		t.log.Warn("xmodel DoTx failed", "err", err)
 		return ErrRWSetInvalid

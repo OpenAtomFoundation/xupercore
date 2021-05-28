@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/proto"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
@@ -310,6 +313,34 @@ func (p *P2PServerV2) Register(sub p2p.Subscriber) error {
 // UnRegister remove message subscriber
 func (p *P2PServerV2) UnRegister(sub p2p.Subscriber) error {
 	return p.dispatcher.UnRegister(sub)
+}
+
+func (p *P2PServerV2) HandleMessage(stream p2p.Stream, msg *pb.XuperMessage) error {
+	if p.dispatcher == nil {
+		p.log.Warn("dispatcher not ready, omit", "msg", msg)
+		return nil
+	}
+
+	if p.ctx.EnvCfg.MetricSwitch {
+		tm := time.Now()
+		defer func() {
+			labels := prom.Labels{
+				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
+			}
+			metrics.NetworkMsgReceivedCounter.With(labels).Inc()
+			metrics.NetworkMsgReceivedBytesCounter.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkServerHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
+		}()
+	}
+
+	if err := p.dispatcher.Dispatch(msg, stream); err != nil {
+		p.log.Warn("handle new message dispatch error", "log_id", msg.GetHeader().GetLogid(),
+			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(), "error", err)
+		return nil // not return err
+	}
+
+	return nil
 }
 
 func (p *P2PServerV2) Context() *nctx.NetCtx {
