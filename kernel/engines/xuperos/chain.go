@@ -161,7 +161,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 			continue
 		}
 
-		tm := time.Now()
+		beginTime := time.Now()
 		contextConfig.Module = req.ModuleName
 		contextConfig.ContractName = req.ContractName
 		if transContractName == req.ContractName {
@@ -216,7 +216,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		responseBodes = append(responseBodes, resp.Body)
 
 		context.Release()
-		metrics.ContractInvokeHistogram.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName).Observe(time.Since(tm).Seconds())
+		metrics.ContractInvokeHistogram.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName).Observe(time.Since(beginTime).Seconds())
 	}
 
 	err = sandbox.Flush()
@@ -282,7 +282,6 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 
-	log.Info("submit tx succ", "txid", utils.F(tx.GetTxid()))
 	return nil
 }
 

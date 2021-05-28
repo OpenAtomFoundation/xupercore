@@ -181,7 +181,6 @@ func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exclu
 
 // 获取一批未确认交易（用于矿工打包区块）
 func (t *State) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
-	metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
 	return t.tx.GetUnconfirmedTx(dedup)
 }
 
@@ -386,7 +385,7 @@ func (t *State) Play(blockid []byte) error {
 }
 
 func (t *State) PlayForMiner(blockid []byte) error {
-	tm := time.Now()
+	beginTime:= time.Now()
 	timer := timer.NewXTimer()
 	batch := t.NewBatch()
 	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
@@ -399,9 +398,11 @@ func (t *State) PlayForMiner(blockid []byte) error {
 		return ErrPreBlockMissMatch
 	}
 	t.utxo.Mutex.Lock()
+	timer.Mark("lock")
 	defer func() {
 		t.utxo.Mutex.Unlock()
-		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "PlayForMiner").Observe(time.Since(tm).Seconds())
+		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
+		metrics.CallMethodHistogram.WithLabelValues("miner", "PlayForMiner").Observe(time.Since(beginTime).Seconds())
 	}()
 	var err error
 	defer func() {
@@ -449,7 +450,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 	t.meta.Meta = newMeta
 	t.meta.MutexMeta.Unlock()
-	t.log.Trace("play for miner", "height", block.Height, "blockId", utils.F(block.Blockid), "costs", timer.Print())
+	t.log.Info("play for miner", "height", block.Height, "blockId", utils.F(block.Blockid), "costs", timer.Print())
 	return nil
 }
 
@@ -457,7 +458,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 // PlayAndRepost 执行一个新收到的block，要求block的pre_hash必须是当前vm的latest_block
 // 执行后会更新latestBlockid
 func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) error {
-	tm := time.Now()
+	beginTime := time.Now()
 	timer := timer.NewXTimer()
 	batch := t.ldb.NewBatch()
 	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
@@ -468,7 +469,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	defer func() {
 		t.utxo.Mutex.Unlock()
 		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
-		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "PlayAndRepost").Observe(time.Since(tm).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "PlayAndRepost").Observe(time.Since(beginTime).Seconds())
 	}()
 	timer.Mark("get_utxo_lock")
 
@@ -533,7 +534,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.meta.Meta = newMeta
 	t.meta.MutexMeta.Unlock()
 
-	t.log.Trace("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "undo", len(undoDone), "costs", timer.Print())
+	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "undo", len(undoDone), "costs", timer.Print())
 	return nil
 }
 
@@ -649,9 +650,9 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 func (t *State) Walk(blockid []byte, ledgerPrune bool) error {
 	t.log.Info("state walk", "ledger_block_id", hex.EncodeToString(blockid),
 		"state_block_id", hex.EncodeToString(t.latestBlockid))
-	tm := time.Now()
+	beginTime := time.Now()
 	defer func() {
-		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "Walk").Observe(time.Since(tm).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "Walk").Observe(time.Since(beginTime).Seconds())
 	}()
 
 	xTimer := timer.NewXTimer()
@@ -747,17 +748,18 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		t.log.Warn("    fail to marshal tx", "pbErr", pbErr)
 		return pbErr
 	}
-	recvTime := time.Now().Unix()
+	recvTime := time.Now()
 	t.utxo.Mutex.RLock()
 	defer t.utxo.Mutex.RUnlock() //lock guard
 	spLockKeys := t.utxo.SpLock.ExtractLockKeys(tx)
 	succLockKeys, lockOK := t.utxo.SpLock.TryLock(spLockKeys)
 	defer t.utxo.SpLock.Unlock(succLockKeys)
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "doTxLock").Observe(time.Since(recvTime).Seconds())
 	if !lockOK {
 		t.log.Info("failed to lock", "txid", utils.F(tx.Txid))
 		return ErrDoubleSpent
 	}
-	waitTime := time.Now().Unix() - recvTime
+	waitTime := time.Now().Unix() - recvTime.Unix()
 	if waitTime > TxWaitTimeout {
 		t.log.Warn("dotx wait too long!", "waitTime", waitTime, "txid", utils.F(tx.Txid))
 	}
@@ -768,22 +770,27 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	}
 	batch := t.ldb.NewBatch()
 	cacheFiller := &utxo.CacheFiller{}
+	beginTime := time.Now()
 	doErr := t.doTxInternal(tx, batch, cacheFiller)
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "doTxInternal").Observe(time.Since(beginTime).Seconds())
 	if doErr != nil {
 		t.log.Info("doTxInternal failed, when DoTx", "doErr", doErr)
 		return doErr
 	}
 	batch.Put(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...), pbTxBuf)
 	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", utils.F(tx.Txid))
+	beginTime = time.Now()
 	writeErr := batch.Write()
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "batchWrite").Observe(time.Since(beginTime).Seconds())
 	if writeErr != nil {
 		t.ClearCache()
 		t.log.Warn("fail to save to ldb", "writeErr", writeErr)
 		return writeErr
 	}
+	beginTime = time.Now()
 	t.tx.UnconfirmTxInMem.Store(string(tx.Txid), tx)
 	cacheFiller.Commit()
-
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "cacheFiller").Observe(time.Since(beginTime).Seconds())
 	return nil
 }
 
@@ -794,7 +801,9 @@ func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *
 		}
 	}
 
+	beginTime := time.Now()
 	err := t.xmodel.DoTx(tx, batch)
+	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "xmodelDoTx").Observe(time.Since(beginTime).Seconds())
 	if err != nil {
 		t.log.Warn("xmodel DoTx failed", "err", err)
 		return ErrRWSetInvalid

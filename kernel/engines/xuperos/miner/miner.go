@@ -95,10 +95,9 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 		return common.ErrForbidden.More("miner queue full")
 	}
 
-	ctx.GetLog().Debug("recv new block,try sync block", "recvHeight", block.Height,
-		"recvBlockId", utils.F(block.Blockid), "inSyncTargetHeight", t.inSyncTargetHeight,
-		"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId))
-
+	ctx.GetLog().Info("recv new block", "inSyncTargetHeight", t.inSyncTargetHeight,
+		"inSyncTargetBlockId", utils.F(t.inSyncTargetBlockId),
+		"recvHeight", block.GetHeight(), "recvBlockId", utils.F(block.GetBlockid()), "txCount", block.TxCount, "size", proto.Size(block))
 	// 尝试同步到该高度，如果小于账本高度会被直接忽略
 	return t.trySyncBlock(ctx, block)
 }
@@ -144,7 +143,9 @@ func (t *Miner) Start() {
 		}
 		// 4.如果是矿工，出块
 		if err == nil && isMiner {
+			beginTime := time.Now()
 			err = t.mining(ctx)
+			metrics.CallMethodHistogram.WithLabelValues("miner", "Mining").Observe(time.Since(beginTime).Seconds())
 		}
 		// 5.如果出错，休眠3s后重试，防止cpu被打满
 		if err != nil && !t.IsExit() {
@@ -215,10 +216,10 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	}
 
 	// 4.打包区块
-	tm := time.Now()
+	beginTime := time.Now()
 	block, err := t.packBlock(ctx, height, now, extData)
 	ctx.GetTimer().Mark("PackBlock")
-	metrics.CallMethodHistogram.WithLabelValues(t.ctx.BCName, "PackBlock").Observe(time.Since(tm).Seconds())
+	metrics.CallMethodHistogram.WithLabelValues("miner", "PackBlock").Observe(time.Since(beginTime).Seconds())
 	if err != nil {
 		ctx.GetLog().Warn("pack block error", "err", err)
 		return err
@@ -236,8 +237,8 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)
 
-	ctx.GetLog().Trace("finish new block generation", "blockId", utils.F(block.GetBlockid()),
-		"height", height, "size", proto.Size(block), "costs", ctx.GetTimer().Print())
+	ctx.GetLog().Info("finish new block generation", "blockId", utils.F(block.GetBlockid()),
+		"height", height, "txCount", block.TxCount, "size", proto.Size(block), "costs", ctx.GetTimer().Print())
 	return nil
 }
 
@@ -638,7 +639,7 @@ func (t *Miner) getBlock(ctx xctx.XContext, blockId []byte) (*lpb.InternalBlock,
 			continue
 		}
 
-		ctx.GetLog().Trace("download block succ", "height", block.Block.Height,
+		ctx.GetLog().Info("download block succ", "height", block.Block.Height,
 			"blockId", utils.F(block.Block.Blockid), "msg_log_id", msg.Header.Logid)
 		return block.Block, nil
 	}
@@ -704,7 +705,7 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 			return errors.New("consensus process confirm block failed")
 		}
 
-		ctx.GetLog().Trace("confirm block finish", "height", block.Height, "blockId", utils.F(block.Blockid), "size", proto.Size(block), "costs", timer.Print())
+		ctx.GetLog().Info("confirm block finish", "blockId", utils.F(block.Blockid), "height", block.Height, "txCount", block.TxCount, "size", proto.Size(block), "costs", timer.Print())
 	}
 
 	ctx.GetLog().Trace("batch confirm block to ledger succ", "blockCount", len(blkIds))
@@ -778,8 +779,8 @@ func (t *Miner) broadcastBlock(ctx xctx.XContext, block *lpb.InternalBlock) {
 
 	err := engCtx.Net.SendMessage(t.ctx, msg)
 	if err != nil {
-		ctx.GetLog().Warn("broadcast block error", "p2pLogId", msg.GetHeader().GetLogid(), "err", err,
-			"blockId", utils.F(block.GetBlockid()))
+		ctx.GetLog().Warn("broadcast block error", "p2pLogId", msg.GetHeader().GetLogid(),
+			"height", block.Height, "blockId", utils.F(block.GetBlockid()), "err", err)
 		return
 	}
 

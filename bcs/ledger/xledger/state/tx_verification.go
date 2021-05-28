@@ -41,11 +41,11 @@ import (
 //   6. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
 //      operation, keep it at last)
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
-	tm := time.Now()
+	beginTime := time.Now()
 	code := "InvalidTx"
 	defer func(){
 		metrics.CallMethodCounter.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx", code).Inc()
-		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(tm).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(beginTime).Seconds())
 	}()
 
 	// Pre processing of tx data

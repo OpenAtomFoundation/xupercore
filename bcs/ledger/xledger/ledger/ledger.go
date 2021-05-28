@@ -558,17 +558,16 @@ func (l *Ledger) parallelCheckTx(txs []*pb.Transaction, block *pb.InternalBlock)
 // ConfirmBlock submit a block to ledger
 func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatus {
 	l.mutex.Lock()
-	tm := time.Now()
+	beginTime := time.Now()
 	var confirmStatus ConfirmStatus
 	defer func() {
 		l.mutex.Unlock()
 		bcName := l.ctx.BCName
 		height := l.GetMeta().GetTrunkHeight()
 		metrics.LedgerHeightGauge.WithLabelValues(bcName).Set(float64(height))
-		metrics.CallMethodHistogram.WithLabelValues(bcName, "ConfirmBlock").Observe(time.Since(tm).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("miner", "ConfirmBlock").Observe(time.Since(beginTime).Seconds())
 		if confirmStatus.Succ {
 			metrics.LedgerConfirmTxCounter.WithLabelValues(bcName).Add(float64(block.TxCount))
-			metrics.TxPerBlockHistogram.WithLabelValues(bcName).Observe(float64(block.TxCount))
 		}
 		if confirmStatus.TrunkSwitch {
 			metrics.LedgerSwitchBranchCounter.WithLabelValues(bcName).Inc()

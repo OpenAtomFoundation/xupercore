@@ -134,9 +134,9 @@ func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 		Timer: timer.NewXTimer(),
 	}
 	if handle, ok := AsyncMsgList[request.GetHeader().GetType()]; ok {
-		tm := time.Now()
+		beginTime := time.Now()
 		handle(ctx, request)
-		metrics.CallMethodHistogram.WithLabelValues(request.Header.Bcname, request.Header.Type.String()).Observe(time.Since(tm).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues(request.Header.Bcname, request.Header.Type.String()).Observe(time.Since(beginTime).Seconds())
 	} else {
 		log.Warn("received unregister request", "type", request.GetHeader().GetType())
 		return

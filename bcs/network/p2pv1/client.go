@@ -43,12 +43,12 @@ func (p *P2PServerV1) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage, optFu
 	}
 
 	if len(peerIDs) <= 0 {
-		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+		p.log.Warn("SendMessage peerID empty", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
 		return ErrEmptyPeer
 	}
 
-	p.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
+	p.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
 		"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", peerIDs)
 	return p.sendMessage(ctx, msg, peerIDs)
 }

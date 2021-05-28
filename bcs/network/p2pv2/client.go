@@ -30,17 +30,18 @@ func (p *P2PServerV2) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage,
 	ctx = &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
 	tm := time.Now()
 	defer func() {
+		size := proto.Size(msg)
 		if p.ctx.EnvCfg.MetricSwitch {
 			labels := prom.Labels{
 				metrics.LabelBCName: msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgSendCounter.With(labels).Inc()
-			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(size))
 			metrics.NetworkClientHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
 		}
-		ctx.GetLog().Info("SendMessage", "log_id", msg.GetHeader().GetLogid(),
-			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
+		ctx.GetLog().Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
+			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(), "msgSize", size,
 			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
 	}()
 
@@ -62,7 +63,7 @@ func (p *P2PServerV2) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage,
 	}
 
 	if len(peerIDs) <= 0 {
-		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+		p.log.Warn("SendMessage peerID empty", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
 		return ErrEmptyPeer
 	}
@@ -121,7 +122,7 @@ func (p *P2PServerV2) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(proto.Size(msg)))
 			metrics.NetworkClientHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
 		}
-		ctx.GetLog().Info("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
+		ctx.GetLog().Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
 			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
 			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
 	}()
