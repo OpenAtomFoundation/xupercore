@@ -45,13 +45,22 @@ func (m *MemXModel) Put(bucket string, key []byte, value *ledger.VersionedData) 
 	return nil
 }
 
-//扫描一个bucket中所有的kv, 调用者可以设置key区间[startKey, endKey)
+// Select 扫描一个bucket中所有的kv, 调用者可以设置key区间[startKey, endKey)
+// start为nil意味着从bucket的第一个元素开始，end为空意味着遍历到bucket的最后一个元素
 func (m *MemXModel) Select(bucket string, startKey []byte, endKey []byte) (ledger.XMIterator, error) {
-	if compareBytes(startKey, endKey) >= 0 {
-		return nil, errors.New("bad select range")
+	if bucket == "" {
+		return nil, errors.New("empty bucket name")
 	}
+	if startKey != nil && endKey != nil && m.tree.Comparator(startKey, endKey) > 0 {
+		return nil, errors.New("bad select range, start key can't bigger than end key")
+	}
+	var rawEndKey []byte
 	rawStartKey := makeRawKey(bucket, startKey)
-	rawEndKey := makeRawKey(bucket, endKey)
+	if endKey != nil {
+		rawEndKey = makeRawKey(bucket, endKey)
+	} else {
+		rawEndKey = prefixEnd(makeRawKey(bucket, nil))
+	}
 	return newTreeRangeIterator(m.tree, rawStartKey, rawEndKey), nil
 }
 
@@ -77,17 +86,12 @@ func newTreeIterator(tree *redblacktree.Tree) ledger.XMIterator {
 	}
 }
 
+// newTreeRangeIterator按照[start, end)的范围迭代，start和end不能为空
 func newTreeRangeIterator(tree *redblacktree.Tree, start, end []byte) ledger.XMIterator {
 	it := &treeIterator{
 		cmp: tree.Comparator,
+		end: end,
 	}
-	// start == nil 意味着从树的最小节点开始遍历
-	if start == nil {
-		iter := tree.Iterator()
-		it.iter = &iter
-		return it
-	}
-
 	// 找到第一个大于等于start的节点
 	startNode, ok := tree.Ceiling(start)
 	if !ok {
@@ -100,7 +104,6 @@ func newTreeRangeIterator(tree *redblacktree.Tree, start, end []byte) ledger.XMI
 	iter.Prev()
 
 	it.iter = &iter
-	it.end = end
 	return it
 }
 
@@ -159,4 +162,19 @@ func treeCompare(a, b interface{}) int {
 	ka := a.([]byte)
 	kb := b.([]byte)
 	return bytes.Compare(ka, kb)
+}
+
+// prefixEnd返回第一个大于prefix的[]byte
+func prefixEnd(prefix []byte) []byte {
+	var limit []byte
+	for i := len(prefix) - 1; i >= 0; i-- {
+		c := prefix[i]
+		if c < 0xff {
+			limit = make([]byte, i+1)
+			copy(limit, prefix)
+			limit[i] = c + 1
+			break
+		}
+	}
+	return limit
 }
