@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	ConfigName = "client.yaml"
+	ConfigName = "engine.yaml"
 )
 
 type ParaChainConfig struct {

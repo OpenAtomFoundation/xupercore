@@ -52,7 +52,7 @@ const (
 	OfflineTxChanBuffer   = 100000
 
 	// TxVersion 为所有交易使用的版本
-	TxVersion = 1
+	TxVersion = 3
 
 	FeePlaceholder = "$"
 	UTXOTotalKey   = "xtotal"
