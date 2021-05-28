@@ -184,9 +184,7 @@ func (t *Engine) loadChains() error {
 	chainCnt := 0
 	rootChain := t.engCtx.EngCfg.RootChain
 	for _, fInfo := range dir {
-		// xupero暂时不支持平行链，只支持一条root链
-		if !fInfo.IsDir() || fInfo.Name() != rootChain {
-			// 忽略非目录, 忽略非root链目录
+		if !fInfo.IsDir() {
 			continue
 		}
 
@@ -273,4 +271,16 @@ func (t *Engine) exit() {
 
 	// 等待全部退出完成
 	wg.Wait()
+}
+
+// RegisterBlockChain load an instance of blockchain and start it dynamically
+func (t *Engine) RegisterBlockChain(name string) error {
+	chain, err := LoadChain(t.engCtx, name)
+	if err != nil {
+		t.log.Error("load chain failed", "error", err, "chain_name", name)
+		return fmt.Errorf("load chain failed")
+	}
+	t.chains.Store(name, chain)
+	go chain.Start()
+	return nil
 }
