@@ -54,14 +54,14 @@ func (s *stateManager) GetAccount(address crypto.Address) (*acm.Account, error) 
 // Retrieve a 32-byte value stored at key for the account at address, return Zero256 if key does not exist but
 // error if address does not
 func (s *stateManager) GetStorage(address crypto.Address, key binary.Word256) ([]byte, error) {
-	// log.Debug("get storage for evm", "contract", s.ctx.ContractName, address, key)
+	//log.Debug("get storage for evm", "contract", s.ctx.ContractName, "address", address.String(), "key", key.String())
 	contractName, err := DetermineContractNameFromEVM(address)
 	if err != nil {
 		return nil, nil
 	}
 	v, err := s.ctx.State.Get(contractName, key.Bytes())
 	if err != nil {
-		return nil, nil
+		return binary.Zero256.Bytes(), nil
 	}
 	return v, nil
 }
@@ -79,7 +79,7 @@ func (s *stateManager) RemoveAccount(address crypto.Address) error {
 
 // Store a 32-byte value at key for the account at address, setting to Zero256 removes the key
 func (s *stateManager) SetStorage(address crypto.Address, key binary.Word256, value []byte) error {
-	// log.Debug("get storage for evm", "contract", s.ctx.ContractName, address, key)
+	//log.Debug("set storage for evm", "contract", s.ctx.ContractName, "address", address.String(), "key", key.String())
 	contractName, err := DetermineContractNameFromEVM(address)
 	if err != nil {
 		return err
@@ -125,32 +125,32 @@ func newBlockStateManager(ctx *bridge.Context) *blockStateManager {
 func (s *blockStateManager) LastBlockHeight() uint64 {
 	// TODO
 	return 0
-	// block, err := s.ctx.Core.QueryLastBlock()
-	// if err != nil {
-	// 	return 0
-	// }
-	// return uint64(block.GetHeight())
+	//block, err := s.ctx.Core.QueryLastBlock()
+	//if err != nil {
+	//	return 0
+	//}
+	//return uint64(block.GetHeight())
 }
 
 // LastBlockTime
 func (s *blockStateManager) LastBlockTime() time.Time {
-	return time.Time{}
 	// TODO
-	// block, err := s.ctx.Core.QueryLastBlock()
-	// if err != nil {
-	// 	return time.Time{}
-	// }
-	// timestamp := block.GetTimestamp()
-	// return time.Unix(timestamp/1e9, timestamp%1e9)
+	return time.Time{}
+	//block, err := s.ctx.Core.QueryLastBlock()
+	//if err != nil {
+	//	return time.Time{}
+	//}
+	//timestamp := block.GetTimestamp()
+	//return time.Unix(timestamp/1e9, timestamp%1e9)
 }
 
 // LastBlockHeight
 func (s *blockStateManager) BlockHash(height uint64) ([]byte, error) {
 	return nil, nil
 	// TODO
-	// block, err := s.ctx.Core.QueryBlockByHeight(int64(height))
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// return block.GetBlockid(), nil
+	//block, err := s.ctx.Core.QueryBlockByHeight(int64(height))
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return block.GetBlockid(), nil
 }

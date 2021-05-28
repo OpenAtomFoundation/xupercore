@@ -22,6 +22,7 @@ const (
 	ProposalKernelContract    = "$proposal"
 	TimerTaskKernelContract   = "$timer_task"
 	TDPOSKernelContract       = "$tdpos"
+	XPOSKernelContract        = "$xpos"
 )
 
 // Govern Token Balance

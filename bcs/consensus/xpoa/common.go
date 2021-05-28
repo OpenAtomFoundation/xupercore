@@ -13,10 +13,12 @@ var (
 	targetParamErr   = errors.New("Target paramters are invalid, please check them.")
 	tooLowHeight     = errors.New("The height should be higher than 3.")
 	aclErr           = errors.New("Xpoa needs valid acl account.")
+	scheduleErr      = errors.New("minerScheduling overflow")
 )
 
 const (
-	contractBucket       = "$xpoa"
+	xpoaBucket           = "$xpoa"
+	poaBucket            = "$poa"
 	validateKeys         = "validates"
 	contractGetValidates = "getValidates"
 	contractEditValidate = "editValidates"
@@ -44,17 +46,17 @@ type ProposerInfo struct {
 
 // LoadValidatorsMultiInfo
 // xpoa 格式为
-// { "validators": [$ADDR_STRING...] }
+// { "address": [$ADDR_STRING...] }
 func loadValidatorsMultiInfo(res []byte) ([]string, error) {
 	if res == nil {
 		return nil, NotValidContract
 	}
 	// 读取最新的validators值
-	contractInfo := ValidatorsInfo{}
+	contractInfo := ProposerInfo{}
 	if err := json.Unmarshal(res, &contractInfo); err != nil {
 		return nil, err
 	}
-	return contractInfo.Validators, nil
+	return contractInfo.Address, nil
 }
 
 func Find(a string, t []string) bool {

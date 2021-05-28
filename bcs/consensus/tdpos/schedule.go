@@ -2,6 +2,7 @@ package tdpos
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -30,11 +31,14 @@ type tdposSchedule struct {
 	enableChainedBFT bool
 
 	// 当前validators的address
-	validators     []string
-	initValidators []string
-	curTerm        int64
-	miner          string
-	startHeight    int64
+	validators         []string
+	initValidators     []string
+	curTerm            int64
+	miner              string
+	startHeight        int64
+	consensusName      string
+	consensusVersion   int64
+	bindContractBucket string
 
 	log    logs.Logger
 	ledger cctx.LedgerRely
@@ -43,16 +47,19 @@ type tdposSchedule struct {
 // NewSchedule 新建schedule实例
 func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely, startHeight int64) *tdposSchedule {
 	schedule := &tdposSchedule{
-		period:            xconfig.Period,
-		blockNum:          xconfig.BlockNum,
-		proposerNum:       xconfig.ProposerNum,
-		alternateInterval: xconfig.AlternateInterval,
-		termInterval:      xconfig.TermInterval,
-		initTimestamp:     xconfig.InitTimestamp,
-		validators:        (xconfig.InitProposer)["1"],
-		startHeight:       startHeight,
-		log:               log,
-		ledger:            ledger,
+		period:             xconfig.Period,
+		blockNum:           xconfig.BlockNum,
+		proposerNum:        xconfig.ProposerNum,
+		alternateInterval:  xconfig.AlternateInterval,
+		termInterval:       xconfig.TermInterval,
+		initTimestamp:      xconfig.InitTimestamp,
+		validators:         (xconfig.InitProposer)["1"],
+		startHeight:        startHeight,
+		consensusName:      "tdpos",
+		consensusVersion:   xconfig.Version,
+		bindContractBucket: tdposBucket,
+		log:                log,
+		ledger:             ledger,
 	}
 	index := 0
 	for index < len(schedule.validators) {
@@ -76,6 +83,8 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely, 
 	}
 	if xconfig.EnableBFT != nil {
 		schedule.enableChainedBFT = true
+		schedule.consensusName = "xpos"
+		schedule.bindContractBucket = xposBucket
 	}
 	return schedule
 }
@@ -191,7 +200,7 @@ func (s *tdposSchedule) GetValidators(round int64) []string {
 	return proposers
 }
 
-// GetIntAddress election接口实现，获取候选人地址到网络地址的映射
+// GetIntAddress election接口实现，获取候选人地址到网络地址的映射，for unit test
 func (s *tdposSchedule) GetIntAddress(address string) string {
 	return ""
 }
@@ -238,7 +247,8 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 		return s.initValidators, nil
 	}
 	// 获取nominate信息
-	res, err := s.getSnapshotKey(height-3, contractBucket, []byte(nominateKey))
+	nKey := fmt.Sprintf("%s_%d_%s", s.consensusName, s.consensusVersion, nominateKey)
+	res, err := s.getSnapshotKey(height-3, s.bindContractBucket, []byte(nKey))
 	if err != nil {
 		s.log.Error("tdpos::calculateTopK::getSnapshotKey err.", "err", err)
 		return nil, err
@@ -258,8 +268,8 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 			Address: candidate,
 		}
 		// 根据候选人信息获取vote选票信息
-		key := voteKeyPrefix + candidate
-		res, err := s.getSnapshotKey(height-3, contractBucket, []byte(key))
+		key := fmt.Sprintf("%s_%d_%s%s", s.consensusName, s.consensusVersion, voteKeyPrefix, candidate)
+		res, err := s.getSnapshotKey(height-3, s.bindContractBucket, []byte(key))
 		if err != nil {
 			s.log.Error("tdpos::calculateTopK::load vote read set err.")
 			return nil, err
