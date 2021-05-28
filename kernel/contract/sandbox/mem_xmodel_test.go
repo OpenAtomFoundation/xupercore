@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sort"
 	"testing"
+
+	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 func TestXModelIterator(t *testing.T) {
@@ -58,7 +60,7 @@ func TestXModelRangeIterator(t *testing.T) {
 		return keys[i] < keys[j]
 	})
 
-	iter, err := m.Select("test", []byte(prefix), []byte(prefix+"\xff"))
+	iter, err := m.Select("test", []byte(keys[0]), []byte(keys[N-1]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +72,63 @@ func TestXModelRangeIterator(t *testing.T) {
 		}
 		i++
 	}
-	if i != N {
+	if i != N-1 {
 		t.Fatalf("expect iter %d iterms got %d", N, i)
 	}
+}
+
+func expectNextKey(t *testing.T, iter ledger.XMIterator, expect string) {
+	ok := iter.Next()
+	if !ok {
+		t.Fatal("expect next ok, go eof")
+	}
+	key := iter.Key()
+	if string(key) != expect {
+		t.Fatalf("expect next key:%s, got %s", expect, key)
+	}
+}
+
+func TestXModelIteratorStartAndEnd(t *testing.T) {
+	m := NewMemXModel()
+	putVersionedData(m, "tess", []byte("1"), []byte("1"))
+	putVersionedData(m, "test", []byte("1"), []byte("1"))
+	putVersionedData(m, "test", []byte("2"), []byte("2"))
+	putVersionedData(m, "test", []byte("3"), []byte("2"))
+	putVersionedData(m, "test1", []byte("1"), []byte("1"))
+	t.Run("nil start", func(tt *testing.T) {
+		iter, err := m.Select("test", nil, nil)
+		if err != nil {
+			tt.Fatal(err)
+		}
+		expectNextKey(t, iter, "1")
+	})
+	t.Run("non nil start", func(tt *testing.T) {
+		iter, err := m.Select("test", []byte("2"), nil)
+		if err != nil {
+			tt.Fatal(err)
+		}
+		expectNextKey(t, iter, "2")
+	})
+	t.Run("nil end", func(tt *testing.T) {
+		iter, err := m.Select("test", []byte("2"), nil)
+		if err != nil {
+			tt.Fatal(err)
+		}
+		expectNextKey(tt, iter, "2")
+		expectNextKey(tt, iter, "3")
+		if iter.Next() {
+			tt.Error("expect end")
+		}
+	})
+	t.Run("non nil end", func(tt *testing.T) {
+		iter, err := m.Select("test", []byte("2"), []byte("3"))
+		if err != nil {
+			tt.Fatal(err)
+		}
+		expectNextKey(tt, iter, "2")
+		if iter.Next() {
+			tt.Error("expect end")
+		}
+	})
+
 }
