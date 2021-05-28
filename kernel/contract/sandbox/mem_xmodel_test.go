@@ -58,7 +58,7 @@ func TestXModelRangeIterator(t *testing.T) {
 		return keys[i] < keys[j]
 	})
 
-	iter, err := m.Select("test", []byte(prefix), []byte(prefix+"\xff"))
+	iter, err := m.Select("test", []byte(keys[0]), []byte(keys[N-1]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestXModelRangeIterator(t *testing.T) {
 		}
 		i++
 	}
-	if i != N {
+	if i != N-1 {
 		t.Fatalf("expect iter %d iterms got %d", N, i)
 	}
 }

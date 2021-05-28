@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/emirpasic/gods/trees/redblacktree"
+	"github.com/emirpasic/gods/utils"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 )
@@ -60,7 +61,7 @@ func (m *MemXModel) NewIterator() ledger.XMIterator {
 
 // treeIterator 把tree的Iterator转换成XMIterator
 type treeIterator struct {
-	tree *redblacktree.Tree
+	cmp  utils.Comparator
 	iter *redblacktree.Iterator
 	end  []byte
 	err  error
@@ -71,29 +72,36 @@ type treeIterator struct {
 func newTreeIterator(tree *redblacktree.Tree) ledger.XMIterator {
 	iter := tree.Iterator()
 	return &treeIterator{
-		tree: tree,
+		cmp:  tree.Comparator,
 		iter: &iter,
 	}
 }
 
 func newTreeRangeIterator(tree *redblacktree.Tree, start, end []byte) ledger.XMIterator {
-	var iter redblacktree.Iterator
+	it := &treeIterator{
+		cmp: tree.Comparator,
+	}
+	// start == nil 意味着从树的最小节点开始遍历
 	if start == nil {
-		iter = tree.Iterator()
-	} else {
-		startNode, ok := tree.Floor(start)
-		if !ok {
-			iter = tree.Iterator()
-		} else {
-			iter = tree.IteratorAt(startNode)
-		}
+		iter := tree.Iterator()
+		it.iter = &iter
+		return it
 	}
 
-	return &treeIterator{
-		tree: tree,
-		iter: &iter,
-		end:  end,
+	// 找到第一个大于等于start的节点
+	startNode, ok := tree.Ceiling(start)
+	if !ok {
+		it.iterDone = true
+		return it
 	}
+	iter := tree.IteratorAt(startNode)
+	// 调用Next才开始我们的第一个次迭代，因此移动一下游标到上一个位置
+	// 如果startNode是第一个元素，则重置迭代器到0位置
+	iter.Prev()
+
+	it.iter = &iter
+	it.end = end
+	return it
 }
 
 func (t *treeIterator) Next() bool {
@@ -116,7 +124,7 @@ func (t *treeIterator) Next() bool {
 	}
 	rawkey := t.iter.Key()
 
-	if t.end != nil && t.tree.Comparator(rawkey, t.end) >= 0 {
+	if t.end != nil && t.cmp(rawkey, t.end) >= 0 {
 		t.iterDone = true
 		return false
 	}
