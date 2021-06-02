@@ -210,6 +210,11 @@ func (t *KernMethod) Thaw(ctx contract.KContext) (*contract.Response, error) {
 		return nil, fmt.Errorf("some one has voted %s tickets, can not thaw now", proposal.VoteAmount.String())
 	}
 
+	// 比较投票状态
+	if proposal.Status != utils.ProposalStatusVoting {
+		return nil, fmt.Errorf("proposal status is %s, only a voting proposal could be thawed", proposal.Status)
+	}
+
 	// 更新proposal状态为撤销
 	proposal.Status = utils.ProposalStatusCancelled
 	err = t.updateProposal(ctx, string(proposalIDBuf), proposal)
