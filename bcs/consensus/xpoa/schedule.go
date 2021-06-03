@@ -108,17 +108,56 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 
 // GetValidators 用于计算目标round候选人信息，同时更新schedule address到internet地址映射
 func (s *xpoaSchedule) GetValidators(round int64) []string {
-	validators, err := s.getValidates(round)
+	if round-1 <= 3 {
+		return s.initValidators
+	}
+	block, err := s.ledger.QueryBlockByHeight(round)
+	var validators []string
+	var calErr error
 	if err != nil {
+		// 尚未产生的区块，使用的是tipHeight-3的快照，tipHeight存在
+		validators, calErr = s.getValidates(round - 1)
+	} else {
+		storage, _ := block.GetConsensusStorage()
+		validators = s.GetLocalValidates(block.GetTimestamp(), round, storage)
+	}
+	if calErr != nil {
 		return nil
 	}
 	return validators
 }
 
-// GetLocalLeader 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
-func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64) string {
+// GetLocalValidates 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
+func (s *xpoaSchedule) GetLocalValidates(timestamp int64, round int64, storage []byte) []string {
+	targetHeight := round - 1
+	if targetHeight <= 3 {
+		return s.initValidators
+	}
 	// ATTENTION: 获取候选人信息时，时刻注意拿取的是check目的round的前三个块，候选人变更是在3个块之后生效，即round-3
-	localValidators := s.GetValidators(round)
+	// 注意: 在competeMaster时，拿到的当前tipHeightMiner-3的快照生成的候选人集合，
+	// 考虑到回滚情况，矿工可能产生高度HE(tipHeightMiner-3, tipHeightMiner+1]区块，follower收到节点时，自身还有tipHeightFollower
+	// H，tipHeightFollower不一定相等
+	if s.enableBFT && storage != nil {
+		conStorage, err := common.ParseOldQCStorage(storage)
+		if err != nil {
+			return nil
+		}
+		if conStorage.TargetBits != 0 {
+			targetHeight = int64(conStorage.TargetBits)
+			s.log.Debug("xpoa::GetLocalValidates::use rollback target.", "targetHeight", targetHeight)
+		}
+	}
+	// 目前使用的是targetHeight，后面需要变为Blockid
+	localValidators, err := s.getValidates(targetHeight)
+	if err != nil || localValidators == nil {
+		return nil
+	}
+	return localValidators
+}
+
+// GetLocalLeader 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
+func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64, storage []byte) string {
+	localValidators := s.GetLocalValidates(timestamp, round, storage)
 	if localValidators == nil {
 		return ""
 	}
