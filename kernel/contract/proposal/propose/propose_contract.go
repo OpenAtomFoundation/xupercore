@@ -307,6 +307,18 @@ func (t *KernMethod) CheckVoteResult(ctx contract.KContext) (*contract.Response,
 		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
 	}
 
+	// 比较提案状态，只有voting状态的提案可以进行检票
+	if proposal.Status != utils.ProposalStatusVoting {
+		//return nil, fmt.Errorf("proposal status is %s, only a voting proposal could be checked", proposal.Status)
+
+		// 返回nil，是个空交易
+		return &contract.Response{
+			Status:  utils.StatusOK,
+			Message: fmt.Sprintf("proposal status is %s, only a voting proposal could be checked", proposal.Status),
+			Body:    nil,
+		}, nil
+	}
+
 	// 获取治理代币总额，以及投票阈值
 	totalSupplyRes, err := ctx.Call("xkernel", utils.GovernTokenKernelContract, "TotalSupply", nil)
 	if err != nil {
@@ -378,6 +390,18 @@ func (t *KernMethod) Trigger(ctx contract.KContext) (*contract.Response, error) 
 	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
 	if err != nil {
 		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
+	}
+
+	// 比较提案状态，只有passed状态的提案可以进行提案内容执行
+	if proposal.Status != utils.ProposalStatusPassed {
+		//return nil, fmt.Errorf("proposal status is %s, only a passed proposal could be triggered", proposal.Status)
+
+		// 返回nil，是个空交易
+		return &contract.Response{
+			Status:  utils.StatusOK,
+			Message: fmt.Sprintf("proposal status is %s, only a passed proposal could be triggered", proposal.Status),
+			Body:    nil,
+		}, nil
 	}
 
 	// 执行提案trigger任务
