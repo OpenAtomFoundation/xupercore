@@ -1,7 +1,8 @@
 package utils
 
 const (
-	StatusOK = 200
+	StatusOK        = 200
+	StatusException = 500
 )
 
 const (
