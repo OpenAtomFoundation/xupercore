@@ -141,7 +141,7 @@ func (pow *PoWConsensus) CalculateBlock(block context.BlockInterface) error {
 	task := mineTask{
 		block: block,
 		done:  make(chan error, 1),
-		close: make(chan int, 1),
+		close: make(chan int),
 	}
 	pow.minech <- &task
 	return <-task.done
@@ -283,25 +283,25 @@ func (pow *PoWConsensus) Stop() error {
 // Start 重启实例
 func (pow *PoWConsensus) Start() error {
 	go func() {
+		var currentMining *mineTask
 		for {
-			var currentMining *mineTask
 			select {
 			case task := <-pow.minech:
 				if currentMining != nil {
-					currentMining.close <- 1
-					close(currentMining.close)
+					currentMining.doClose()
 				}
 				currentMining = task
 				go pow.mining(task)
 			case height := <-pow.newblock:
 				if currentMining != nil && height > currentMining.block.GetHeight() {
-					currentMining.close <- 1
-					close(currentMining.close)
+					currentMining.doClose()
 					currentMining = nil
 				}
 			case <-pow.sigc:
-				close(pow.minech)
-				close(pow.newblock)
+				if currentMining != nil {
+					currentMining.doClose()
+					currentMining = nil
+				}
 				return
 			default:
 			}
@@ -421,25 +421,24 @@ func (pow *PoWConsensus) IsProofed(blockID []byte, targetBits uint32) bool {
 func (pow *PoWConsensus) mining(task *mineTask) {
 	gussNonce := ^int32(^uint32(0) >> 1)
 	tries := MAX_TRIES
-	defer close(task.done)
 	for {
 		select {
 		case <-task.close:
-			task.done <- OODMineErr
+			task.doDone(OODMineErr)
 			return
 		default:
 		}
 		if tries == 0 {
-			task.done <- TryTooMuchMineErr
+			task.doDone(TryTooMuchMineErr)
 			return
 		}
 		if err := task.block.SetItem("nonce", gussNonce); err != nil {
-			task.done <- PoWBlockItemErr
+			task.doDone(PoWBlockItemErr)
 			return
 		}
 		bid, err := task.block.MakeBlockId()
 		if err != nil {
-			task.done <- MakeBlockErr
+			task.doDone(MakeBlockErr)
 			return
 		}
 		if pow.IsProofed(bid, pow.targetBits) {
@@ -447,11 +446,11 @@ func (pow *PoWConsensus) mining(task *mineTask) {
 			// 签名重置
 			s, err := pow.Crypto.SignECDSA(pow.Address.PrivateKey, bid)
 			if err != nil {
-				task.done <- BlockSignErr
+				task.doDone(BlockSignErr)
 				return
 			}
 			task.block.SetItem("sign", s)
-			task.done <- nil
+			task.doDone(nil)
 			return
 		}
 		gussNonce++
@@ -463,4 +462,12 @@ type mineTask struct {
 	block context.BlockInterface
 	done  chan error
 	close chan int
+}
+
+func (t *mineTask) doClose() {
+	close(t.close)
+}
+
+func (t *mineTask) doDone(err error) {
+	t.done <- err
 }
