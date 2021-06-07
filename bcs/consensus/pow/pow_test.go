@@ -276,6 +276,8 @@ func TestMining(t *testing.T) {
 		return
 	}
 	powC.targetBits = minTarget
+	powC.Start()
+	defer powC.Stop()
 	ps := PoWStorage{
 		TargetBits: minTarget,
 	}
@@ -313,7 +315,7 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("NewBlock error", err)
 		return
 	}
-	l, ok := powC.ctx.Ledger.(*kmock.FakeLedger)
+	l, ok := powC.Ledger.(*kmock.FakeLedger)
 	err = l.Put(genesisB)
 	if err != nil {
 		t.Error("TestRefreshDifficulty put genesis err", "err", err)
@@ -330,7 +332,13 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("NewBlockWithStorage error", err)
 		return
 	}
-	err = powC.mining(B1)
+	T1 := mineTask{
+		block: B1,
+		done:  make(chan error, 1),
+		close: make(chan int, 1),
+	}
+	go powC.mining(&T1)
+	err = <-T1.done
 	if err != nil {
 		t.Error("TestRefreshDifficulty mining error", "blockId", B1.GetBlockid(), "err", err)
 		return
@@ -345,7 +353,13 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("NewBlockWithStorage error", err)
 		return
 	}
-	err = powC.mining(B2)
+	T2 := mineTask{
+		block: B2,
+		done:  make(chan error, 1),
+		close: make(chan int, 1),
+	}
+	go powC.mining(&T2)
+	err = <-T2.done
 	if err != nil {
 		t.Error("TestRefreshDifficulty mining error", "blockId", B2.GetBlockid(), "err", err)
 		return
@@ -370,8 +384,13 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("NewBlockWithStorage error B3", err)
 		return
 	}
-	go powC.mining(B3)
-	powC.sigc <- false
+	T3 := mineTask{
+		block: B3,
+		done:  make(chan error, 1),
+		close: make(chan int, 1),
+	}
+	go powC.mining(&T3)
+	T3.close <- 1
 }
 
 func TestCheckMinerMatch(t *testing.T) {
