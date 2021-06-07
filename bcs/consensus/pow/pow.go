@@ -303,7 +303,6 @@ func (pow *PoWConsensus) Start() error {
 					currentMining = nil
 				}
 				return
-			default:
 			}
 		}
 	}()
