@@ -4,6 +4,7 @@ package bridge
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -50,68 +51,68 @@ func (c *SyscallService) Ping(ctx context.Context, in *pb.PingRequest) (*pb.Ping
 
 // QueryBlock implements Syscall interface
 func (c *SyscallService) QueryBlock(ctx context.Context, in *pb.QueryBlockRequest) (*pb.QueryBlockResponse, error) {
-	return nil, ErrNotImplementation
-	// nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
-	// if !ok {
-	// 	return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
-	// }
+	nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
+	if !ok {
+		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
+	}
 
-	// rawBlockid, err := hex.DecodeString(in.Blockid)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	rawBlockid, err := hex.DecodeString(in.Blockid)
+	if err != nil {
+		return nil, err
+	}
 
-	// block, err := nctx.Core.QueryBlock(rawBlockid)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	block, err := nctx.Core.QueryBlock(rawBlockid)
+	if err != nil {
+		return nil, err
+	}
 
-	// txids := []string{}
-	// for _, t := range block.Transactions {
-	// 	txids = append(txids, hex.EncodeToString(t.Txid))
-	// }
+	txids := []string{}
+	for _, t := range block.Transactions {
+		txids = append(txids, hex.EncodeToString(t.Txid))
+	}
 
-	// blocksdk := &pb.Block{
-	// 	Blockid:  hex.EncodeToString(block.Blockid),
-	// 	PreHash:  hex.EncodeToString(block.PreHash),
-	// 	Proposer: block.Proposer,
-	// 	Sign:     hex.EncodeToString(block.Sign),
-	// 	Pubkey:   block.Pubkey,
-	// 	Height:   block.Height,
-	// 	Txids:    txids,
-	// 	TxCount:  block.TxCount,
-	// 	InTrunk:  block.InTrunk,
-	// 	NextHash: hex.EncodeToString(block.NextHash),
-	// }
+	blocksdk := &pb.Block{
+		Blockid:  hex.EncodeToString(block.Blockid),
+		PreHash:  hex.EncodeToString(block.PreHash),
+		Proposer: block.Proposer,
+		Sign:     hex.EncodeToString(block.Sign),
+		Pubkey:   block.Pubkey,
+		Height:   block.Height,
+		Txids:    txids,
+		TxCount:  block.TxCount,
+		InTrunk:  block.InTrunk,
+		NextHash: hex.EncodeToString(block.NextHash),
+	}
 
-	// return &pb.QueryBlockResponse{
-	// 	Block: blocksdk,
-	// }, nil
+	return &pb.QueryBlockResponse{
+		Block: blocksdk,
+	}, nil
 }
 
 // QueryTx implements Syscall interface
 func (c *SyscallService) QueryTx(ctx context.Context, in *pb.QueryTxRequest) (*pb.QueryTxResponse, error) {
-	return nil, ErrNotImplementation
-	// nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
-	// if !ok {
-	// 	return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
-	// }
 
-	// rawTxid, err := hex.DecodeString(in.Txid)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
+	if !ok {
+		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
+	}
 
-	// tx, err := nctx.Core.QueryTransaction(rawTxid)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	rawTxid, err := hex.DecodeString(in.Txid)
+	if err != nil {
+		return nil, err
+	}
 
-	// txsdk := ConvertTxToSDKTx(tx)
+	tx, err := nctx.Core.QueryTransaction(rawTxid)
+	if err != nil {
+		return nil, err
+	}
+	_ = tx
 
-	// return &pb.QueryTxResponse{
-	// 	Tx: txsdk,
-	// }, nil
+	return &pb.QueryTxResponse{
+		Tx:                   tx,
+		XXX_sizecache:        tx.XXX_sizecache,
+		XXX_NoUnkeyedLiteral: tx.XXX_NoUnkeyedLiteral,
+	}, nil
 }
 
 // Transfer implements Syscall interface

@@ -1,5 +1,10 @@
 package mock
 
+import (
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
+)
+
 type fakeChainCore struct {
 }
 
@@ -16,4 +21,13 @@ func (f *fakeChainCore) VerifyContractPermission(initiator string, authRequire [
 // VerifyContractOwnerPermission verify contract ownership permisson
 func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
 	return nil
+}
+
+func (t *fakeChainCore) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error) {
+	return &xldgpb.InternalBlock{}, nil
+}
+
+func (t *fakeChainCore) QueryTransaction(txid []byte) (*pb.Transaction, error) {
+
+	return &pb.Transaction{}, nil
 }

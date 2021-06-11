@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+
 	"github.com/xuperchain/xupercore/bcs/network/p2pv2"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/mock"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
@@ -325,6 +328,15 @@ func (c *FakeKContext) ResourceLimit() contract.Limits {
 
 func (c *FakeKContext) Call(module, contract, method string, args map[string][]byte) (*contract.Response, error) {
 	return nil, nil
+}
+
+func (c *FakeKContext) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error) {
+	return &xldgpb.InternalBlock{}, nil
+
+}
+
+func (c *FakeKContext) QueryTransaction(txid []byte) (*pb.Transaction, error) {
+	return &pb.Transaction{}, nil
 }
 
 type FakeManager struct {
