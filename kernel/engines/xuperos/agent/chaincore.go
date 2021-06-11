@@ -36,52 +36,11 @@ func (t *ChainCoreAgent) VerifyContractOwnerPermission(contractName string, auth
 
 // QueryTransaction query confirmed tx
 func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) {
-	ltx, err := t.chainCtx.Ledger.QueryTransaction(txid)
-	if err != nil {
-		return nil, err
-	}
-	txInputs := []*pb.TxInput{}
-	txOutputs := []*pb.TxOutput{}
+	return t.chainCtx.State.QueryTransaction(txid)
 
-	for _, input := range ltx.TxInputs {
-		txInputs = append(txInputs, &pb.TxInput{
-			RefTxid:              string(input.RefTxid),
-			RefOffset:            input.RefOffset,
-			FromAddr:             input.FromAddr,
-			Amount:               string(input.Amount),
-			FrozenHeight:         input.FrozenHeight,
-			XXX_NoUnkeyedLiteral: input.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     input.XXX_unrecognized,
-			XXX_sizecache:        input.XXX_sizecache,
-		})
-	}
-	for _, output := range ltx.TxOutputs {
-		txOutputs = append(txOutputs, &pb.TxOutput{
-			Amount:               string(output.Amount),
-			ToAddr:               output.ToAddr,
-			FrozenHeight:         output.FrozenHeight,
-			XXX_NoUnkeyedLiteral: output.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     output.XXX_unrecognized,
-			XXX_sizecache:        output.XXX_sizecache,
-		})
-	}
-
-	tx := &pb.Transaction{
-		Txid:                 string(txid),
-		Blockid:              string(ltx.Blockid),
-		TxInputs:             txInputs,
-		TxOutputs:            txOutputs,
-		Desc:                 ltx.Desc,
-		Initiator:            ltx.Initiator,
-		AuthRequire:          ltx.AuthRequire,
-		XXX_NoUnkeyedLiteral: ltx.XXX_NoUnkeyedLiteral,
-		XXX_unrecognized:     ltx.XXX_unrecognized,
-		XXX_sizecache:        ltx.XXX_sizecache,
-	}
-	return tx, nil
 }
 
 // QueryBlock query block
 func (t *ChainCoreAgent) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error) {
-	return t.chainCtx.Ledger.QueryBlock(blockid)
+	return t.chainCtx.State.QueryBlock(blockid)
 }
