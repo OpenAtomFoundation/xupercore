@@ -52,15 +52,14 @@ func (db *LDBDatabase) Open(path string, options map[string]interface{}) error {
 	}
 	switch options["storageType"] {
 	case kvdb.StorageTypeSingle:
-		db.OpenSingle(path, options)
+		return db.OpenSingle(path, options)
 	case kvdb.StorageTypeMulti:
-		db.OpenMulti(path, options)
+		return db.OpenMulti(path, options)
 	case kvdb.StorageTypeCloud:
-		db.OpenCloud(path, options)
+		return db.OpenCloud(path, options)
 	default:
 		return fmt.Errorf("open database fail. err:invalid storageType:%s", options["storageType"])
 	}
-	return nil
 }
 
 // Path returns the path to the database directory.

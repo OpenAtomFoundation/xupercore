@@ -306,7 +306,7 @@ func (t *Chain) initChainCtx() error {
 	leg, err := t.relyAgent.CreateLedger()
 	if err != nil {
 		t.log.Error("open ledger failed", "bcName", t.ctx.BCName, "err", err)
-		return fmt.Errorf("open ledger failed")
+		return err
 	}
 	t.ctx.Ledger = leg
 	t.log.Trace("open ledger succ", "bcName", t.ctx.BCName)
