@@ -81,7 +81,7 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	err = t.loadChains()
 	if err != nil {
 		t.log.Error("load chain failed", "err", err)
-		return common.ErrLoadChainFailed
+		return err
 	}
 	t.log.Trace("load all chain succeeded")
 
@@ -179,7 +179,7 @@ func (t *Engine) loadChains() error {
 		chain, err := LoadChain(t.engCtx, fInfo.Name())
 		if err != nil {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
-			return fmt.Errorf("load chain failed")
+			return err
 		}
 		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
 
