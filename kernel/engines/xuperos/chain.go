@@ -409,13 +409,16 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
 	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
 
-	// 11.平行链
-	/*err = t.relyAgent.CreateParaChain()
+	// 11. 仅主链创建平行链Mgmt
+	if t.ctx.BCName != t.ctx.EngCtx.EngCfg.RootChain {
+		t.log.Trace("create parachain succ", "bcName", t.ctx.BCName)
+		return nil
+	}
+	err = t.relyAgent.CreateParaChain()
 	if err != nil {
-		t.log.Error("create parachain error", "bcName", t.ctx.BCName, "err", err)
+		t.log.Error("create parachain mgmt error", "bcName", t.ctx.BCName, "err", err)
 		return fmt.Errorf("create parachain error")
 	}
-	t.log.Trace("create parachain succ", "bcName", t.ctx.BCName)*/
-
+	t.log.Trace("create root succ", "bcName", t.ctx.BCName)
 	return nil
 }

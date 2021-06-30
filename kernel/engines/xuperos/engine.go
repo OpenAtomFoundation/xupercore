@@ -22,8 +22,8 @@ type Engine struct {
 	engCtx *common.EngineCtx
 	// 日志
 	log logs.Logger
-	// 链实例
-	chains sync.Map
+	// 链管理成员
+	ChainMgmtImpl
 	// p2p网络事件处理
 	netEvent *xnet.NetEvent
 	// 依赖代理组件
@@ -70,6 +70,9 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 		return common.ErrNewEngineCtxFailed.More("%v", err)
 	}
 	t.engCtx = engCtx
+	t.ChainMgmtImpl = ChainMgmtImpl{
+		engCtx: engCtx,
+	}
 	t.log = t.engCtx.XLog
 	t.log.Trace("init engine context succeeded")
 

@@ -2,8 +2,10 @@ package parachain
 
 import (
 	"fmt"
-	"github.com/spf13/viper"
 	"strconv"
+
+	"github.com/spf13/viper"
+	"github.com/xuperchain/xupercore/kernel/contract"
 )
 
 const (
@@ -24,9 +26,6 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	if ctx == nil || ctx.Contract == nil || ctx.BcName == "" {
 		return nil, fmt.Errorf("parachain ctx set error")
 	}
-	if ctx.BcName != ctx.ChainCtx.EngCtx.EngCfg.RootChain {
-		return nil, fmt.Errorf("Permission denied to register this contract")
-	}
 	conf, err := loadConfig(ctx.ChainCtx.EngCtx.EnvCfg.GenConfFilePath(ConfigName))
 	if err != nil {
 		return nil, err
@@ -38,7 +37,17 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	}
 	t := NewKernContractMethod(ctx.BcName, minNewChainAmount, ctx.ChainCtx)
 	register := ctx.Contract.GetKernRegistry()
-	register.RegisterKernMethod(ParaChainKernelContract, "CreateBlockChain", t.CreateBlockChain)
+	// 注册合约方法
+	xpoaKMethods := map[string]contract.KernMethod{
+		"createBlockChain": t.CreateBlockChain,
+		"editGroup":        t.methodEditGroup,
+		"getGroup":         t.methodGetGroup,
+	}
+	for method, f := range xpoaKMethods {
+		if _, err := register.GetKernMethod(ParaChainKernelContract, method); err != nil {
+			register.RegisterKernMethod(ParaChainKernelContract, method, f)
+		}
+	}
 	//todo
 	//workerObj := ctx.GetAsyncWorker()
 	//workerObj.RegisterHandler(ParaChainKernelContract, "CreateBlockChain", handleCreateChain)

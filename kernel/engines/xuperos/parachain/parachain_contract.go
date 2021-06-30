@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	//"github.com/xuperchain/xupercore/kernel/engines/xuperos"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"strings"
+
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/protos"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
@@ -26,6 +29,17 @@ var (
 	ErrBlockChainExist = errors.New("BlockChain Exist")
 	// ErrCreateBlockChain is returned when create block chain error
 	ErrCreateBlockChain = errors.New("Create BlockChain error")
+	ErrGroupNotFound    = errors.New("Group Not Found")
+	ErrUnAuthorized     = errors.New("UnAuthorized")
+)
+
+const (
+	Success           = 200
+	UnAuthorized      = 403
+	TargetNotFound    = 404
+	InternalServerErr = 500
+
+	ParaChainEventName = "EditParaGroups"
 )
 
 type KernMethod struct {
@@ -50,69 +64,97 @@ type createChainMessage struct {
 	ChainCtx *common.ChainCtx
 }
 
-/*func handleCreateChain(ctx asyncTask.TaskContext) error {
+/*
+func handleCreateChain(ctx asyncTask.TaskContext) error {
 	var args createChainMessage
 	ctx.ParseArgs(&args)
-
 	err := createLedger(args.ChainCtx, args.BcName, []byte(args.Data))
 	if err != nil {
 		return err
 	}
-	chain, err := xuperos.LoadChain(args.ChainCtx.EngCtx, args.BcName)
-	if err != nil {
-		return err
-	}
-	go chain.Start()
-
-	return nil
-}*/
+	return args.ChainCtx.EngCtx.Register(args.BcName)
+}
+*/
 
 func (t *KernMethod) CreateBlockChain(ctx contract.KContext) (*contract.Response, error) {
 	if t.BcName != t.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}
-	/*bcName, bcData, err := t.validateCreateBC(ctx.Args())
-	if err != nil {
-		return nil, err
-	}
-	message := &createChainMessage{
-		ChainCtx: t.ChainCtx,
-		BcName:   bcName,
-		Data:     bcData,
-	}
-	ctx.EmitAsyncTask("CreateBlockChain", message)*/
+	bcName, _, err := t.validateCreateBC(ctx.Args())
+	/*
+		if err != nil {
+			return nil, err
+		}
+		message := &createChainMessage{
+			ChainCtx: t.ChainCtx,
+			BcName:   bcName,
+			Data:     bcData,
+		}
+		ctx.EmitAsyncTask("CreateBlockChain", message)
+	*/
 
+	// 确保未创建过该链
+	chainRes, err := ctx.Get(ParaChainKernelContract, []byte(bcName))
+	if chainRes != nil {
+		return newContractErrResponse(UnAuthorized, ErrBlockChainExist.Error()), ErrBlockChainExist
+	}
+
+	// 创建链时，自动写入Group信息
+	value := &Group{
+		GroupID:    bcName,
+		Admin:      []string{ctx.Initiator()},
+		Identities: nil,
+	}
+	value = loadGroupArgs(ctx.Args(), value)
+	rawBytes, err := json.Marshal(value)
+	if err != nil {
+		return newContractErrResponse(InternalServerErr, err.Error()), err
+	}
+	if err := ctx.Put(ParaChainKernelContract,
+		[]byte(bcName), rawBytes); err != nil {
+		return newContractErrResponse(InternalServerErr, err.Error()), err
+	}
 	delta := contract.Limits{
 		XFee: t.MinNewChainAmount,
 	}
 	ctx.AddResourceUsed(delta)
 
 	return &contract.Response{
-		Status: 200,
+		Status: Success,
 		Body:   []byte("CreateBlockChain success"),
 	}, nil
 }
 
 func (t *KernMethod) validateCreateBC(args map[string][]byte) (string, string, error) {
+	/*
+		bcName := ""
+		bcData := ""
+		if args["name"] == nil {
+			return bcName, bcData, errors.New("block chain name is empty")
+		}
+		if args["data"] == nil {
+			return bcName, bcData, errors.New("first block data is empty")
+		}
+		bcName = string(args["name"])
+		bcData = string(args["data"])
+
+		// check data format, prevent panic
+		bcCfg := &ledger.RootConfig{}
+		err := json.Unmarshal(args["data"], bcCfg)
+		if err != nil {
+			return bcName, bcData, fmt.Errorf("first block data error.err:%v", err)
+		}
+
+		return bcName, bcData, nil
+	*/
+
+	// For test
 	bcName := ""
-	bcData := ""
 	if args["name"] == nil {
-		return bcName, bcData, errors.New("block chain name is empty")
-	}
-	if args["data"] == nil {
-		return bcName, bcData, errors.New("first block data is empty")
+		return bcName, "", errors.New("block chain name is empty")
 	}
 	bcName = string(args["name"])
-	bcData = string(args["data"])
-
-	// check data format, prevent panic
-	bcCfg := &ledger.RootConfig{}
-	err := json.Unmarshal(args["data"], bcCfg)
-	if err != nil {
-		return bcName, bcData, fmt.Errorf("first block data error.err:%v", err)
-	}
-
-	return bcName, bcData, nil
+	return bcName, "", nil
 }
 
 func createLedger(chainCtx *common.ChainCtx, bcName string, data []byte) error {
@@ -181,4 +223,131 @@ func createLedger(chainCtx *common.ChainCtx, bcName string, data []byte) error {
 		return err
 	}
 	return nil
+}
+
+//////////// Group ///////////
+type Group struct {
+	GroupID    string   `json:"name,omitempty"`
+	Admin      []string `json:"admin,omitempty"`
+	Identities []string `json:"identities,omitempty"`
+}
+
+// methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
+func (t *KernMethod) methodEditGroup(ctx contract.KContext) (*contract.Response, error) {
+	group := &Group{}
+	group = loadGroupArgs(ctx.Args(), group)
+	if group == nil {
+		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
+	}
+	// 1. 查看Group群组是否存在
+	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
+	if err != nil {
+		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), err
+	}
+
+	// 2. 查看发起者是否有权限修改
+	chainGroup := Group{}
+	err = json.Unmarshal(groupBytes, &chainGroup)
+	if err != nil {
+		return newContractErrResponse(InternalServerErr, err.Error()), err
+	}
+	if !isContain(chainGroup.Admin, ctx.Initiator()) {
+		return newContractErrResponse(UnAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+	}
+
+	// 3. 发起修改
+	if group.Admin == nil { // 必须要有admin权限
+		group.Admin = chainGroup.Admin
+	}
+	rawBytes, err := json.Marshal(group)
+	if err != nil {
+		return newContractErrResponse(InternalServerErr, err.Error()), err
+	}
+	if err := ctx.Put(ParaChainKernelContract, []byte(group.GroupID), rawBytes); err != nil {
+		return newContractErrResponse(InternalServerErr, err.Error()), err
+	}
+
+	// 4. 通知event
+	e := protos.ContractEvent{
+		Name: ParaChainEventName,
+		Body: rawBytes,
+	}
+	ctx.AddEvent(&e)
+
+	delta := contract.Limits{
+		XFee: t.MinNewChainAmount,
+	}
+	ctx.AddResourceUsed(delta)
+	return &contract.Response{
+		Status: Success,
+		Body:   []byte("Edit Group success"),
+	}, nil
+}
+
+// methodGetGroup 平行链群组读方法
+func (t *KernMethod) methodGetGroup(ctx contract.KContext) (*contract.Response, error) {
+	group := &Group{}
+	group = loadGroupArgs(ctx.Args(), group)
+	if group == nil {
+		t.ChainCtx.XLog.Error("!!!! Group nil.", "group", group)
+		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
+	}
+	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
+	if err != nil {
+		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), err
+	}
+	err = json.Unmarshal(groupBytes, group)
+	if err != nil {
+		return newContractErrResponse(InternalServerErr, err.Error()), err
+	}
+	// 仅群组有权限的节点方可访问该key
+	if !isContain(group.Admin, ctx.Initiator()) && !isContain(group.Identities, ctx.Initiator()) {
+		return newContractErrResponse(UnAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+	}
+	return &contract.Response{
+		Status: Success,
+		Body:   groupBytes,
+	}, nil
+}
+
+func loadGroupArgs(args map[string][]byte, group *Group) *Group {
+	g := &Group{
+		GroupID:    group.GroupID,
+		Admin:      group.Admin,
+		Identities: group.Identities,
+	}
+	bcName, ok := args["name"]
+	if !ok {
+		return nil
+	}
+	g.GroupID = string(bcName)
+	admin, ok := args["admin"]
+	if !ok {
+		return g
+	}
+	adminStr := string(admin)
+	g.Admin = strings.Split(adminStr, ";")
+	ids, ok := args["identities"]
+	if !ok {
+		return g
+	}
+	identitiesStr := string(ids)
+	g.Identities = strings.Split(identitiesStr, ";")
+	return g
+}
+
+func isContain(items []string, item string) bool {
+	for _, eachItem := range items {
+		if eachItem == item {
+			return true
+		}
+	}
+	return false
+}
+
+func newContractErrResponse(status int, msg string) *contract.Response {
+	return &contract.Response{
+		Status:  status,
+		Message: msg,
+	}
 }
