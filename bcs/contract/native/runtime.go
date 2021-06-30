@@ -36,7 +36,7 @@ type Process interface {
 // DockerProcess is the process running as a docker container
 type DockerProcess struct {
 	basedir  string
-	startcmd string
+	startcmd *exec.Cmd
 	envs     []string
 	mounts   []string
 	// ports    []string
@@ -71,17 +71,13 @@ func (d *DockerProcess) Start() error {
 	for _, mount := range d.mounts {
 		volumes[mount] = struct{}{}
 	}
-
-	cmd := []string{
-		"sh", "-c",
-		d.startcmd,
-	}
+	// cmd.Args contains cmd binpath
+	cmd := d.startcmd.Args
 
 	env := []string{
 		"XCHAIN_PING_TIMEOUT=" + strconv.Itoa(pingTimeoutSecond),
 	}
 	env = append(env, d.envs...)
-	env = append(env, os.Environ()...)
 
 	user := strconv.Itoa(os.Getuid()) + ":" + strconv.Itoa(os.Getgid())
 
@@ -160,7 +156,7 @@ func (d *DockerProcess) Stop(timeout time.Duration) error {
 // HostProcess is the process running as a native process
 type HostProcess struct {
 	basedir  string
-	startcmd string
+	startcmd *exec.Cmd
 	envs     []string
 
 	cmd *exec.Cmd
@@ -169,7 +165,7 @@ type HostProcess struct {
 
 // Start implements process interface
 func (h *HostProcess) Start() error {
-	cmd := exec.Command("sh", "-c", h.startcmd)
+	cmd := h.startcmd
 	cmd.Dir = h.basedir
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid: true,
