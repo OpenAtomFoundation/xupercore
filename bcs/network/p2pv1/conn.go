@@ -170,9 +170,6 @@ type ConnPool struct {
 }
 
 func (p *ConnPool) Get(addr string) (*Conn, error) {
-	if addr == "127.0.0.1:38202" || addr == "127.0.0.1:38201" || addr == "127.0.0.1:38203" {
-		return nil, ErrAddressIllegal
-	}
 	if v, ok := p.pool.Load(addr); ok {
 		return v.(*Conn), nil
 	}
