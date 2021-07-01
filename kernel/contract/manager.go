@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
@@ -46,7 +45,9 @@ type ChainCore interface {
 	// QueryTransaction query confirmed tx
 	QueryTransaction(txid []byte) (*pb.Transaction, error)
 	// QueryBlock query block
-	QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error)
+	QueryBlock(blockid []byte) (ledger.BlockHandle, error)
+
+	//QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error)
 	// ResolveChain resolve chain endorsorinfos
 	// ResolveChain(chainName string) (*pb.CrossQueryMeta, error)
 }

@@ -65,23 +65,22 @@ func (c *SyscallService) QueryBlock(ctx context.Context, in *pb.QueryBlockReques
 	if err != nil {
 		return nil, err
 	}
-
-	txids := []string{}
-	for _, t := range block.Transactions {
-		txids = append(txids, hex.EncodeToString(t.Txid))
-	}
+	//txids := []string{}
+	//for _, t := range block.Transactions {
+	//	txids = append(txids, hex.EncodeToString(t.Txid))
+	//}
 
 	blocksdk := &pb.Block{
-		Blockid:  hex.EncodeToString(block.Blockid),
-		PreHash:  hex.EncodeToString(block.PreHash),
-		Proposer: block.Proposer,
-		Sign:     hex.EncodeToString(block.Sign),
-		Pubkey:   block.Pubkey,
-		Height:   block.Height,
-		Txids:    txids,
-		TxCount:  block.TxCount,
-		InTrunk:  block.InTrunk,
-		NextHash: hex.EncodeToString(block.NextHash),
+		Blockid:  hex.EncodeToString(block.GetBlockid()),
+		PreHash:  hex.EncodeToString(block.GetPreHash()),
+		Proposer: block.GetProposer(),
+		Sign:     hex.EncodeToString(block.GetSign()),
+		//Pubkey:   block.GetPublicKey(),
+		Height: block.GetHeight(),
+		//Txids:    txids,
+		//TxCount:  block.TxCount,
+		//InTrunk:  block.InTrunk,
+		//NextHash: hex.EncodeToString(block.NextHash),
 	}
 
 	return &pb.QueryBlockResponse{

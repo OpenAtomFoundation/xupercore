@@ -834,8 +834,12 @@ func (t *State) ClearCache() {
 	t.log.Info("clear utxo cache")
 }
 
-func (t *State) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error) {
-	return t.sctx.Ledger.QueryBlock(blockid)
+func (t *State) QueryBlock(blockid []byte) (kledger.BlockHandle, error) {
+	block, err := t.sctx.Ledger.QueryBlock(blockid)
+	if err != nil {
+		return nil, err
+	}
+	return NewBlockAgent(block), err
 }
 func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	ltx, err := t.sctx.Ledger.QueryTransaction(txid)

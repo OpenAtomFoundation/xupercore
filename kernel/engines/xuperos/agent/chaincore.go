@@ -1,9 +1,9 @@
 package agent
 
 import (
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
@@ -41,6 +41,11 @@ func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) 
 }
 
 // QueryBlock query block
-func (t *ChainCoreAgent) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error) {
-	return t.chainCtx.State.QueryBlock(blockid)
+func (t *ChainCoreAgent) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
+	block, err := t.chainCtx.State.QueryBlock(blockid)
+	return block, err
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return NewBlockAgent(block), nil
 }
