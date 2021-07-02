@@ -28,6 +28,7 @@ var (
 )
 
 var (
+	// TODO ensure XMCache implement StateSandbox?
 	_ contract.StateSandbox = (*XMCache)(nil)
 )
 
@@ -44,10 +45,10 @@ type XMCache struct {
 	outputsCache *MemXModel
 
 	model ledger.XMReader
-
-	// utxoCache       *UtxoCache
 	// crossQueryCache *CrossQueryCache
-	events []*protos.ContractEvent
+	events      []*protos.ContractEvent
+	utxoInputs  []*protos.TxInput
+	utxoOutputx []*protos.TxOutput
 }
 
 // NewXModelCache new an instance of XModel Cache
@@ -207,6 +208,29 @@ func (xc *XMCache) getWriteSets() []*ledger.PureData {
 		writeSets = append(writeSets, val.PureData)
 	}
 	return writeSets
+}
+
+func (xc *XMCache) Insert(address string, amount *big.Int) {
+
+}
+func (xc *XMCache) SetTxInputs(inputs []*protos.TxInput) {
+	xc.utxoInputs = inputs
+}
+
+func (xc *XMCache) SetTxOutputs(outputs []*protos.TxOutput) {
+	xc.utxoOutputx = outputs
+}
+
+//func (xc *XMCache) UTxORWSet() {
+//	return xc.utxoInputs,xc.utxoOutputx
+//}
+
+func (xc *XMCache) UtxoInputs() []*protos.TxInput {
+	return xc.utxoInputs
+}
+
+func (xc *XMCache) UtxoOutputs() []*protos.TxOutput {
+	return xc.utxoOutputx
 }
 
 // // Transfer transfer tokens using utxo

@@ -2,6 +2,8 @@ package contract
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/protos"
+	"math/big"
 	"sync"
 
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
@@ -46,6 +48,7 @@ type ChainCore interface {
 	// QueryBlock(blockid []byte) (*pb.InternalBlock, error)
 	// ResolveChain resolve chain endorsorinfos
 	// ResolveChain(chainName string) (*pb.CrossQueryMeta, error)
+	SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 func Register(name string, f NewManagerFunc) {

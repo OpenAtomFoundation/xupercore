@@ -1,5 +1,11 @@
 package mock
 
+import (
+	"math/big"
+
+	"github.com/xuperchain/xupercore/protos"
+)
+
 type fakeChainCore struct {
 }
 
@@ -16,4 +22,12 @@ func (f *fakeChainCore) VerifyContractPermission(initiator string, authRequire [
 // VerifyContractOwnerPermission verify contract ownership permisson
 func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
 	return nil
+}
+
+func (f *fakeChainCore) Transfer(from string, to string, amount *big.Int) error {
+	return nil
+}
+
+func (f *fakeChainCore) SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
+	return nil, nil, nil, nil
 }

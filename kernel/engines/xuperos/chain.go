@@ -219,15 +219,14 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	}
 	rwSet := sandbox.RWSet()
 	invokeResponse := &protos.InvokeResponse{
-		GasUsed:   gasUsed,
-		Response:  responseBodes,
-		Inputs:    xmodel.GetTxInputs(rwSet.RSet),
-		Outputs:   xmodel.GetTxOutputs(rwSet.WSet),
-		Requests:  requests,
-		Responses: responses,
-		// TODO: 合约内转账未实现，空值
-		//UtxoInputs:  utxoInputs,
-		//UtxoOutputs: utxoOutputs,
+		GasUsed:     gasUsed,
+		Response:    responseBodes,
+		Inputs:      xmodel.GetTxInputs(rwSet.RSet),
+		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
+		Requests:    requests,
+		Responses:   responses,
+		UtxoInputs:  sandbox.UtxoInputs(),
+		UtxoOutputs: sandbox.UtxoOutputs(),
 	}
 
 	return invokeResponse, nil

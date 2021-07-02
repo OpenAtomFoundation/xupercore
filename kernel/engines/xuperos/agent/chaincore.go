@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"math/big"
+
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type ChainCoreAgent struct {
@@ -30,4 +33,8 @@ func (t *ChainCoreAgent) VerifyContractPermission(initiator string, authRequire 
 // 结合合约acl设置鉴权
 func (t *ChainCoreAgent) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
 	return t.chainCtx.State.VerifyContractOwnerPermission(contractName, authRequire)
+}
+
+func (t *ChainCoreAgent) SelectUtxos(from string, amount *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
+	return t.chainCtx.State.SelectUtxos(from, amount, needLock, excludeUnconfirmed)
 }

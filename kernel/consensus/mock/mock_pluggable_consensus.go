@@ -358,6 +358,19 @@ func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMeth
 func (r *FakeRegistry) RegisterShortcut(oldmethod, contract, method string) {
 }
 
+func (r *FakeKContext) SetTxInputs([]*protos.TxInput) {
+	return
+}
+func (r *FakeKContext) SetTxOutputs([]*protos.TxOutput) {
+	return
+}
+func (r *FakeKContext) UtxoInputs() []*protos.TxInput {
+	return nil
+}
+func (r *FakeKContext) UtxoOutputs() []*protos.TxOutput {
+	return nil
+}
+
 type FReaderItem struct {
 	Bucket string
 	Key    []byte

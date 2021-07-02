@@ -31,6 +31,14 @@ type XMState interface {
 
 // XMState 对XuperBridge暴露对账本的UTXO操作能力
 type UTXOState interface {
+	SetTxInputs([]*protos.TxInput)
+	SetTxOutputs([]*protos.TxOutput)
+	UtxoInputs() []*protos.TxInput
+	UtxoOutputs() []*protos.TxOutput
+}
+type UTXORWSet struct {
+	TxInput  []*protos.TxInput
+	TxOutput []*protos.TxOutput
 }
 type UTXORWSet struct {
 	TxInput  []*protos.TxInput

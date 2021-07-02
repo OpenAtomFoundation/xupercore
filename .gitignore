@@ -34,3 +34,6 @@ logs/
 # Log files
 *.log
 *.log.wf
+
+# Coverage
+coverage.txt
