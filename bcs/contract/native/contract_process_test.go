@@ -20,7 +20,7 @@ func TestCommandNotFound(t *testing.T) {
 			Enable:      true,
 			Docker: contract.NativeDockerConfig{
 				Enable:    true,
-				ImageName: "docker.io/centos:7.5.1804",
+				ImageName: "ubuntu:18.04:",
 				Cpus:      1,
 				Memory:    "1G",
 			},
@@ -40,7 +40,7 @@ func TestCommandNotFound(t *testing.T) {
 		if err == nil {
 			t.Error("expect error,get nil")
 		}
-		//t.Log(err)
+		t.Log(err)
 	})
 
 	t.Run("testDockerOpenJDK", func(t *testing.T) {

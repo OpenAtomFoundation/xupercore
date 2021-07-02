@@ -18,7 +18,7 @@ jobs:
 
     - name: pull unit test related images
       run: |
-        docker pull openjdk:8u292-slim-buster &&  docker pull docker.io/centos:7.5.1804
+        docker pull openjdk:8u292-slim-buster && docker pull ubuntu:18.04
 
     - name: Checkout code
       uses: actions/checkout@v2
