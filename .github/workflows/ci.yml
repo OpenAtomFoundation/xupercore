@@ -12,19 +12,10 @@ jobs:
       uses: actions/setup-go@v1
       with:
         go-version: ${{ matrix.go-version }}
-
-    - name: setup Docker
-      uses: docker-practice/actions-setup-docker@master
-
-    - name: pull unit test related images
-      run: |
-        docker pull openjdk:8u292-slim-buster &&  docker pull docker.io/centos:7.5.1804
-
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Test
       run: make && make test
-
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1
       with:
