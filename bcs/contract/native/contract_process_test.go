@@ -10,33 +10,6 @@ import (
 
 func TestCommandNotFound(t *testing.T) {
 
-	//t.Run("testHost", func(t *testing.T) {
-	//	cp, err := newContractProcess(&contract.NativeConfig{
-	//		Driver:      "native",
-	//		StopTimeout: 5,
-	//		Enable:      true,
-	//		Docker: contract.NativeDockerConfig{
-	//			Enable: false,
-	//		},
-	//	}, "xchain-test", "/tmp", "", &protos.WasmCodeDesc{
-	//		Runtime: "java",
-	//		Digest:  []byte("nativetest"),
-	//	})
-	//
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//
-	//	process, err := cp.makeNativeProcess()
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//	err = process.Start()
-	//	if err != nil {
-	//		t.Error(err)
-	//	}
-	//})
-
 	t.Run("testDocker", func(t *testing.T) {
 		if resp, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
 			t.Skip(string(resp))
