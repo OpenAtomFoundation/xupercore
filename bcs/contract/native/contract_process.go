@@ -87,7 +87,7 @@ func (c *contractProcess) makeNativeProcess() (Process, error) {
 
 // wait the subprocess to be ready
 func (c *contractProcess) waitReply() error {
-	const waitTimeout = 10 * time.Second
+	const waitTimeout = 2 * time.Second
 	ctx, cancel := context.WithTimeout(context.TODO(), waitTimeout)
 	defer cancel()
 	for {
