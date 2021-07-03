@@ -36,10 +36,11 @@ type UTXOState interface {
 	UtxoInputs() []*protos.TxInput
 	UtxoOutputs() []*protos.TxOutput
 }
-type UTXORWSet struct {
-	TxInput  []*protos.TxInput
-	TxOutput []*protos.TxOutput
-}
+
+//type UTXORWSet struct {
+//	TxInput  []*protos.TxInput
+//	TxOutput []*protos.TxOutput
+//}
 type UTXORWSet struct {
 	TxInput  []*protos.TxInput
 	TxOutput []*protos.TxOutput

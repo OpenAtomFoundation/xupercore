@@ -141,7 +141,7 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 	_ = m
 	nctx.State.SetTxOutputs([]*protos.TxOutput{
 		{
-			Amount:               []byte(amount.String()),
+			Amount:               amount.Bytes(),
 			ToAddr:               []byte(in.GetTo()),
 			FrozenHeight:         0,
 			XXX_NoUnkeyedLiteral: struct{}{},
