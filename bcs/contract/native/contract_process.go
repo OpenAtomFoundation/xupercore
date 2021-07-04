@@ -79,15 +79,15 @@ func (c *contractProcess) makeNativeProcess() (Process, error) {
 		startcmd: startcmd,
 		envs:     envs,
 		mounts:   mounts,
-		// ports:    []string{strconv.Itoa(c.rpcPort)},
-		cfg:    &c.cfg.Docker,
-		Logger: c.logger,
+		ports:    []string{strconv.Itoa(c.rpcPort)},
+		cfg:      &c.cfg.Docker,
+		Logger:   c.logger,
 	}, nil
 }
 
 // wait the subprocess to be ready
 func (c *contractProcess) waitReply() error {
-	const waitTimeout = 10 * time.Second
+	const waitTimeout = 5 * time.Second
 	ctx, cancel := context.WithTimeout(context.TODO(), waitTimeout)
 	defer cancel()
 	for {
@@ -153,6 +153,12 @@ func (c *contractProcess) resetRpcClient() error {
 	c.rpcPort = port
 	c.rpcConn = conn
 	c.rpcClient = pbrpc.NewNativeCodeClient(c.rpcConn)
+	ctx, _ := context.WithTimeout(context.TODO(), 10*time.Second)
+	_, err = c.rpcClient.Ping(ctx, new(pb.PingRequest))
+	if err != nil {
+		fmt.Println(err)
+	}
+
 	return nil
 }
 
@@ -172,11 +178,12 @@ func (c *contractProcess) start(startMonitor bool) error {
 	if err != nil {
 		return err
 	}
-	c.process, err = c.makeNativeProcess()
+	process, err := c.makeNativeProcess()
 	if err != nil {
 		return err
 	}
 
+	c.process = process
 	err = c.process.Start()
 	if err != nil {
 		return err

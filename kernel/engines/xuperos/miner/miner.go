@@ -16,7 +16,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"

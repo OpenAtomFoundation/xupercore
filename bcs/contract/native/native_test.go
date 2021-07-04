@@ -3,6 +3,7 @@ package native
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -11,6 +12,11 @@ import (
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
+)
+
+const (
+	RUNTIME_DOCKER = "docker"
+	RUNTIME_HOST   = "host"
 )
 
 var contractConfig = &contract.ContractConfig{
@@ -25,9 +31,12 @@ var contractConfig = &contract.ContractConfig{
 	},
 }
 
-func compile(th *mock.TestHelper) ([]byte, error) {
+func compile(th *mock.TestHelper, runtime string) ([]byte, error) {
 	target := filepath.Join(th.Basedir(), "counter.bin")
 	cmd := exec.Command("go", "build", "-o", target)
+	if runtime == RUNTIME_DOCKER {
+		cmd.Env = append(os.Environ(), []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0"}...)
+	}
 	cmd.Dir = "testdata"
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -44,7 +53,7 @@ func TestNativeDeploy(t *testing.T) {
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
 
-	bin, err := compile(th)
+	bin, err := compile(th, RUNTIME_HOST)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +64,7 @@ func TestNativeDeploy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	//select {}
 	t.Logf("%#v", resp)
 }
 
@@ -63,7 +72,7 @@ func TestNativeInvoke(t *testing.T) {
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
 
-	bin, err := compile(th)
+	bin, err := compile(th, RUNTIME_HOST)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +98,7 @@ func TestNativeUpgrade(t *testing.T) {
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
 
-	bin, err := compile(th)
+	bin, err := compile(th, RUNTIME_HOST)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +134,7 @@ func TestNativeDocker(t *testing.T) {
 	th := mock.NewTestHelper(&cfg)
 	defer th.Close()
 
-	bin, err := compile(th)
+	bin, err := compile(th, RUNTIME_DOCKER)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,8 +143,7 @@ func TestNativeDocker(t *testing.T) {
 		"creator": []byte("icexin"),
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
 	}
-
 	t.Logf("%#v", resp)
 }

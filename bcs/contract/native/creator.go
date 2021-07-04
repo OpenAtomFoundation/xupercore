@@ -2,6 +2,7 @@ package native
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"os"
 
@@ -49,9 +50,11 @@ func (n *nativeCreator) startRpcServer(service *bridge.SyscallService) (string, 
 	n.listener = listener
 	rpcServer := grpc.NewServer()
 	pbrpc.RegisterSyscallServer(rpcServer, service)
-	go rpcServer.Serve(listener)
 
-	addr := "tcp://" + listener.Addr().String()
+	port := listener.Addr().(*net.TCPAddr).Port
+	go rpcServer.Serve(listener)
+	addr := fmt.Sprintf("tcp://%s:%d", "docker.for.mac.host.internal", port)
+
 	return addr, nil
 }
 
