@@ -53,7 +53,7 @@ func CreateKVInstance(kvParam *KVParameter) (Database, error) {
 	if f, ok := services[kvParam.KVEngineType]; ok {
 		instance, err := f(kvParam)
 		if err != nil {
-			return nil, err
+			return nil, errors.New("get kvInstance fail")
 		}
 		return instance, nil
 	}

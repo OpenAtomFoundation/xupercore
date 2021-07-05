@@ -37,15 +37,6 @@ type UTXOState interface {
 	UtxoOutputs() []*protos.TxOutput
 }
 
-//type UTXORWSet struct {
-//	TxInput  []*protos.TxInput
-//	TxOutput []*protos.TxOutput
-//}
-type UTXORWSet struct {
-	TxInput  []*protos.TxInput
-	TxOutput []*protos.TxOutput
-}
-
 // CrossQueryState 对XuperBridge暴露对跨链只读合约的操作能力
 type CrossQueryState interface {
 }

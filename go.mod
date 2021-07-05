@@ -35,12 +35,12 @@ require (
 	github.com/xuperchain/log15 v0.0.0-20190620081506-bc88a9198230
 	github.com/xuperchain/xvm v0.0.0-20210126142521-68fd016c56d7
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
-	golang.org/x/tools v0.1.2 // indirect
+	golang.org/x/net v0.0.0-20200822124328-c89045814202 // indirect
+	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
+	golang.org/x/sys v0.0.0-20200824131525-c12d262b63d8 // indirect
+	golang.org/x/tools v0.0.0-20200117012304-6edc0a871e69 // indirect
 	google.golang.org/genproto v0.0.0-20190927181202-20e1ac93f88c // indirect
 	google.golang.org/grpc v1.27.1
 )
 
 replace github.com/hyperledger/burrow => github.com/xuperchain/burrow v0.30.6-0.20210115120720-3da1be35a1e2
-
-replace github.com/xuperchain/xupercore => ../xupercore
