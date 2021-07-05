@@ -120,6 +120,7 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 	if !ok {
 		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
 	}
+	fmt.Println(in.String())
 	amount, ok := new(big.Int).SetString(in.GetAmount(), 10)
 	if !ok {
 		return nil, errors.New("parse amount error")
@@ -131,24 +132,36 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 	if in.GetTo() == "" {
 		return nil, errors.New("empty to address")
 	}
-	// TODO
-	inputs, _, amount, err := nctx.Core.SelectUtxos(nctx.Initiator, amount, false, false)
+	inputs1, _, total, err := nctx.Core.SelectUtxos(nctx.Initiator, amount, true, true)
 	if err != nil {
 		return nil, err
 	}
+	outputs := nctx.State.UtxoOutputs()
+	inputs := nctx.State.UtxoInputs()
+	inputs = append(inputs, inputs1...)
 	nctx.State.SetTxInputs(inputs)
-	m := in.GetAmount()
-	_ = m
-	nctx.State.SetTxOutputs([]*protos.TxOutput{
-		{
-			Amount:               amount.Bytes(),
-			ToAddr:               []byte(in.GetTo()),
+
+	outputs = append(outputs, &protos.TxOutput{
+		Amount:               amount.Bytes(),
+		ToAddr:               []byte(in.GetTo()),
+		FrozenHeight:         0,
+		XXX_NoUnkeyedLiteral: struct{}{},
+		XXX_unrecognized:     nil,
+		XXX_sizecache:        0,
+	})
+	remain := total.Sub(total, amount)
+	if remain.Cmp(big.NewInt(0)) > 0 {
+		outputs = append(outputs, &protos.TxOutput{
+			Amount:               remain.Bytes(),
+			ToAddr:               []byte(nctx.Initiator),
 			FrozenHeight:         0,
 			XXX_NoUnkeyedLiteral: struct{}{},
 			XXX_unrecognized:     nil,
 			XXX_sizecache:        0,
-		},
-	})
+		})
+	}
+
+	nctx.State.SetTxOutputs(outputs)
 
 	return &pb.TransferResponse{}, nil
 }
