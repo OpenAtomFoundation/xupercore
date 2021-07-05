@@ -28,7 +28,6 @@ var (
 )
 
 var (
-	// TODO ensure XMCache implement StateSandbox?
 	_ contract.StateSandbox = (*XMCache)(nil)
 )
 
