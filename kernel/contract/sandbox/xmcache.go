@@ -210,9 +210,6 @@ func (xc *XMCache) getWriteSets() []*ledger.PureData {
 	return writeSets
 }
 
-func (xc *XMCache) Insert(address string, amount *big.Int) {
-
-}
 func (xc *XMCache) SetTxInputs(inputs []*protos.TxInput) {
 	xc.utxoInputs = inputs
 }
@@ -220,10 +217,6 @@ func (xc *XMCache) SetTxInputs(inputs []*protos.TxInput) {
 func (xc *XMCache) SetTxOutputs(outputs []*protos.TxOutput) {
 	xc.utxoOutputx = outputs
 }
-
-//func (xc *XMCache) UTxORWSet() {
-//	return xc.utxoInputs,xc.utxoOutputx
-//}
 
 func (xc *XMCache) UtxoInputs() []*protos.TxInput {
 	return xc.utxoInputs
