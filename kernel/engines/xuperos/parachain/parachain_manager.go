@@ -35,15 +35,15 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := NewKernContractMethod(ctx.BcName, minNewChainAmount, ctx.ChainCtx)
+	t := NewParaChainContract(ctx.BcName, minNewChainAmount, ctx.ChainCtx)
 	register := ctx.Contract.GetKernRegistry()
 	// 注册合约方法
-	xpoaKMethods := map[string]contract.KernMethod{
+	kMethods := map[string]contract.KernMethod{
 		"createBlockChain": t.CreateBlockChain,
 		"editGroup":        t.methodEditGroup,
 		"getGroup":         t.methodGetGroup,
 	}
-	for method, f := range xpoaKMethods {
+	for method, f := range kMethods {
 		if _, err := register.GetKernMethod(ParaChainKernelContract, method); err != nil {
 			register.RegisterKernMethod(ParaChainKernelContract, method, f)
 		}

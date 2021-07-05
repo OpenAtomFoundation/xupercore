@@ -34,22 +34,22 @@ var (
 )
 
 const (
-	Success           = 200
-	UnAuthorized      = 403
-	TargetNotFound    = 404
-	InternalServerErr = 500
+	success           = 200
+	unAuthorized      = 403
+	targetNotFound    = 404
+	internalServerErr = 500
 
-	ParaChainEventName = "EditParaGroups"
+	paraChainEventName = "EditParaGroups"
 )
 
-type KernMethod struct {
+type paraChainContract struct {
 	BcName            string
 	MinNewChainAmount int64
 	ChainCtx          *common.ChainCtx
 }
 
-func NewKernContractMethod(bcName string, minNewChainAmount int64, chainCtx *common.ChainCtx) *KernMethod {
-	t := &KernMethod{
+func NewParaChainContract(bcName string, minNewChainAmount int64, chainCtx *common.ChainCtx) *paraChainContract {
+	t := &paraChainContract{
 		BcName:            bcName,
 		MinNewChainAmount: minNewChainAmount,
 		ChainCtx:          chainCtx,
@@ -72,15 +72,15 @@ func handleCreateChain(ctx asyncTask.TaskContext) error {
 	if err != nil {
 		return err
 	}
-	return args.ChainCtx.EngCtx.Register(args.BcName)
+	return args.ChainCtx.EngCtx.ChainM.LoadChain(args.BcName)
 }
 */
 
-func (t *KernMethod) CreateBlockChain(ctx contract.KContext) (*contract.Response, error) {
-	if t.BcName != t.ChainCtx.EngCtx.EngCfg.RootChain {
+func (p *paraChainContract) CreateBlockChain(ctx contract.KContext) (*contract.Response, error) {
+	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}
-	bcName, _, err := t.validateCreateBC(ctx.Args())
+	bcName, _, err := p.parseArgs(ctx.Args())
 	/*
 		if err != nil {
 			return nil, err
@@ -96,7 +96,7 @@ func (t *KernMethod) CreateBlockChain(ctx contract.KContext) (*contract.Response
 	// 确保未创建过该链
 	chainRes, err := ctx.Get(ParaChainKernelContract, []byte(bcName))
 	if chainRes != nil {
-		return newContractErrResponse(UnAuthorized, ErrBlockChainExist.Error()), ErrBlockChainExist
+		return newContractErrResponse(unAuthorized, ErrBlockChainExist.Error()), ErrBlockChainExist
 	}
 
 	// 创建链时，自动写入Group信息
@@ -108,24 +108,24 @@ func (t *KernMethod) CreateBlockChain(ctx contract.KContext) (*contract.Response
 	value = loadGroupArgs(ctx.Args(), value)
 	rawBytes, err := json.Marshal(value)
 	if err != nil {
-		return newContractErrResponse(InternalServerErr, err.Error()), err
+		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 	if err := ctx.Put(ParaChainKernelContract,
 		[]byte(bcName), rawBytes); err != nil {
-		return newContractErrResponse(InternalServerErr, err.Error()), err
+		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 	delta := contract.Limits{
-		XFee: t.MinNewChainAmount,
+		XFee: p.MinNewChainAmount,
 	}
 	ctx.AddResourceUsed(delta)
 
 	return &contract.Response{
-		Status: Success,
+		Status: success,
 		Body:   []byte("CreateBlockChain success"),
 	}, nil
 }
 
-func (t *KernMethod) validateCreateBC(args map[string][]byte) (string, string, error) {
+func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, error) {
 	/*
 		bcName := ""
 		bcData := ""
@@ -233,26 +233,26 @@ type Group struct {
 }
 
 // methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
-func (t *KernMethod) methodEditGroup(ctx contract.KContext) (*contract.Response, error) {
+func (p *paraChainContract) methodEditGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
 	group = loadGroupArgs(ctx.Args(), group)
 	if group == nil {
-		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
+		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
 	}
 	// 1. 查看Group群组是否存在
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
 	if err != nil {
-		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), err
+		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), err
 	}
 
 	// 2. 查看发起者是否有权限修改
 	chainGroup := Group{}
 	err = json.Unmarshal(groupBytes, &chainGroup)
 	if err != nil {
-		return newContractErrResponse(InternalServerErr, err.Error()), err
+		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 	if !isContain(chainGroup.Admin, ctx.Initiator()) {
-		return newContractErrResponse(UnAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
 	}
 
 	// 3. 发起修改
@@ -261,51 +261,50 @@ func (t *KernMethod) methodEditGroup(ctx contract.KContext) (*contract.Response,
 	}
 	rawBytes, err := json.Marshal(group)
 	if err != nil {
-		return newContractErrResponse(InternalServerErr, err.Error()), err
+		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 	if err := ctx.Put(ParaChainKernelContract, []byte(group.GroupID), rawBytes); err != nil {
-		return newContractErrResponse(InternalServerErr, err.Error()), err
+		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 
 	// 4. 通知event
 	e := protos.ContractEvent{
-		Name: ParaChainEventName,
+		Name: paraChainEventName,
 		Body: rawBytes,
 	}
 	ctx.AddEvent(&e)
 
 	delta := contract.Limits{
-		XFee: t.MinNewChainAmount,
+		XFee: p.MinNewChainAmount,
 	}
 	ctx.AddResourceUsed(delta)
 	return &contract.Response{
-		Status: Success,
+		Status: success,
 		Body:   []byte("Edit Group success"),
 	}, nil
 }
 
 // methodGetGroup 平行链群组读方法
-func (t *KernMethod) methodGetGroup(ctx contract.KContext) (*contract.Response, error) {
+func (p *paraChainContract) methodGetGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
 	group = loadGroupArgs(ctx.Args(), group)
 	if group == nil {
-		t.ChainCtx.XLog.Error("!!!! Group nil.", "group", group)
-		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
+		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
 	}
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
 	if err != nil {
-		return newContractErrResponse(TargetNotFound, ErrGroupNotFound.Error()), err
+		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), err
 	}
 	err = json.Unmarshal(groupBytes, group)
 	if err != nil {
-		return newContractErrResponse(InternalServerErr, err.Error()), err
+		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 	// 仅群组有权限的节点方可访问该key
 	if !isContain(group.Admin, ctx.Initiator()) && !isContain(group.Identities, ctx.Initiator()) {
-		return newContractErrResponse(UnAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
 	}
 	return &contract.Response{
-		Status: Success,
+		Status: success,
 		Body:   groupBytes,
 	}, nil
 }

@@ -40,7 +40,7 @@ type Chain interface {
 // 依赖接口而不是依赖具体实现
 type Engine interface {
 	engines.BCEngine
-	ChainMgmt
+	ChainManager
 	Context() *EngineCtx
 	SetRelyAgent(EngineRelyAgent) error
 }
@@ -64,8 +64,8 @@ type ChainRelyAgent interface {
 	CreateParaChain() error
 }
 
-type ChainMgmt interface {
+type ChainManager interface {
 	Get(string) (Chain, error)
 	GetChains() []string
-	Register(string) error
+	LoadChain(string) error
 }

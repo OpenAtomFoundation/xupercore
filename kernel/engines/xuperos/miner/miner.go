@@ -509,6 +509,7 @@ func (t *Miner) syncBlock(ctx xctx.XContext, targetBlock *lpb.InternalBlock) err
 	// 可优化为并发拉取，可以优化为批处理，方便查看同步进度
 	blkIds, err := t.downloadMissBlock(ctx, targetBlock)
 	if err != nil {
+		ctx.GetLog().Warn("download miss block failed", "err", err)
 		return fmt.Errorf("download miss block failed")
 	}
 
