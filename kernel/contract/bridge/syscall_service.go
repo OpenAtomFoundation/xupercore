@@ -120,7 +120,6 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 	if !ok {
 		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
 	}
-	fmt.Println(in.String())
 	amount, ok := new(big.Int).SetString(in.GetAmount(), 10)
 	if !ok {
 		return nil, errors.New("parse amount error")
@@ -132,16 +131,18 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 	if in.GetTo() == "" {
 		return nil, errors.New("empty to address")
 	}
-	inputs1, _, total, err := nctx.Core.SelectUtxos(nctx.Initiator, amount, true, true)
+	inputs, _, total, err := nctx.Core.SelectUtxos(nctx.Initiator, amount, true, true)
 	if err != nil {
 		return nil, err
 	}
-	outputs := nctx.State.UtxoOutputs()
-	inputs := nctx.State.UtxoInputs()
-	inputs = append(inputs, inputs1...)
-	nctx.State.SetTxInputs(inputs)
+	// for cross contract call
+	utxoOutputs := nctx.State.UtxoOutputs()
+	utxoInputs := nctx.State.UtxoInputs()
 
-	outputs = append(outputs, &protos.TxOutput{
+	utxoInputs = append(utxoInputs, inputs...)
+	nctx.State.SetTxInputs(utxoInputs)
+
+	utxoOutputs = append(utxoOutputs, &protos.TxOutput{
 		Amount:               amount.Bytes(),
 		ToAddr:               []byte(in.GetTo()),
 		FrozenHeight:         0,
@@ -149,9 +150,9 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 		XXX_unrecognized:     nil,
 		XXX_sizecache:        0,
 	})
-	remain := total.Sub(total, amount)
-	if remain.Cmp(big.NewInt(0)) > 0 {
-		outputs = append(outputs, &protos.TxOutput{
+
+	if remain := total.Sub(total, amount); remain.Cmp(big.NewInt(0)) > 0 {
+		utxoOutputs = append(utxoOutputs, &protos.TxOutput{
 			Amount:               remain.Bytes(),
 			ToAddr:               []byte(nctx.Initiator),
 			FrozenHeight:         0,
@@ -161,7 +162,7 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 		})
 	}
 
-	nctx.State.SetTxOutputs(outputs)
+	nctx.State.SetTxOutputs(utxoOutputs)
 
 	return &pb.TransferResponse{}, nil
 }
