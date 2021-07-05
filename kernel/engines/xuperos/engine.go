@@ -70,10 +70,11 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 		return common.ErrNewEngineCtxFailed.More("%v", err)
 	}
 	t.engCtx = engCtx
+	t.log = t.engCtx.XLog
 	t.chainM = ChainManagerImpl{
 		engCtx: engCtx,
+		log:    t.log,
 	}
-	t.log = t.engCtx.XLog
 	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文

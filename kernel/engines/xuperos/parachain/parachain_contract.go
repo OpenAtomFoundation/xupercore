@@ -126,35 +126,25 @@ func (p *paraChainContract) CreateBlockChain(ctx contract.KContext) (*contract.R
 }
 
 func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, error) {
-	/*
-		bcName := ""
-		bcData := ""
-		if args["name"] == nil {
-			return bcName, bcData, errors.New("block chain name is empty")
-		}
-		if args["data"] == nil {
-			return bcName, bcData, errors.New("first block data is empty")
-		}
-		bcName = string(args["name"])
-		bcData = string(args["data"])
-
-		// check data format, prevent panic
-		bcCfg := &ledger.RootConfig{}
-		err := json.Unmarshal(args["data"], bcCfg)
-		if err != nil {
-			return bcName, bcData, fmt.Errorf("first block data error.err:%v", err)
-		}
-
-		return bcName, bcData, nil
-	*/
-
-	// For test
 	bcName := ""
+	bcData := ""
 	if args["name"] == nil {
-		return bcName, "", errors.New("block chain name is empty")
+		return bcName, bcData, errors.New("block chain name is empty")
+	}
+	if args["data"] == nil {
+		return bcName, bcData, errors.New("first block data is empty")
 	}
 	bcName = string(args["name"])
-	return bcName, "", nil
+	bcData = string(args["data"])
+
+	// check data format, prevent panic
+	bcCfg := &ledger.RootConfig{}
+	err := json.Unmarshal(args["data"], bcCfg)
+	if err != nil {
+		return bcName, bcData, fmt.Errorf("first block data error.err:%v", err)
+	}
+
+	return bcName, bcData, nil
 }
 
 func createLedger(chainCtx *common.ChainCtx, bcName string, data []byte) error {
