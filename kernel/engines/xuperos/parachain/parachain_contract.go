@@ -291,7 +291,7 @@ func (p *paraChainContract) methodGetGroup(ctx contract.KContext) (*contract.Res
 	}
 	// 仅群组有权限的节点方可访问该key
 	if !isContain(group.Admin, ctx.Initiator()) && !isContain(group.Identities, ctx.Initiator()) {
-		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), nil
 	}
 	return &contract.Response{
 		Status: success,
