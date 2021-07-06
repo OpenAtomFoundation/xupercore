@@ -123,7 +123,7 @@ func (t *Engine) Run() {
 	}()
 
 	// 遍历启动每条链
-	t.chainM.StartChains(wg)
+	t.chainM.StartChains()
 
 	// 阻塞等待，直到所有异步任务成功退出
 	wg.Wait()
@@ -230,7 +230,7 @@ func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*common.EngineCtx, error) 
 func (t *Engine) exit() {
 	// 关闭矿工
 	wg := &sync.WaitGroup{}
-	t.chainM.StopChains(wg)
+	t.chainM.StopChains()
 
 	// 关闭P2P网络
 	wg.Add(1)

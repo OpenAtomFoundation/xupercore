@@ -76,7 +76,7 @@ func handleCreateChain(ctx asyncTask.TaskContext) error {
 }
 */
 
-func (p *paraChainContract) CreateBlockChain(ctx contract.KContext) (*contract.Response, error) {
+func (p *paraChainContract) methodCreateChain(ctx contract.KContext) (*contract.Response, error) {
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}

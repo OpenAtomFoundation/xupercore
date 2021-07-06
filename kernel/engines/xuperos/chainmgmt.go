@@ -46,7 +46,8 @@ func (m *ChainManagerImpl) GetChains() []string {
 	return chains
 }
 
-func (m *ChainManagerImpl) StartChains(wg *sync.WaitGroup) {
+func (m *ChainManagerImpl) StartChains() {
+	var wg sync.WaitGroup
 	m.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(common.Chain)
 		m.log.Trace("start chain " + k.(string))
@@ -63,17 +64,16 @@ func (m *ChainManagerImpl) StartChains(wg *sync.WaitGroup) {
 
 		return true
 	})
+	wg.Wait()
 }
 
-func (m *ChainManagerImpl) StopChains(wg *sync.WaitGroup) {
+func (m *ChainManagerImpl) StopChains() {
 	m.chains.Range(func(k, v interface{}) bool {
 		chainHD := v.(common.Chain)
 
 		m.log.Trace("stop chain " + k.(string))
-		wg.Add(1)
 		// 关闭链
 		chainHD.Stop()
-		wg.Done()
 		m.log.Trace("chain " + k.(string) + " closed")
 
 		return true
