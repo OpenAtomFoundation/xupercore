@@ -323,9 +323,6 @@ func (s *tdposSchedule) CalOldProposers(height int64, timestamp int64, storage [
 	if tipTerm == inputTerm {
 		return s.calHisValidators(tipHeight)
 	}
-	if tipTerm > inputTerm {
-		return nil, invalidTermErr
-	}
 	targetHeight := tipHeight
 	if s.enableChainedBFT && storage != nil {
 		// 获取该block的ConsensusStorage
