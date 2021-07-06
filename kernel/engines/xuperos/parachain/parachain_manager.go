@@ -39,9 +39,9 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	register := ctx.Contract.GetKernRegistry()
 	// 注册合约方法
 	kMethods := map[string]contract.KernMethod{
-		"createChain": t.methodCreateChain,
-		"editGroup":   t.methodEditGroup,
-		"getGroup":    t.methodGetGroup,
+		"createChain": t.createChain,
+		"editGroup":   t.editGroup,
+		"getGroup":    t.getGroup,
 	}
 	for method, f := range kMethods {
 		if _, err := register.GetKernMethod(ParaChainKernelContract, method); err != nil {

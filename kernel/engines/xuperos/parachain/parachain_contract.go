@@ -76,7 +76,7 @@ func handleCreateChain(ctx asyncTask.TaskContext) error {
 }
 */
 
-func (p *paraChainContract) methodCreateChain(ctx contract.KContext) (*contract.Response, error) {
+func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}
@@ -223,7 +223,7 @@ type Group struct {
 }
 
 // methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
-func (p *paraChainContract) methodEditGroup(ctx contract.KContext) (*contract.Response, error) {
+func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
 	group = loadGroupArgs(ctx.Args(), group)
 	if group == nil {
@@ -275,7 +275,7 @@ func (p *paraChainContract) methodEditGroup(ctx contract.KContext) (*contract.Re
 }
 
 // methodGetGroup 平行链群组读方法
-func (p *paraChainContract) methodGetGroup(ctx contract.KContext) (*contract.Response, error) {
+func (p *paraChainContract) getGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
 	group = loadGroupArgs(ctx.Args(), group)
 	if group == nil {
