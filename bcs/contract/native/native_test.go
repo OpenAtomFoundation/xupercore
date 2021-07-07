@@ -85,32 +85,6 @@ func TestNativeInvoke(t *testing.T) {
 	t.Logf("body:%s", resp.Body)
 }
 
-func TestInContractTransfer(t *testing.T) {
-	// th := mock.NewTestHelper(contractConfig)
-	// defer th.Close()
-	//
-	//bin, err := compile(th)
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-	//
-	//_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
-	//	"creator": []byte("icexin"),
-	//})
-	//if err != nil {
-	//	t.Fatal(err)
-	//}
-
-	// resp, err := th.Invoke("native", "contract2", "increase", map[string][]byte{
-	// 	"key": []byte("k1"),
-	// })
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-
-	// t.Logf("body:%s", resp.Body)
-}
-
 func TestNativeUpgrade(t *testing.T) {
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
