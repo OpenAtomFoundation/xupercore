@@ -43,8 +43,8 @@ func (u *UTXOSandbox) Transfer(from, to string, amount *big.Int) error {
 	return nil
 }
 
-func (uc *UTXOSandbox) GetUTXORWSets() contract.UTXORWSet {
-	return contract.UTXORWSet{
+func (uc *UTXOSandbox) GetUTXORWSets() *contract.UTXORWSet {
+	return &contract.UTXORWSet{
 		Rset: uc.inputCache,
 		WSet: uc.outputCache,
 	}

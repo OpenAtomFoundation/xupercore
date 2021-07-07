@@ -322,6 +322,11 @@ func (uv *UtxoVM) parseUtxoKeys(uKey string) ([]byte, int, error) {
 	return refTxid, offset, nil
 }
 
+func (uv *UtxoVM) SelectUtxo(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
+
+	return uv.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
+}
+
 //SelectUtxos 选择足够的utxo
 //输入: 转账人地址、公钥、金额、是否需要锁定utxo
 //输出：选出的utxo、utxo keys、实际构成的金额(可能大于需要的金额)、错误码

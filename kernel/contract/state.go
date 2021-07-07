@@ -62,7 +62,7 @@ type StateSandbox interface {
 	// 没有调用Flush只能得到KV数据的读写集
 	Flush() error
 	RWSet() *RWSet
-	UTXORWSet() UTXORWSet
+	UTXORWSet() *UTXORWSet
 }
 
 type RWSet struct {

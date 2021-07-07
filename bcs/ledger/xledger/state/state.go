@@ -178,13 +178,6 @@ func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exclu
 	return t.utxo.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
 }
 
-//
-// TODO @fengjin
-func (t *State) SelectUtxo(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
-
-	return t.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
-}
-
 // 获取一批未确认交易（用于矿工打包区块）
 func (t *State) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
 	return t.tx.GetUnconfirmedTx(dedup)

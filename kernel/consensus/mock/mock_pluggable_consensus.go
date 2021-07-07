@@ -328,8 +328,11 @@ func (c *FakeKContext) Call(module, contract, method string, args map[string][]b
 	return nil, nil
 }
 
-func (c *FakeKContext) UTXORWSet() ([]*protos.TxInput, []*protos.TxOutput) {
-	return []*protos.TxInput{}, []*protos.TxOutput{}
+func (c *FakeKContext) UTXORWSet() *contract.UTXORWSet {
+	return &contract.UTXORWSet{
+		Rset: []*protos.TxInput{},
+		WSet: []*protos.TxOutput{},
+	}
 }
 
 func (c *FakeKContext) Transfer(from string, to string, amount *big.Int) error {
