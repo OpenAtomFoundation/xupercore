@@ -249,11 +249,11 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
 func NewUtxoVM(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
-	return MakeUtxoVM(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
+	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxoVM(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize, tmplockSeconds int,
+func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize, tmplockSeconds int,
 	stateDB kvdb.Database) (*UtxoVM, error) {
 	utxoMutex := &sync.RWMutex{}
 
