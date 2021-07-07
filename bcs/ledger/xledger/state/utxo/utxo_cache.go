@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"errors"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/protos"
 	"math/big"
 	"sync"
@@ -36,10 +37,6 @@ type UtxoCache struct {
 	List      *list.List
 	Limit     int
 	mutex     *sync.Mutex
-}
-
-type UtxoVM1 interface {
-	SelectUtxos(fromAddr string, amount *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // NewUtxoCache create instance of UtxoCache
@@ -118,10 +115,10 @@ type UTXOSandbox struct {
 	outputCache []*protos.TxOutput
 	inputIdx    int
 	Penetrate   bool
-	utxovm      UtxoVM1
+	utxovm      contract.UtxoVM
 }
 
-func NewUTXOSandbox(vm UtxoVM1, inputs []*protos.TxInput, Penetrate bool) *UTXOSandbox {
+func NewUTXOSandbox(vm contract.UtxoVM, inputs []*protos.TxInput, Penetrate bool) *UTXOSandbox {
 	return &UTXOSandbox{
 		utxovm:      vm,
 		inputCache:  inputs,
