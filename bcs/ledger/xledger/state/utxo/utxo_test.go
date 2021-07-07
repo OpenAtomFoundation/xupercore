@@ -147,7 +147,7 @@ func TestBasicFunc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	utxoHandle, err := utxo.NewUtxoVM(sctx, metaHandle, stateHandle.GetLDB())
+	utxoHandle, err := utxo.NewUtxo(sctx, metaHandle, stateHandle.GetLDB())
 	if err != nil {
 		t.Fatal(err)
 	}

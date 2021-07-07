@@ -97,20 +97,20 @@ func (uv *UtxoCache) remove(address string, utxoKey string) {
 }
 
 // Remove delete uxto key from cache
-func (uc *UtxoCache) Remove(address string, utxoKey string) {
-	uc.mutex.Lock()
-	defer uc.mutex.Unlock()
-	uc.remove(address, utxoKey)
+func (uv *UtxoCache) Remove(address string, utxoKey string) {
+	uv.mutex.Lock()
+	defer uv.mutex.Unlock()
+	uv.remove(address, utxoKey)
 }
 
 // Lock used to lock cache
-func (uc *UtxoCache) Lock() {
-	uc.mutex.Lock()
+func (uv *UtxoCache) Lock() {
+	uv.mutex.Lock()
 }
 
 // Unlock used to unlock cache
-func (uc *UtxoCache) Unlock() {
-	uc.mutex.Unlock()
+func (uv *UtxoCache) Unlock() {
+	uv.mutex.Unlock()
 }
 
 type UTXOSandbox struct {
@@ -185,67 +185,6 @@ func (u *UTXOSandbox) Transfer(from, to string, amount *big.Int) error {
 	return nil
 }
 
-//func (uc *UTXOSandbox) Transfer(from, to string, amount *big.Int) error {
-//var inputs []*protos.TxInput
-//var err error
-//if uc.envInputs != nil && len(uc.envInputs) != 0 {
-//	inputs = uc.envInputs
-//} else {
-//	inputs, _, _, err = uc.utxovm.SelectUtxos(from, amount, true, false)
-//	if err != nil {
-//		return err
-//	}
-//}
-//total := new(big.Int)
-//
-//newUtoxInput := []*protos.TxInput{}
-//fmt.Println("len inputs:", len(inputs))
-//fmt.Println("inputs", inputs[0].RefTxid, inputs[0].Amount, inputs[0].FromAddr)
-//for _, input1 := range inputs {
-//	found := false
-//	for _, input2 := range uc.utxoInputs {
-//		if bytes.Equal(input1.RefTxid, input2.RefTxid) {
-//			found = true
-//			break
-//		}
-//	}
-//	if !found {
-//		//uc.inputIndex++
-//		newUtoxInput = append(newUtoxInput, input1)
-//	}
-//
-//}
-//uc.utxoInputs = append(uc.utxoInputs, newUtoxInput...)
-//for _, input := range inputs {
-//	total = total.Add(total, new(big.Int).SetBytes(input.Amount))
-//}
-//
-//remain := big.NewInt(0).Sub(total, amount)
-////fmt.Println("remain", remain.String())
-//fmt.Println("total:", total.String())
-////var outputAmount *big.Int
-//uc.utxoOutputs = append(uc.utxoOutputs, &protos.TxOutput{
-//	Amount:               amount.Bytes(),
-//	ToAddr:               []byte(to),
-//	FrozenHeight:         0,
-//	XXX_NoUnkeyedLiteral: struct{}{},
-//	XXX_unrecognized:     nil,
-//	XXX_sizecache:        0,
-//})
-//if remain.Cmp(new(big.Int)) > 0 {
-//	uc.utxoOutputs = append(uc.utxoOutputs, &protos.TxOutput{
-//		Amount:               remain.Bytes(),
-//		ToAddr:               []byte(from),
-//		FrozenHeight:         0,
-//		XXX_NoUnkeyedLiteral: struct{}{},
-//		XXX_unrecognized:     nil,
-//		XXX_sizecache:        0,
-//	})
-//}
-
-//return nil
-//}
-//
 func (uc *UTXOSandbox) GetUTXORWSets() ([]*protos.TxInput, []*protos.TxOutput) {
 
 	if uc.Penetrate {

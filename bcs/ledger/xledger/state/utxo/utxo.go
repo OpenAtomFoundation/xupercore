@@ -248,7 +248,7 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param ledger 账本对象
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
-func NewUtxoVM(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
+func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
 	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
 }
 
@@ -256,7 +256,6 @@ func NewUtxoVM(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Datab
 func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize, tmplockSeconds int,
 	stateDB kvdb.Database) (*UtxoVM, error) {
 	utxoMutex := &sync.RWMutex{}
-
 	utxoVM := &UtxoVM{
 		metaHandle:        metaHandle,
 		ldb:               stateDB,
@@ -382,7 +381,6 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 			}
 		}
 	}
-	//TODO  找到直接 Return 呀
 	uv.UtxoCache.Unlock()
 	if !foundEnough {
 		// 底层key: table_prefix from_addr "_" txid "_" offset

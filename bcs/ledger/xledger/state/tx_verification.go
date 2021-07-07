@@ -565,16 +565,13 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	}
 
 	reader := sandbox.XMReaderFromRWSet(rwSet)
-	//vm := NewVM(reader)
 	utxoInput, err := xmodel.ParseContractUtxoInputs(tx)
 	if err != nil {
-
 		return false, err
 	}
 
 	sandBoxConfig := &contract.SandboxConfig{
-		XMReader: reader,
-		//UtxoVM:    vm,
+		XMReader:  reader,
 		UTXOInput: utxoInput,
 		Penetrate: false,
 	}
