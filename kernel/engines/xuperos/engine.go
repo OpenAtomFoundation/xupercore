@@ -22,8 +22,8 @@ type Engine struct {
 	engCtx *common.EngineCtx
 	// 日志
 	log logs.Logger
-	// 链实例
-	chains sync.Map
+	// 链管理成员
+	chainM ChainManagerImpl
 	// p2p网络事件处理
 	netEvent *xnet.NetEvent
 	// 依赖代理组件
@@ -71,6 +71,10 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	}
 	t.engCtx = engCtx
 	t.log = t.engCtx.XLog
+	t.chainM = ChainManagerImpl{
+		engCtx: engCtx,
+		log:    t.log,
+	}
 	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文
@@ -119,22 +123,7 @@ func (t *Engine) Run() {
 	}()
 
 	// 遍历启动每条链
-	t.chains.Range(func(k, v interface{}) bool {
-		chainHD := v.(common.Chain)
-		t.log.Trace("start chain " + k.(string))
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			t.log.Trace("run chain " + k.(string))
-			// 启动链
-			chainHD.Start()
-			t.log.Trace("chain " + k.(string) + " exit")
-		}()
-
-		return true
-	})
+	t.chainM.StartChains()
 
 	// 阻塞等待，直到所有异步任务成功退出
 	wg.Wait()
@@ -148,8 +137,8 @@ func (t *Engine) Exit() {
 }
 
 func (t *Engine) Get(name string) (common.Chain, error) {
-	if chain, ok := t.chains.Load(name); ok {
-		return chain.(common.Chain), nil
+	if chain, err := t.chainM.Get(name); err == nil {
+		return &chain, nil
 	}
 
 	return nil, common.ErrChainNotExist
@@ -161,12 +150,7 @@ func (t *Engine) Context() *common.EngineCtx {
 }
 
 func (t *Engine) GetChains() []string {
-	chains := make([]string, 0)
-	t.chains.Range(func(k, v interface{}) bool {
-		chains = append(chains, k.(string))
-		return true
-	})
-	return chains
+	return t.chainM.GetChains()
 }
 
 // 从本地存储加载链
@@ -200,13 +184,13 @@ func (t *Engine) loadChains() error {
 		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
 
 		// 记录链实例
-		t.chains.Store(fInfo.Name(), chain)
+		t.chainM.Put(fInfo.Name(), chain)
 		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
 		chainCnt++
 	}
 
 	// root链必须存在
-	if _, ok := t.chains.Load(rootChain); !ok {
+	if _, err := t.chainM.Get(rootChain); err != nil {
 		t.log.Error("root chain not exist, please create it first", "rootChain", rootChain)
 		return fmt.Errorf("root chain not exist")
 	}
@@ -246,18 +230,7 @@ func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*common.EngineCtx, error) 
 func (t *Engine) exit() {
 	// 关闭矿工
 	wg := &sync.WaitGroup{}
-	t.chains.Range(func(k, v interface{}) bool {
-		chainHD := v.(common.Chain)
-
-		t.log.Trace("stop chain " + k.(string))
-		wg.Add(1)
-		// 关闭链
-		chainHD.Stop()
-		wg.Done()
-		t.log.Trace("chain " + k.(string) + " closed")
-
-		return true
-	})
+	t.chainM.StopChains()
 
 	// 关闭P2P网络
 	wg.Add(1)
@@ -273,14 +246,7 @@ func (t *Engine) exit() {
 	wg.Wait()
 }
 
-// RegisterBlockChain load an instance of blockchain and start it dynamically
-func (t *Engine) RegisterBlockChain(name string) error {
-	chain, err := LoadChain(t.engCtx, name)
-	if err != nil {
-		t.log.Error("load chain failed", "error", err, "chain_name", name)
-		return fmt.Errorf("load chain failed")
-	}
-	t.chains.Store(name, chain)
-	go chain.Start()
-	return nil
+// LoadChain load an instance of blockchain and start it dynamically
+func (t *Engine) LoadChain(name string) error {
+	return t.chainM.LoadChain(name)
 }

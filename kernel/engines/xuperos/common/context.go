@@ -28,6 +28,8 @@ type EngineCtx struct {
 	EngCfg *engconf.EngineConf
 	// 网络组件句柄
 	Net network.Network
+	// 链管理上下文
+	ChainM ChainManager
 }
 
 // 链级别上下文，维护链级别上下文，每条平行链各有一个
