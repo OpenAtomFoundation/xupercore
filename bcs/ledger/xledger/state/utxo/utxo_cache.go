@@ -1,7 +1,11 @@
 package utxo
 
 import (
+	"bytes"
 	"container/list"
+	"errors"
+	"github.com/xuperchain/xupercore/protos"
+	"math/big"
 	"sync"
 )
 
@@ -32,6 +36,11 @@ type UtxoCache struct {
 	List      *list.List
 	Limit     int
 	mutex     *sync.Mutex
+	//utxovm    UtxoVM1
+}
+
+type UtxoVM1 interface {
+	SelectUtxos(fromAddr string, amount *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // NewUtxoCache create instance of UtxoCache
@@ -42,6 +51,7 @@ func NewUtxoCache(limit int) *UtxoCache {
 		List:      list.New(),
 		Limit:     limit,
 		mutex:     &sync.Mutex{},
+		//utxovm:    vm.(UtxoVM1),
 	}
 }
 
@@ -89,18 +99,162 @@ func (uv *UtxoCache) remove(address string, utxoKey string) {
 }
 
 // Remove delete uxto key from cache
-func (uv *UtxoCache) Remove(address string, utxoKey string) {
-	uv.mutex.Lock()
-	defer uv.mutex.Unlock()
-	uv.remove(address, utxoKey)
+func (uc *UtxoCache) Remove(address string, utxoKey string) {
+	uc.mutex.Lock()
+	defer uc.mutex.Unlock()
+	uc.remove(address, utxoKey)
 }
 
 // Lock used to lock cache
-func (uv *UtxoCache) Lock() {
-	uv.mutex.Lock()
+func (uc *UtxoCache) Lock() {
+	uc.mutex.Lock()
 }
 
 // Unlock used to unlock cache
-func (uv *UtxoCache) Unlock() {
-	uv.mutex.Unlock()
+func (uc *UtxoCache) Unlock() {
+	uc.mutex.Unlock()
+}
+
+type UTXOSandbox struct {
+	inputCache  []*protos.TxInput
+	outputCache []*protos.TxOutput
+	//utxoInputs  []*protos.TxInput
+	//utxoOutputs []*protos.TxOutput
+	inputIdx  int
+	Penetrate bool
+	utxovm    UtxoVM1
+}
+
+func NewUTXOSandbox(vm UtxoVM1, inputs []*protos.TxInput, Penetrate bool) *UTXOSandbox {
+	return &UTXOSandbox{
+		utxovm:     vm,
+		inputCache: inputs,
+		//utxoInputs:  []*protos.TxInput{},
+		//utxoOutputs: []*protos.TxOutput{},
+		Penetrate: Penetrate,
+		//inputIndex:  0,
+	}
+}
+
+func (u *UTXOSandbox) selectUtxos(from string, amount *big.Int) (*big.Int, error) {
+	if u.Penetrate {
+		inputs, _, total, err := u.utxovm.SelectUtxos(from, amount, false, false)
+		if err != nil {
+			return nil, err
+		}
+		u.inputCache = append(u.inputCache, inputs...)
+		return total, nil
+	}
+
+	fromBytes := []byte(from)
+	inputCache := u.inputCache[u.inputIdx:]
+	sum := new(big.Int)
+	n := 0
+	for _, input := range inputCache {
+		n++
+		// Since contract calls bridge serially, a mismatched from address is an error
+		if !bytes.Equal(input.GetFromAddr(), fromBytes) {
+			return nil, errors.New("from address mismatch in utxo cache")
+		}
+		sum.Add(sum, new(big.Int).SetBytes(input.GetAmount()))
+		if sum.Cmp(amount) >= 0 {
+			break
+		}
+	}
+	if sum.Cmp(amount) < 0 {
+		return nil, errors.New("utxo not enough in utxo cache")
+	}
+	u.inputIdx += n
+	return sum, nil
+}
+
+func (u *UTXOSandbox) Transfer(from, to string, amount *big.Int) error {
+	if amount.Cmp(new(big.Int)) == 0 {
+		return nil
+	}
+	total, err := u.selectUtxos(from, amount)
+	if err != nil {
+		return err
+	}
+	u.outputCache = append(u.outputCache, &protos.TxOutput{
+		Amount: amount.Bytes(),
+		ToAddr: []byte(to),
+	})
+	// make change
+	if total.Cmp(amount) > 0 {
+		u.outputCache = append(u.outputCache, &protos.TxOutput{
+			Amount: new(big.Int).Sub(total, amount).Bytes(),
+			ToAddr: []byte(from),
+		})
+	}
+	return nil
+}
+
+//func (uc *UTXOSandbox) Transfer(from, to string, amount *big.Int) error {
+//var inputs []*protos.TxInput
+//var err error
+//if uc.envInputs != nil && len(uc.envInputs) != 0 {
+//	inputs = uc.envInputs
+//} else {
+//	inputs, _, _, err = uc.utxovm.SelectUtxos(from, amount, true, false)
+//	if err != nil {
+//		return err
+//	}
+//}
+//total := new(big.Int)
+//
+//newUtoxInput := []*protos.TxInput{}
+//fmt.Println("len inputs:", len(inputs))
+//fmt.Println("inputs", inputs[0].RefTxid, inputs[0].Amount, inputs[0].FromAddr)
+//for _, input1 := range inputs {
+//	found := false
+//	for _, input2 := range uc.utxoInputs {
+//		if bytes.Equal(input1.RefTxid, input2.RefTxid) {
+//			found = true
+//			break
+//		}
+//	}
+//	if !found {
+//		//uc.inputIndex++
+//		newUtoxInput = append(newUtoxInput, input1)
+//	}
+//
+//}
+//uc.utxoInputs = append(uc.utxoInputs, newUtoxInput...)
+//for _, input := range inputs {
+//	total = total.Add(total, new(big.Int).SetBytes(input.Amount))
+//}
+//
+//remain := big.NewInt(0).Sub(total, amount)
+////fmt.Println("remain", remain.String())
+//fmt.Println("total:", total.String())
+////var outputAmount *big.Int
+//uc.utxoOutputs = append(uc.utxoOutputs, &protos.TxOutput{
+//	Amount:               amount.Bytes(),
+//	ToAddr:               []byte(to),
+//	FrozenHeight:         0,
+//	XXX_NoUnkeyedLiteral: struct{}{},
+//	XXX_unrecognized:     nil,
+//	XXX_sizecache:        0,
+//})
+//if remain.Cmp(new(big.Int)) > 0 {
+//	uc.utxoOutputs = append(uc.utxoOutputs, &protos.TxOutput{
+//		Amount:               remain.Bytes(),
+//		ToAddr:               []byte(from),
+//		FrozenHeight:         0,
+//		XXX_NoUnkeyedLiteral: struct{}{},
+//		XXX_unrecognized:     nil,
+//		XXX_sizecache:        0,
+//	})
+//}
+
+//return nil
+//}
+//
+func (uc *UTXOSandbox) GetUTXORWSets() ([]*protos.TxInput, []*protos.TxOutput) {
+
+	if uc.Penetrate {
+		return uc.inputCache, uc.outputCache
+	}
+	return uc.inputCache[:uc.inputIdx], uc.outputCache
 }

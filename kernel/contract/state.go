@@ -3,10 +3,17 @@ package contract
 import (
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
+	"math/big"
 )
 
 type SandboxConfig struct {
-	XMReader ledger.XMReader
+	XMReader  ledger.XMReader
+	UtxoVM    UtxoVM
+	UTXOInput []*protos.TxInput
+	Penetrate bool
+}
+type UtxoVM interface {
+	SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // Iterator iterates over key/value pairs in key order
@@ -31,6 +38,8 @@ type XMState interface {
 
 // XMState 对XuperBridge暴露对账本的UTXO操作能力
 type UTXOState interface {
+	Transfer(from string, to string, amount *big.Int) error
+	GetUtxoRWSets() ([]*protos.TxInput, []*protos.TxOutput)
 }
 
 // CrossQueryState 对XuperBridge暴露对跨链只读合约的操作能力

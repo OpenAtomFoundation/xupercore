@@ -23,7 +23,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	"github.com/xuperchain/xupercore/kernel/permission/acl"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/cache"
 	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
@@ -96,12 +95,6 @@ type InboundTx struct {
 type UtxoLockItem struct {
 	timestamp int64
 	holder    *list.Element
-}
-
-type contractChainCore struct {
-	*acl.Manager // ACL manager for read/write acl table
-	*UtxoVM
-	*ledger.Ledger
 }
 
 func GenUtxoKey(addr []byte, txid []byte, offset int32) string {
@@ -255,14 +248,15 @@ func (uv *UtxoVM) clearExpiredLocks() {
 //   @param ledger 账本对象
 //   @param store path, utxo 数据的保存路径
 //   @param xlog , 日志handler
-func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
-	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
+func NewUtxoVM(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
+	return MakeUtxoVM(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
 }
 
 // MakeUtxoVM 这个函数比NewUtxoVM更加可订制化
-func MakeUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize, tmplockSeconds int,
+func MakeUtxoVM(sctx *context.StateCtx, metaHandle *meta.Meta, cachesize, tmplockSeconds int,
 	stateDB kvdb.Database) (*UtxoVM, error) {
 	utxoMutex := &sync.RWMutex{}
+
 	utxoVM := &UtxoVM{
 		metaHandle:        metaHandle,
 		ldb:               stateDB,
@@ -388,6 +382,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 			}
 		}
 	}
+	//TODO  找到直接 Return 呀
 	uv.UtxoCache.Unlock()
 	if !foundEnough {
 		// 底层key: table_prefix from_addr "_" txid "_" offset

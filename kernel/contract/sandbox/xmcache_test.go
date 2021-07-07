@@ -23,7 +23,7 @@ func TestXMCachePutGet(t *testing.T) {
 	}
 	store := NewMemXModel()
 
-	mc := NewXModelCache(store)
+	mc := NewXModelCache(store, nil, nil, false)
 	for _, test := range testCases {
 		switch test.Op {
 		case "put":
@@ -66,7 +66,7 @@ func TestXMCacheIterator(t *testing.T) {
 			},
 		})
 	}
-	mc := NewXModelCache(state)
+	mc := NewXModelCache(state, nil, nil, false)
 	for i := N / 2; i < N; i++ {
 		t.Logf("write cache:%s", keys[i])
 		mc.Put("test", []byte(keys[i]), []byte(keys[i]))

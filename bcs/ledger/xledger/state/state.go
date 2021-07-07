@@ -123,7 +123,7 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 		return nil, fmt.Errorf("create state failed because create meta error:%s", err)
 	}
 
-	obj.utxo, err = utxo.MakeUtxo(sctx, obj.meta, sctx.LedgerCfg.Utxo.CacheSize,
+	obj.utxo, err = utxo.MakeUtxoVM(sctx, obj.meta, sctx.LedgerCfg.Utxo.CacheSize,
 		sctx.LedgerCfg.Utxo.TmpLockSeconds, obj.ldb)
 	if err != nil {
 		return nil, fmt.Errorf("create state failed because create utxo error:%s", err)
@@ -520,7 +520,9 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 
 func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 	stateConfig := &contract.SandboxConfig{
-		XMReader: t.CreateXMReader(),
+		XMReader:  t.CreateXMReader(),
+		UtxoVM:    t.utxo,
+		Penetrate: true,
 	}
 	if !t.sctx.IsInit() {
 		return nil, nil
@@ -762,15 +764,15 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 
 func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *utxo.CacheFiller) error {
 	if tx.GetModifyBlock() == nil || (tx.GetModifyBlock() != nil && !tx.ModifyBlock.Marked) {
-		if err := t.utxo.CheckInputEqualOutput(tx); err != nil {
-			return err
-		}
+		//if err := t.utxo.CheckInputEqualOutput(tx); err != nil {
+		//	return err
+		//}
 	}
 
 	err := t.xmodel.DoTx(tx, batch)
 	if err != nil {
 		t.log.Warn("xmodel DoTx failed", "err", err)
-		return ErrRWSetInvalid
+		return err
 	}
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
@@ -879,7 +881,7 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 	err := t.xmodel.UndoTx(tx, batch)
 	if err != nil {
 		t.log.Warn("xmodel.UndoTx failed", "err", err)
-		return ErrRWSetInvalid
+		return err
 	}
 
 	for _, txInput := range tx.TxInputs {
@@ -1335,7 +1337,8 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 	xmReader := t.CreateXMReader()
 	sandBoxCfg := &contract.SandboxConfig{
-		XMReader: xmReader,
+		XMReader:  xmReader,
+		Penetrate: true,
 	}
 	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxCfg)
 	if err != nil {
