@@ -53,12 +53,12 @@ type XMCache struct {
 }
 
 // NewXModelCache new an instance of XModel Cache
-func NewXModelCache(model ledger.XMReader, reader contract.UtxoReader) *XMCache {
+func NewXModelCache(cfg *contract.SandboxConfig) *XMCache {
 	return &XMCache{
-		model:        model,
+		model:        cfg.XMReader,
 		inputsCache:  NewMemXModel(),
 		outputsCache: NewMemXModel(),
-		utxoSandbox:  utxo.NewUTXOSandbox(reader),
+		utxoSandbox:  utxo.NewUTXOSandbox(cfg),
 
 		// crossQueryCache: NewCrossQueryCache(),
 	}

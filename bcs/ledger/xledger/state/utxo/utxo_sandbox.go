@@ -13,10 +13,10 @@ type UTXOSandbox struct {
 	utxoReader  contract.UtxoReader
 }
 
-func NewUTXOSandbox(utxoReader contract.UtxoReader) *UTXOSandbox {
+func NewUTXOSandbox(cfg *contract.SandboxConfig) *UTXOSandbox {
 	return &UTXOSandbox{
 		outputCache: []*protos.TxOutput{},
-		utxoReader:  utxoReader,
+		utxoReader:  cfg.UTXOReader,
 	}
 }
 
