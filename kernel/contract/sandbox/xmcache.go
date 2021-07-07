@@ -227,13 +227,9 @@ func (xc *XMCache) flushUTXORWSet() error {
 	UTXORWSet := xc.utxoSandbox.GetUTXORWSets()
 	inputs := UTXORWSet.Rset
 	outputs := UTXORWSet.WSet
-	fmt.Println("len output", len(outputs))
 	var in, out []byte
 	var err error
 	if len(inputs) != 0 {
-		for _, input := range inputs {
-			fmt.Printf("input,from %s,amount:%s\n", string(input.FromAddr), new(big.Int).SetBytes(input.Amount).String())
-		}
 		in, err = xmodel.MarshalMessages(inputs)
 		if err != nil {
 			return err

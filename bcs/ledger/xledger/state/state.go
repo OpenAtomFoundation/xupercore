@@ -774,7 +774,7 @@ func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *
 	err := t.xmodel.DoTx(tx, batch)
 	if err != nil {
 		t.log.Warn("xmodel DoTx failed", "err", err)
-		return err
+		return ErrRWSetInvalid
 	}
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
@@ -883,7 +883,7 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 	err := t.xmodel.UndoTx(tx, batch)
 	if err != nil {
 		t.log.Warn("xmodel.UndoTx failed", "err", err)
-		return err
+		return ErrRWSetInvalid
 	}
 
 	for _, txInput := range tx.TxInputs {
