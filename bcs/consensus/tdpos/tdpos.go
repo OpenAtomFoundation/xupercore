@@ -193,15 +193,10 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Warn("Tdpos::CheckMinerMatch::GetConsensusStorage error", "err", err)
 		return false, err
 	}
-	tdposStorage, err := common.ParseOldQCStorage(bv)
-	if err != nil {
-		tp.log.Warn("Tdpos::CheckMinerMatch::ParseOldQCStorage error.", "err", err)
-		return false, err
-	}
 	tp.log.Debug("Tdpos::CheckMinerMatch", "blockid", utils.F(block.GetBlockid()), "height", block.GetHeight())
 
 	// 1 判断当前区块生产者是否合法
-	term, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
+	_, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
 	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Warn("Tdpos::CheckMinerMatch::minerScheduling overflow.")
 		return false, scheduleErr
@@ -217,12 +212,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Debug("Tdpos::CheckMinerMatch::invalid proposer", "want", wantProposers[pos], "have", string(block.GetProposer()))
 		return false, invalidProposerErr
 	}
-
-	// 2 验证轮数信息, 判断curTerm是否合法
-	if tdposStorage.CurTerm > 0 && tdposStorage.CurTerm != term {
-		tp.log.Warn("Tdpos::CheckMinerMatch::check failed, invalid term.", "want", term, "have", tdposStorage.CurTerm)
-		return false, invalidTermErr
-	}
+	
 	if !tp.election.enableChainedBFT {
 		return true, nil
 	}
