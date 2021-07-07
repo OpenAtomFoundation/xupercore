@@ -13,7 +13,6 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
-	pb "github.com/xuperchain/xupercore/protos"
 )
 
 var (
@@ -35,8 +34,8 @@ var (
 )
 
 // UtxoReader manages utxos
-type UtxoVM interface {
-	SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
+type UtxoReader interface {
+	SelectUtxo(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // XMCache data structure for XModel Cache
@@ -54,12 +53,12 @@ type XMCache struct {
 }
 
 // NewXModelCache new an instance of XModel Cache
-func NewXModelCache(model ledger.XMReader, vm UtxoVM, utxoInput []*protos.TxInput, Penetrate bool) *XMCache {
+func NewXModelCache(model ledger.XMReader, reader contract.UtxoReader) *XMCache {
 	return &XMCache{
 		model:        model,
 		inputsCache:  NewMemXModel(),
 		outputsCache: NewMemXModel(),
-		utxoSandbox:  utxo.NewUTXOSandbox(vm, utxoInput, Penetrate),
+		utxoSandbox:  utxo.NewUTXOSandbox(reader),
 
 		// crossQueryCache: NewCrossQueryCache(),
 	}
@@ -219,16 +218,22 @@ func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
 }
 
 //UTXORWSet returns the inputs and outputs of utxo
-func (xc *XMCache) UTXORWSet() ([]*pb.TxInput, []*pb.TxOutput) {
+func (xc *XMCache) UTXORWSet() contract.UTXORWSet {
 	return xc.utxoSandbox.GetUTXORWSets()
 }
 
 // putUtxos put utxos to TransientBucket
 func (xc *XMCache) flushUTXORWSet() error {
-	inputs, outputs := xc.utxoSandbox.GetUTXORWSets()
+	UTXORWSet := xc.utxoSandbox.GetUTXORWSets()
+	inputs := UTXORWSet.Rset
+	outputs := UTXORWSet.WSet
+	fmt.Println("len output", len(outputs))
 	var in, out []byte
 	var err error
 	if len(inputs) != 0 {
+		for _, input := range inputs {
+			fmt.Printf("input,from %s,amount:%s\n", string(input.FromAddr), new(big.Int).SetBytes(input.Amount).String())
+		}
 		in, err = xmodel.MarshalMessages(inputs)
 		if err != nil {
 			return err

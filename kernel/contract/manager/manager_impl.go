@@ -80,7 +80,7 @@ func (m *managerImpl) NewContext(cfg *contract.ContextConfig) (contract.Context,
 }
 
 func (m *managerImpl) NewStateSandbox(cfg *contract.SandboxConfig) (contract.StateSandbox, error) {
-	return sandbox.NewXModelCache(cfg.XMReader, cfg.UtxoVM, cfg.UTXOInput, cfg.Penetrate), nil
+	return sandbox.NewXModelCache(cfg.XMReader, cfg.UTXOReader), nil
 }
 
 func (m *managerImpl) GetKernRegistry() contract.KernRegistry {

@@ -7,13 +7,11 @@ import (
 )
 
 type SandboxConfig struct {
-	XMReader  ledger.XMReader
-	UtxoVM    UtxoReader
-	UTXOInput []*protos.TxInput
-	Penetrate bool
+	XMReader   ledger.XMReader
+	UTXOReader UtxoReader
 }
 type UtxoReader interface {
-	SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
+	SelectUtxo(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // Iterator iterates over key/value pairs in key order

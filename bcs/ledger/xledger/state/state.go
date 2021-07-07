@@ -178,6 +178,13 @@ func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exclu
 	return t.utxo.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
 }
 
+//
+// TODO @fengjin
+func (t *State) SelectUtxo(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
+
+	return t.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
+}
+
 // 获取一批未确认交易（用于矿工打包区块）
 func (t *State) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
 	return t.tx.GetUnconfirmedTx(dedup)
@@ -353,6 +360,9 @@ func (t *State) DoTx(tx *pb.Transaction) error {
 func (t *State) CreateXMReader() kledger.XMReader {
 	return t.xmodel
 }
+func (t *State) CreateUtxoReader() contract.UtxoReader {
+	return t.utxo
+}
 
 // 根据指定blockid创建快照（Select方法不可用）
 func (t *State) CreateSnapshot(blkId []byte) (kledger.XMReader, error) {
@@ -520,9 +530,8 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 
 func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 	stateConfig := &contract.SandboxConfig{
-		XMReader:  t.CreateXMReader(),
-		UtxoVM:    t.utxo,
-		Penetrate: true,
+		XMReader:   t.CreateXMReader(),
+		UTXOReader: t.CreateUtxoReader(),
 	}
 	if !t.sctx.IsInit() {
 		return nil, nil
@@ -772,7 +781,7 @@ func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *
 	err := t.xmodel.DoTx(tx, batch)
 	if err != nil {
 		t.log.Warn("xmodel DoTx failed", "err", err)
-		return ErrRWSetInvalid
+		return err
 	}
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
@@ -881,7 +890,7 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 	err := t.xmodel.UndoTx(tx, batch)
 	if err != nil {
 		t.log.Warn("xmodel.UndoTx failed", "err", err)
-		return ErrRWSetInvalid
+		return err
 	}
 
 	for _, txInput := range tx.TxInputs {
@@ -1337,8 +1346,7 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 
 	xmReader := t.CreateXMReader()
 	sandBoxCfg := &contract.SandboxConfig{
-		XMReader:  xmReader,
-		Penetrate: true,
+		XMReader: xmReader,
 	}
 	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxCfg)
 	if err != nil {
