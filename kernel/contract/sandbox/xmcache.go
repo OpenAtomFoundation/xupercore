@@ -34,7 +34,7 @@ var (
 	_ contract.StateSandbox = (*XMCache)(nil)
 )
 
-// UtxoVM manages utxos
+// UtxoReader manages utxos
 type UtxoVM interface {
 	SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
@@ -218,8 +218,8 @@ func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
 	return xc.utxoSandbox.Transfer(from, to, amount)
 }
 
-//GetUtxoRWSets returns the inputs and outputs of utxo
-func (xc *XMCache) GetUtxoRWSets() ([]*pb.TxInput, []*pb.TxOutput) {
+//UTXORWSet returns the inputs and outputs of utxo
+func (xc *XMCache) UTXORWSet() ([]*pb.TxInput, []*pb.TxOutput) {
 	return xc.utxoSandbox.GetUTXORWSets()
 }
 

@@ -8,11 +8,11 @@ import (
 
 type SandboxConfig struct {
 	XMReader  ledger.XMReader
-	UtxoVM    UtxoVM
+	UtxoVM    UtxoReader
 	UTXOInput []*protos.TxInput
 	Penetrate bool
 }
-type UtxoVM interface {
+type UtxoReader interface {
 	SelectUtxos(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
@@ -39,7 +39,6 @@ type XMState interface {
 // XMState 对XuperBridge暴露对账本的UTXO操作能力
 type UTXOState interface {
 	Transfer(from string, to string, amount *big.Int) error
-	GetUtxoRWSets() ([]*protos.TxInput, []*protos.TxOutput)
 }
 
 // CrossQueryState 对XuperBridge暴露对跨链只读合约的操作能力
@@ -65,9 +64,15 @@ type StateSandbox interface {
 	// 没有调用Flush只能得到KV数据的读写集
 	Flush() error
 	RWSet() *RWSet
+	UTXORWSet() UTXORWSet
 }
 
 type RWSet struct {
 	RSet []*ledger.VersionedData
 	WSet []*ledger.PureData
+}
+
+type UTXORWSet struct {
+	Rset []*protos.TxInput
+	WSet []*protos.TxOutput
 }

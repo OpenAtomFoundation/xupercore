@@ -328,7 +328,7 @@ func (c *FakeKContext) Call(module, contract, method string, args map[string][]b
 	return nil, nil
 }
 
-func (c *FakeKContext) GetUtxoRWSets() ([]*protos.TxInput, []*protos.TxOutput) {
+func (c *FakeKContext) UTXORWSet() ([]*protos.TxInput, []*protos.TxOutput) {
 	return []*protos.TxInput{}, []*protos.TxOutput{}
 }
 

@@ -220,7 +220,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		return nil, err
 	}
 	rwSet := sandbox.RWSet()
-	utxoInputs, utxoOutputs := sandbox.GetUtxoRWSets()
+	utxoRWSet := sandbox.UTXORWSet()
 
 	invokeResponse := &protos.InvokeResponse{
 		GasUsed:     gasUsed,
@@ -229,8 +229,8 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
 		Requests:    requests,
 		Responses:   responses,
-		UtxoInputs:  utxoInputs,
-		UtxoOutputs: utxoOutputs,
+		UtxoInputs:  utxoRWSet.Rset,
+		UtxoOutputs: utxoRWSet.WSet,
 	}
 
 	return invokeResponse, nil

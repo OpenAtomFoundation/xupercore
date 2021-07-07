@@ -13,10 +13,10 @@ type UTXOSandbox struct {
 	outputCache []*protos.TxOutput
 	inputIdx    int
 	Penetrate   bool
-	utxovm      contract.UtxoVM
+	utxovm      contract.UtxoReader
 }
 
-func NewUTXOSandbox(vm contract.UtxoVM, inputs []*protos.TxInput, Penetrate bool) *UTXOSandbox {
+func NewUTXOSandbox(vm contract.UtxoReader, inputs []*protos.TxInput, Penetrate bool) *UTXOSandbox {
 	return &UTXOSandbox{
 		utxovm:      vm,
 		inputCache:  inputs,
