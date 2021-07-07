@@ -36,7 +36,6 @@ type UtxoCache struct {
 	List      *list.List
 	Limit     int
 	mutex     *sync.Mutex
-	//utxovm    UtxoVM1
 }
 
 type UtxoVM1 interface {
@@ -51,7 +50,6 @@ func NewUtxoCache(limit int) *UtxoCache {
 		List:      list.New(),
 		Limit:     limit,
 		mutex:     &sync.Mutex{},
-		//utxovm:    vm.(UtxoVM1),
 	}
 }
 
@@ -118,27 +116,24 @@ func (uc *UtxoCache) Unlock() {
 type UTXOSandbox struct {
 	inputCache  []*protos.TxInput
 	outputCache []*protos.TxOutput
-	//utxoInputs  []*protos.TxInput
-	//utxoOutputs []*protos.TxOutput
-	inputIdx  int
-	Penetrate bool
-	utxovm    UtxoVM1
+	inputIdx    int
+	Penetrate   bool
+	utxovm      UtxoVM1
 }
 
 func NewUTXOSandbox(vm UtxoVM1, inputs []*protos.TxInput, Penetrate bool) *UTXOSandbox {
 	return &UTXOSandbox{
-		utxovm:     vm,
-		inputCache: inputs,
-		//utxoInputs:  []*protos.TxInput{},
-		//utxoOutputs: []*protos.TxOutput{},
-		Penetrate: Penetrate,
-		//inputIndex:  0,
+		utxovm:      vm,
+		inputCache:  inputs,
+		outputCache: []*protos.TxOutput{},
+		Penetrate:   Penetrate,
+		inputIdx:    0,
 	}
 }
 
 func (u *UTXOSandbox) selectUtxos(from string, amount *big.Int) (*big.Int, error) {
 	if u.Penetrate {
-		inputs, _, total, err := u.utxovm.SelectUtxos(from, amount, false, false)
+		inputs, _, total, err := u.utxovm.SelectUtxos(from, amount, true, false)
 		if err != nil {
 			return nil, err
 		}
