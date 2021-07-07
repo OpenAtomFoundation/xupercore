@@ -124,13 +124,13 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 			if strings.HasPrefix(err.Error(), "Gas not enough") {
 				err = ErrGasNotEnough
 			} else {
-				err = err
+				err = ErrRWSetInvalid
 			}
 			return ok, err
 		}
 		if !ok {
 			// always return RWSet Invalid Error if verification not passed
-			return ok, err
+			return ok, ErrRWSetInvalid
 		}
 	}
 	return true, nil
@@ -190,13 +190,13 @@ func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isR
 			if strings.HasPrefix(err.Error(), "Gas not enough") {
 				err = ErrGasNotEnough
 			} else {
-				err = err
+				err = ErrRWSetInvalid
 			}
 			return ok, err
 		}
 		if !ok {
 			// always return RWSet Invalid Error if verification not passed
-			return ok, err
+			return ok, ErrRWSetInvalid
 		}
 	}
 	return true, nil
@@ -642,7 +642,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 
 		ctx.Release()
 	}
-	fmt.Println("verification")
+
 	err = sandBox.Flush()
 	if err != nil {
 		return false, err

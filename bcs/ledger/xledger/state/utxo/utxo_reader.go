@@ -3,7 +3,6 @@ package utxo
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/protos"
 	"math/big"
@@ -22,8 +21,6 @@ func NewUTXOReaderFromInput(input []*protos.TxInput) contract.UtxoReader {
 }
 
 func (r *UTXOReader) SelectUtxo(from string, amount *big.Int, lock bool, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
-	fmt.Printf("before input idx:%d,n:%d\n", r.inputIdx, 0)
-
 	fromBytes := []byte(from)
 	inputCache := r.inputCache[r.inputIdx:]
 	sum := new(big.Int)
