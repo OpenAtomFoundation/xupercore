@@ -30,7 +30,9 @@ var contractConfig = &contract.ContractConfig{
 		Enable: true,
 		Driver: "default",
 	},
-	LogDriver: &MockLogger{},
+	LogDriver: &MockLogger{
+		log15.New(),
+	},
 }
 
 func TestCreate(t *testing.T) {
