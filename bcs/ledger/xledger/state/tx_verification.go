@@ -569,7 +569,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	utxoReader := utxo.NewUTXOReaderFromInput(utxoInput)
+	utxoReader := sandbox.NewUTXOReaderFromInput(utxoInput)
 	sandBoxConfig := &contract.SandboxConfig{
 		XMReader:   reader,
 		UTXOReader: utxoReader,

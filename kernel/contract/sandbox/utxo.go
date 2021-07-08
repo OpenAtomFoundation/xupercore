@@ -1,4 +1,4 @@
-package utxo
+package sandbox
 
 import (
 	"bytes"
