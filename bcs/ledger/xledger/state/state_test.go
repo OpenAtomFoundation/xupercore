@@ -702,6 +702,7 @@ func CreateContract(xmreader kledger.XMReader, state *State, envcfg *xconf.EnvCo
 		EnvConf:  envcfg,
 		Core:     state,
 		XMReader: xmreader,
+		Config:   contract.DefaultContractConfig(),
 	}
 	contractObj, err := contract.CreateManager("default", mgCfg)
 	if err != nil {

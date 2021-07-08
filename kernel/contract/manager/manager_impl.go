@@ -59,9 +59,10 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 				Registry: &m.kregistry,
 			},
 		},
-		Config: *xcfg,
-		XModel: cfg.XMReader,
-		Core:   cfg.Core,
+		Config:    *xcfg,
+		XModel:    cfg.XMReader,
+		Core:      cfg.Core,
+		LogDriver: cfg.Config.LogDriver,
 	})
 	if err != nil {
 		return nil, err

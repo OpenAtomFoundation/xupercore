@@ -96,7 +96,13 @@ func NewLogger(logId, subMod string) (*LogFitter, error) {
 	// 基础日志实例和日志配置采用单例模式
 	lock.RLock()
 	defer lock.RUnlock()
-	if logConf == nil || logHandle == nil {
+	var logLevel string
+	if logConf == nil {
+		logLevel = "debug"
+	} else {
+		logLevel = logConf.Level
+	}
+	if logHandle == nil {
 		return nil, fmt.Errorf("log not init")
 	}
 
@@ -116,7 +122,7 @@ func NewLogger(logId, subMod string) (*LogFitter, error) {
 		infoFields:   make([]interface{}, 0),
 		infoFieldLck: &sync.RWMutex{},
 		callDepth:    DefaultCallDepth,
-		minLvl:       LvlFromString(logConf.Level),
+		minLvl:       LvlFromString(logLevel),
 		subMod:       subMod,
 	}
 

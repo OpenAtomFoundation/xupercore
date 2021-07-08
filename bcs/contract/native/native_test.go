@@ -15,6 +15,7 @@ import (
 
 var contractConfig = &contract.ContractConfig{
 	EnableUpgrade: true,
+	DebugLog:      contract.LogConfig{Level: "debug"},
 	Xkernel: contract.XkernelConfig{
 		Enable: true,
 		Driver: "default",

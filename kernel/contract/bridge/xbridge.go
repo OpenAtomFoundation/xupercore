@@ -2,11 +2,14 @@ package bridge
 
 import (
 	"fmt"
-	"io"
 	"path/filepath"
 
+	//loggg "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
+	"github.com/xuperchain/xupercore/lib/logs"
+
+	//"github.com/xuperchain/xupercore/lib/logs/config"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -21,7 +24,7 @@ type XBridge struct {
 	config         contract.ContractConfig
 	core           contract.ChainCore
 
-	// debugLogger *log.Logger
+	debugLogger logs.LogDriver
 
 	*contractManager
 }
@@ -31,7 +34,7 @@ type XBridgeConfig struct {
 	VMConfigs map[ContractType]VMConfig
 	XModel    ledger.XMReader
 	Config    contract.ContractConfig
-	LogWriter io.Writer
+	LogDriver logs.LogDriver
 	Core      contract.ChainCore
 }
 
@@ -58,10 +61,7 @@ func New(cfg *XBridgeConfig) (*XBridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	// err = xbridge.initDebugLogger(cfg)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	xbridge.initDebugLogger(cfg)
 	return xbridge, nil
 }
 
@@ -91,26 +91,13 @@ func (v *XBridge) initVM() error {
 	return nil
 }
 
-// func (v *XBridge) initDebugLogger(cfg *XBridgeConfig) error {
-// 	// 如果日志开启，并且没有自定义writter则使用配置文件打开日志对象
-// 	if cfg.Config.EnableDebugLog && cfg.LogWriter == nil {
-// 		debugLogger, err := log.OpenLog(&cfg.Config.DebugLog)
-// 		if err != nil {
-// 			return err
-// 		}
-// 		v.debugLogger = &debugLogger
-// 		return nil
-// 	}
+func (v *XBridge) initDebugLogger(cfg *XBridgeConfig) {
+	// Allow inject debug logger for unit test and xdev tool
+	if cfg.LogDriver != nil {
+		v.debugLogger = cfg.LogDriver
+	}
 
-// 	w := cfg.LogWriter
-// 	if w == nil {
-// 		w = ioutil.Discard
-// 	}
-// 	logger := log15.Root().New()
-// 	logger.SetHandler(log15.StreamHandler(w, log15.LogfmtFormat()))
-// 	v.debugLogger = &log.Logger{Logger: logger}
-// 	return nil
-// }
+}
 
 func (v *XBridge) getCreator(tp ContractType) InstanceCreator {
 	return v.creators[tp]
@@ -164,7 +151,15 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		ctx.ContractSet = make(map[string]bool)
 		ctx.ContractSet[ctx.ContractName] = true
 	}
-	// ctx.Logger = v.xbridge.debugLogger.New("contract", ctx.ContractName, "ctxid", ctx.ID)
+	if v.debugLogger != nil {
+		ctx.Logger = v.debugLogger
+	} else {
+		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), "contract")
+	}
+
+	if err != nil {
+		return nil, err
+	}
 	release := func() {
 		v.ctxmgr.DestroyContext(ctx)
 	}

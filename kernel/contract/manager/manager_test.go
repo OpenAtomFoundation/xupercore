@@ -14,6 +14,7 @@ var contractConfig = &contract.ContractConfig{
 		Enable: true,
 		Driver: "default",
 	},
+	//DebugLog: contract.LogConfig{Level: "debug"},
 }
 
 func TestCreate(t *testing.T) {
