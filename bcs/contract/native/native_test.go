@@ -14,6 +14,21 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
 
+type MockLogger struct {
+	log15.Logger
+}
+
+func (*MockLogger) GetLogId() string {
+	return ""
+}
+
+func (*MockLogger) SetCommField(key string, value interface{}) {
+
+}
+func (*MockLogger) SetInfoField(key string, value interface{}) {
+
+}
+
 var contractConfig = &contract.ContractConfig{
 	EnableUpgrade: true,
 	Xkernel: contract.XkernelConfig{
@@ -24,7 +39,7 @@ var contractConfig = &contract.ContractConfig{
 		Enable: true,
 		Driver: "native",
 	},
-	LogDriver: log15.New(),
+	LogDriver: &MockLogger{},
 }
 
 func compile(th *mock.TestHelper) ([]byte, error) {

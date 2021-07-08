@@ -48,7 +48,7 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	m := &managerImpl{
 		core: cfg.Core,
 	}
-	var logDriver logs.LogDriver
+	var logDriver logs.Logger
 	if cfg.Config != nil {
 		logDriver = cfg.Config.LogDriver
 	}

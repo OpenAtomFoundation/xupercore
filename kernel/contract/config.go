@@ -101,7 +101,7 @@ type LogConfig struct {
 type ContractConfig struct {
 	EnableDebugLog bool
 	EnableUpgrade  bool
-	LogDriver      logs.LogDriver
+	LogDriver      logs.Logger
 
 	Native  NativeConfig
 	Wasm    WasmConfig

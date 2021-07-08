@@ -375,6 +375,7 @@ func (c *SyscallService) PostLog(ctx context.Context, in *pb.PostLogRequest) (*p
 	if !ok {
 		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
 	}
+	nctx.Logger.SetCommField("contract_name", nctx.ContractName)
 	nctx.Logger.Info(in.GetEntry())
 	return &pb.PostLogResponse{}, nil
 }

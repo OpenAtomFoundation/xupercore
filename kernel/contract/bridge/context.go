@@ -39,7 +39,7 @@ type Context struct {
 
 	Instance Instance
 
-	Logger logs.LogDriver
+	Logger logs.Logger
 
 	// resource used by sub contract call
 	SubResourceUsed contract.Limits

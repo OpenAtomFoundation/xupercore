@@ -22,7 +22,7 @@ type XBridge struct {
 	config         contract.ContractConfig
 	core           contract.ChainCore
 
-	debugLogger logs.LogDriver
+	debugLogger logs.Logger
 
 	*contractManager
 }
@@ -32,7 +32,7 @@ type XBridgeConfig struct {
 	VMConfigs map[ContractType]VMConfig
 	XModel    ledger.XMReader
 	Config    contract.ContractConfig
-	LogDriver logs.LogDriver
+	LogDriver logs.Logger
 	Core      contract.ChainCore
 }
 
@@ -147,7 +147,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		ctx.Logger = v.debugLogger
 	} else {
 		// use contract Name for convience of filter log from specific contract using grep or other logging processing stack
-		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), "contract_"+ctx.ContractName)
+		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), "contract")
 	}
 
 	if err != nil {
