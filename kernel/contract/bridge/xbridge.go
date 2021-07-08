@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"path/filepath"
 
-	//loggg "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 
-	//"github.com/xuperchain/xupercore/lib/logs/config"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -90,11 +88,6 @@ func (v *XBridge) initVM() error {
 	}
 	return nil
 }
-
-//func (v *XBridge) initDebugLogger(cfg *XBridgeConfig) {
-//
-//
-//}
 
 func (v *XBridge) getCreator(tp ContractType) InstanceCreator {
 	return v.creators[tp]
