@@ -130,7 +130,8 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	}
 
 	stateConfig := &contract.SandboxConfig{
-		XMReader: t.ctx.State.CreateXMReader(),
+		XMReader:   t.ctx.State.CreateXMReader(),
+		UTXOReader: t.ctx.State.CreateUtxoReader(),
 	}
 	sandbox, err := t.ctx.Contract.NewStateSandbox(stateConfig)
 	if err != nil {
@@ -218,16 +219,17 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		return nil, err
 	}
 	rwSet := sandbox.RWSet()
+	utxoRWSet := sandbox.UTXORWSet()
+
 	invokeResponse := &protos.InvokeResponse{
-		GasUsed:   gasUsed,
-		Response:  responseBodes,
-		Inputs:    xmodel.GetTxInputs(rwSet.RSet),
-		Outputs:   xmodel.GetTxOutputs(rwSet.WSet),
-		Requests:  requests,
-		Responses: responses,
-		// TODO: 合约内转账未实现，空值
-		//UtxoInputs:  utxoInputs,
-		//UtxoOutputs: utxoOutputs,
+		GasUsed:     gasUsed,
+		Response:    responseBodes,
+		Inputs:      xmodel.GetTxInputs(rwSet.RSet),
+		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
+		Requests:    requests,
+		Responses:   responses,
+		UtxoInputs:  utxoRWSet.Rset,
+		UtxoOutputs: utxoRWSet.WSet,
 	}
 
 	return invokeResponse, nil

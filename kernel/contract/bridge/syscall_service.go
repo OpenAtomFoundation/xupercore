@@ -116,28 +116,27 @@ func (c *SyscallService) QueryTx(ctx context.Context, in *pb.QueryTxRequest) (*p
 
 // Transfer implements Syscall interface
 func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (*pb.TransferResponse, error) {
-	return nil, ErrNotImplementation
-	// nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
-	// if !ok {
-	// 	return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
-	// }
-	// amount, ok := new(big.Int).SetString(in.GetAmount(), 10)
-	// if !ok {
-	// 	return nil, errors.New("parse amount error")
-	// }
-	// // make sure amount is not negative
-	// if amount.Cmp(new(big.Int)) < 0 {
-	// 	return nil, errors.New("amount should not be negative")
-	// }
-	// if in.GetTo() == "" {
-	// 	return nil, errors.New("empty to address")
-	// }
-	// err := nctx.Store.Transfer(nctx.ContractName, in.GetTo(), amount)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// resp := &pb.TransferResponse{}
-	// return resp, nil
+	nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
+	if !ok {
+		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
+	}
+	amount, ok := new(big.Int).SetString(in.GetAmount(), 10)
+	if !ok {
+		return nil, errors.New("parse amount error")
+	}
+	// make sure amount is not negative
+	if amount.Cmp(new(big.Int)) < 0 {
+		return nil, errors.New("amount should not be negative")
+	}
+	if in.GetTo() == "" {
+		return nil, errors.New("empty to address")
+	}
+	err := nctx.State.Transfer(nctx.Initiator, in.GetTo(), amount)
+	if err != nil {
+		return nil, err
+	}
+	resp := &pb.TransferResponse{}
+	return resp, nil
 }
 
 // ContractCall implements Syscall interface

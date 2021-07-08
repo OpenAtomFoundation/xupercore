@@ -3,6 +3,7 @@ package mock
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/xuperchain/xupercore/bcs/network/p2pv2"
@@ -325,6 +326,17 @@ func (c *FakeKContext) ResourceLimit() contract.Limits {
 
 func (c *FakeKContext) Call(module, contract, method string, args map[string][]byte) (*contract.Response, error) {
 	return nil, nil
+}
+
+func (c *FakeKContext) UTXORWSet() *contract.UTXORWSet {
+	return &contract.UTXORWSet{
+		Rset: []*protos.TxInput{},
+		WSet: []*protos.TxOutput{},
+	}
+}
+
+func (c *FakeKContext) Transfer(from string, to string, amount *big.Int) error {
+	return nil
 }
 
 type FakeManager struct {

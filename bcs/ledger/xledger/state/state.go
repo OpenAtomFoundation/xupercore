@@ -353,6 +353,9 @@ func (t *State) DoTx(tx *pb.Transaction) error {
 func (t *State) CreateXMReader() kledger.XMReader {
 	return t.xmodel
 }
+func (t *State) CreateUtxoReader() contract.UtxoReader {
+	return t.utxo
+}
 
 // 根据指定blockid创建快照（Select方法不可用）
 func (t *State) CreateSnapshot(blkId []byte) (kledger.XMReader, error) {
@@ -520,7 +523,8 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 
 func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 	stateConfig := &contract.SandboxConfig{
-		XMReader: t.CreateXMReader(),
+		XMReader:   t.CreateXMReader(),
+		UTXOReader: t.CreateUtxoReader(),
 	}
 	if !t.sctx.IsInit() {
 		return nil, nil

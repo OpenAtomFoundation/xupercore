@@ -3,6 +3,8 @@ package sandbox
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"math/big"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
@@ -31,9 +33,9 @@ var (
 	_ contract.StateSandbox = (*XMCache)(nil)
 )
 
-// UtxoVM manages utxos
-type UtxoVM interface {
-	SelectUtxos(fromAddr string, fromPubKey string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
+// UtxoReader manages utxos
+type UtxoReader interface {
+	SelectUtxo(string, *big.Int, bool, bool) ([]*protos.TxInput, [][]byte, *big.Int, error)
 }
 
 // XMCache data structure for XModel Cache
@@ -45,18 +47,19 @@ type XMCache struct {
 
 	model ledger.XMReader
 
-	// utxoCache       *UtxoCache
+	utxoSandbox *utxo.UTXOSandbox
 	// crossQueryCache *CrossQueryCache
 	events []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
-func NewXModelCache(model ledger.XMReader) *XMCache {
+func NewXModelCache(cfg *contract.SandboxConfig) *XMCache {
 	return &XMCache{
-		model:        model,
+		model:        cfg.XMReader,
 		inputsCache:  NewMemXModel(),
 		outputsCache: NewMemXModel(),
-		// utxoCache:       NewUtxoCache(utxovm),
+		utxoSandbox:  utxo.NewUTXOSandbox(cfg),
+
 		// crossQueryCache: NewCrossQueryCache(),
 	}
 }
@@ -210,215 +213,219 @@ func (xc *XMCache) getWriteSets() []*ledger.PureData {
 }
 
 // // Transfer transfer tokens using utxo
-// func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
-// 	return xc.utxoCache.Transfer(from, to, amount)
-// }
+func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
+	return xc.utxoSandbox.Transfer(from, to, amount)
+}
 
-// // GetUtxoRWSets returns the inputs and outputs of utxo
-// func (xc *XMCache) GetUtxoRWSets() ([]*pb.TxInput, []*pb.TxOutput) {
-// 	return xc.utxoCache.GetRWSets()
-// }
+//UTXORWSet returns the inputs and outputs of utxo
+func (xc *XMCache) UTXORWSet() *contract.UTXORWSet {
+	return xc.utxoSandbox.GetUTXORWSets()
+}
 
-// // putUtxos put utxos to TransientBucket
-// func (xc *XMCache) putUtxos(inputs []*pb.TxInput, outputs []*pb.TxOutput) error {
-// 	var in, out []byte
-// 	var err error
-// 	if len(inputs) != 0 {
-// 		in, err = MarshalMessages(inputs)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	if len(outputs) != 0 {
-// 		out, err = MarshalMessages(outputs)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	if in != nil {
-// 		err = xc.Put(TransientBucket, contractUtxoInputKey, in)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	if out != nil {
-// 		err = xc.Put(TransientBucket, contractUtxoOutputKey, out)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
+// putUtxos put utxos to TransientBucket
+func (xc *XMCache) flushUTXORWSet() error {
+	UTXORWSet := xc.utxoSandbox.GetUTXORWSets()
+	inputs := UTXORWSet.Rset
+	outputs := UTXORWSet.WSet
+	var in, out []byte
+	var err error
+	if len(inputs) != 0 {
+		in, err = xmodel.MarshalMessages(inputs)
+		if err != nil {
+			return err
+		}
+	}
+	if len(outputs) != 0 {
+		for _, output := range outputs {
+			fmt.Printf("output:to %s,amount:%s\n", string(output.ToAddr), new(big.Int).SetBytes(output.Amount))
+		}
+		fmt.Println()
+		out, err = xmodel.MarshalMessages(outputs)
+		if err != nil {
+			return err
+		}
+	}
+	if in != nil {
+		err = xc.Put(TransientBucket, contractUtxoInputKey, in)
+		if err != nil {
+			return err
+		}
+	}
+	if out != nil {
+		err = xc.Put(TransientBucket, contractUtxoOutputKey, out)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-// func (xc *XMCache) writeUtxoRWSet() error {
-// 	return xc.putUtxos(xc.GetUtxoRWSets())
-// }
+// ParseContractUtxoInputs parse contract utxo inputs from tx write sets
+//func ParseContractUtxoInputs(tx *pb.Transaction) ([]*pb.TxInput, error) {
+//	var (
+//		utxoInputs []*pb.TxInput
+//		extInput   []byte
+//	)
+//	for _, out := range tx.GetTxOutputsExt() {
+//		if out.GetBucket() != TransientBucket {
+//			continue
+//		}
+//		if bytes.Equal(out.GetKey(), contractUtxoInputKey) {
+//			extInput = out.GetValue()
+//		}
+//	}
+//	if extInput != nil {
+//		err := UnmsarshalMessages(extInput, &utxoInputs)
+//		if err != nil {
+//			return nil, err
+//		}
+//	}
+//	return utxoInputs, nil
+//}
 
-// // ParseContractUtxoInputs parse contract utxo inputs from tx write sets
-// func ParseContractUtxoInputs(tx *pb.Transaction) ([]*pb.TxInput, error) {
-// 	var (
-// 		utxoInputs []*pb.TxInput
-// 		extInput   []byte
-// 	)
-// 	for _, out := range tx.GetTxOutputsExt() {
-// 		if out.GetBucket() != TransientBucket {
-// 			continue
-// 		}
-// 		if bytes.Equal(out.GetKey(), contractUtxoInputKey) {
-// 			extInput = out.GetValue()
-// 		}
-// 	}
-// 	if extInput != nil {
-// 		err := UnmsarshalMessages(extInput, &utxoInputs)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return utxoInputs, nil
-// }
+// ParseContractUtxo parse contract utxos from tx write sets
+//func ParseContractUtxo(tx *pb.Transaction) ([]*pb.TxInput, []*pb.TxOutput, error) {
 
-// // ParseContractUtxo parse contract utxos from tx write sets
-// func ParseContractUtxo(tx *pb.Transaction) ([]*pb.TxInput, []*pb.TxOutput, error) {
-// 	var (
-// 		utxoInputs  []*pb.TxInput
-// 		utxoOutputs []*pb.TxOutput
-// 		extInput    []byte
-// 		extOutput   []byte
-// 	)
-// 	for _, out := range tx.GetTxOutputsExt() {
-// 		if out.GetBucket() != TransientBucket {
-// 			continue
-// 		}
-// 		if bytes.Equal(out.GetKey(), contractUtxoInputKey) {
-// 			extInput = out.GetValue()
-// 		}
-// 		if bytes.Equal(out.GetKey(), contractUtxoOutputKey) {
-// 			extOutput = out.GetValue()
-// 		}
-// 	}
-// 	if extInput != nil {
-// 		err := UnmsarshalMessages(extInput, &utxoInputs)
-// 		if err != nil {
-// 			return nil, nil, err
-// 		}
-// 	}
-// 	if extOutput != nil {
-// 		err := UnmsarshalMessages(extOutput, &utxoOutputs)
-// 		if err != nil {
-// 			return nil, nil, err
-// 		}
-// 	}
-// 	return utxoInputs, utxoOutputs, nil
-// }
+//var (
+//	utxoInputs  []*pb.TxInput
+//	utxoOutputs []*pb.TxOutput
+//	extInput    []byte
+//	extOutput   []byte
+//)
+//for _, out := range tx.GetTxOutputsExt() {
+//	if out.GetBucket() != TransientBucket {
+//		continue
+//	}
+//	if bytes.Equal(out.GetKey(), contractUtxoInputKey) {
+//		extInput = out.GetValue()
+//	}
+//	if bytes.Equal(out.GetKey(), contractUtxoOutputKey) {
+//		extOutput = out.GetValue()
+//	}
+//}
+//if extInput != nil {
+//	err := UnmsarshalMessages(extInput, &utxoInputs)
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//}
+//if extOutput != nil {
+//	err := UnmsarshalMessages(extOutput, &utxoOutputs)
+//	if err != nil {
+//		return nil, nil, err
+//	}
+//}
+//return utxoInputs, utxoOutputs, nil
+//}
 
-// func makeInputsMap(txInputs []*pb.TxInput) map[string]bool {
-// 	res := map[string]bool{}
-// 	if len(txInputs) == 0 {
-// 		return nil
-// 	}
-// 	for _, v := range txInputs {
-// 		utxoKey := string(v.GetRefTxid()) + strconv.FormatInt(int64(v.GetRefOffset()), 10)
-// 		res[utxoKey] = true
-// 	}
-// 	return res
-// }
+//func makeInputsMap(txInputs []*pb.TxInput) map[string]bool {
+//	res := map[string]bool{}
+//	if len(txInputs) == 0 {
+//		return nil
+//	}
+//	for _, v := range txInputs {
+//		utxoKey := string(v.GetRefTxid()) + strconv.FormatInt(int64(v.GetRefOffset()), 10)
+//		res[utxoKey] = true
+//	}
+//	return res
+//}
 
-// func isSubOutputs(contractOutputs, txOutputs []*pb.TxOutput) bool {
-// 	markedOutput := map[string]int{}
-// 	for _, v := range txOutputs {
-// 		key := string(v.GetAmount()) + string(v.GetToAddr())
-// 		markedOutput[key]++
-// 	}
+//func isSubOutputs(contractOutputs, txOutputs []*pb.TxOutput) bool {
+//	markedOutput := map[string]int{}
+//	for _, v := range txOutputs {
+//		key := string(v.GetAmount()) + string(v.GetToAddr())
+//		markedOutput[key]++
+//	}
+//
+//	for _, v := range contractOutputs {
+//		key := string(v.GetAmount()) + string(v.GetToAddr())
+//		if val, ok := markedOutput[key]; !ok {
+//			return false
+//		} else if val < 1 {
+//			return false
+//		} else {
+//			markedOutput[key] = val - 1
+//		}
+//	}
+//	return true
+//}
 
-// 	for _, v := range contractOutputs {
-// 		key := string(v.GetAmount()) + string(v.GetToAddr())
-// 		if val, ok := markedOutput[key]; !ok {
-// 			return false
-// 		} else if val < 1 {
-// 			return false
-// 		} else {
-// 			markedOutput[key] = val - 1
-// 		}
-// 	}
-// 	return true
-// }
+// IsContractUtxoEffective check if contract utxo in tx utxo
+//func IsContractUtxoEffective(contractTxInputs []*pb.TxInput, contractTxOutputs []*pb.TxOutput, tx *pb.Transaction) bool {
+//	if len(contractTxInputs) > len(tx.GetTxInputs()) || len(contractTxOutputs) > len(tx.GetTxOutputs()) {
+//		return false
+//	}
+//
+//	contractTxInputsMap := makeInputsMap(contractTxInputs)
+//	txInputsMap := makeInputsMap(tx.GetTxInputs())
+//	for k := range contractTxInputsMap {
+//		if !(txInputsMap[k]) {
+//			return false
+//		}
+//	}
+//
+//	if !isSubOutputs(contractTxOutputs, tx.GetTxOutputs()) {
+//		return false
+//	}
+//	return true
+//}
 
-// // IsContractUtxoEffective check if contract utxo in tx utxo
-// func IsContractUtxoEffective(contractTxInputs []*pb.TxInput, contractTxOutputs []*pb.TxOutput, tx *pb.Transaction) bool {
-// 	if len(contractTxInputs) > len(tx.GetTxInputs()) || len(contractTxOutputs) > len(tx.GetTxOutputs()) {
-// 		return false
-// 	}
+// CrossQuery will query contract from other chain
+//func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
+//	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
+//}
 
-// 	contractTxInputsMap := makeInputsMap(contractTxInputs)
-// 	txInputsMap := makeInputsMap(tx.GetTxInputs())
-// 	for k := range contractTxInputsMap {
-// 		if !(txInputsMap[k]) {
-// 			return false
-// 		}
-// 	}
+// ParseCrossQuery parse cross query from tx
+//func ParseCrossQuery(tx *pb.Transaction) ([]*pb.CrossQueryInfo, error) {
+//	var (
+//		crossQueryInfos []*pb.CrossQueryInfo
+//		queryInfos      []byte
+//	)
+//	for _, out := range tx.GetTxOutputsExt() {
+//		if out.GetBucket() != TransientBucket {
+//			continue
+//		}
+//		if bytes.Equal(out.GetKey(), crossQueryInfosKey) {
+//			queryInfos = out.GetValue()
+//		}
+//	}
+//	if queryInfos != nil {
+//		err := UnmsarshalMessages(queryInfos, &crossQueryInfos)
+//		if err != nil {
+//			return nil, err
+//		}
+//	}
+//	return crossQueryInfos, nil
+//}
 
-// 	if !isSubOutputs(contractTxOutputs, tx.GetTxOutputs()) {
-// 		return false
-// 	}
-// 	return true
-// }
+// IsCrossQueryEffective check if crossQueryInfos effective
+// TODO: zq
+//func IsCrossQueryEffective(cqi []*pb.CrossQueryInfo, tx *pb.Transaction) bool {
+//	return true
+//}
 
-// // CrossQuery will query contract from other chain
-// func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
-// 	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
-// }
+// PutCrossQueries put queryInfos to db
+//func (xc *XMCache) putCrossQueries(queryInfos []*pb.CrossQueryInfo) error {
+//	var qi []byte
+//	var err error
+//	if len(queryInfos) != 0 {
+//		qi, err = MarshalMessages(queryInfos)
+//		if err != nil {
+//			return err
+//		}
+//	}
+//	if qi != nil {
+//		err = xc.Put(TransientBucket, crossQueryInfosKey, qi)
+//		if err != nil {
+//			return err
+//		}
+//	}
+//	return nil
+//}
 
-// // ParseCrossQuery parse cross query from tx
-// func ParseCrossQuery(tx *pb.Transaction) ([]*pb.CrossQueryInfo, error) {
-// 	var (
-// 		crossQueryInfos []*pb.CrossQueryInfo
-// 		queryInfos      []byte
-// 	)
-// 	for _, out := range tx.GetTxOutputsExt() {
-// 		if out.GetBucket() != TransientBucket {
-// 			continue
-// 		}
-// 		if bytes.Equal(out.GetKey(), crossQueryInfosKey) {
-// 			queryInfos = out.GetValue()
-// 		}
-// 	}
-// 	if queryInfos != nil {
-// 		err := UnmsarshalMessages(queryInfos, &crossQueryInfos)
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 	}
-// 	return crossQueryInfos, nil
-// }
-
-// // IsCrossQueryEffective check if crossQueryInfos effective
-// // TODO: zq
-// func IsCrossQueryEffective(cqi []*pb.CrossQueryInfo, tx *pb.Transaction) bool {
-// 	return true
-// }
-
-// // PutCrossQueries put queryInfos to db
-// func (xc *XMCache) putCrossQueries(queryInfos []*pb.CrossQueryInfo) error {
-// 	var qi []byte
-// 	var err error
-// 	if len(queryInfos) != 0 {
-// 		qi, err = MarshalMessages(queryInfos)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	if qi != nil {
-// 		err = xc.Put(TransientBucket, crossQueryInfosKey, qi)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	return nil
-// }
-
-// func (xc *XMCache) writeCrossQueriesRWSet() error {
-// 	return xc.putCrossQueries(xc.crossQueryCache.GetCrossQueryRWSets())
-// }
+//func (xc *XMCache) writeCrossQueriesRWSet() error {
+//	return xc.putCrossQueries(xc.crossQueryCache.GetCrossQueryRWSets())
+//}
 
 // ParseContractEvents parse contract events from tx
 func ParseContractEvents(tx *lpb.Transaction) ([]*protos.ContractEvent, error) {
@@ -460,10 +467,10 @@ func (xc *XMCache) writeEventRWSet() error {
 // generated during the execution of the contract, but will not be referenced by other txs.
 func (xc *XMCache) Flush() error {
 	var err error
-	// err = xc.writeUtxoRWSet()
-	// if err != nil {
-	// 	return err
-	// }
+	err = xc.flushUTXORWSet()
+	if err != nil {
+		return err
+	}
 
 	// err = xc.writeCrossQueriesRWSet()
 	// if err != nil {

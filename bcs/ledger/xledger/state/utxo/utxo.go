@@ -23,7 +23,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/meta"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	"github.com/xuperchain/xupercore/kernel/permission/acl"
 	aclu "github.com/xuperchain/xupercore/kernel/permission/acl/utils"
 	"github.com/xuperchain/xupercore/lib/cache"
 	crypto_base "github.com/xuperchain/xupercore/lib/crypto/client/base"
@@ -96,12 +95,6 @@ type InboundTx struct {
 type UtxoLockItem struct {
 	timestamp int64
 	holder    *list.Element
-}
-
-type contractChainCore struct {
-	*acl.Manager // ACL manager for read/write acl table
-	*UtxoVM
-	*ledger.Ledger
 }
 
 func GenUtxoKey(addr []byte, txid []byte, offset int32) string {
@@ -327,6 +320,11 @@ func (uv *UtxoVM) parseUtxoKeys(uKey string) ([]byte, int, error) {
 		return nil, 0, err
 	}
 	return refTxid, offset, nil
+}
+
+func (uv *UtxoVM) SelectUtxo(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
+
+	return uv.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
 }
 
 //SelectUtxos 选择足够的utxo
