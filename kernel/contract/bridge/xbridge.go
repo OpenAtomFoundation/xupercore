@@ -42,13 +42,14 @@ type XBridgeConfig struct {
 func New(cfg *XBridgeConfig) (*XBridge, error) {
 	ctxmgr := NewContextManager()
 	xbridge := &XBridge{
-		ctxmgr:    ctxmgr,
-		basedir:   cfg.Basedir,
-		vmconfigs: cfg.VMConfigs,
-		creators:  make(map[ContractType]InstanceCreator),
-		xmodel:    cfg.XModel,
-		core:      cfg.Core,
-		config:    cfg.Config,
+		ctxmgr:      ctxmgr,
+		basedir:     cfg.Basedir,
+		vmconfigs:   cfg.VMConfigs,
+		creators:    make(map[ContractType]InstanceCreator),
+		xmodel:      cfg.XModel,
+		core:        cfg.Core,
+		config:      cfg.Config,
+		debugLogger: cfg.LogDriver,
 	}
 	xbridge.contractManager = &contractManager{
 		xbridge:      xbridge,
@@ -61,7 +62,6 @@ func New(cfg *XBridgeConfig) (*XBridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	xbridge.initDebugLogger(cfg)
 	return xbridge, nil
 }
 
@@ -91,13 +91,10 @@ func (v *XBridge) initVM() error {
 	return nil
 }
 
-func (v *XBridge) initDebugLogger(cfg *XBridgeConfig) {
-	// Allow inject debug logger for unit test and xdev tool
-	if cfg.LogDriver != nil {
-		v.debugLogger = cfg.LogDriver
-	}
-
-}
+//func (v *XBridge) initDebugLogger(cfg *XBridgeConfig) {
+//
+//
+//}
 
 func (v *XBridge) getCreator(tp ContractType) InstanceCreator {
 	return v.creators[tp]
@@ -151,10 +148,13 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		ctx.ContractSet = make(map[string]bool)
 		ctx.ContractSet[ctx.ContractName] = true
 	}
+	// lifecycle of debug logger driver is coincident with bridge
+	// while ctx.Logger's coincident with context
 	if v.debugLogger != nil {
 		ctx.Logger = v.debugLogger
 	} else {
-		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), "contract")
+		// use contract Name for convience of filter log from specific contract using grep or other logging processing stack
+		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), ctx.ContractName)
 	}
 
 	if err != nil {
