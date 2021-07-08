@@ -3,6 +3,7 @@ package manager
 import (
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -47,6 +48,10 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	m := &managerImpl{
 		core: cfg.Core,
 	}
+	var logDriver logs.LogDriver
+	if cfg.Config != nil {
+		logDriver = cfg.Config.LogDriver
+	}
 	xbridge, err := bridge.New(&bridge.XBridgeConfig{
 		Basedir: cfg.Basedir,
 		VMConfigs: map[bridge.ContractType]bridge.VMConfig{
@@ -62,7 +67,7 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 		Config:    *xcfg,
 		XModel:    cfg.XMReader,
 		Core:      cfg.Core,
-		LogDriver: cfg.Config.LogDriver,
+		LogDriver: logDriver,
 	})
 	if err != nil {
 		return nil, err
