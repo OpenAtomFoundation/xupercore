@@ -147,7 +147,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		ctx.Logger = v.debugLogger
 	} else {
 		// use contract Name for convience of filter log from specific contract using grep or other logging processing stack
-		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), ctx.ContractName)
+		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), "contract_"+ctx.ContractName)
 	}
 
 	if err != nil {
