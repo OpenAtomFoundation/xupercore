@@ -1,5 +1,9 @@
 package contract
 
+import (
+	"github.com/xuperchain/xupercore/lib/logs"
+)
+
 // NativeConfig contains the two above config
 type NativeConfig struct {
 	Driver string
@@ -96,8 +100,8 @@ type LogConfig struct {
 // ContractConfig define the config of XuperBridge
 type ContractConfig struct {
 	EnableDebugLog bool
-	DebugLog       LogConfig
 	EnableUpgrade  bool
+	LogDriver      logs.Logger
 
 	Native  NativeConfig
 	Wasm    WasmConfig

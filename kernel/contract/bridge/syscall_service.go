@@ -371,12 +371,12 @@ func (c *SyscallService) GetAccountAddresses(ctx context.Context, in *pb.GetAcco
 
 // PostLog handle log entry from contract
 func (c *SyscallService) PostLog(ctx context.Context, in *pb.PostLogRequest) (*pb.PostLogResponse, error) {
-	// nctx, ok := c.ctxmgr.Context(in.GetHeader().GetCtxid())
-	_, ok := c.ctxmgr.Context(in.GetHeader().GetCtxid())
+	nctx, ok := c.ctxmgr.Context(in.GetHeader().GetCtxid())
 	if !ok {
 		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
 	}
-	// nctx.Logger.Info(in.GetEntry())
+	nctx.Logger.SetCommField("contract_name", nctx.ContractName)
+	nctx.Logger.Info(in.GetEntry())
 	return &pb.PostLogResponse{}, nil
 }
 

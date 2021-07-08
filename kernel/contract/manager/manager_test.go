@@ -3,16 +3,35 @@ package manager
 import (
 	"testing"
 
+	log15 "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 )
 
+type MockLogger struct {
+	log15.Logger
+}
+
+func (*MockLogger) GetLogId() string {
+	return ""
+}
+
+func (*MockLogger) SetCommField(key string, value interface{}) {
+
+}
+func (*MockLogger) SetInfoField(key string, value interface{}) {
+
+}
+
 var contractConfig = &contract.ContractConfig{
 	Xkernel: contract.XkernelConfig{
 		Enable: true,
 		Driver: "default",
+	},
+	LogDriver: &MockLogger{
+		log15.New(),
 	},
 }
 

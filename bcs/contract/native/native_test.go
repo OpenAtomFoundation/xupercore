@@ -7,11 +7,27 @@ import (
 	"path/filepath"
 	"testing"
 
+	log15 "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
+
+type MockLogger struct {
+	log15.Logger
+}
+
+func (*MockLogger) GetLogId() string {
+	return ""
+}
+
+func (*MockLogger) SetCommField(key string, value interface{}) {
+
+}
+func (*MockLogger) SetInfoField(key string, value interface{}) {
+
+}
 
 var contractConfig = &contract.ContractConfig{
 	EnableUpgrade: true,
@@ -22,6 +38,9 @@ var contractConfig = &contract.ContractConfig{
 	Native: contract.NativeConfig{
 		Enable: true,
 		Driver: "native",
+	},
+	LogDriver: &MockLogger{
+		log15.New(),
 	},
 }
 
