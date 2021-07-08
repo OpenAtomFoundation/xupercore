@@ -100,9 +100,8 @@ type LogConfig struct {
 // ContractConfig define the config of XuperBridge
 type ContractConfig struct {
 	EnableDebugLog bool
-	//DebugLog       LogConfig
-	EnableUpgrade bool
-	LogDriver     logs.LogDriver
+	EnableUpgrade  bool
+	LogDriver      logs.LogDriver
 
 	Native  NativeConfig
 	Wasm    WasmConfig
