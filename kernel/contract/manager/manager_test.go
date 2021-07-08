@@ -3,6 +3,7 @@ package manager
 import (
 	"testing"
 
+	log15 "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
@@ -14,6 +15,7 @@ var contractConfig = &contract.ContractConfig{
 		Enable: true,
 		Driver: "default",
 	},
+	LogDriver: log15.New(),
 }
 
 func TestCreate(t *testing.T) {

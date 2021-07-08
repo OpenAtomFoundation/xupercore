@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	log15 "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
@@ -23,6 +24,7 @@ var contractConfig = &contract.ContractConfig{
 		Enable: true,
 		Driver: "native",
 	},
+	LogDriver: log15.New(),
 }
 
 func compile(th *mock.TestHelper) ([]byte, error) {
