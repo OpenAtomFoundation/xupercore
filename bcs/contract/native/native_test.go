@@ -39,7 +39,9 @@ var contractConfig = &contract.ContractConfig{
 		Enable: true,
 		Driver: "native",
 	},
-	LogDriver: &MockLogger{},
+	LogDriver: &MockLogger{
+		log15.New(),
+	},
 }
 
 func compile(th *mock.TestHelper) ([]byte, error) {
