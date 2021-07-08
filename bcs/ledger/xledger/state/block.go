@@ -1,26 +1,25 @@
-package agent
+package state
 
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 type BlockAgent struct {
-	blk *lpb.InternalBlock
+	blk *xldgpb.InternalBlock
 }
 
 // 兼容xledger账本历史原因共识部分字段分开存储在区块中
 type ConsensusStorage struct {
-	TargetBits  int32           `json:"targetBits,omitempty"`
-	Justify     *lpb.QuorumCert `json:"justify,omitempty"`
-	CurTerm     int64           `json:"curTerm,omitempty"`
-	CurBlockNum int64           `json:"curBlockNum,omitempty"`
+	TargetBits  int32              `json:"targetBits,omitempty"`
+	Justify     *xldgpb.QuorumCert `json:"justify,omitempty"`
+	CurTerm     int64              `json:"curTerm,omitempty"`
+	CurBlockNum int64              `json:"curBlockNum,omitempty"`
 }
 
-func NewBlockAgent(blk *lpb.InternalBlock) *BlockAgent {
+func NewBlockAgent(blk *xldgpb.InternalBlock) *BlockAgent {
 	return &BlockAgent{
 		blk: blk,
 	}
@@ -106,4 +105,21 @@ func (t *BlockAgent) GetPublicKey() string {
 
 func (t *BlockAgent) GetSign() []byte {
 	return t.blk.GetSign()
+}
+
+func (t *BlockAgent) GetInTrunk() bool {
+	return t.blk.InTrunk
+}
+
+func (t *BlockAgent) GetNextHash() []byte {
+	return t.blk.NextHash
+}
+
+func (t *BlockAgent) GetTxIDs() [][]byte {
+	txIDs := [][]byte{}
+	for _, tx := range t.blk.Transactions {
+		txIDs = append(txIDs, tx.Txid)
+	}
+	return txIDs
+
 }
