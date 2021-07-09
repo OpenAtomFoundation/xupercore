@@ -5,22 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
 type BlockAgent struct {
-	blk *xldgpb.InternalBlock
+	blk *lpb.InternalBlock
 }
 
 // 兼容xledger账本历史原因共识部分字段分开存储在区块中
 type ConsensusStorage struct {
-	TargetBits  int32              `json:"targetBits,omitempty"`
-	Justify     *xldgpb.QuorumCert `json:"justify,omitempty"`
-	CurTerm     int64              `json:"curTerm,omitempty"`
-	CurBlockNum int64              `json:"curBlockNum,omitempty"`
+	TargetBits  int32           `json:"targetBits,omitempty"`
+	Justify     *lpb.QuorumCert `json:"justify,omitempty"`
+	CurTerm     int64           `json:"curTerm,omitempty"`
+	CurBlockNum int64           `json:"curBlockNum,omitempty"`
 }
 
-func NewBlockAgent(blk *xldgpb.InternalBlock) *BlockAgent {
+func NewBlockAgent(blk *lpb.InternalBlock) *BlockAgent {
 	return &BlockAgent{
 		blk: blk,
 	}
