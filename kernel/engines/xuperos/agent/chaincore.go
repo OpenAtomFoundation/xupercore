@@ -42,5 +42,4 @@ func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) 
 // QueryBlock query block
 func (t *ChainCoreAgent) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
 	return t.chainCtx.State.QueryBlock(blockid)
-
 }
