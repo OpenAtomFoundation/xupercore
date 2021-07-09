@@ -14,7 +14,7 @@ type BlockHandle interface {
 	GetNextHash() []byte
 	GetPublicKey() string
 	GetSign() []byte
-	GetTxIDs() [][]byte
+	GetTxIDs() []string
 	GetInTrunk() bool
 }
 

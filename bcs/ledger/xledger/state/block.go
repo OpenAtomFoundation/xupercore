@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
@@ -115,10 +116,10 @@ func (t *BlockAgent) GetNextHash() []byte {
 	return t.blk.NextHash
 }
 
-func (t *BlockAgent) GetTxIDs() [][]byte {
-	txIDs := [][]byte{}
+func (t *BlockAgent) GetTxIDs() []string {
+	txIDs := []string{}
 	for _, tx := range t.blk.Transactions {
-		txIDs = append(txIDs, tx.Txid)
+		txIDs = append(txIDs, hex.EncodeToString(tx.Txid))
 	}
 	return txIDs
 

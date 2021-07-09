@@ -118,8 +118,8 @@ func (b *FakeBlock) GetInTrunk() bool {
 func (b *FakeBlock) GetNextHash() []byte {
 	return []byte{}
 }
-func (b *FakeBlock) GetTxIDs() [][]byte {
-	return [][]byte{}
+func (b *FakeBlock) GetTxIDs() []string {
+	return []string{}
 }
 
 type FakeMeta struct {

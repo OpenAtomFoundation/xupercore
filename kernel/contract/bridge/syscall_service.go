@@ -65,10 +65,6 @@ func (c *SyscallService) QueryBlock(ctx context.Context, in *pb.QueryBlockReques
 	if err != nil {
 		return nil, err
 	}
-	txids := []string{}
-	for _, t := range block.GetTxIDs() {
-		txids = append(txids, hex.EncodeToString(t))
-	}
 	blocksdk := &pb.Block{
 		Blockid:  hex.EncodeToString(block.GetBlockid()),
 		PreHash:  hex.EncodeToString(block.GetPreHash()),
@@ -76,8 +72,8 @@ func (c *SyscallService) QueryBlock(ctx context.Context, in *pb.QueryBlockReques
 		Sign:     hex.EncodeToString(block.GetSign()),
 		Pubkey:   []byte(block.GetPublicKey()),
 		Height:   block.GetHeight(),
-		Txids:    txids,
-		TxCount:  int32(len(txids)),
+		Txids:    block.GetTxIDs(),
+		TxCount:  int32(len(block.GetTxIDs())),
 		InTrunk:  block.GetInTrunk(),
 		NextHash: hex.EncodeToString(block.GetNextHash()),
 	}
