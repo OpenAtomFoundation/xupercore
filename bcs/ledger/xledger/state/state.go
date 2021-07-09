@@ -858,10 +858,10 @@ func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 
 	for _, input := range ltx.TxInputs {
 		txInputs = append(txInputs, &pb.TxInput{
-			RefTxid:              string(input.RefTxid),
+			RefTxid:              hex.EncodeToString(input.RefTxid),
 			RefOffset:            input.RefOffset,
 			FromAddr:             input.FromAddr,
-			Amount:               string(input.Amount),
+			Amount:               new(big.Int).SetBytes(input.Amount).String(),
 			FrozenHeight:         input.FrozenHeight,
 			XXX_NoUnkeyedLiteral: input.XXX_NoUnkeyedLiteral,
 			XXX_unrecognized:     input.XXX_unrecognized,
@@ -870,7 +870,7 @@ func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	}
 	for _, output := range ltx.TxOutputs {
 		txOutputs = append(txOutputs, &pb.TxOutput{
-			Amount:               string(output.Amount),
+			Amount:               new(big.Int).SetBytes(output.Amount).String(),
 			ToAddr:               output.ToAddr,
 			FrozenHeight:         output.FrozenHeight,
 			XXX_NoUnkeyedLiteral: output.XXX_NoUnkeyedLiteral,
@@ -880,8 +880,8 @@ func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	}
 
 	tx := &pb.Transaction{
-		Txid:                 string(txid),
-		Blockid:              string(ltx.Blockid),
+		Txid:                 hex.EncodeToString(txid),
+		Blockid:              hex.EncodeToString(ltx.Blockid),
 		TxInputs:             txInputs,
 		TxOutputs:            txOutputs,
 		Desc:                 ltx.Desc,

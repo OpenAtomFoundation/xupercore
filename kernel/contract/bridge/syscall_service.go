@@ -100,10 +100,12 @@ func (c *SyscallService) QueryTx(ctx context.Context, in *pb.QueryTxRequest) (*p
 		return nil, err
 	}
 
+	fmt.Println("1")
 	tx, err := nctx.Core.QueryTransaction(rawTxid)
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(2)
 	_ = tx
 
 	return &pb.QueryTxResponse{
