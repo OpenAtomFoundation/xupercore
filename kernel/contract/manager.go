@@ -40,13 +40,11 @@ type ChainCore interface {
 	VerifyContractPermission(initiator string, authRequire []string, contractName, methodName string) (bool, error)
 	// VerifyContractOwnerPermission verify contract ownership permisson
 	VerifyContractOwnerPermission(contractName string, authRequire []string) error
-
 	// QueryTransaction query confirmed tx
 	QueryTransaction(txid []byte) (*pb.Transaction, error)
 	// QueryBlock query block
 	QueryBlock(blockid []byte) (ledger.BlockHandle, error)
 
-	//QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error)
 	// ResolveChain resolve chain endorsorinfos
 	// ResolveChain(chainName string) (*pb.CrossQueryMeta, error)
 }

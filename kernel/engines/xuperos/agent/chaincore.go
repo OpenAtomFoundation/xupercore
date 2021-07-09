@@ -40,45 +40,7 @@ func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) 
 	if err != nil {
 		return nil, err
 	}
-	txInputs := []*pb.TxInput{}
-	txOutputs := []*pb.TxOutput{}
-	for _, input := range ltx.TxInputs {
-		txInputs = append(txInputs, &pb.TxInput{
-			RefTxid:              input.GetRefTxid(),
-			RefOffset:            input.RefOffset,
-			FromAddr:             input.FromAddr,
-			Amount:               input.GetAmount(),
-			FrozenHeight:         input.FrozenHeight,
-			XXX_NoUnkeyedLiteral: input.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     input.XXX_unrecognized,
-			XXX_sizecache:        input.XXX_sizecache,
-		})
-	}
-	for _, output := range ltx.TxOutputs {
-		txOutputs = append(txOutputs, &pb.TxOutput{
-			Amount:               output.GetAmount(),
-			ToAddr:               output.ToAddr,
-			FrozenHeight:         output.FrozenHeight,
-			XXX_NoUnkeyedLiteral: output.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     output.XXX_unrecognized,
-			XXX_sizecache:        output.XXX_sizecache,
-		})
-	}
-
-	tx := &pb.Transaction{
-		Txid:                 ltx.Txid,
-		Blockid:              ltx.Blockid,
-		TxInputs:             txInputs,
-		TxOutputs:            txOutputs,
-		Desc:                 ltx.Desc,
-		Initiator:            ltx.Initiator,
-		AuthRequire:          ltx.AuthRequire,
-		XXX_NoUnkeyedLiteral: ltx.XXX_NoUnkeyedLiteral,
-		XXX_unrecognized:     ltx.XXX_unrecognized,
-		XXX_sizecache:        ltx.XXX_sizecache,
-	}
-
-	return tx, err
+	return ltx, err
 }
 
 // QueryBlock query block

@@ -352,7 +352,6 @@ func (c *FakeKContext) Transfer(from string, to string, amount *big.Int) error {
 }
 func (c *FakeKContext) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error) {
 	return &xldgpb.InternalBlock{}, nil
-
 }
 func (c *FakeKContext) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	return &pb.Transaction{}, nil
