@@ -102,9 +102,7 @@ func (c *SyscallService) QueryTx(ctx context.Context, in *pb.QueryTxRequest) (*p
 	}
 
 	return &pb.QueryTxResponse{
-		Tx:                   tx,
-		XXX_sizecache:        tx.XXX_sizecache,
-		XXX_NoUnkeyedLiteral: tx.XXX_NoUnkeyedLiteral,
+		Tx: tx,
 	}, nil
 }
 

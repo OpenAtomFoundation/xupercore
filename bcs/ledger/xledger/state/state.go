@@ -856,38 +856,29 @@ func (t *State) QueryTransaction(txid []byte) (*pb2.Transaction, error) {
 
 	for _, input := range ltx.TxInputs {
 		txInputs = append(txInputs, &pb2.TxInput{
-			RefTxid:              hex.EncodeToString(input.GetRefTxid()),
-			RefOffset:            input.RefOffset,
-			FromAddr:             input.FromAddr,
-			Amount:               new(big.Int).SetBytes(input.GetAmount()).String(),
-			FrozenHeight:         input.FrozenHeight,
-			XXX_NoUnkeyedLiteral: input.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     input.XXX_unrecognized,
-			XXX_sizecache:        input.XXX_sizecache,
+			RefTxid:      hex.EncodeToString(input.GetRefTxid()),
+			RefOffset:    input.RefOffset,
+			FromAddr:     input.FromAddr,
+			Amount:       new(big.Int).SetBytes(input.GetAmount()).String(),
+			FrozenHeight: input.FrozenHeight,
 		})
 	}
 	for _, output := range ltx.TxOutputs {
 		txOutputs = append(txOutputs, &pb2.TxOutput{
-			Amount:               hex.EncodeToString(output.GetAmount()),
-			ToAddr:               output.ToAddr,
-			FrozenHeight:         output.FrozenHeight,
-			XXX_NoUnkeyedLiteral: output.XXX_NoUnkeyedLiteral,
-			XXX_unrecognized:     output.XXX_unrecognized,
-			XXX_sizecache:        output.XXX_sizecache,
+			Amount:       hex.EncodeToString(output.GetAmount()),
+			ToAddr:       output.ToAddr,
+			FrozenHeight: output.FrozenHeight,
 		})
 	}
 
 	tx := &pb2.Transaction{
-		Txid:                 hex.EncodeToString(ltx.Txid),
-		Blockid:              hex.EncodeToString(ltx.Blockid),
-		TxInputs:             txInputs,
-		TxOutputs:            txOutputs,
-		Desc:                 ltx.Desc,
-		Initiator:            ltx.Initiator,
-		AuthRequire:          ltx.AuthRequire,
-		XXX_NoUnkeyedLiteral: ltx.XXX_NoUnkeyedLiteral,
-		XXX_unrecognized:     ltx.XXX_unrecognized,
-		XXX_sizecache:        ltx.XXX_sizecache,
+		Txid:        hex.EncodeToString(ltx.Txid),
+		Blockid:     hex.EncodeToString(ltx.Blockid),
+		TxInputs:    txInputs,
+		TxOutputs:   txOutputs,
+		Desc:        ltx.Desc,
+		Initiator:   ltx.Initiator,
+		AuthRequire: ltx.AuthRequire,
 	}
 	return tx, nil
 }
