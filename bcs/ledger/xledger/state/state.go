@@ -842,8 +842,6 @@ func (t *State) QueryBlock(blockid []byte) (kledger.BlockHandle, error) {
 	if err != nil {
 		return nil, err
 	}
-	//return block, err
-
 	return NewBlockAgent(block), nil
 
 }
