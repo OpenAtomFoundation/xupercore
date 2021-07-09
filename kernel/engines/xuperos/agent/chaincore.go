@@ -36,18 +36,11 @@ func (t *ChainCoreAgent) VerifyContractOwnerPermission(contractName string, auth
 
 // QueryTransaction query confirmed tx
 func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) {
-	ltx, err := t.chainCtx.State.QueryTransaction(txid)
-	if err != nil {
-		return nil, err
-	}
-	return ltx, err
+	return t.chainCtx.State.QueryTransaction(txid)
 }
 
 // QueryBlock query block
 func (t *ChainCoreAgent) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
-	block, err := t.chainCtx.State.QueryBlock(blockid)
-	if err != nil {
-		return nil, err
-	}
-	return block, err
+	return t.chainCtx.State.QueryBlock(blockid)
+
 }
