@@ -1,12 +1,10 @@
 package agent
 
 import (
-	"encoding/hex"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
-	"math/big"
 )
 
 type ChainCoreAgent struct {
@@ -38,47 +36,49 @@ func (t *ChainCoreAgent) VerifyContractOwnerPermission(contractName string, auth
 
 // QueryTransaction query confirmed tx
 func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) {
-	lpb, err := t.chainCtx.State.QueryTransaction(txid)
+	ltx, err := t.chainCtx.State.QueryTransaction(txid)
 	if err != nil {
 		return nil, err
 	}
 	txInputs := []*pb.TxInput{}
-	for _, input := range lpb.TxInputs {
-		txInputs = append(txInputs, &pb.TxInput{
-			RefTxid:              hex.EncodeToString(input.GetRefTxid()),
-			RefOffset:            input.GetRefOffset(),
-			FromAddr:             input.GetFromAddr(),
-			Amount:               new(big.Int).SetBytes(input.GetAmount()).String(),
-			FrozenHeight:         0,
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     nil,
-			XXX_sizecache:        0,
-		})
-	}
 	txOutputs := []*pb.TxOutput{}
-	for _, output := range lpb.TxOutputs {
-		txOutputs = append(txOutputs, &pb.TxOutput{
-			Amount:               new(big.Int).SetBytes(output.Amount).String(),
-			ToAddr:               output.GetToAddr(),
-			FrozenHeight:         output.GetFrozenHeight(),
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     nil,
-			XXX_sizecache:        0,
+	for _, input := range ltx.TxInputs {
+		txInputs = append(txInputs, &pb.TxInput{
+			RefTxid:              input.GetRefTxid(),
+			RefOffset:            input.RefOffset,
+			FromAddr:             input.FromAddr,
+			Amount:               input.GetAmount(),
+			FrozenHeight:         input.FrozenHeight,
+			XXX_NoUnkeyedLiteral: input.XXX_NoUnkeyedLiteral,
+			XXX_unrecognized:     input.XXX_unrecognized,
+			XXX_sizecache:        input.XXX_sizecache,
 		})
 	}
-	return &pb.Transaction{
-		Txid:                 hex.EncodeToString(lpb.Txid),
-		Blockid:              hex.EncodeToString(lpb.Blockid),
+	for _, output := range ltx.TxOutputs {
+		txOutputs = append(txOutputs, &pb.TxOutput{
+			Amount:               output.GetAmount(),
+			ToAddr:               output.ToAddr,
+			FrozenHeight:         output.FrozenHeight,
+			XXX_NoUnkeyedLiteral: output.XXX_NoUnkeyedLiteral,
+			XXX_unrecognized:     output.XXX_unrecognized,
+			XXX_sizecache:        output.XXX_sizecache,
+		})
+	}
+
+	tx := &pb.Transaction{
+		Txid:                 ltx.Txid,
+		Blockid:              ltx.Blockid,
 		TxInputs:             txInputs,
 		TxOutputs:            txOutputs,
-		Desc:                 lpb.GetDesc(),
-		Initiator:            lpb.GetInitiator(),
-		AuthRequire:          lpb.GetAuthRequire(),
-		XXX_NoUnkeyedLiteral: lpb.XXX_NoUnkeyedLiteral,
-		XXX_unrecognized:     lpb.XXX_unrecognized,
-		XXX_sizecache:        lpb.XXX_sizecache,
-	}, nil
+		Desc:                 ltx.Desc,
+		Initiator:            ltx.Initiator,
+		AuthRequire:          ltx.AuthRequire,
+		XXX_NoUnkeyedLiteral: ltx.XXX_NoUnkeyedLiteral,
+		XXX_unrecognized:     ltx.XXX_unrecognized,
+		XXX_sizecache:        ltx.XXX_sizecache,
+	}
 
+	return tx, err
 }
 
 // QueryBlock query block
@@ -88,5 +88,4 @@ func (t *ChainCoreAgent) QueryBlock(blockid []byte) (ledger.BlockHandle, error) 
 		return nil, err
 	}
 	return block, err
-	//return state.NewBlockAgent(block), nil
 }

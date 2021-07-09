@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -846,20 +847,21 @@ func (t *State) QueryBlock(blockid []byte) (kledger.BlockHandle, error) {
 	return NewBlockAgent(block), nil
 
 }
-func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
+func (t *State) QueryTransaction(txid []byte) (*pb2.Transaction, error) {
 	ltx, err := t.sctx.Ledger.QueryTransaction(txid)
 	if err != nil {
 		return nil, err
 	}
-	txInputs := []*protos.TxInput{}
-	txOutputs := []*protos.TxOutput{}
+
+	txInputs := []*pb2.TxInput{}
+	txOutputs := []*pb2.TxOutput{}
 
 	for _, input := range ltx.TxInputs {
-		txInputs = append(txInputs, &protos.TxInput{
-			RefTxid:              input.GetRefTxid(),
+		txInputs = append(txInputs, &pb2.TxInput{
+			RefTxid:              hex.EncodeToString(input.GetRefTxid()),
 			RefOffset:            input.RefOffset,
 			FromAddr:             input.FromAddr,
-			Amount:               input.GetAmount(),
+			Amount:               new(big.Int).SetBytes(input.GetAmount()).String(),
 			FrozenHeight:         input.FrozenHeight,
 			XXX_NoUnkeyedLiteral: input.XXX_NoUnkeyedLiteral,
 			XXX_unrecognized:     input.XXX_unrecognized,
@@ -867,8 +869,8 @@ func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 		})
 	}
 	for _, output := range ltx.TxOutputs {
-		txOutputs = append(txOutputs, &protos.TxOutput{
-			Amount:               output.GetAmount(),
+		txOutputs = append(txOutputs, &pb2.TxOutput{
+			Amount:               hex.EncodeToString(output.GetAmount()),
 			ToAddr:               output.ToAddr,
 			FrozenHeight:         output.FrozenHeight,
 			XXX_NoUnkeyedLiteral: output.XXX_NoUnkeyedLiteral,
@@ -877,9 +879,9 @@ func (t *State) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 		})
 	}
 
-	tx := &pb.Transaction{
-		Txid:                 ltx.Txid,
-		Blockid:              ltx.Blockid,
+	tx := &pb2.Transaction{
+		Txid:                 hex.EncodeToString(ltx.Txid),
+		Blockid:              hex.EncodeToString(ltx.Blockid),
 		TxInputs:             txInputs,
 		TxOutputs:            txOutputs,
 		Desc:                 ltx.Desc,
