@@ -3,10 +3,12 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
+
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -139,7 +141,11 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	ctx.Release()
 	t.Commit(state)
+	t.sandbox = state
 	return resp, nil
+}
+func (t *TestHelper) Sandbox() contract.StateSandbox {
+	return t.sandbox
 }
 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
@@ -166,6 +172,7 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 	})
+
 	ctx.Release()
 	t.Commit(state)
 	return err
@@ -208,6 +215,7 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 	txbuf := make([]byte, 32)
 	rand.Read(txbuf)
 	for i, w := range rwset.WSet {
+		fmt.Println(w.Bucket, string(w.Key))
 		t.state.Put(w.Bucket, w.Key, &ledger.VersionedData{
 			RefTxid:   txbuf,
 			RefOffset: int32(i),
