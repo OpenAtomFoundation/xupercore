@@ -1,9 +1,9 @@
-package agent
+package state
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
@@ -106,4 +106,21 @@ func (t *BlockAgent) GetPublicKey() string {
 
 func (t *BlockAgent) GetSign() []byte {
 	return t.blk.GetSign()
+}
+
+func (t *BlockAgent) GetInTrunk() bool {
+	return t.blk.InTrunk
+}
+
+func (t *BlockAgent) GetNextHash() []byte {
+	return t.blk.NextHash
+}
+
+func (t *BlockAgent) GetTxIDs() []string {
+	txIDs := []string{}
+	for _, tx := range t.blk.Transactions {
+		txIDs = append(txIDs, hex.EncodeToString(tx.Txid))
+	}
+	return txIDs
+
 }

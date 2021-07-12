@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
@@ -30,4 +32,14 @@ func (t *ChainCoreAgent) VerifyContractPermission(initiator string, authRequire 
 // 结合合约acl设置鉴权
 func (t *ChainCoreAgent) VerifyContractOwnerPermission(contractName string, authRequire []string) error {
 	return t.chainCtx.State.VerifyContractOwnerPermission(contractName, authRequire)
+}
+
+// QueryTransaction query confirmed tx
+func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) {
+	return t.chainCtx.State.QueryTransaction(txid)
+}
+
+// QueryBlock query block
+func (t *ChainCoreAgent) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
+	return t.chainCtx.State.QueryBlock(blockid)
 }

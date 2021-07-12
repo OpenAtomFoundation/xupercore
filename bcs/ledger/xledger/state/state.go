@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -834,6 +835,52 @@ func (t *State) ClearCache() {
 	t.clearBalanceCache()
 	t.xmodel.CleanCache()
 	t.log.Info("clear utxo cache")
+}
+
+func (t *State) QueryBlock(blockid []byte) (kledger.BlockHandle, error) {
+	block, err := t.sctx.Ledger.QueryBlock(blockid)
+	if err != nil {
+		return nil, err
+	}
+	return NewBlockAgent(block), nil
+
+}
+func (t *State) QueryTransaction(txid []byte) (*pb2.Transaction, error) {
+	ltx, err := t.sctx.Ledger.QueryTransaction(txid)
+	if err != nil {
+		return nil, err
+	}
+
+	txInputs := []*pb2.TxInput{}
+	txOutputs := []*pb2.TxOutput{}
+
+	for _, input := range ltx.TxInputs {
+		txInputs = append(txInputs, &pb2.TxInput{
+			RefTxid:      hex.EncodeToString(input.GetRefTxid()),
+			RefOffset:    input.RefOffset,
+			FromAddr:     input.FromAddr,
+			Amount:       new(big.Int).SetBytes(input.GetAmount()).String(),
+			FrozenHeight: input.FrozenHeight,
+		})
+	}
+	for _, output := range ltx.TxOutputs {
+		txOutputs = append(txOutputs, &pb2.TxOutput{
+			Amount:       hex.EncodeToString(output.GetAmount()),
+			ToAddr:       output.ToAddr,
+			FrozenHeight: output.FrozenHeight,
+		})
+	}
+
+	tx := &pb2.Transaction{
+		Txid:        hex.EncodeToString(ltx.Txid),
+		Blockid:     hex.EncodeToString(ltx.Blockid),
+		TxInputs:    txInputs,
+		TxOutputs:   txOutputs,
+		Desc:        ltx.Desc,
+		Initiator:   ltx.Initiator,
+		AuthRequire: ltx.AuthRequire,
+	}
+	return tx, nil
 }
 
 func (t *State) clearBalanceCache() {

@@ -11,8 +11,11 @@ type BlockHandle interface {
 	SetItem(item string, value interface{}) error
 	MakeBlockId() ([]byte, error)
 	GetPreHash() []byte
+	GetNextHash() []byte
 	GetPublicKey() string
 	GetSign() []byte
+	GetTxIDs() []string
+	GetInTrunk() bool
 }
 
 type XMSnapshotReader interface {

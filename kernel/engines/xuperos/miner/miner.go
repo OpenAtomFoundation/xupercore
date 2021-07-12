@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"math/big"
 	"sort"
 	"sync"
@@ -16,7 +17,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
@@ -320,8 +320,8 @@ func (t *Miner) packBlock(ctx xctx.XContext, height int64,
 	return block, nil
 }
 
-func (t *Miner) convertConsData(data []byte) (*agent.ConsensusStorage, error) {
-	var consInfo agent.ConsensusStorage
+func (t *Miner) convertConsData(data []byte) (*state.ConsensusStorage, error) {
+	var consInfo state.ConsensusStorage
 	if len(data) < 1 {
 		return &consInfo, nil
 	}
@@ -380,7 +380,7 @@ func (t *Miner) getAwardTx(height int64) (*lpb.Transaction, error) {
 func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	// 需要转化下，为了共识做一些变更（比如pow）
 	origBlkId := block.Blockid
-	blkAgent := agent.NewBlockAgent(block)
+	blkAgent := state.NewBlockAgent(block)
 	err := t.ctx.Consensus.CalculateBlock(blkAgent)
 	if err != nil {
 		ctx.GetLog().Warn("consensus calculate block failed", "err", err,
@@ -654,7 +654,7 @@ func (t *Miner) batchConfirmBlock(ctx xctx.XContext, blkIds [][]byte) error {
 				"blockId", utils.F(blkIds[index]))
 			return fmt.Errorf("the verification of block failed from ledger.")
 		}
-		blockAgent := agent.NewBlockAgent(block)
+		blockAgent := state.NewBlockAgent(block)
 		isMatch, err := t.ctx.Consensus.CheckMinerMatch(ctx, blockAgent)
 		if !isMatch {
 			ctx.GetLog().Warn("consensus check miner match failed",
