@@ -26,7 +26,10 @@ xvm:
 # make test, test your code
 test: xvm unit
 unit:
-	go test -coverprofile=coverage.txt -covermode=atomic ./...
+	go get -u github.com/ory/go-acc
+	go-acc ./...
+	#go test -coverprofile=coverage.txt -covermode=atomic ./...
+
 
 # make clean
 cleanall: clean cleancache
