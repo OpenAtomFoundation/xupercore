@@ -3,7 +3,7 @@ package common
 // 引擎常量配置
 const (
 	// 引擎名
-	BCEngineName = "xuperos"
+	BCEngineName = "xchain"
 )
 
 // 广播模式

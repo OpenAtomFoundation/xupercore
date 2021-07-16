@@ -7,4 +7,6 @@ const (
 	LedgerStrgDirName = "ledger"
 	// state machine storage dir name
 	StateStrgDirName = "utxoVM"
+	// async task dir name
+	AsyncWorkerDirName = "asyncWorker"
 )

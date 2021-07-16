@@ -263,6 +263,10 @@ func NewFakeKContext(args map[string][]byte, m map[string]map[string][]byte) *Fa
 	}
 }
 
+func (c *FakeKContext) EmitAsyncTask(contract, event string, args interface{}) error {
+	return nil
+}
+
 func (c *FakeKContext) Args() map[string][]byte {
 	return c.args
 }

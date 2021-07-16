@@ -31,6 +31,9 @@ var (
 	ErrCreateBlockChain = errors.New("Create BlockChain error")
 	ErrGroupNotFound    = errors.New("Group Not Found")
 	ErrUnAuthorized     = errors.New("UnAuthorized")
+
+	// 存储本引擎的chainManager，方便后续动态LoadChain
+	localEngineCtx *common.EngineCtx
 )
 
 const (
@@ -59,46 +62,42 @@ func NewParaChainContract(bcName string, minNewChainAmount int64, chainCtx *comm
 }
 
 type createChainMessage struct {
-	BcName   string
-	Data     string
-	ChainCtx *common.ChainCtx
+	BcName string
+	Data   string
 }
 
-/*
-func handleCreateChain(ctx asyncTask.TaskContext) error {
+func handleCreateChain(ctx common.TaskContext) error {
 	var args createChainMessage
-	ctx.ParseArgs(&args)
-	err := createLedger(args.ChainCtx, args.BcName, []byte(args.Data))
+	err := ctx.ParseArgs(&args)
 	if err != nil {
 		return err
 	}
-	return args.ChainCtx.EngCtx.ChainM.LoadChain(args.BcName)
+	err = createLedger(args.BcName, []byte(args.Data))
+	if err != nil {
+		return err
+	}
+	return localEngineCtx.ChainM.LoadChain(args.BcName)
 }
-*/
 
 func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
+	if localEngineCtx == nil {
+		localEngineCtx = p.ChainCtx.EngCtx
+	}
+
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}
-	bcName, _, err := p.parseArgs(ctx.Args())
-	/*
-		if err != nil {
-			return nil, err
-		}
-		message := &createChainMessage{
-			ChainCtx: t.ChainCtx,
-			BcName:   bcName,
-			Data:     bcData,
-		}
-		ctx.EmitAsyncTask("CreateBlockChain", message)
-	*/
+	bcName, bcData, err := p.parseArgs(ctx.Args())
+	if err != nil {
+		return nil, err
+	}
 
+	// 1. 群组相关字段改写
 	// 确保未创建过该链
 	chainRes, err := ctx.Get(ParaChainKernelContract, []byte(bcName))
 	if chainRes != nil {
 		return newContractErrResponse(unAuthorized, ErrBlockChainExist.Error()), ErrBlockChainExist
 	}
-
 	// 创建链时，自动写入Group信息
 	value := &Group{
 		GroupID:    bcName,
@@ -114,6 +113,18 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 		[]byte(bcName), rawBytes); err != nil {
 		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
+
+	// 2. 群组注册完毕后，再进行异步事件调用
+	// 当该Tx被打包上链时，将运行CreateBlockChain注册的handler，并输入参数
+	message := &createChainMessage{
+		BcName: bcName,
+		Data:   bcData,
+	}
+	err = ctx.EmitAsyncTask("$parachain", "CreateBlockChain", message)
+	if err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+
 	delta := contract.Limits{
 		XFee: p.MinNewChainAmount,
 	}
@@ -147,8 +158,11 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, e
 	return bcName, bcData, nil
 }
 
-func createLedger(chainCtx *common.ChainCtx, bcName string, data []byte) error {
-	envConf := chainCtx.EngCtx.EnvCfg
+func createLedger(bcName string, data []byte) error {
+	if localEngineCtx == nil {
+		return errors.New("local engine context is nil.")
+	}
+	envConf := localEngineCtx.EnvCfg
 	dataDir := envConf.GenDataAbsPath(envConf.ChainDir)
 	fullpath := filepath.Join(dataDir, bcName)
 	if lutils.PathExists(fullpath) {

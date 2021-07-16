@@ -60,4 +60,6 @@ type ChainCtx struct {
 	TimerTask timerTask.TimerManager
 	// 结点账户信息
 	Address *xaddress.Address
+	// 异步任务
+	Asyncworker Asyncworker
 }

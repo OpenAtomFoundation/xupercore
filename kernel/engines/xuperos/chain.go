@@ -15,6 +15,7 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/asyncworker"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -46,7 +47,7 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
+func LoadChain(engCtx *common.EngineCtx, bcName string, asyncworker *asyncworker.AsyncWorkerImpl) (*Chain, error) {
 	if engCtx == nil || bcName == "" {
 		return nil, common.ErrParameter
 	}
@@ -63,6 +64,7 @@ func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	ctx.BCName = bcName
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
+	ctx.Asyncworker = asyncworker
 	chainObj := &Chain{}
 	chainObj.ctx = ctx
 	chainObj.log = ctx.XLog
