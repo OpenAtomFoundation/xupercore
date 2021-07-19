@@ -224,9 +224,13 @@ func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, heigh
 			cursorBuf, err := json.Marshal(cursor)
 			if err != nil {
 				aw.log.Warn("marshal cursor failed when doAsyncTasks", "err", err)
-				return err
+				continue
 			}
-			aw.finishTable.Put([]byte(aw.bcname), cursorBuf)
+			err = aw.finishTable.Put([]byte(aw.bcname), cursorBuf)
+			if err != nil {
+				aw.log.Warn("finishTable put data error", "err", err)
+				continue
+			}
 		}
 	}
 	return nil
