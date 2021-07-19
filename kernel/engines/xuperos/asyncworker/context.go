@@ -3,7 +3,7 @@ package asyncworker
 import "encoding/json"
 
 var (
-	UnmarshalFunc = AsyncworkerUnmarshal
+	UnmarshalFunc = json.Unmarshal
 )
 
 type TaskContextImpl struct {
@@ -23,12 +23,4 @@ func (tc *TaskContextImpl) ParseArgs(v interface{}) error {
 
 func (tc *TaskContextImpl) RetryTimes() int {
 	return 0
-}
-
-func AsyncworkerMarshal(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-func AsyncworkerUnmarshal(data []byte, v interface{}) error {
-	return json.Unmarshal(data, v)
 }

@@ -2,16 +2,12 @@ package kernel
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/asyncworker"
 	"github.com/xuperchain/xupercore/protos"
-)
-
-var (
-	asyncworkerMarshal = asyncworker.AsyncworkerMarshal
 )
 
 type kcontextImpl struct {
@@ -88,7 +84,8 @@ func (k *kcontextImpl) Call(module, contractName, method string, args map[string
 // EmitAsyncTask 异步发送订阅事件
 func (k *kcontextImpl) EmitAsyncTask(contract, event string, args interface{}) (err error) {
 	var rawBytes []byte
-	rawBytes, err = asyncworkerMarshal(args)
+	// 见asyncworker.TaskContextImpl, Unmarshal函数对应为json.Unmarshal
+	rawBytes, err = json.Marshal(args)
 	if err != nil {
 		return
 	}

@@ -71,7 +71,7 @@ type ChainManager interface {
 }
 
 // 避免循环调用
-type Asyncworker interface {
+type AsyncworkerAgent interface {
 	RegisterHandler(contract string, event string, handler TaskHandler)
 }
 
