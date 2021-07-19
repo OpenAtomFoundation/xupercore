@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/protos"
 
@@ -33,9 +34,6 @@ var (
 	ErrUnAuthorized     = errors.New("UnAuthorized")
 	ErrChainNotFound    = errors.New("Chain Not Found")
 	ErrCtxEmpty         = errors.New("Chain context is not found")
-
-	// 存储本引擎的chainManager，方便后续动态LoadChain
-	localEngineCtx *common.EngineCtx
 )
 
 const (
@@ -72,32 +70,26 @@ type stopChainMessage struct {
 	BcName string
 }
 
-func handleCreateChain(ctx common.TaskContext) error {
-	if localEngineCtx == nil {
-		return ErrCtxEmpty
-	}
+func (p *paraChainContract) handleCreateChain(ctx common.TaskContext) error {
 	var args createChainMessage
 	err := ctx.ParseArgs(&args)
 	if err != nil {
 		return err
 	}
-	err = createLedger(args.BcName, []byte(args.Data))
+	err = createLedger(args.BcName, []byte(args.Data), p.ChainCtx.EngCtx.EnvCfg)
 	if err != nil {
 		return err
 	}
-	return localEngineCtx.ChainM.LoadChain(args.BcName)
+	return p.ChainCtx.EngCtx.ChainM.LoadChain(args.BcName)
 }
 
-func handleStopChain(ctx common.TaskContext) error {
-	if localEngineCtx == nil {
-		return ErrCtxEmpty
-	}
+func (p *paraChainContract) handleStopChain(ctx common.TaskContext) error {
 	var args stopChainMessage
 	err := ctx.ParseArgs(&args)
 	if err != nil {
 		return err
 	}
-	return localEngineCtx.ChainM.Stop(args.BcName)
+	return p.ChainCtx.EngCtx.ChainM.Stop(args.BcName)
 }
 
 func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
@@ -186,7 +178,7 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 	}
 
 	// 4. 查看当前实例是否有该链
-	_, err = localEngineCtx.ChainM.Get(bcName)
+	_, err = p.ChainCtx.EngCtx.ChainM.Get(bcName)
 	if err != nil {
 		return newContractErrResponse(unAuthorized, err.Error()), err
 	}
@@ -233,11 +225,7 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, e
 	return bcName, bcData, nil
 }
 
-func createLedger(bcName string, data []byte) error {
-	if localEngineCtx == nil {
-		return errors.New("local engine context is nil.")
-	}
-	envConf := localEngineCtx.EnvCfg
+func createLedger(bcName string, data []byte, envConf *xconfig.EnvConf) error {
 	dataDir := envConf.GenDataAbsPath(envConf.ChainDir)
 	fullpath := filepath.Join(dataDir, bcName)
 	if lutils.PathExists(fullpath) {

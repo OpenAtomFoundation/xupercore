@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,7 +69,10 @@ func (aw *AsyncWorkerImpl) RegisterHandler(contract string, event string, handle
 		aw.log.Warn("RegisterHandler require contract and event as parameters.")
 		return
 	}
-
+	if !strings.HasPrefix(contract, "$") {
+		aw.log.Error("RegisterHandler require contract has prefix $, refuse register.")
+		return
+	}
 	aw.mutex.Lock()
 	defer aw.mutex.Unlock()
 	// 先查看method是否合法
@@ -100,7 +104,7 @@ func (aw *AsyncWorkerImpl) addBlockFilter(contract, event string) {
 	}
 }
 
-func (aw *AsyncWorkerImpl) StartAsyncTask() (err error) {
+func (aw *AsyncWorkerImpl) Start() (err error) {
 	// trick方法, 此处确保所有RegisterHandler处理完毕之后再起goroutine
 	time.Sleep(time.Second * 10)
 
@@ -129,46 +133,39 @@ func (aw *AsyncWorkerImpl) StartAsyncTask() (err error) {
 	}
 
 	// encfunc 提供iter.Data()对应的序列化方法, iter提供指向固定filter的迭代器
-	encodeFunc, iter, err := aw.router.Subscribe(eventType, filterBuf)
+	_, iter, err := aw.router.Subscribe(eventType, filterBuf)
 	if err != nil {
 		aw.log.Error("couldn't do async task because of a subscribe error", "err", err)
 		return err
 	}
 
 	go func() {
-		for {
-			select {
-			case <-aw.close:
-				iter.Close()
-				aw.log.Warn("async task loop shut down.")
-				return
-			}
+		select {
+		case <-aw.close:
+			iter.Close()
+			aw.log.Warn("async task loop shut down.")
+			return
 		}
 	}()
 
 	go func() {
 		for iter.Next() {
 			payload := iter.Data()
-			buf, err := encodeFunc(payload)
-			if err != nil {
-				aw.log.Error("couldn't do async task because of a encode error", "error", err)
+			block, ok := payload.(*protos.FilteredBlock)
+			if !ok {
+				aw.log.Error("couldn't do async task because of a transfer error")
 				break
 			}
-			switch eventType {
-			case protos.SubscribeType_BLOCK:
-				var block protos.FilteredBlock
-				err = proto.Unmarshal(buf, &block)
-				if err != nil {
-					aw.log.Error("couldn't do async task because of a block unmarshal error", "error", err)
-					break
-				}
-				// 当且仅当断点有效，且当前高度为断点存储高度时，需要过滤部分已做异步任务
-				if cursor != nil && block.BlockHeight == cursor.BlockHeight {
-					aw.doAsyncTasks(block.Txs, block.BlockHeight, cursor)
-					continue
-				}
-				aw.doAsyncTasks(block.Txs, block.BlockHeight, nil)
+			if eventType != protos.SubscribeType_BLOCK {
+				aw.log.Error("couldn't do async task because of eventType error", "have", eventType, "want", protos.SubscribeType_BLOCK)
+				break
 			}
+			// 当且仅当断点有效，且当前高度为断点存储高度时，需要过滤部分已做异步任务
+			if cursor != nil && block.BlockHeight == cursor.BlockHeight {
+				aw.doAsyncTasks(block.Txs, block.BlockHeight, cursor)
+				continue
+			}
+			aw.doAsyncTasks(block.Txs, block.BlockHeight, nil)
 		}
 	}()
 	return
@@ -260,7 +257,7 @@ func (aw *AsyncWorkerImpl) getAsyncTask(contract, event string) (common.TaskHand
 }
 
 func (aw *AsyncWorkerImpl) Stop() {
-	aw.close <- struct{}{}
+	close(aw.close)
 	aw.finishTable.Close()
 }
 

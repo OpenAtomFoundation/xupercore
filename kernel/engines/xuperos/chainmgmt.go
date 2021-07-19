@@ -94,7 +94,6 @@ func (m *ChainManagerImpl) StopChains() {
 }
 
 func (m *ChainManagerImpl) LoadChain(chainName string) error {
-	// 目前平行链不支持异步worker生成，故最后一个参数为nil
 	chain, err := LoadChain(m.engCtx, chainName)
 	if err != nil {
 		m.engCtx.XLog.Error("load chain failed", "error", err, "chain_name", chainName)

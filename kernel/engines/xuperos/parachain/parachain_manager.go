@@ -36,9 +36,6 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 		return nil, err
 	}
 	t := NewParaChainContract(ctx.BcName, minNewChainAmount, ctx.ChainCtx)
-	if localEngineCtx == nil {
-		localEngineCtx = t.ChainCtx.EngCtx
-	}
 	register := ctx.Contract.GetKernRegistry()
 	// 注册合约方法
 	kMethods := map[string]contract.KernMethod{
@@ -53,8 +50,8 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 		}
 	}
 	// 仅主链绑定handleCreateChain 从链上下文中获取链绑定的异步任务worker
-	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "CreateBlockChain", handleCreateChain)
-	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "StopBlockChain", handleStopChain)
+	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "CreateBlockChain", t.handleCreateChain)
+	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "StopBlockChain", t.handleStopChain)
 	mg := &Manager{
 		Ctx: ctx,
 	}

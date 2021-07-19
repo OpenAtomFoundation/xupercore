@@ -194,5 +194,5 @@ func TestStartAsyncTask(t *testing.T) {
 		return
 	}
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
-	aw.StartAsyncTask()
+	aw.Start()
 }
