@@ -4,14 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	lconf "github.com/xuperchain/xupercore/bcs/ledger/xledger/config"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/event"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -28,8 +25,10 @@ var (
 	ErrRetry  = errors.New("retry task")
 	eventType = protos.SubscribeType_BLOCK
 
-	emptyErr  = errors.New("Haven't store cursor before")
-	cursorErr = errors.New("DB stored an invalid cursor")
+	emptyErr        = errors.New("Haven't store cursor before")
+	cursorErr       = errors.New("DB stored an invalid cursor")
+	emptyDBErr      = errors.New("Haven't get valid db")
+	emptyCounterErr = errors.New("Haven't get valid router")
 )
 
 type AsyncWorkerImpl struct {
@@ -37,18 +36,20 @@ type AsyncWorkerImpl struct {
 	mutex   sync.Mutex
 	methods map[string]map[string]common.TaskHandler // 句柄存储
 
-	filter *protos.BlockFilter // 订阅event事件时的筛选正则
-	router *event.Router       // 通过router进行事件订阅
-
-	baseDB      kvdb.Database //持久化执行过的异步任务
-	finishTable kvdb.Database //保存临时的block区块
+	filter      *protos.BlockFilter // 订阅event事件时的筛选正则
+	router      *event.Router       // 通过router进行事件订阅
+	finishTable kvdb.Database       //保存临时的block区块
 
 	close chan struct{}
 
 	log logs.Logger
 }
 
-func NewAsyncWorkerImpl(bcName string, e common.Engine) (*AsyncWorkerImpl, error) {
+func NewAsyncWorkerImpl(bcName string, e common.Engine, baseDB kvdb.Database) (*AsyncWorkerImpl, error) {
+	if baseDB == nil {
+		e.Context().XLog.Error("NewAsyncWorkerImpl error, baseDB empty")
+		return nil, emptyDBErr
+	}
 	aw := &AsyncWorkerImpl{
 		filter: &protos.BlockFilter{
 			Bcname:   bcName,
@@ -57,27 +58,6 @@ func NewAsyncWorkerImpl(bcName string, e common.Engine) (*AsyncWorkerImpl, error
 		close:  make(chan struct{}, 1),
 		router: event.NewRouter(e),
 		log:    e.Context().XLog,
-	}
-
-	// new kvdb instance
-	envCfg := e.Context().EnvCfg
-	lcfg, err := lconf.LoadLedgerConf(envCfg.GenConfFilePath(envCfg.LedgerConf))
-	storePath := envCfg.GenDataAbsPath(e.Context().EnvCfg.ChainDir)
-	storePath = filepath.Join(storePath, bcName)
-	asyncDBPath := filepath.Join(storePath, def.AsyncWorkerDirName)
-	// 目前仅使用默认设置
-	kvParam := &kvdb.KVParameter{
-		DBPath:                asyncDBPath,
-		KVEngineType:          lcfg.KVEngineType,
-		MemCacheSize:          ledger.MemCacheSize,
-		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
-		OtherPaths:            lcfg.OtherPaths,
-		StorageType:           lcfg.StorageType,
-	}
-	baseDB, err := kvdb.CreateKVInstance(kvParam)
-	if err != nil {
-		aw.log.Error("fail to open asyncworker leveldb.", "error", err)
-		return nil, err
 	}
 	aw.finishTable = kvdb.NewTable(baseDB, FinishTablePrefix)
 	return aw, nil
@@ -144,6 +124,10 @@ func (aw *AsyncWorkerImpl) StartAsyncTask() (err error) {
 		return err
 	}
 
+	if aw.router == nil {
+		return emptyCounterErr
+	}
+
 	// encfunc 提供iter.Data()对应的序列化方法, iter提供指向固定filter的迭代器
 	encodeFunc, iter, err := aw.router.Subscribe(eventType, filterBuf)
 	if err != nil {
@@ -201,7 +185,7 @@ func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, heigh
 		}
 		for eventIndex, event := range tx.Events {
 			// 断点之前的tx不需要再次执行了
-			if cursor != nil && int64(index) == cursor.TxIndex && int64(eventIndex) < cursor.EventIndex {
+			if cursor != nil && int64(index) == cursor.TxIndex && int64(eventIndex) <= cursor.EventIndex {
 				continue
 			}
 			handler, err := aw.getAsyncTask(event.Contract, event.Name)
@@ -215,6 +199,8 @@ func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, heigh
 				aw.log.Error("do async task error", "err", err, "contract", event.Contract, "event", event.Name)
 				continue
 			}
+			aw.log.Info("do async task success", "contract", event.Contract, "event", event.Name,
+				"txIndex", index, "eventIndex", eventIndex)
 			// 执行完毕后进行持久化
 			cursor := asyncWorkerCursor{
 				BlockHeight: height,
@@ -275,7 +261,7 @@ func (aw *AsyncWorkerImpl) getAsyncTask(contract, event string) (common.TaskHand
 
 func (aw *AsyncWorkerImpl) Stop() {
 	aw.close <- struct{}{}
-	aw.baseDB.Close()
+	aw.finishTable.Close()
 }
 
 type asyncWorkerCursor struct {

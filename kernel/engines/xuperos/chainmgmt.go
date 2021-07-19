@@ -33,6 +33,16 @@ func (m *ChainManagerImpl) Put(chainName string, chain common.Chain) {
 	m.chains.Store(chainName, chain)
 }
 
+func (m *ChainManagerImpl) Stop(chainName string) error {
+	c, err := m.Get(chainName)
+	if err != nil {
+		return err
+	}
+	c.Stop()
+	m.chains.Delete(chainName)
+	return nil
+}
+
 func (m *ChainManagerImpl) GetChains() []string {
 	var chains []string
 	m.chains.Range(func(key, value interface{}) bool {
@@ -85,7 +95,7 @@ func (m *ChainManagerImpl) StopChains() {
 
 func (m *ChainManagerImpl) LoadChain(chainName string) error {
 	// 目前平行链不支持异步worker生成，故最后一个参数为nil
-	chain, err := LoadChain(m.engCtx, chainName, nil)
+	chain, err := LoadChain(m.engCtx, chainName)
 	if err != nil {
 		m.engCtx.XLog.Error("load chain failed", "error", err, "chain_name", chainName)
 		return fmt.Errorf("load chain failed")

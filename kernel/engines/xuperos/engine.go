@@ -147,6 +147,10 @@ func (t *Engine) Get(name string) (common.Chain, error) {
 	return nil, common.ErrChainNotExist
 }
 
+func (t *Engine) Stop(name string) error {
+	return t.chainM.Stop(name)
+}
+
 // 获取执行引擎环境
 func (t *Engine) Context() *common.EngineCtx {
 	return t.engCtx
@@ -177,17 +181,7 @@ func (t *Engine) loadChains() error {
 
 		chainDir := filepath.Join(dataDir, fInfo.Name())
 		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
-
-		// 实例化每条链
-		var aw *asyncworker.AsyncWorkerImpl
-		if fInfo.Name() == rootChain {
-			aw, err = asyncworker.NewAsyncWorkerImpl(fInfo.Name(), t)
-			if err != nil {
-				t.log.Error("create asyncWorker error", "err", err)
-				return err
-			}
-		}
-		chain, err := LoadChain(t.engCtx, fInfo.Name(), aw)
+		chain, err := LoadChain(t.engCtx, fInfo.Name())
 		if err != nil {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
 			return fmt.Errorf("load chain failed")
@@ -198,7 +192,18 @@ func (t *Engine) loadChains() error {
 		t.chainM.Put(fInfo.Name(), chain)
 
 		// 启动异步任务worker
-		if aw != nil {
+		if fInfo.Name() == rootChain {
+			aw, err := asyncworker.NewAsyncWorkerImpl(fInfo.Name(), t, chain.ctx.State.GetLDB())
+			if err != nil {
+				t.log.Error("create asyncworker error", "bcName", rootChain, "err", err)
+				return err
+			}
+			chain.ctx.Asyncworker = aw
+			err = chain.relyAgent.CreateParaChain()
+			if err != nil {
+				t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
+				return fmt.Errorf("create parachain error")
+			}
 			aw.StartAsyncTask()
 		}
 

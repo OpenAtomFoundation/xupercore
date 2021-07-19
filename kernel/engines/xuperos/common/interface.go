@@ -68,6 +68,7 @@ type ChainManager interface {
 	Get(string) (Chain, error)
 	GetChains() []string
 	LoadChain(string) error
+	Stop(string) error
 }
 
 // 避免循环调用

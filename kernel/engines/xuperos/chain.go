@@ -15,7 +15,6 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/asyncworker"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -47,7 +46,7 @@ type Chain struct {
 }
 
 // 从本地存储加载链
-func LoadChain(engCtx *common.EngineCtx, bcName string, asyncworker *asyncworker.AsyncWorkerImpl) (*Chain, error) {
+func LoadChain(engCtx *common.EngineCtx, bcName string) (*Chain, error) {
 	if engCtx == nil || bcName == "" {
 		return nil, common.ErrParameter
 	}
@@ -64,7 +63,6 @@ func LoadChain(engCtx *common.EngineCtx, bcName string, asyncworker *asyncworker
 	ctx.BCName = bcName
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
-	ctx.Asyncworker = asyncworker
 	chainObj := &Chain{}
 	chainObj.ctx = ctx
 	chainObj.log = ctx.XLog
@@ -412,17 +410,6 @@ func (t *Chain) initChainCtx() error {
 	// 设置timer manager到状态机
 	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
 	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
-
-	// 11. 仅主链创建平行链Mgmt
-	if t.ctx.BCName != t.ctx.EngCtx.EngCfg.RootChain {
-		t.log.Trace("create parachain succ", "bcName", t.ctx.BCName)
-		return nil
-	}
-	err = t.relyAgent.CreateParaChain()
-	if err != nil {
-		t.log.Error("create parachain mgmt error", "bcName", t.ctx.BCName, "err", err)
-		return fmt.Errorf("create parachain error")
-	}
-	t.log.Trace("create root succ", "bcName", t.ctx.BCName)
+	t.log.Trace("create chain succ", "bcName", t.ctx.BCName)
 	return nil
 }

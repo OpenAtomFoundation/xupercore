@@ -31,6 +31,8 @@ var (
 	ErrCreateBlockChain = errors.New("Create BlockChain error")
 	ErrGroupNotFound    = errors.New("Group Not Found")
 	ErrUnAuthorized     = errors.New("UnAuthorized")
+	ErrChainNotFound    = errors.New("Chain Not Found")
+	ErrCtxEmpty         = errors.New("Chain context is not found")
 
 	// 存储本引擎的chainManager，方便后续动态LoadChain
 	localEngineCtx *common.EngineCtx
@@ -66,7 +68,14 @@ type createChainMessage struct {
 	Data   string
 }
 
+type stopChainMessage struct {
+	BcName string
+}
+
 func handleCreateChain(ctx common.TaskContext) error {
+	if localEngineCtx == nil {
+		return ErrCtxEmpty
+	}
 	var args createChainMessage
 	err := ctx.ParseArgs(&args)
 	if err != nil {
@@ -79,11 +88,19 @@ func handleCreateChain(ctx common.TaskContext) error {
 	return localEngineCtx.ChainM.LoadChain(args.BcName)
 }
 
-func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
+func handleStopChain(ctx common.TaskContext) error {
 	if localEngineCtx == nil {
-		localEngineCtx = p.ChainCtx.EngCtx
+		return ErrCtxEmpty
 	}
+	var args stopChainMessage
+	err := ctx.ParseArgs(&args)
+	if err != nil {
+		return err
+	}
+	return localEngineCtx.ChainM.Stop(args.BcName)
+}
 
+func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, errors.New("Permission denied to call this contract")
 	}
@@ -120,7 +137,7 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 		BcName: bcName,
 		Data:   bcData,
 	}
-	err = ctx.EmitAsyncTask("$parachain", "CreateBlockChain", message)
+	err = ctx.EmitAsyncTask("CreateBlockChain", message)
 	if err != nil {
 		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
@@ -133,6 +150,64 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	return &contract.Response{
 		Status: success,
 		Body:   []byte("CreateBlockChain success"),
+	}, nil
+}
+
+func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response, error) {
+	// 1. 查看输入参数是否正确
+	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
+		return nil, errors.New("Permission denied to call this contract")
+	}
+	if ctx.Args()["name"] == nil {
+		return nil, errors.New("arg name is required")
+	}
+	bcName := string(ctx.Args()["name"])
+	if bcName == "" {
+		return nil, errors.New("arg name is empty")
+	}
+
+	// 2. 查看是否包含相关群组，确保链已经创建过
+	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(bcName))
+	if err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+	if groupBytes == nil {
+		return newContractErrResponse(unAuthorized, ErrChainNotFound.Error()), ErrChainNotFound
+	}
+
+	// 3. 查看发起者是否有权限停用
+	chainGroup := Group{}
+	err = json.Unmarshal(groupBytes, &chainGroup)
+	if err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+	if !isContain(chainGroup.Admin, ctx.Initiator()) {
+		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+	}
+
+	// 4. 查看当前实例是否有该链
+	_, err = localEngineCtx.ChainM.Get(bcName)
+	if err != nil {
+		return newContractErrResponse(unAuthorized, err.Error()), err
+	}
+
+	// 5. 将该链停掉
+	message := stopChainMessage{
+		BcName: bcName,
+	}
+	err = ctx.EmitAsyncTask("StopBlockChain", message)
+	if err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+
+	delta := contract.Limits{
+		XFee: p.MinNewChainAmount,
+	}
+	ctx.AddResourceUsed(delta)
+
+	return &contract.Response{
+		Status: success,
+		Body:   []byte("StopBlockChain success"),
 	}, nil
 }
 

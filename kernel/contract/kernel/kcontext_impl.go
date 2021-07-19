@@ -82,7 +82,7 @@ func (k *kcontextImpl) Call(module, contractName, method string, args map[string
 }
 
 // EmitAsyncTask 异步发送订阅事件
-func (k *kcontextImpl) EmitAsyncTask(contract, event string, args interface{}) (err error) {
+func (k *kcontextImpl) EmitAsyncTask(event string, args interface{}) (err error) {
 	var rawBytes []byte
 	// 见asyncworker.TaskContextImpl, Unmarshal函数对应为json.Unmarshal
 	rawBytes, err = json.Marshal(args)
@@ -90,7 +90,7 @@ func (k *kcontextImpl) EmitAsyncTask(contract, event string, args interface{}) (
 		return
 	}
 	e := protos.ContractEvent{
-		Contract: contract,
+		Contract: k.ctx.ContractName,
 		Name:     event,
 		Body:     rawBytes,
 	}

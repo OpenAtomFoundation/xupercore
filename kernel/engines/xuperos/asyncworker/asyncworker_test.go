@@ -103,7 +103,6 @@ func newAsyncWorkerWithDB(t *testing.T) (*AsyncWorkerImpl, error) {
 		return nil, err
 	}
 
-	aw.baseDB = tmpBaseDB
 	aw.finishTable = tmpFinishTable
 
 	return aw, nil
@@ -186,4 +185,14 @@ func TestDoAsyncTasks(t *testing.T) {
 	if cursor.BlockHeight != 3 {
 		t.Errorf("doAsyncTasks reloadCursor error")
 	}
+}
+
+func TestStartAsyncTask(t *testing.T) {
+	aw, err := newAsyncWorkerWithDB(t)
+	if err != nil {
+		t.Errorf("create db error, err=%v", err)
+		return
+	}
+	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
+	aw.StartAsyncTask()
 }
