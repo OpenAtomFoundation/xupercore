@@ -18,6 +18,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
@@ -161,6 +162,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 			continue
 		}
 
+		beginTime := time.Now()
 		contextConfig.Module = req.ModuleName
 		contextConfig.ContractName = req.ContractName
 		if transContractName == req.ContractName {
@@ -183,15 +185,18 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		if err != nil {
 			context.Release()
 			ctx.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
+			metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").Inc()
 			return nil, common.ErrContractInvokeFailed.More("%v", err)
 		}
 
 		if resp.Status >= 400 && i < len(reservedRequests) {
 			context.Release()
 			ctx.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
+			metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").Inc()
 			return nil, common.ErrContractInvokeFailed.More("%v", resp.Message)
 		}
 
+		metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "OK").Inc()
 		resourceUsed := context.ResourceUsed()
 		if i >= len(reservedRequests) {
 			gasUsed += resourceUsed.TotalGas(gasPrice)
@@ -212,6 +217,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		responseBodes = append(responseBodes, resp.Body)
 
 		context.Release()
+		metrics.ContractInvokeHistogram.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName).Observe(time.Since(beginTime).Seconds())
 	}
 
 	err = sandbox.Flush()
@@ -254,10 +260,16 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 	}
 	t.txIdCache.Set(string(tx.GetTxid()), true, TxIdCacheExpired)
 
+	code := "OK"
+	defer func() {
+		metrics.CallMethodCounter.WithLabelValues(t.ctx.BCName, "SubmitTx", code).Inc()
+	}()
+
 	// 验证交易
 	_, err := t.ctx.State.VerifyTx(tx)
 	if err != nil {
 		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
+		code = "VerifyTxFailed"
 		return common.ErrTxVerifyFailed.More("err:%v", err)
 	}
 
@@ -268,10 +280,10 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 		if err == state.ErrAlreadyInUnconfirmed {
 			t.txIdCache.Delete(string(tx.GetTxid()))
 		}
+		code = "SubmitTxFailed"
 		return common.ErrSubmitTxFailed.More("err:%v", err)
 	}
 
-	log.Info("submit tx succ", "txid", utils.F(tx.GetTxid()))
 	return nil
 }
 

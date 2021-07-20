@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/patrickmn/go-cache"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"sync"
 	"time"
 
@@ -27,26 +28,22 @@ var (
 func (p *P2PServerV2) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage,
 	optFunc ...p2p.OptionFunc) error {
 	ctx = &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+	tm := time.Now()
 	defer func() {
-		ctx.GetLog().Info("SendMessage", "log_id", msg.GetHeader().GetLogid(),
-			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
+		size := proto.Size(msg)
+		if p.ctx.EnvCfg.MetricSwitch {
+			labels := prom.Labels{
+				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
+			}
+			metrics.NetworkMsgSendCounter.With(labels).Inc()
+			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(size))
+			metrics.NetworkClientHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
+		}
+		ctx.GetLog().Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
+			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(), "msgSize", size,
 			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
 	}()
-
-	if p.ctx.EnvCfg.MetricSwitch {
-		tm := time.Now()
-		defer func() {
-			labels := prom.Labels{
-				"bcname": msg.GetHeader().GetBcname(),
-				"type":   msg.GetHeader().GetType().String(),
-				"method": "SendMessage",
-			}
-
-			p2p.Metrics.QPS.With(labels).Inc()
-			p2p.Metrics.Cost.With(labels).Add(float64(time.Since(tm).Microseconds()))
-			p2p.Metrics.Packet.With(labels).Add(float64(proto.Size(msg)))
-		}()
-	}
 
 	opt := p2p.Apply(optFunc)
 	filter := p.getFilter(msg, opt)
@@ -66,7 +63,7 @@ func (p *P2PServerV2) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage,
 	}
 
 	if len(peerIDs) <= 0 {
-		p.log.Warn("SendMessageWithResponse peerID empty", "log_id", msg.GetHeader().GetLogid(),
+		p.log.Warn("SendMessage peerID empty", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum())
 		return ErrEmptyPeer
 	}
@@ -114,26 +111,21 @@ func (p *P2PServerV2) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerI
 func (p *P2PServerV2) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage,
 	optFunc ...p2p.OptionFunc) ([]*pb.XuperMessage, error) {
 	ctx = &xctx.BaseCtx{XLog: ctx.GetLog(), Timer: timer.NewXTimer()}
+	tm := time.Now()
 	defer func() {
-		ctx.GetLog().Info("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
+		if p.ctx.EnvCfg.MetricSwitch {
+			labels := prom.Labels{
+				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
+			}
+			metrics.NetworkMsgSendCounter.With(labels).Inc()
+			metrics.NetworkMsgSendBytesCounter.With(labels).Add(float64(proto.Size(msg)))
+			metrics.NetworkClientHandlingHistogram.With(labels).Observe(time.Since(tm).Seconds())
+		}
+		ctx.GetLog().Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
 			"bcname", msg.GetHeader().GetBcname(), "msgType", msg.GetHeader().GetType(),
 			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
 	}()
-
-	if p.ctx.EnvCfg.MetricSwitch {
-		tm := time.Now()
-		defer func() {
-			labels := prom.Labels{
-				"bcname": msg.GetHeader().GetBcname(),
-				"type":   msg.GetHeader().GetType().String(),
-				"method": "SendMessageWithResponse",
-			}
-
-			p2p.Metrics.QPS.With(labels).Inc()
-			p2p.Metrics.Cost.With(labels).Add(float64(time.Since(tm).Microseconds()))
-			p2p.Metrics.Packet.With(labels).Add(float64(proto.Size(msg)))
-		}()
-	}
 
 	opt := p2p.Apply(optFunc)
 	filter := p.getFilter(msg, opt)
