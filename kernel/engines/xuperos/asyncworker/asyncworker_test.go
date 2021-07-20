@@ -181,10 +181,6 @@ func TestDoAsyncTasks(t *testing.T) {
 		t.Errorf("doAsyncTasks error")
 		return
 	}
-	cursor, err := aw.reloadCursor()
-	if cursor.BlockHeight != 3 {
-		t.Errorf("doAsyncTasks reloadCursor error")
-	}
 }
 
 func TestStartAsyncTask(t *testing.T) {
