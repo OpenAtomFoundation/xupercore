@@ -199,22 +199,38 @@ func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, heigh
 			aw.log.Info("do async task success", "contract", event.Contract, "event", event.Name,
 				"txIndex", index, "eventIndex", eventIndex)
 			// 执行完毕后进行持久化
-			cursor := asyncWorkerCursor{
+			newCursor := asyncWorkerCursor{
 				BlockHeight: height,
 				TxIndex:     int64(index),
 				EventIndex:  int64(eventIndex),
 			}
-			cursorBuf, err := json.Marshal(cursor)
-			if err != nil {
-				aw.log.Warn("marshal cursor failed when doAsyncTasks", "err", err)
-				continue
-			}
-			err = aw.finishTable.Put([]byte(aw.bcname), cursorBuf)
-			if err != nil {
-				aw.log.Warn("finishTable put data error", "err", err)
+			if err := aw.storeCursor(newCursor); err != nil {
 				continue
 			}
 		}
+	}
+	// 该block已经处理完毕，此时需要记录到游标里，避免后续事件遍历负担
+	newCursor := asyncWorkerCursor{
+		BlockHeight: height + 1,
+		TxIndex:     0,
+		EventIndex:  0,
+	}
+	if err := aw.storeCursor(newCursor); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (aw *AsyncWorkerImpl) storeCursor(cursor asyncWorkerCursor) error {
+	cursorBuf, err := json.Marshal(cursor)
+	if err != nil {
+		aw.log.Warn("marshal cursor failed when storeCursor", "err", err, "cursor", cursor)
+		return err
+	}
+	err = aw.finishTable.Put([]byte(aw.bcname), cursorBuf)
+	if err != nil {
+		aw.log.Warn("finishTable put data error when storeCursor", "err", err, "bcname", aw.bcname, "cursor", cursor)
+		return err
 	}
 	return nil
 }
