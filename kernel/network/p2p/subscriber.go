@@ -11,9 +11,6 @@ import (
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
 	pb "github.com/xuperchain/xupercore/protos"
-
-	"github.com/golang/protobuf/proto"
-	prom "github.com/prometheus/client_golang/prometheus"
 )
 
 var (
@@ -149,15 +146,6 @@ func (s *subscriber) HandleMessage(ctx xctx.XContext, msg *pb.XuperMessage, stre
 		if err != nil {
 			ctx.GetLog().Error("subscriber: send response error", "err", err)
 			return ErrStreamSendError
-		}
-
-		if s.ctx.EnvCfg.MetricSwitch {
-			labels := prom.Labels{
-				"bcname": resp.GetHeader().GetBcname(),
-				"type":   resp.GetHeader().GetType().String(),
-				"method": "HandleMessage",
-			}
-			Metrics.Packet.With(labels).Add(float64(proto.Size(resp)))
 		}
 	}
 

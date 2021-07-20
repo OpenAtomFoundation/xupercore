@@ -110,7 +110,7 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 	xlog, _ := logs.NewLogger(msg.Header.Logid, "p2p")
 	ctx := &xctx.BaseCtx{XLog: xlog, Timer: timer.NewXTimer()}
 	defer func() {
-		ctx.GetLog().Info("Dispatch", "bc", msg.GetHeader().GetBcname(),
+		ctx.GetLog().Trace("Dispatch", "bc", msg.GetHeader().GetBcname(),
 			"type", msg.GetHeader().GetType(), "from", msg.GetHeader().GetFrom(),
 			"checksum", msg.GetHeader().GetDataCheckSum(), "timer", ctx.GetTimer().Print())
 	}()
