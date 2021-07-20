@@ -9,6 +9,7 @@ import (
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/engines"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/asyncworker"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 	xnet "github.com/xuperchain/xupercore/kernel/engines/xuperos/net"
@@ -75,6 +76,8 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 		engCtx: engCtx,
 		log:    t.log,
 	}
+	t.engCtx.ChainM = &t.chainM
+	t.log = t.engCtx.XLog
 	t.log.Trace("init engine context succeeded")
 
 	// 加载区块链，初始化链上下文
@@ -138,10 +141,14 @@ func (t *Engine) Exit() {
 
 func (t *Engine) Get(name string) (common.Chain, error) {
 	if chain, err := t.chainM.Get(name); err == nil {
-		return &chain, nil
+		return chain, nil
 	}
 
 	return nil, common.ErrChainNotExist
+}
+
+func (t *Engine) Stop(name string) error {
+	return t.chainM.Stop(name)
 }
 
 // 获取执行引擎环境
@@ -174,8 +181,6 @@ func (t *Engine) loadChains() error {
 
 		chainDir := filepath.Join(dataDir, fInfo.Name())
 		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
-
-		// 实例化每条链
 		chain, err := LoadChain(t.engCtx, fInfo.Name())
 		if err != nil {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
@@ -185,6 +190,23 @@ func (t *Engine) loadChains() error {
 
 		// 记录链实例
 		t.chainM.Put(fInfo.Name(), chain)
+
+		// 启动异步任务worker
+		if fInfo.Name() == rootChain {
+			aw, err := asyncworker.NewAsyncWorkerImpl(fInfo.Name(), t, chain.ctx.State.GetLDB())
+			if err != nil {
+				t.log.Error("create asyncworker error", "bcName", rootChain, "err", err)
+				return err
+			}
+			chain.ctx.Asyncworker = aw
+			err = chain.relyAgent.CreateParaChain()
+			if err != nil {
+				t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
+				return fmt.Errorf("create parachain error")
+			}
+			aw.Start()
+		}
+
 		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
 		chainCnt++
 	}
@@ -194,7 +216,6 @@ func (t *Engine) loadChains() error {
 		t.log.Error("root chain not exist, please create it first", "rootChain", rootChain)
 		return fmt.Errorf("root chain not exist")
 	}
-
 	t.log.Trace("load chain form data dir succeeded", "chainCnt", chainCnt)
 	return nil
 }
@@ -223,7 +244,6 @@ func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*common.EngineCtx, error) 
 	if err != nil {
 		return nil, fmt.Errorf("create network failed.err:%v", err)
 	}
-
 	return engCtx, nil
 }
 

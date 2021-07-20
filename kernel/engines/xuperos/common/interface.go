@@ -68,4 +68,18 @@ type ChainManager interface {
 	Get(string) (Chain, error)
 	GetChains() []string
 	LoadChain(string) error
+	Stop(string) error
+}
+
+// 避免循环调用
+type AsyncworkerAgent interface {
+	RegisterHandler(contract string, event string, handler TaskHandler)
+}
+
+type TaskHandler func(ctx TaskContext) error
+
+type TaskContext interface {
+	// ParseArgs 用来解析任务参数，参数为对应任务参数类型的指针
+	ParseArgs(v interface{}) error
+	RetryTimes() int
 }

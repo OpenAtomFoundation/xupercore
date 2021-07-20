@@ -42,15 +42,16 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 		"createChain": t.createChain,
 		"editGroup":   t.editGroup,
 		"getGroup":    t.getGroup,
+		"stopChain":   t.stopChain,
 	}
 	for method, f := range kMethods {
 		if _, err := register.GetKernMethod(ParaChainKernelContract, method); err != nil {
 			register.RegisterKernMethod(ParaChainKernelContract, method, f)
 		}
 	}
-	//todo
-	//workerObj := ctx.GetAsyncWorker()
-	//workerObj.RegisterHandler(ParaChainKernelContract, "CreateBlockChain", handleCreateChain)
+	// 仅主链绑定handleCreateChain 从链上下文中获取链绑定的异步任务worker
+	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "CreateBlockChain", t.handleCreateChain)
+	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "StopBlockChain", t.handleStopChain)
 	mg := &Manager{
 		Ctx: ctx,
 	}

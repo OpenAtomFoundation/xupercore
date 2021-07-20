@@ -17,20 +17,30 @@ type ChainManagerImpl struct {
 	log    logs.Logger
 }
 
-func (m *ChainManagerImpl) Get(chainName string) (Chain, error) {
+func (m *ChainManagerImpl) Get(chainName string) (common.Chain, error) {
 	c, ok := m.chains.Load(chainName)
 	if !ok {
-		return Chain{}, errors.New("target chainName doesn't exist")
+		return nil, errors.New("target chainName doesn't exist")
 	}
 	if _, ok := c.(*Chain); !ok {
-		return Chain{}, errors.New("transfer to Chain pointer error")
+		return nil, errors.New("transfer to Chain pointer error")
 	}
 	chainPtr := c.(*Chain)
-	return *chainPtr, nil
+	return chainPtr, nil
 }
 
-func (m *ChainManagerImpl) Put(chainName string, chain *Chain) {
+func (m *ChainManagerImpl) Put(chainName string, chain common.Chain) {
 	m.chains.Store(chainName, chain)
+}
+
+func (m *ChainManagerImpl) Stop(chainName string) error {
+	c, err := m.Get(chainName)
+	if err != nil {
+		return err
+	}
+	c.Stop()
+	m.chains.Delete(chainName)
+	return nil
 }
 
 func (m *ChainManagerImpl) GetChains() []string {
@@ -49,7 +59,10 @@ func (m *ChainManagerImpl) GetChains() []string {
 func (m *ChainManagerImpl) StartChains() {
 	var wg sync.WaitGroup
 	m.chains.Range(func(k, v interface{}) bool {
-		chainHD := v.(common.Chain)
+		chainHD, ok := v.(common.Chain)
+		if !ok {
+			m.log.Error("chain " + k.(string) + " transfer error")
+		}
 		m.log.Trace("start chain " + k.(string))
 
 		wg.Add(1)

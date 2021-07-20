@@ -23,4 +23,7 @@ type KContext interface {
 	ResourceLimit() Limits
 
 	Call(module, contract, method string, args map[string][]byte) (*Response, error)
+
+	// 合约异步事件调用
+	EmitAsyncTask(event string, args interface{}) error
 }

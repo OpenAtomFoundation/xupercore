@@ -2,10 +2,12 @@ package kernel
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 type kcontextImpl struct {
@@ -77,4 +79,21 @@ func (k *kcontextImpl) Call(module, contractName, method string, args map[string
 		Message: resp.Response.GetMessage(),
 		Body:    resp.Response.GetBody(),
 	}, nil
+}
+
+// EmitAsyncTask 异步发送订阅事件
+func (k *kcontextImpl) EmitAsyncTask(event string, args interface{}) (err error) {
+	var rawBytes []byte
+	// 见asyncworker.TaskContextImpl, Unmarshal函数对应为json.Unmarshal
+	rawBytes, err = json.Marshal(args)
+	if err != nil {
+		return
+	}
+	e := protos.ContractEvent{
+		Contract: k.ctx.ContractName,
+		Name:     event,
+		Body:     rawBytes,
+	}
+	k.AddEvent(&e)
+	return
 }
