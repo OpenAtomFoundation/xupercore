@@ -172,7 +172,9 @@ func (aw *AsyncWorkerImpl) Start() (err error) {
 }
 
 func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, height int64, cursor *asyncWorkerCursor) error {
+	var lastTxIndex, lastEventIndex int64
 	for index, tx := range txs {
+		lastTxIndex = int64(index)
 		if tx.Events == nil {
 			continue
 		}
@@ -181,6 +183,7 @@ func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, heigh
 			continue
 		}
 		for eventIndex, event := range tx.Events {
+			lastEventIndex = int64(eventIndex)
 			// 断点之前的tx不需要再次执行了
 			if cursor != nil && int64(index) == cursor.TxIndex && int64(eventIndex) <= cursor.EventIndex {
 				continue
@@ -211,9 +214,9 @@ func (aw *AsyncWorkerImpl) doAsyncTasks(txs []*protos.FilteredTransaction, heigh
 	}
 	// 该block已经处理完毕，此时需要记录到游标里，避免后续事件遍历负担
 	newCursor := asyncWorkerCursor{
-		BlockHeight: height + 1,
-		TxIndex:     0,
-		EventIndex:  0,
+		BlockHeight: height,
+		TxIndex:     lastTxIndex,
+		EventIndex:  lastEventIndex,
 	}
 	if err := aw.storeCursor(newCursor); err != nil {
 		return err
@@ -278,7 +281,7 @@ func (aw *AsyncWorkerImpl) Stop() {
 }
 
 type asyncWorkerCursor struct {
-	BlockHeight int64 `json:"block_height"`
-	TxIndex     int64 `json:"tx_index"`
-	EventIndex  int64 `json:"event_index"`
+	BlockHeight int64 `json:"block_height,required"`
+	TxIndex     int64 `json:"tx_index,required"`
+	EventIndex  int64 `json:"event_index,required"`
 }
