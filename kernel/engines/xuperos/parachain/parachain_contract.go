@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"io/ioutil"
 	"os"
@@ -27,13 +26,16 @@ import (
 
 var (
 	// ErrBlockChainExist is returned when create an existed block chain
-	ErrBlockChainExist = errors.New("BlockChain Exist")
+	ErrBlockChainExist = errors.New("blockChain exist")
 	// ErrCreateBlockChain is returned when create block chain error
-	ErrCreateBlockChain = errors.New("Create BlockChain error")
-	ErrGroupNotFound    = errors.New("Group Not Found")
-	ErrUnAuthorized     = errors.New("UnAuthorized")
-	ErrChainNotFound    = errors.New("Chain Not Found")
-	ErrCtxEmpty         = errors.New("Chain context is not found")
+	ErrCreateBlockChain = errors.New("create blockChain error")
+	ErrGroupNotFound    = errors.New("group not found")
+	ErrUnAuthorized     = errors.New("unAuthorized")
+	ErrChainNotFound    = errors.New("chain not found")
+	ErrCtxEmpty         = errors.New("chain context is not found")
+	ErrBcNameEmpty      = errors.New("block chain name is empty")
+	ErrBcDataEmpty      = errors.New("first block data is empty")
+	ErrAdminEmpty       = errors.New("no administrator")
 )
 
 const (
@@ -94,27 +96,29 @@ func (p *paraChainContract) handleStopChain(ctx common.TaskContext) error {
 
 func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
-		return nil, errors.New("Permission denied to call this contract")
+		return nil, ErrUnAuthorized
 	}
-	bcName, bcData, err := p.parseArgs(ctx.Args())
+	bcName, bcData, bcGroup, err := p.parseArgs(ctx.Args())
 	if err != nil {
 		return nil, err
 	}
 
 	// 1. 群组相关字段改写
 	// 确保未创建过该链
-	chainRes, err := ctx.Get(ParaChainKernelContract, []byte(bcName))
+	chainRes, _ := ctx.Get(ParaChainKernelContract, []byte(bcName))
 	if chainRes != nil {
 		return newContractErrResponse(unAuthorized, ErrBlockChainExist.Error()), ErrBlockChainExist
 	}
 	// 创建链时，自动写入Group信息
-	value := &Group{
+	group := &Group{
 		GroupID:    bcName,
 		Admin:      []string{ctx.Initiator()},
 		Identities: nil,
 	}
-	value = loadGroupArgs(ctx.Args(), value)
-	rawBytes, err := json.Marshal(value)
+	if bcGroup != nil {
+		group = bcGroup
+	}
+	rawBytes, err := json.Marshal(group)
 	if err != nil {
 		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
@@ -148,14 +152,14 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response, error) {
 	// 1. 查看输入参数是否正确
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
-		return nil, errors.New("Permission denied to call this contract")
+		return nil, ErrUnAuthorized
 	}
 	if ctx.Args()["name"] == nil {
-		return nil, errors.New("arg name is required")
+		return nil, ErrBcNameEmpty
 	}
 	bcName := string(ctx.Args()["name"])
 	if bcName == "" {
-		return nil, errors.New("arg name is empty")
+		return nil, ErrBcNameEmpty
 	}
 
 	// 2. 查看是否包含相关群组，确保链已经创建过
@@ -203,26 +207,50 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 	}, nil
 }
 
-func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, error) {
+func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *Group, error) {
+	// 检查bcName和bcData是否合法
 	bcName := ""
 	bcData := ""
 	if args["name"] == nil {
-		return bcName, bcData, errors.New("block chain name is empty")
+		return bcName, bcData, nil, ErrBcNameEmpty
 	}
 	if args["data"] == nil {
-		return bcName, bcData, errors.New("first block data is empty")
+		return bcName, bcData, nil, ErrBcDataEmpty
 	}
 	bcName = string(args["name"])
 	bcData = string(args["data"])
-
+	if bcName == "" {
+		return bcName, bcData, nil, ErrBcNameEmpty
+	}
+	if bcName == p.ChainCtx.EngCtx.EngCfg.RootChain {
+		return bcName, bcData, nil, ErrBlockChainExist
+	}
+	if bcData == "" {
+		return bcName, bcData, nil, ErrBcDataEmpty
+	}
 	// check data format, prevent panic
 	bcCfg := &ledger.RootConfig{}
 	err := json.Unmarshal(args["data"], bcCfg)
 	if err != nil {
-		return bcName, bcData, fmt.Errorf("first block data error.err:%v", err)
+		return bcName, bcData, nil, fmt.Errorf("first block data error.err:%v", err)
+	}
+	if args["group"] == nil {
+		return bcName, bcData, nil, nil
 	}
 
-	return bcName, bcData, nil
+	// 若群组存在检查群组是否合法
+	var bcGroup Group
+	err = json.Unmarshal(args["group"], &bcGroup)
+	if err != nil {
+		return bcName, bcData, nil, fmt.Errorf("group data error.err:%v", err)
+	}
+	if bcGroup.GroupID != bcName {
+		return bcName, bcData, nil, fmt.Errorf("group name should be same with the parachain name")
+	}
+	if len(bcGroup.Admin) == 0 {
+		return bcName, bcData, nil, ErrAdminEmpty
+	}
+	return bcName, bcData, &bcGroup, nil
 }
 
 func createLedger(bcName string, data []byte, envConf *xconfig.EnvConf) error {
@@ -302,9 +330,9 @@ type Group struct {
 // methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
 func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
-	group = loadGroupArgs(ctx.Args(), group)
-	if group == nil {
-		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
+	group, err := loadGroupArgs(ctx.Args(), group)
+	if err != nil {
+		return newContractErrResponse(targetNotFound, err.Error()), err
 	}
 	// 1. 查看Group群组是否存在
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
@@ -354,9 +382,9 @@ func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response
 // methodGetGroup 平行链群组读方法
 func (p *paraChainContract) getGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
-	group = loadGroupArgs(ctx.Args(), group)
-	if group == nil {
-		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), ErrGroupNotFound
+	group, err := loadGroupArgs(ctx.Args(), group)
+	if err != nil {
+		return newContractErrResponse(targetNotFound, err.Error()), err
 	}
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
 	if err != nil {
@@ -376,30 +404,39 @@ func (p *paraChainContract) getGroup(ctx contract.KContext) (*contract.Response,
 	}, nil
 }
 
-func loadGroupArgs(args map[string][]byte, group *Group) *Group {
+func loadGroupArgs(args map[string][]byte, group *Group) (*Group, error) {
 	g := &Group{
 		GroupID:    group.GroupID,
 		Admin:      group.Admin,
 		Identities: group.Identities,
 	}
-	bcName, ok := args["name"]
+	bcNameBytes, ok := args["name"]
 	if !ok {
-		return nil
+		return nil, ErrBcNameEmpty
 	}
-	g.GroupID = string(bcName)
-	admin, ok := args["admin"]
+	g.GroupID = string(bcNameBytes)
+	if g.GroupID == "" {
+		return nil, ErrBcNameEmpty
+	}
+
+	adminBytes, ok := args["admin"]
 	if !ok {
-		return g
+		return g, nil
 	}
-	adminStr := string(admin)
-	g.Admin = strings.Split(adminStr, ";")
-	ids, ok := args["identities"]
+	err := json.Unmarshal(adminBytes, &g.Admin)
+	if err != nil {
+		return nil, err
+	}
+
+	idsBytes, ok := args["identities"]
 	if !ok {
-		return g
+		return g, nil
 	}
-	identitiesStr := string(ids)
-	g.Identities = strings.Split(identitiesStr, ";")
-	return g
+	err = json.Unmarshal(idsBytes, &g.Identities)
+	if err != nil {
+		return nil, err
+	}
+	return g, nil
 }
 
 func isContain(items []string, item string) bool {
