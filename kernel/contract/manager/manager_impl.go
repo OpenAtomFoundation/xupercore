@@ -1,11 +1,17 @@
 package manager
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/lib/logs"
+	"math/big"
 	"path/filepath"
+	"sync/atomic"
 
+	"github.com/xuperchain/xupercore/lib/logs"
+
+	"github.com/hyperledger/burrow/crypto"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
@@ -76,6 +82,8 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	registry := &m.kregistry
 	registry.RegisterKernMethod("$contract", "deployContract", m.deployContract)
 	registry.RegisterKernMethod("$contract", "upgradeContract", m.upgradeContract)
+	registry.RegisterKernMethod("xvm", "proxy", m.emvprox)
+
 	registry.RegisterShortcut("Deploy", "$contract", "deployContract")
 	registry.RegisterShortcut("Upgrade", "$contract", "upgradeContract")
 	return m, nil
@@ -147,6 +155,57 @@ func (m *managerImpl) upgradeContract(ctx contract.KContext) (*contract.Response
 	return resp, nil
 }
 
+type Transaction struct {
+	data txdata
+	// caches
+	hash atomic.Value
+	size atomic.Value
+	from atomic.Value
+}
+
+type txdata struct {
+	AccountNonce uint64
+	Price        *big.Int
+	GasLimit     uint64
+	//Recipient    *common.Address
+	Amount  *big.Int
+	Payload []byte
+
+	V *big.Int
+	R *big.Int
+	S *big.Int
+
+	// This is only used when marshaling to JSON.
+	// Hash *common.Hash `json:"hash" rlp:"-"`
+}
+
+func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error) {
+	args := ctx.Args()
+	desc, ok := args["desc"]
+	tx := &Transaction{}
+	if !ok {
+		//	TODO
+	}
+	if err := json.Unmarshal(desc, tx); err != nil {
+		return nil, err
+	}
+	var _ = crypto.Address{}
+	//TODO
+	bytes1 := []byte{}
+	signature, err := crypto.SignatureFromBytes(bytes1, crypto.CurveTypeSecp256k1)
+	if err != nil {
+		return nil, err
+	}
+	sig := []byte{}
+	if !bytes.Equal(signature.GetSignature(), sig) {
+		return nil, errors.New("aaaaa")
+	}
+	return &contract.Response{
+		Status:  200,
+		Message: "",
+		Body:    []byte("TODO"),
+	}, nil
+}
 func init() {
 	contract.Register("default", newManagerImpl)
 }
