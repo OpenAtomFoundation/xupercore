@@ -123,7 +123,7 @@ func (c *SyscallService) Transfer(ctx context.Context, in *pb.TransferRequest) (
 	if in.GetTo() == "" {
 		return nil, errors.New("empty to address")
 	}
-	err := nctx.State.Transfer(nctx.Initiator, in.GetTo(), amount)
+	err := nctx.State.Transfer(nctx.ContractName, in.GetTo(), amount)
 	if err != nil {
 		return nil, err
 	}
