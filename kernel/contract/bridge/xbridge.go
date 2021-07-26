@@ -25,6 +25,7 @@ type XBridge struct {
 	debugLogger logs.Logger
 
 	*contractManager
+	//*SyscallService
 }
 
 type XBridgeConfig struct {
@@ -168,4 +169,9 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		instance: instance,
 		release:  release,
 	}, nil
+}
+
+// TODO templ
+func (v *XBridge) SysCallService(ctxCfg *contract.ContextConfig) *SyscallService {
+	return v.syscallService
 }

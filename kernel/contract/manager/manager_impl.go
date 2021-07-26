@@ -82,7 +82,7 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	registry := &m.kregistry
 	registry.RegisterKernMethod("$contract", "deployContract", m.deployContract)
 	registry.RegisterKernMethod("$contract", "upgradeContract", m.upgradeContract)
-	registry.RegisterKernMethod("xvm", "proxy", m.emvprox)
+	registry.RegisterKernMethod("$evm", "proxy", m.emvprox)
 
 	registry.RegisterShortcut("Deploy", "$contract", "deployContract")
 	registry.RegisterShortcut("Upgrade", "$contract", "upgradeContract")
@@ -179,6 +179,7 @@ type txdata struct {
 	// Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
+// TODO 放到 bridge ？
 func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	desc, ok := args["desc"]
@@ -190,7 +191,6 @@ func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error)
 		return nil, err
 	}
 	var _ = crypto.Address{}
-	//TODO
 	bytes1 := []byte{}
 	signature, err := crypto.SignatureFromBytes(bytes1, crypto.CurveTypeSecp256k1)
 	if err != nil {
@@ -198,14 +198,34 @@ func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error)
 	}
 	sig := []byte{}
 	if !bytes.Equal(signature.GetSignature(), sig) {
-		return nil, errors.New("aaaaa")
+		return nil, errors.New("tx vertificate failed")
 	}
-	return &contract.Response{
-		Status:  200,
-		Message: "",
-		Body:    []byte("TODO"),
-	}, nil
+	//state, err := m.NewStateSandbox(&contract.SandboxConfig{
+	//	XMReader:   nil,
+	//	UTXOReader: nil,
+	//})
+	//ctx1, err := m.NewContext(&contract.ContextConfig{
+	//	State:                 state,
+	//	Initiator:             "XC1111111111111111@xuper",
+	//	AuthRequire:           nil,
+	//	Caller:                "XC1111111111111111@xuper",
+	//	Module:                "evm",
+	//	ContractName:          "counter",
+	//	ResourceLimits:        contract.Limits{},
+	//	CanInitialize:         false,
+	//	TransferAmount:        new(big.Int).SetInt64(10000).String(),
+	//	ContractSet:           nil,
+	//	ContractCodeFromCache: false,
+	//})
+	method := "increase"
+	args1 := map[string][]byte{}
+	contract := "counter"
+	//resp, err := ctx1.Invoke(method, args1)
+	resp, err := ctx.Call("evm", contract, method, args1)
+	return resp, err
+
 }
+
 func init() {
 	contract.Register("default", newManagerImpl)
 }

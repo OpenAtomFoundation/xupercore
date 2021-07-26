@@ -1,8 +1,11 @@
 package manager
 
 import (
+	"encoding/json"
 	"testing"
 
+	log15 "github.com/xuperchain/log15"
+	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
@@ -49,6 +52,31 @@ func TestInvoke(t *testing.T) {
 
 	resp, err := th.Invoke("xkernel", "$hello", "Hi", map[string][]byte{
 		"name": []byte("xuper"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Logf("%s", resp.Body)
+}
+
+type evmTransaction struct {
+}
+
+func TestEVM(t *testing.T) {
+	th := mock.NewTestHelper(contractConfig)
+	defer th.Close()
+	m := th.Manager()
+
+	m.GetKernRegistry().RegisterKernMethod("$evm", "proxy", new(helloContract).Hi)
+	txData := evmTransaction{}
+	data, err := json.Marshal(txData)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	resp, err := th.Invoke("xkernel", "$evm", "proxy", map[string][]byte{
+		"desc": data,
 	})
 	if err != nil {
 		t.Fatal(err)
