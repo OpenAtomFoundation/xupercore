@@ -1,7 +1,6 @@
 package manager
 
 import (
-	"encoding/json"
 	"testing"
 
 	log15 "github.com/xuperchain/log15"
@@ -61,28 +60,6 @@ func TestInvoke(t *testing.T) {
 }
 
 type evmTransaction struct {
-}
-
-func TestEVM(t *testing.T) {
-	th := mock.NewTestHelper(contractConfig)
-	defer th.Close()
-	m := th.Manager()
-
-	m.GetKernRegistry().RegisterKernMethod("$evm", "proxy", new(helloContract).Hi)
-	txData := evmTransaction{}
-	data, err := json.Marshal(txData)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	resp, err := th.Invoke("xkernel", "$evm", "proxy", map[string][]byte{
-		"desc": data,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("%s", resp.Body)
 }
 
 type helloContract struct {
