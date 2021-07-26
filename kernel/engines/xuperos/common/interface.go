@@ -61,7 +61,6 @@ type ChainRelyAgent interface {
 	CreateGovernToken() (governToken.GovManager, error)
 	CreateProposal() (propose.ProposeManager, error)
 	CreateTimerTask() (timerTask.TimerManager, error)
-	CreateParaChain() error
 }
 
 type ChainManager interface {
