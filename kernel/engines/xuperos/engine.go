@@ -199,7 +199,7 @@ func (t *Engine) loadChains() error {
 				return err
 			}
 			chain.ctx.Asyncworker = aw
-			err = chain.relyAgent.CreateParaChain()
+			err = chain.CreateParaChain()
 			if err != nil {
 				t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
 				return fmt.Errorf("create parachain error")

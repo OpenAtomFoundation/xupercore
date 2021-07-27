@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 )
 
 const (
@@ -49,9 +50,16 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 			register.RegisterKernMethod(ParaChainKernelContract, method, f)
 		}
 	}
+
 	// 仅主链绑定handleCreateChain 从链上下文中获取链绑定的异步任务worker
-	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "CreateBlockChain", t.handleCreateChain)
-	ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, "StopBlockChain", t.handleStopChain)
+	asyncTask := map[string]common.TaskHandler{
+		"CreateBlockChain":  t.handleCreateChain,
+		"StopBlockChain":    t.handleStopChain,
+		"RefreshBlockChain": t.handleRefreshChain,
+	}
+	for task, f := range asyncTask {
+		ctx.ChainCtx.Asyncworker.RegisterHandler(ParaChainKernelContract, task, f)
+	}
 	mg := &Manager{
 		Ctx: ctx,
 	}

@@ -44,7 +44,8 @@ const (
 	targetNotFound    = 404
 	internalServerErr = 500
 
-	paraChainEventName = "EditParaGroups"
+	paraChainEventName  = "EditParaGroups"
+	genesisConfigPrefix = "$G_"
 )
 
 type paraChainContract struct {
@@ -64,34 +65,81 @@ func NewParaChainContract(bcName string, minNewChainAmount int64, chainCtx *comm
 }
 
 type createChainMessage struct {
-	BcName string
-	Data   string
+	BcName        string `json:"name"`
+	GenesisConfig string `json:"genesis_config"`
+	Group         Group  `json:"group"`
 }
 
 type stopChainMessage struct {
-	BcName string
+	BcName string `json:"name"`
 }
 
+type refreshMessage struct {
+	BcName        string `json:"name"`
+	GenesisConfig string `json:"genesis_config"`
+	Group         Group  `json:"group"`
+}
+
+// handleCreateChain 创建平行链的异步事件方法，若账本不存在则创建，加载链到引擎，需幂等
 func (p *paraChainContract) handleCreateChain(ctx common.TaskContext) error {
 	var args createChainMessage
 	err := ctx.ParseArgs(&args)
 	if err != nil {
 		return err
 	}
-	err = createLedger(args.BcName, []byte(args.Data), p.ChainCtx.EngCtx.EnvCfg)
-	if err != nil {
-		return err
+	// 查看当前节点是否有权限创建/获取该平行链
+	haveAccess := isContain(args.Group.Admin, p.ChainCtx.Address.Address) || isContain(args.Group.Identities, p.ChainCtx.Address.Address)
+	if !haveAccess {
+		return nil
 	}
-	return p.ChainCtx.EngCtx.ChainM.LoadChain(args.BcName)
+	return p.doCreateChain(args.BcName, args.GenesisConfig)
 }
 
+func (p *paraChainContract) doCreateChain(bcName string, bcGenesisConfig string) error {
+	if _, err := p.ChainCtx.EngCtx.ChainM.Get(bcName); err == nil {
+		p.ChainCtx.XLog.Warn("Chain is running, no need be created", "chain", bcName)
+		return nil
+	}
+	err := createLedger(bcName, []byte(bcGenesisConfig), p.ChainCtx.EngCtx.EnvCfg)
+	if err != nil && err != ErrBlockChainExist {
+		return err
+	}
+	if err == ErrBlockChainExist {
+		p.ChainCtx.XLog.Warn("Chain created before, load again", "chain", bcName)
+	}
+	return p.ChainCtx.EngCtx.ChainM.LoadChain(bcName)
+}
+
+// handleStopChain 关闭平行链，仅从引擎中卸载，不处理账本，需幂等
 func (p *paraChainContract) handleStopChain(ctx common.TaskContext) error {
 	var args stopChainMessage
 	err := ctx.ParseArgs(&args)
 	if err != nil {
 		return err
 	}
-	return p.ChainCtx.EngCtx.ChainM.Stop(args.BcName)
+	return p.doStopChain(args.BcName)
+}
+
+func (p *paraChainContract) doStopChain(bcName string) error {
+	if _, err := p.ChainCtx.EngCtx.ChainM.Get(bcName); err != nil {
+		p.ChainCtx.XLog.Warn("Chain hasn't been loaded yet", "chain", bcName)
+		return nil
+	}
+	return p.ChainCtx.EngCtx.ChainM.Stop(bcName)
+}
+
+func (p *paraChainContract) handleRefreshChain(ctx common.TaskContext) error {
+	var args refreshMessage
+	err := ctx.ParseArgs(&args)
+	if err != nil {
+		return err
+	}
+	// 根据当前节点目前是否有权限获取该链，决定当前是停掉链还是加载链
+	haveAccess := isContain(args.Group.Admin, p.ChainCtx.Address.Address) || isContain(args.Group.Identities, p.ChainCtx.Address.Address)
+	if haveAccess {
+		return p.doCreateChain(args.BcName, args.GenesisConfig)
+	}
+	return p.doStopChain(args.BcName)
 }
 
 func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
@@ -122,16 +170,23 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	if err != nil {
 		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
+	// 写群组信息
 	if err := ctx.Put(ParaChainKernelContract,
 		[]byte(bcName), rawBytes); err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+	// 写创世块配置信息
+	if err := ctx.Put(ParaChainKernelContract,
+		[]byte(genesisConfigPrefix+bcName), []byte(bcData)); err != nil {
 		return newContractErrResponse(internalServerErr, err.Error()), err
 	}
 
 	// 2. 群组注册完毕后，再进行异步事件调用
 	// 当该Tx被打包上链时，将运行CreateBlockChain注册的handler，并输入参数
 	message := &createChainMessage{
-		BcName: bcName,
-		Data:   bcData,
+		BcName:        bcName,
+		GenesisConfig: bcData,
+		Group:         *group,
 	}
 	err = ctx.EmitAsyncTask("CreateBlockChain", message)
 	if err != nil {
@@ -181,13 +236,7 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
 	}
 
-	// 4. 查看当前实例是否有该链
-	_, err = p.ChainCtx.EngCtx.ChainM.Get(bcName)
-	if err != nil {
-		return newContractErrResponse(unAuthorized, err.Error()), err
-	}
-
-	// 5. 将该链停掉
+	// 4. 将该链停掉
 	message := stopChainMessage{
 		BcName: bcName,
 	}
@@ -368,6 +417,22 @@ func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response
 		Body: rawBytes,
 	}
 	ctx.AddEvent(&e)
+
+	// 5. 发起另一个异步事件，旨在根据不同链的状况停掉链或者加载链
+	genesisConfig, err := ctx.Get(ParaChainKernelContract, []byte(genesisConfigPrefix+group.GroupID))
+	if err != nil {
+		err = fmt.Errorf("get genesis config failed when edit the group, bcName = %s, err = %v", group.GroupID, err)
+		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), err
+	}
+	message := &refreshMessage{
+		BcName:        group.GroupID,
+		GenesisConfig: string(genesisConfig),
+		Group:         *group,
+	}
+	err = ctx.EmitAsyncTask("RefreshBlockChain", message)
+	if err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
 
 	delta := contract.Limits{
 		XFee: p.MinNewChainAmount,
