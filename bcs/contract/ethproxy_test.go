@@ -57,8 +57,10 @@ func TestEVM(t *testing.T) {
 	}
 	args := map[string][]byte{
 		"contract_abi": abi,
+		"input":        bin,
+		"jsonEncoded":  []byte("false"),
 	}
-	resp, err := th.Deploy("evm", "counter", "evmcounter", bin, args)
+	resp, err := th.Deploy("evm", "counter", "counter", bin, args)
 	if err != nil {
 		t.Fatal(err)
 	}

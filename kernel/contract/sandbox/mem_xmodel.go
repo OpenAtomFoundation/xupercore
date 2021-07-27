@@ -3,6 +3,7 @@ package sandbox
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/emirpasic/gods/trees/redblacktree"
 	"github.com/emirpasic/gods/utils"
@@ -33,6 +34,7 @@ func NewMemXModel() *MemXModel {
 func (m *MemXModel) Get(bucket string, key []byte) (*ledger.VersionedData, error) {
 	buKey := makeRawKey(bucket, key)
 	v, ok := m.tree.Get(buKey)
+	//fmt.Println("get:", string(buKey))
 	if !ok {
 		return nil, ErrNotFound
 	}
@@ -41,7 +43,11 @@ func (m *MemXModel) Get(bucket string, key []byte) (*ledger.VersionedData, error
 
 func (m *MemXModel) Put(bucket string, key []byte, value *ledger.VersionedData) error {
 	buKey := makeRawKey(bucket, key)
+	if string(key) == "counter.code" {
+		fmt.Println(value.PureData.Value)
+	}
 	m.tree.Put(buKey, value)
+	//fmt.Println("put:", string(buKey))
 	return nil
 }
 

@@ -204,6 +204,7 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 	rwset := state.RWSet()
 	txbuf := make([]byte, 32)
 	rand.Read(txbuf)
+	fmt.Println("wset start")
 	for i, w := range rwset.WSet {
 		t.state.Put(w.Bucket, w.Key, &ledger.VersionedData{
 			RefTxid:   txbuf,
@@ -215,6 +216,7 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 			},
 		})
 	}
+	fmt.Println("wset stop")
 }
 
 func (t *TestHelper) Close() {

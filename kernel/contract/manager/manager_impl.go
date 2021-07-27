@@ -1,8 +1,6 @@
 package manager
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -11,7 +9,6 @@ import (
 
 	"github.com/xuperchain/xupercore/lib/logs"
 
-	"github.com/hyperledger/burrow/crypto"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
@@ -181,25 +178,25 @@ type txdata struct {
 
 // TODO 放到 bridge ？
 func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error) {
-	args := ctx.Args()
-	desc, ok := args["desc"]
-	tx := &Transaction{}
-	if !ok {
-		//	TODO
-	}
-	if err := json.Unmarshal(desc, tx); err != nil {
-		return nil, err
-	}
-	var _ = crypto.Address{}
-	bytes1 := []byte{}
-	signature, err := crypto.SignatureFromBytes(bytes1, crypto.CurveTypeSecp256k1)
-	if err != nil {
-		return nil, err
-	}
-	sig := []byte{}
-	if !bytes.Equal(signature.GetSignature(), sig) {
-		return nil, errors.New("tx vertificate failed")
-	}
+	//args := ctx.Args()
+	//desc, ok := args["desc"]
+	//tx := &Transaction{}
+	//if !ok {
+	//	//	TODO
+	//}
+	//if err := json.Unmarshal(desc, tx); err != nil {
+	//	return nil, err
+	//}
+	//var _ = crypto.Address{}
+	//bytes1 := []byte{}
+	//signature, err := crypto.SignatureFromBytes(bytes1, crypto.CurveTypeSecp256k1)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//sig := []byte{}
+	//if !bytes.Equal(signature.GetSignature(), sig) {
+	//	return nil, errors.New("tx vertificate failed")
+	//}
 	//state, err := m.NewStateSandbox(&contract.SandboxConfig{
 	//	XMReader:   nil,
 	//	UTXOReader: nil,
@@ -217,9 +214,12 @@ func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error)
 	//	ContractSet:           nil,
 	//	ContractCodeFromCache: false,
 	//})
-	method := "increase"
-	args1 := map[string][]byte{}
+	method := "testWrite"
+	args1 := map[string][]byte{
+		"key": []byte("xchain"),
+	}
 	contract := "counter"
+
 	//resp, err := ctx1.Invoke(method, args1)
 	resp, err := ctx.Call("evm", contract, method, args1)
 	return resp, err

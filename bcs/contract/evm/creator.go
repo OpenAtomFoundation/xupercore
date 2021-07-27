@@ -3,13 +3,14 @@ package evm
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
 
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/execution/engine"
-	"github.com/hyperledger/burrow/execution/errors"
+	burror_errors "github.com/hyperledger/burrow/execution/errors"
 	"github.com/hyperledger/burrow/execution/evm"
 	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/execution/exec"
@@ -165,7 +166,7 @@ func (e *evmInstance) Release() {
 func (e *evmInstance) Abort(msg string) {
 }
 
-func (e *evmInstance) Call(call *exec.CallEvent, exception *errors.Exception) error {
+func (e *evmInstance) Call(call *exec.CallEvent, exception *burror_errors.Exception) error {
 	return nil
 }
 
