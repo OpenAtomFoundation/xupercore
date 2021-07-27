@@ -17,6 +17,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/agent"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -423,5 +424,18 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
 	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
 	t.log.Trace("create chain succ", "bcName", t.ctx.BCName)
+	return nil
+}
+
+// 创建平行链实例
+func (t *Chain) CreateParaChain() error {
+	paraChainCtx, err := parachain.NewParaChainCtx(t.ctx.BCName, t.ctx)
+	if err != nil {
+		return fmt.Errorf("create parachain ctx failed.err:%v", err)
+	}
+	_, err = parachain.NewParaChainManager(paraChainCtx)
+	if err != nil {
+		return fmt.Errorf("create parachain instance failed.err:%v", err)
+	}
 	return nil
 }
