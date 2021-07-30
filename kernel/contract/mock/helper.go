@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	ContractAccount  = "XC1111111111111111@xuper"
-	ContractAccount2 = "XC2222222222222222@xuper"
+	ContractAccount      = "XC1111111111111111@xuper"
+	ContractAccount2     = "XC2222222222222222@xuper"
+	FeaturesContractName = "features"
 )
 
 type TestHelper struct {
@@ -37,9 +38,7 @@ func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
 	}
 
 	state := sandbox.NewMemXModel()
-	//state.
 	core := new(fakeChainCore)
-	//core.
 	m, err := contract.CreateManager("default", &contract.ManagerConfig{
 		Basedir:  basedir,
 		BCName:   "xuper",
@@ -85,10 +84,20 @@ func (t *TestHelper) initAccount() {
 	})
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
+		//{
+		//	RefTxid:              nil,
+		//	RefOffset:            0,
+		//	FromAddr:             []byte(ContractAccount),
+		//	Amount:               big.NewInt(9999).Bytes(),
+		//	FrozenHeight:         0,
+		//	XXX_NoUnkeyedLiteral: struct{}{},
+		//	XXX_unrecognized:     nil,
+		//	XXX_sizecache:        0,
+		//},
 		{
 			RefTxid:              nil,
 			RefOffset:            0,
-			FromAddr:             []byte(ContractAccount),
+			FromAddr:             []byte(FeaturesContractName),
 			Amount:               big.NewInt(9999).Bytes(),
 			FrozenHeight:         0,
 			XXX_NoUnkeyedLiteral: struct{}{},
@@ -97,9 +106,6 @@ func (t *TestHelper) initAccount() {
 		},
 	})
 	t.utxoReader = utxoReader
-	//t.utxo = utxo.NewUTXOSandbox(&contract.SandboxConfig{
-	//	UTXOReader: utxoReader,
-	//})
 }
 
 func (t *TestHelper) Balance(account string) *big.Int {
@@ -210,7 +216,6 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 	if err != nil {
 		return nil, err
 	}
-	//TODO @fengjin
 	state.Flush()
 	t.utxo = state.UTXORWSet()
 	t.Commit(state)

@@ -75,7 +75,7 @@ func TestNativeInvoke(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = th.Deploy("native", "go", "features", bin, map[string][]byte{
+	_, err = th.Deploy("native", "go", mock.FeaturesContractName, bin, map[string][]byte{
 		"creator": []byte("icexin"),
 	})
 	if err != nil {
@@ -109,7 +109,7 @@ func TestNativeInvoke(t *testing.T) {
 			}
 		}
 		{
-			if new(big.Int).SetBytes(uwset[1].Amount).Int64() != 9899 || string(uwset[1].ToAddr) != mock.ContractAccount {
+			if new(big.Int).SetBytes(uwset[1].Amount).Int64() != 9899 || string(uwset[1].ToAddr) != mock.FeaturesContractName {
 				fmt.Println(new(big.Int).SetBytes(uwset[0].Amount).Int64())
 				fmt.Println(string(uwset[0].ToAddr))
 				t.Error("transfer error")
