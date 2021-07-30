@@ -3,7 +3,6 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -223,7 +222,6 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 	txbuf := make([]byte, 32)
 	rand.Read(txbuf)
 	for i, w := range rwset.WSet {
-		fmt.Println(w.Bucket, string(w.Key))
 		t.state.Put(w.Bucket, w.Key, &ledger.VersionedData{
 			RefTxid:   txbuf,
 			RefOffset: int32(i),
