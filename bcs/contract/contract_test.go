@@ -3,18 +3,19 @@ package contract
 import (
 	"bytes"
 	"fmt"
-	log15 "github.com/xuperchain/log15"
-	_ "github.com/xuperchain/xupercore/bcs/contract/native"
-	"github.com/xuperchain/xupercore/kernel/contract"
-	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
-	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
-	"github.com/xuperchain/xupercore/kernel/contract/mock"
 	"io/ioutil"
 	"math/big"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	log15 "github.com/xuperchain/log15"
+	_ "github.com/xuperchain/xupercore/bcs/contract/native"
+	"github.com/xuperchain/xupercore/kernel/contract"
+	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
+	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
+	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
 
 type MockLogger struct {
@@ -92,7 +93,7 @@ func TestNativeInvoke(t *testing.T) {
 	t.Run("Transfer", func(t *testing.T) {
 		resp, err := th.Invoke("native", "features", "Transfer", map[string][]byte{
 			"to":        []byte(mock.ContractAccount2),
-			"amount":    big.NewInt(100).Bytes(),
+			"amount":    []byte(big.NewInt(100).String()),
 			"initiator": []byte(mock.ContractAccount),
 		})
 		if err != nil {
