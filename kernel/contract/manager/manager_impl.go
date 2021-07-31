@@ -79,7 +79,7 @@ func newManagerImpl(cfg *contract.ManagerConfig) (contract.Manager, error) {
 	registry := &m.kregistry
 	registry.RegisterKernMethod("$contract", "deployContract", m.deployContract)
 	registry.RegisterKernMethod("$contract", "upgradeContract", m.upgradeContract)
-	registry.RegisterKernMethod("$evm", "proxy", m.emvprox)
+	registry.RegisterKernMethod("$contract", "proxy", m.evmproxy)
 
 	registry.RegisterShortcut("Deploy", "$contract", "deployContract")
 	registry.RegisterShortcut("Upgrade", "$contract", "upgradeContract")
@@ -176,9 +176,46 @@ type txdata struct {
 	// Hash *common.Hash `json:"hash" rlp:"-"`
 }
 
+//2. 普通合约调用方案方案
+func (m *managerImpl) evmproxy(ctx contract.KContext) (*contract.Response, error) {
+	return m.evmproxy2(ctx)
+}
+func (m *managerImpl) emvprox1(ctx contract.KContext) (*contract.Response, error) {
+	args := ctx.Args()
+	initiator := args["from"]
+	contractName := args["to"]
+	state, err := m.NewStateSandbox(&contract.SandboxConfig{
+		XMReader:   nil,
+		UTXOReader: nil,
+	})
+	if err != nil {
+		return nil, err
+	}
+	ctx1, err := m.NewContext(&contract.ContextConfig{
+		State:       state,
+		Initiator:   string(initiator),
+		AuthRequire: nil,
+		Caller:      string(initiator),
+		Module:      "evm",
+		// 地址转换
+		ContractName:          string(contractName),
+		ResourceLimits:        contract.Limits{},
+		CanInitialize:         false,
+		TransferAmount:        "",
+		ContractSet:           nil,
+		ContractCodeFromCache: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return ctx1.Invoke("method", map[string][]byte{})
+}
+
+// 1.跨合约调用方案
 // TODO 放到 bridge ？
-func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error) {
-	//args := ctx.Args()
+func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, error) {
+	args := ctx.Args()
+
 	//desc, ok := args["desc"]
 	//tx := &Transaction{}
 	//if !ok {
@@ -214,14 +251,20 @@ func (m *managerImpl) emvprox(ctx contract.KContext) (*contract.Response, error)
 	//	ContractSet:           nil,
 	//	ContractCodeFromCache: false,
 	//})
-	method := "testWrite"
+	//method := "testWrite"
+	//args1 := map[string][]byte{
+	//	"key": []byte("xchain"),
+	//}
+	contract := string(args["to"])
+	//method := string(args["to"])
+	data := string(args["data"])
 	args1 := map[string][]byte{
-		"key": []byte("xchain"),
+		"input":       []byte(data),
+		"jsonEncoded": []byte("false"),
 	}
-	contract := "counter"
 
 	//resp, err := ctx1.Invoke(method, args1)
-	resp, err := ctx.Call("evm", contract, method, args1)
+	resp, err := ctx.Call("evm", contract, "method", args1)
 	return resp, err
 
 }
