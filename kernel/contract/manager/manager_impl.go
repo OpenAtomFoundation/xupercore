@@ -1,10 +1,13 @@
 package manager
 
 import (
+	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/hyperledger/burrow/crypto"
+	"github.com/hyperledger/burrow/rpc/web3"
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"math/big"
 	"path/filepath"
@@ -184,58 +187,30 @@ func (m *managerImpl) evmproxy(ctx contract.KContext) (*contract.Response, error
 	return m.evmproxy2(ctx)
 }
 
-// 1.跨合约调用方案
-// TODO 放到 bridge ？
 func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 
-	//desc, ok := args["desc"]
-	//tx := &Transaction{}
-	//if !ok {
-	//	//	TODO
-	//}
-	//if err := json.Unmarshal(desc, tx); err != nil {
-	//	return nil, err
-	//}
-	//var _ = crypto.Address{}
-	//bytes1 := []byte{}
-	//signature, err := crypto.SignatureFromBytes(bytes1, crypto.CurveTypeSecp256k1)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//sig := []byte{}
-	//if !bytes.Equal(signature.GetSignature(), sig) {
-	//	return nil, errors.New("tx vertificate failed")
-	//}
-	//state, err := m.NewStateSandbox(&contract.SandboxConfig{
-	//	XMReader:   nil,
-	//	UTXOReader: nil,
-	//})
-	//ctx1, err := m.NewContext(&contract.ContextConfig{
-	//	State:                 state,
-	//	Initiator:             "XC1111111111111111@xuper",
-	//	AuthRequire:           nil,
-	//	Caller:                "XC1111111111111111@xuper",
-	//	Module:                "evm",
-	//	ContractName:          "counter",
-	//	ResourceLimits:        contract.Limits{},
-	//	CanInitialize:         false,
-	//	TransferAmount:        new(big.Int).SetInt64(10000).String(),
-	//	ContractSet:           nil,
-	//	ContractCodeFromCache: false,
-	//})
-	//method := "testWrite"
-	//args1 := map[string][]byte{
-	//	"key": []byte("xchain"),
-	//}
 	to := args["to"]
 	// TODO length check
 	from := args["from"]
-	data := args["data"]
-	//args1 := map[string][]byte{
-	//	"input":       []byte("{\"key\":\"xchain\"}"),
-	//	"jsonEncoded": []byte("true"),
-	//}
+	data := args["param"]
+	//all := args["all"]
+
+	req := &web3.EthSendTransactionParams{}
+	// TODO  两种的区别
+	if err := json.Unmarshal(data, req); err != nil {
+		return nil, err
+	}
+	// TODO  variable naming
+	unc := crypto.UncompressedSignatureFromParams([]byte(req.R), []byte(req.S))
+	sig, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(sig.RawBytes(), []byte(req.Hash)) {
+		return nil, errors.New("signature verification failed")
+	}
+	// TODO
 	input, err := hex.DecodeString(string(data))
 	if err != nil {
 		return nil, err
@@ -258,12 +233,16 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 		return nil, err
 	}
 	Initiator, err := evm.EVMAddressToXchain(fromAddress)
-	// TODO 确认下地址转换相关问题
+	// TODO
+	// 1.下地址转换相关问题
+	// 2. 跨合约调用
+	// 3.合约部署与合约升级
 	nctx, err := m.xbridge.NewContext(&contract.ContextConfig{
 		State:     ctx,
 		Initiator: Initiator,
 
-		AuthRequire:           []string{Initiator},
+		AuthRequire: []string{Initiator},
+		//
 		Caller:                "",
 		Module:                "evm",
 		ContractName:          contractName,
@@ -280,11 +259,11 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	if err != nil {
 		return nil, err
 	}
-
 	return resp, err
 
 }
 
+//func UnmarshalTransaction(data []byte,)
 func init() {
 	contract.Register("default", newManagerImpl)
 }
