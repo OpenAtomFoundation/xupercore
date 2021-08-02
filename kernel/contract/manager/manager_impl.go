@@ -1,8 +1,11 @@
 package manager
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/hyperledger/burrow/crypto"
+	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"math/big"
 	"path/filepath"
 	"sync/atomic"
@@ -180,42 +183,11 @@ type txdata struct {
 func (m *managerImpl) evmproxy(ctx contract.KContext) (*contract.Response, error) {
 	return m.evmproxy2(ctx)
 }
-func (m *managerImpl) emvprox1(ctx contract.KContext) (*contract.Response, error) {
-	args := ctx.Args()
-	//initiator := args["from"]
-	//contractName := args["to"]
-	_ = args
-	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader:   nil,
-		UTXOReader: nil,
-	})
-	if err != nil {
-		return nil, err
-	}
-	ctx1, err := m.NewContext(&contract.ContextConfig{
-		State:       state,
-		Initiator:   "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
-		AuthRequire: []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"},
-		Caller:      "",
-		Module:      "evm",
-		// 地址转换
-		ContractName:          "counter",
-		ResourceLimits:        contract.MaxLimits,
-		CanInitialize:         false,
-		TransferAmount:        "",
-		ContractSet:           nil,
-		ContractCodeFromCache: false,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return ctx1.Invoke("method", map[string][]byte{})
-}
 
 // 1.跨合约调用方案
 // TODO 放到 bridge ？
 func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, error) {
-	//args := ctx.Args()
+	args := ctx.Args()
 
 	//desc, ok := args["desc"]
 	//tx := &Transaction{}
@@ -256,26 +228,45 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	//args1 := map[string][]byte{
 	//	"key": []byte("xchain"),
 	//}
-	//to := string(args["to"])
-	//from := string(args["from"])
-	//method := string(args["to"])
-	//data := string(args["data"])
+	to := args["to"]
+	// TODO length check
+	from := args["from"]
+	data := args["data"]
+	//args1 := map[string][]byte{
+	//	"input":       []byte("{\"key\":\"xchain\"}"),
+	//	"jsonEncoded": []byte("true"),
+	//}
+	input, err := hex.DecodeString(string(data))
+	if err != nil {
+		return nil, err
+	}
 	args1 := map[string][]byte{
-		"input":       []byte("{\"key\":\"xchain\"}"),
-		"jsonEncoded": []byte("true"),
+		"input":       input,
+		"jsonEncoded": []byte("false"),
 	}
 
-	//TODO
-	//from = "XC1111111111111111@xuper"
-
+	address, err := crypto.AddressFromHexString(string(to))
+	if err != nil {
+		return nil, err
+	}
+	contractName, err := evm.DetermineContractNameFromEVM(address)
+	if err != nil {
+		return nil, err
+	}
+	fromAddress, err := crypto.AddressFromHexString(string(from))
+	if err != nil {
+		return nil, err
+	}
+	Initiator, err := evm.EVMAddressToXchain(fromAddress)
+	// TODO 确认下地址转换相关问题
 	nctx, err := m.xbridge.NewContext(&contract.ContextConfig{
-		State:       ctx,
-		Initiator:   "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
-		AuthRequire: []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"},
-		Caller:      "",
-		Module:      "evm",
-		// 地址转换
-		ContractName:          "counter",
+		State:     ctx,
+		Initiator: Initiator,
+
+		AuthRequire:           []string{Initiator},
+		Caller:                "",
+		Module:                "evm",
+		ContractName:          contractName,
 		ResourceLimits:        contract.MaxLimits,
 		CanInitialize:         false,
 		TransferAmount:        "",
@@ -285,12 +276,11 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	if err != nil {
 		return nil, err
 	}
-	resp, err := nctx.Invoke("increase", args1)
+	resp, err := nctx.Invoke("", args1)
 	if err != nil {
 		return nil, err
 	}
-	//resp, err := ctx1.Invoke(method, args1)
-	//resp, err := ctx.Call("evm", to, "method", args1)
+
 	return resp, err
 
 }
