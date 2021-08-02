@@ -124,6 +124,7 @@ func (e *evmInstance) Exec() error {
 			return fmt.Errorf("get evm value error")
 		}
 	}
+	fmt.Println(hex.EncodeToString(input))
 	params := engine.CallParams{
 		CallType: exec.CallTypeCode,
 		Caller:   caller,

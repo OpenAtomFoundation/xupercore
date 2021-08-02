@@ -182,8 +182,9 @@ func (m *managerImpl) evmproxy(ctx contract.KContext) (*contract.Response, error
 }
 func (m *managerImpl) emvprox1(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
-	initiator := args["from"]
-	contractName := args["to"]
+	//initiator := args["from"]
+	//contractName := args["to"]
+	_ = args
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
 		XMReader:   nil,
 		UTXOReader: nil,
@@ -193,13 +194,13 @@ func (m *managerImpl) emvprox1(ctx contract.KContext) (*contract.Response, error
 	}
 	ctx1, err := m.NewContext(&contract.ContextConfig{
 		State:       state,
-		Initiator:   string(initiator),
-		AuthRequire: nil,
-		Caller:      string(initiator),
+		Initiator:   "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+		AuthRequire: []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"},
+		Caller:      "",
 		Module:      "evm",
 		// 地址转换
-		ContractName:          string(contractName),
-		ResourceLimits:        contract.Limits{},
+		ContractName:          "counter",
+		ResourceLimits:        contract.MaxLimits,
 		CanInitialize:         false,
 		TransferAmount:        "",
 		ContractSet:           nil,
@@ -214,7 +215,7 @@ func (m *managerImpl) emvprox1(ctx contract.KContext) (*contract.Response, error
 // 1.跨合约调用方案
 // TODO 放到 bridge ？
 func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, error) {
-	args := ctx.Args()
+	//args := ctx.Args()
 
 	//desc, ok := args["desc"]
 	//tx := &Transaction{}
@@ -255,16 +256,41 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	//args1 := map[string][]byte{
 	//	"key": []byte("xchain"),
 	//}
-	contract := string(args["to"])
+	//to := string(args["to"])
+	//from := string(args["from"])
 	//method := string(args["to"])
-	data := string(args["data"])
+	//data := string(args["data"])
 	args1 := map[string][]byte{
-		"input":       []byte(data),
-		"jsonEncoded": []byte("false"),
+		"input":       []byte("{\"key\":\"xchain\"}"),
+		"jsonEncoded": []byte("true"),
 	}
 
+	//TODO
+	//from = "XC1111111111111111@xuper"
+
+	nctx, err := m.xbridge.NewContext(&contract.ContextConfig{
+		State:       ctx,
+		Initiator:   "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+		AuthRequire: []string{"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"},
+		Caller:      "",
+		Module:      "evm",
+		// 地址转换
+		ContractName:          "counter",
+		ResourceLimits:        contract.MaxLimits,
+		CanInitialize:         false,
+		TransferAmount:        "",
+		ContractSet:           nil,
+		ContractCodeFromCache: false,
+	})
+	if err != nil {
+		return nil, err
+	}
+	resp, err := nctx.Invoke("increase", args1)
+	if err != nil {
+		return nil, err
+	}
 	//resp, err := ctx1.Invoke(method, args1)
-	resp, err := ctx.Call("evm", contract, "method", args1)
+	//resp, err := ctx.Call("evm", to, "method", args1)
 	return resp, err
 
 }
