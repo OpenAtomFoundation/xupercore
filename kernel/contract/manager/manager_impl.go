@@ -1,11 +1,13 @@
 package manager
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/hyperledger/burrow/crypto"
+	"github.com/hyperledger/burrow/encoding/rlp"
+	"github.com/hyperledger/burrow/rpc/web3"
+	"github.com/hyperledger/burrow/txs"
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"math/big"
 	"path/filepath"
@@ -194,9 +196,29 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	//from := args["from"]
 	from := "b60e8dd61c5d32be8058bb8eb970870f07233155"
 	data := args["param"]
-	r := args["r"]
-	s := args["s"]
-	hash := args["hash"]
+	r1 := "9910f8e6fc72f08b0caddf1b1135ed4e4dbee034849fab65eed88003e76ac087"
+	s1 := "04bf09c57e9af2829a39859ba93525fd21da489abf78d0e4fe613d5411090a82"
+	hash1 := "549e6094d23179b5d0e092ee32621cf79d3bb35855043d713ca86fbd096a4639"
+	gas := string(args["gas"])
+	nonce := string(args["nonce"])
+	gasLimit := string(args["gas_limit"])
+	gasPrice := ""
+	amount := ""
+
+	r, err := hex.DecodeString(string(r1))
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO 避免来回转换
+	s, err := hex.DecodeString(string(s1))
+	if err != nil {
+		return nil, err
+	}
+	//hash, err := hex.DecodeString(string(args["hash"]))
+	//if err != nil {
+	//	return nil, err
+	//}
 	//all := args["all"]
 	// TODO 0x prefix
 
@@ -214,10 +236,15 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	if err != nil {
 		return nil, err
 	}
-
-	if bytes.Equal(sig.RawBytes(), []byte(hash)) {
-		return nil, errors.New("signature verification failed")
+	hash, err := hex.DecodeString(hash1)
+	if err != nil {
+		return nil, err
 	}
+	//sig.RawBytes()
+	fmt.Println(sig.String())
+	//if !bytes.Equal(sig.RawBytes(), []byte(hash)) {
+	//	return nil, errors.New("signature verification failed")
+	//}
 	// TODO
 	input, err := hex.DecodeString(string(data))
 	if err != nil {
@@ -227,7 +254,35 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 		"input":       input,
 		"jsonEncoded": []byte("false"),
 	}
-
+	// for fields
+	//tx := web3.EthSendTransactionParams{web3.Transaction{
+	//	TransactionIndex: "",
+	//	BlockHash:        "",
+	//	From:             string(from),
+	//	Hash:             "",
+	//	Data:             "",
+	//	Nonce:            "",
+	//	Gas:              gas,
+	//	Value:            "",
+	//	// TODO 好像没用到
+	//	V:           "",
+	//	S:           s1,
+	//	GasPrice:    "",
+	//	To:          to,
+	//	BlockNumber: "",
+	//	R:           r1,
+	//}}
+	pk, err := crypto.PublicKeyFromSignature(sig.RawBytes(), hash)
+	if err != nil {
+		return nil, err
+	}
+	msg, err := txs.RLPEncode(nonce, gasPrice, gasLimit, from, amount, data)
+	if err != nil {
+		return nil, err
+	}
+	if err := pk.Verify(msg, sig); err != nil {
+		return nil, err
+	}
 	address, err := crypto.AddressFromHexString(string(to))
 	if err != nil {
 		return nil, err
