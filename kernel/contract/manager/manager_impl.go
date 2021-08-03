@@ -3,11 +3,9 @@ package manager
 import (
 	"bytes"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/hyperledger/burrow/crypto"
-	"github.com/hyperledger/burrow/rpc/web3"
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"math/big"
 	"path/filepath"
@@ -190,24 +188,34 @@ func (m *managerImpl) evmproxy(ctx contract.KContext) (*contract.Response, error
 func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 
-	to := args["to"]
+	//to := args["to"]
+	to := "313131312D2D2D2D2D2D2D2D2D636F756E746572"
 	// TODO length check
-	from := args["from"]
+	//from := args["from"]
+	from := "b60e8dd61c5d32be8058bb8eb970870f07233155"
 	data := args["param"]
+	r := args["r"]
+	s := args["s"]
+	hash := args["hash"]
 	//all := args["all"]
+	// TODO 0x prefix
 
-	req := &web3.EthSendTransactionParams{}
+	//req := &web3.EthSendTransactionParams{}
 	// TODO  两种的区别
-	if err := json.Unmarshal(data, req); err != nil {
-		return nil, err
-	}
+	//if err := json.Unmarshal(data, req); err != nil {
+	//	return nil, err
+	//}
+	//hash:=req.Hash
 	// TODO  variable naming
-	unc := crypto.UncompressedSignatureFromParams([]byte(req.R), []byte(req.S))
+	//unc := crypto.UncompressedSignatureFromParams([]byte(req.R), []byte(req.S))
+	unc := crypto.UncompressedSignatureFromParams(r, s)
+
 	sig, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
 	if err != nil {
 		return nil, err
 	}
-	if bytes.Equal(sig.RawBytes(), []byte(req.Hash)) {
+
+	if bytes.Equal(sig.RawBytes(), []byte(hash)) {
 		return nil, errors.New("signature verification failed")
 	}
 	// TODO
@@ -234,7 +242,7 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	}
 	Initiator, err := evm.EVMAddressToXchain(fromAddress)
 	// TODO
-	// 1.下地址转换相关问题
+	// 1.地址转换相关问题
 	// 2. 跨合约调用
 	// 3.合约部署与合约升级
 	nctx, err := m.xbridge.NewContext(&contract.ContextConfig{
