@@ -187,7 +187,7 @@ func TestSMR(t *testing.T) {
 	time.Sleep(time.Second * 10)
 
 	// 模拟第一个Proposal交互
-	err = sA.ProcessProposal(1, []byte{1}, []string{NodeA, NodeB, NodeC})
+	err = sA.ProcessProposal(1, []byte{1}, []byte{0}, []string{NodeA, NodeB, NodeC})
 	if err != nil {
 		t.Error("ProcessProposal error", "error", err)
 		return
@@ -233,7 +233,7 @@ func TestSMR(t *testing.T) {
 
 	// 模拟第二个Proposal交互, 此时由B节点发出
 	// ABC节点应该都存储了新的view=2的node，但是只有C更新了HighQC
-	err = sB.ProcessProposal(2, []byte{2}, []string{NodeA, NodeB, NodeC})
+	err = sB.ProcessProposal(2, []byte{2}, []byte{1}, []string{NodeA, NodeB, NodeC})
 	if err != nil {
 		t.Error("ProcessProposal error", "error", err)
 		return
@@ -273,7 +273,7 @@ func TestSMR(t *testing.T) {
 	sB.UpdateJustifyQcStatus(justi)
 	sC.UpdateJustifyQcStatus(justi)
 
-	err = sA.ProcessProposal(2, []byte{3}, []string{NodeA, NodeB, NodeC})
+	err = sA.ProcessProposal(2, []byte{3}, []byte{1}, []string{NodeA, NodeB, NodeC})
 	if err != nil {
 		t.Error("ProcessProposal error", "error", err)
 		return

@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"math/big"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 
 	"github.com/golang/protobuf/proto"
 
@@ -135,6 +136,7 @@ func (t *Miner) Start() {
 			isMiner, isSync, err = t.ctx.Consensus.CompeteMaster(ledgerTipHeight + 1)
 			ctx.Timer.Mark("CompeteMaster")
 			ctx.GetLog().Trace("compete master result", "height", ledgerTipHeight+1, "isMiner", isMiner, "isSync", isSync, "err", err)
+			metrics.BlockGauge.WithLabelValues(t.ctx.BCName, "pack-tx-nums").Set(float64(0))
 		}
 		// 3.如需要同步，尝试同步网络最新区块
 		if err == nil && isMiner && isSync {
@@ -233,6 +235,8 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 			"blockId", utils.F(block.GetBlockid()))
 		return err
 	}
+
+	metrics.BlockGauge.WithLabelValues(t.ctx.BCName, "pack-tx-nums").Set(float64(block.TxCount))
 
 	// 6.异步广播新生成的区块
 	go t.broadcastBlock(ctx, block)

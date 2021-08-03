@@ -16,7 +16,9 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
 
@@ -26,6 +28,7 @@ func init() {
 
 type xpoaConsensus struct {
 	xcontext.XContext
+	bcName        string
 	election      *xpoaSchedule
 	smr           *chainedBft.Smr
 	isProduce     map[int64]bool
@@ -44,15 +47,15 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	// TODO:cCtx.BcName需要注册表吗？
 	if cCtx.Crypto == nil || cCtx.Address == nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::CryptoClient in context is nil")
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: CryptoClient in context is nil")
 		return nil
 	}
 	if cCtx.Ledger == nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::Ledger in context is nil")
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: Ledger in context is nil")
 		return nil
 	}
 	if cCfg.ConsensusName != "xpoa" {
-		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::consensus name in config is wrong", "name", cCfg.ConsensusName)
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: consensus name in config is wrong", "name", cCfg.ConsensusName)
 		return nil
 	}
 
@@ -61,14 +64,14 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	xconfig := &xpoaConfig{}
 	err := json.Unmarshal([]byte(cCfg.Config), xconfig)
 	if err != nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::xpoa struct unmarshal error", "error", err)
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
 
 	// create xpoaSchedule
 	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight)
 	if schedule == nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaSchedule error")
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaSchedule error")
 		return nil
 	}
 	// 创建status实例
@@ -84,6 +87,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	// create xpoaConsensus实例
 	xpoa := &xpoaConsensus{
+		bcName:        cCtx.BcName,
 		XContext:      &cCtx.BaseCtx,
 		election:      schedule,
 		isProduce:     make(map[int64]bool),
@@ -108,7 +112,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	xpoa.isProduce[timeKey] = true
 
 	if !schedule.enableBFT {
-		cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::create a poa instance successfully!")
+		cCtx.XLog.Debug("consensus:xpoa:NewXpoaConsensus: create a poa instance successfully!")
 		return xpoa
 	}
 
@@ -116,7 +120,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
 	qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 	if qcTree == nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::init QCTree err", "startHeight", cCfg.StartHeight)
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: init QCTree err", "startHeight", cCfg.StartHeight)
 		return nil
 	}
 	pacemaker := &chainedBft.DefaultPaceMaker{
@@ -145,7 +149,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	}
 	go smr.Start()
 	xpoa.smr = smr
-	cCtx.XLog.Debug("Xpoa::NewXpoaConsensus::load chained-bft successfully.")
+	cCtx.XLog.Debug("consensus:xpoa:NewXpoaConsensus: load chained-bft successfully.")
 	return xpoa
 }
 
@@ -159,7 +163,7 @@ Again:
 		sleep = MAXSLEEPTIME
 	}
 	v, ok := x.isProduce[key]
-	if !ok || v == false {
+	if !ok || !v {
 		x.isProduce[key] = true
 	} else {
 		time.Sleep(time.Duration(sleep) * time.Millisecond)
@@ -167,23 +171,26 @@ Again:
 		common.CleanProduceMap(x.isProduce, x.election.period)
 		goto Again
 	}
+
+	metrics.BlockGauge.WithLabelValues(x.bcName, "consensus-rollback").Set(float64(0))
+
 	// update validates
 	tipBlock := x.election.ledger.GetTipBlock()
 	if x.election.UpdateValidator(tipBlock.GetHeight()) {
-		x.GetLog().Debug("Xpoa::CompeteMaster::change validators", "valisators", x.election.validators)
+		x.GetLog().Debug("consensus:xpoa:CompeteMaster: change validators", "valisators", x.election.validators)
 	}
 	_, pos, blockPos := x.election.minerScheduling(time.Now().UnixNano(), len(x.election.validators))
 	if blockPos > x.election.blockNum || pos >= int64(len(x.election.validators)) {
-		x.GetLog().Debug("Xpoa::CompeteMaster::minerScheduling err", "pos", pos, "blockPos", blockPos)
+		x.GetLog().Debug("consensus:xpoa:CompeteMaster: minerScheduling err", "pos", pos, "blockPos", blockPos)
 		goto Again
 	}
 	x.election.miner = x.election.validators[pos]
 	if x.election.miner == x.election.address {
-		x.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", true, "height", tipBlock.GetHeight())
+		x.GetLog().Debug("consensus:xpoa:CompeteMaster", "isMiner", true, "height", tipBlock.GetHeight())
 		needSync := tipBlock.GetHeight() == 0 || string(tipBlock.GetProposer()) != x.election.miner
 		return true, needSync, nil
 	}
-	x.GetLog().Debug("Xpoa::CompeteMaster", "isMiner", false, "height", tipBlock.GetHeight())
+	x.GetLog().Debug("consensus:xpoa:CompeteMaster", "isMiner", false, "height", tipBlock.GetHeight())
 	return false, false, nil
 }
 
@@ -199,7 +206,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	// 验证矿工身份
 	proposer := x.election.GetLocalLeader(block.GetTimestamp(), block.GetHeight(), conStoreBytes)
 	if proposer != string(block.GetProposer()) {
-		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::calculate proposer error", "logid", ctx.GetLog().GetLogId(), "want", proposer,
+		ctx.GetLog().Error("consensus:xpoa:CheckMinerMatch: calculate proposer error", "logid", ctx.GetLog().GetLogId(), "want", proposer,
 			"have", string(block.GetProposer()), "blockId", utils.F(block.GetBlockid()))
 		return false, MinerSelectErr
 	}
@@ -213,7 +220,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	// 兼容老的结构
 	justify, err := common.OldQCToNew(conStoreBytes)
 	if err != nil {
-		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err,
+		ctx.GetLog().Error("consensus:xpoa:CheckMinerMatch: OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err,
 			"blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
@@ -223,7 +230,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify,
 		x.election.GetLocalValidates(preBlock.GetTimestamp(), justify.GetProposalView(), preConStoreBytes))
 	if err != nil {
-		ctx.GetLog().Warn("Xpoa::CheckMinerMatch::bft IsQuorumCertValidate failed", "logid", ctx.GetLog().GetLogId(),
+		ctx.GetLog().Error("consensus:xpoa:CheckMinerMatch: bft IsQuorumCertValidate failed", "logid", ctx.GetLog().GetLogId(),
 			"proposalQC:[height]", pNode.In.GetProposalView(), "proposalQC:[id]", utils.F(pNode.In.GetProposalId()),
 			"justifyQC:[height]", justify.GetProposalView(), "justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
 		return false, err
@@ -238,62 +245,95 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := x.election.ledger.GetTipBlock()
-	var truncateT []byte
-	var err error
-	if !bytes.Equal(x.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
-		// 单个节点不存在投票验证的hotstuff流程，因此返回true
-		if len(x.election.validators) == 1 {
-			return nil, nil, nil
-		}
-		truncateT, err = func() ([]byte, error) {
-			// 1. 比对HighQC与ledger高度
-			b, err := x.election.ledger.QueryBlock(x.smr.GetHighQC().GetProposalId())
-			if err != nil || b.GetHeight() > tipBlock.GetHeight() {
-				// 不存在时需要把本地HighQC回滚到ledger; HighQC高度高于账本高度，本地HighQC回滚到ledger
-				if err := x.smr.EnforceUpdateHighQC(tipBlock.GetBlockid()); err != nil {
-					// 本地HighQC回滚错误直接退出
-					return nil, err
-				}
-				return nil, nil
-			}
-			// 高度相等时，应统一回滚到上一高度，此时genericQC一定存在
-			if b.GetHeight() == tipBlock.GetHeight() {
-				if err := x.smr.EnforceUpdateHighQC(x.smr.GetGenericQC().GetProposalId()); err != nil {
-					// 本地HighQC回滚错误直接退出
-					return nil, err
-				}
-				return x.smr.GetHighQC().GetProposalId(), nil
-			}
-			// 2. 账本高度更高时，裁剪账本
-			return x.smr.GetHighQC().GetProposalId(), nil
-		}()
-		if err != nil {
-			return nil, nil, err
-		}
+	shundown, truncateT, err := x.renewQCStatus(tipBlock)
+	if err != nil {
+		return nil, nil, err
+	}
+	if shundown {
+		return nil, nil, nil
 	}
 	// 此处需要获取带签名的完整Justify, 此时HighQC已经更新
 	qc := x.smr.GetCompleteHighQC()
-	qcQuorumCert, ok := qc.(*chainedBft.QuorumCert)
-	if !ok {
-		x.GetLog().Warn("Xpoa::ProcessBeforeMiner::qc transfer err", "qc", qc)
-		return nil, nil, InvalidQC
-	}
-	oldQC, err := common.NewToOldQC(qcQuorumCert)
-	if err != nil {
-		x.GetLog().Warn("Xpoa::ProcessBeforeMiner::NewToOldQC error", "error", err)
-		return nil, nil, err
-	}
+	qcQuorumCert, _ := qc.(*chainedBft.QuorumCert)
+	oldQC, _ := common.NewToOldQC(qcQuorumCert)
 	storage := common.ConsensusStorage{
 		Justify: oldQC,
 	}
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncateT != nil {
-		x.GetLog().Debug("Xpoa::ProcessBeforeMiner::last block not confirmed, walk to previous block", "target", utils.F(truncateT),
+		x.GetLog().Debug("consensus:xpoa:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
 			"ledger", tipBlock.GetHeight(), "HighQC", x.smr.GetHighQC().GetProposalView())
 		storage.TargetBits = int32(tipBlock.GetHeight())
+	} else {
+		metrics.BlockGauge.WithLabelValues(x.bcName, "consensus-rollback").Set(float64(0))
+		metrics.BlockCounter.WithLabelValues(x.bcName, "consensus-rollback").Add(float64(0))
 	}
 	bytes, _ := json.Marshal(storage)
 	return truncateT, bytes, nil
+}
+
+// renewQCStatus 返回一个裁剪目标，供miner模块直接回滚并出块
+func (x *xpoaConsensus) renewQCStatus(tipBlock ledger.BlockHandle) (bool, []byte, error) {
+	if bytes.Equal(x.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
+		return false, nil, nil
+	}
+	// 单个节点不存在投票验证的hotstuff流程，因此返回true
+	if len(x.election.validators) == 1 {
+		return true, nil, nil
+	}
+	// 在本地状态树上找到指代TipBlock的QC，若找不到，则在状态树上找和TipBlock同一分支上的最近值
+	targetHighQC, err := func() (chainedBft.QuorumCertInterface, error) {
+		targetId := tipBlock.GetBlockid()
+		for {
+			block, err := x.election.ledger.QueryBlock(targetId)
+			if err != nil {
+				return nil, err
+			}
+			// 至多回滚到root节点
+			if block.GetHeight() <= x.smr.GetRootQC().GetProposalView() {
+				x.log.Warn("consensus:xpoa:renewQCStatus: set root qc.", "root", utils.F(x.smr.GetRootQC().GetProposalId()), "root height", x.smr.GetRootQC().GetProposalView(),
+					"block", utils.F(block.GetBlockid()), "block height", block.GetHeight())
+				return x.smr.GetRootQC(), nil
+			}
+			// 查找目标Id是否挂在状态树上，若否，则从target网上查找知道状态树里有
+			node := x.smr.QueryNode(block.GetBlockid())
+			if node == nil {
+				targetId = block.GetPreHash()
+				continue
+			}
+			// node在状态树上找到之后，以此为起点(包括当前点)，继续向上查找，知道找到符合全名数量要求的QC，该QC可强制转化为新的HighQC
+			storage, _ := block.GetConsensusStorage()
+			wantProposers := x.election.GetLocalValidates(block.GetTimestamp(), block.GetHeight(), storage)
+			if wantProposers == nil {
+				x.log.Error("consensus:xpoa:renewQCStatus: election error.", "error", err)
+				return nil, EmptyValidors
+			}
+			if !x.smr.ValidNewHighQC(node.In.GetProposalId(), wantProposers) {
+				x.log.Warn("consensus:xpoa:renewQCStatus: target not ready", "target", utils.F(node.In.GetProposalId()), "wantProposers", wantProposers, "height", node.In.GetProposalView())
+				targetId = block.GetPreHash()
+				continue
+			}
+			return node.In, nil
+		}
+	}()
+	if err != nil {
+		return false, nil, err
+	}
+	ok, err := x.smr.EnforceUpdateHighQC(targetHighQC.GetProposalId())
+	if err != nil {
+		x.log.Error("consensus:xpoa:renewQCStatus: EnforceUpdateHighQC error.", "error", err)
+		return false, nil, err
+	}
+	if ok {
+		x.log.Debug("consensus:xpoa:renewQCStatus: EnforceUpdateHighQC success.", "target", utils.F(targetHighQC.GetProposalId()), "height", targetHighQC.GetProposalView())
+	}
+	if bytes.Equal(tipBlock.GetBlockid(), targetHighQC.GetProposalId()) {
+		return false, nil, nil
+	}
+	diff := tipBlock.GetHeight() - targetHighQC.GetProposalView()
+	metrics.BlockGauge.WithLabelValues(x.bcName, "consensus-rollback").Set(float64(diff))
+	metrics.BlockCounter.WithLabelValues(x.bcName, "consensus-rollback").Add(float64(diff))
+	return false, targetHighQC.GetProposalId(), nil
 }
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
@@ -305,13 +345,13 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	// 获取block中共识专有存储, 检查justify是否符合要求
 	justifyBytes, err := block.GetConsensusStorage()
 	if err != nil && block.GetHeight() != x.status.StartHeight {
-		x.GetLog().Warn("Xpoa::CheckMinerMatch::parse storage error", "err", err, "blockId", utils.F(block.GetBlockid()))
+		x.GetLog().Warn("consensus:xpoa:CheckMinerMatch: parse storage error", "err", err, "blockId", utils.F(block.GetBlockid()))
 		return err
 	}
 	if justifyBytes != nil && block.GetHeight() > x.status.StartHeight {
 		justify, err := common.OldQCToNew(justifyBytes)
 		if err != nil {
-			x.GetLog().Error("Xpoa::ProcessConfirmBlock::OldQCToNew error", "err", err, "blockId", utils.F(block.GetBlockid()))
+			x.GetLog().Error("consensus:xpoa:ProcessConfirmBlock: OldQCToNew error", "err", err, "blockId", utils.F(block.GetBlockid()))
 			return err
 		}
 		x.smr.UpdateJustifyQcStatus(justify)
@@ -319,22 +359,22 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	// 查看本地是否是最新round的生产者
 	_, pos, blockPos := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
 	if blockPos > x.election.blockNum || pos >= int64(len(x.election.validators)) {
-		x.GetLog().Debug("Xpoa::smr::ProcessConfirmBlock::minerScheduling overflow.")
+		x.GetLog().Debug("consensus:xpoa:smr::ProcessConfirmBlock: minerScheduling overflow.")
 		return scheduleErr
 	}
 	// 如果是当前矿工，则发送Proposal消息
 	if x.election.validators[pos] == x.election.address && string(block.GetProposer()) == x.election.address {
 		validators := x.election.GetValidators(block.GetHeight() + 1)
-		if err := x.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), validators); err != nil {
-			x.GetLog().Warn("Xpoa::ProcessConfirmBlock::bft next proposal failed", "error", err, "blockId", utils.F(block.GetBlockid()))
+		if err := x.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), block.GetPreHash(), validators); err != nil {
+			x.GetLog().Warn("consensus:xpoa:ProcessConfirmBlock: bft next proposal failed", "error", err, "blockId", utils.F(block.GetBlockid()))
 			return err
 		}
-		x.GetLog().Debug("Xpoa::ProcessConfirmBlock::miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView(), "blockId", utils.F(block.GetBlockid()))
+		x.GetLog().Debug("consensus:xpoa:ProcessConfirmBlock: miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView(), "blockId", utils.F(block.GetBlockid()))
 	}
 	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
 	pNode := x.smr.BlockToProposalNode(block)
 	err = x.smr.UpdateQcStatus(pNode)
-	x.GetLog().Debug("Xpoa::ProcessConfirmBlock::Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
+	x.GetLog().Debug("consensus:xpoa:ProcessConfirmBlock: Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
 	return nil
 }
 
@@ -377,6 +417,5 @@ func (x *xpoaConsensus) GetJustifySigns(block cctx.BlockInterface) []*chainedBft
 		return nil
 	}
 	signs := common.OldSignToNew(b)
-	x.GetLog().Debug("Xpoa::GetJustifySigns", "signs", signs)
 	return signs
 }
