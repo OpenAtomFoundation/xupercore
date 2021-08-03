@@ -125,6 +125,9 @@ func (t *QCPendingTree) GetLockedQC() *ProposalNode {
 
 // 更新本地qcTree, insert新节点, 将新节点parentQC和本地HighQC对比，如有必要进行更新
 func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
+	if node.Sons == nil {
+		node.Sons = make([]*ProposalNode, 0)
+	}
 	if t.DFSQueryNode(node.In.GetProposalId()) != nil {
 		t.Log.Debug("QCPendingTree::updateQcStatus::has been inserted", "search", utils.F(node.In.GetProposalId()))
 		return nil
