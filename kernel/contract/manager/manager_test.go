@@ -2,9 +2,12 @@ package manager
 
 import (
 	"encoding/json"
+	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/rpc/web3"
+	"github.com/hyperledger/burrow/txs"
 	"testing"
 
+	"encoding/hex"
 	log15 "github.com/xuperchain/log15"
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -90,4 +93,51 @@ func TestUnmarshal(t *testing.T) {
 		return
 	}
 	t.Logf("%v", tx)
+}
+
+func TestRLP(t *testing.T) {
+	r, err := hex.DecodeString("3c46a1ff9d0dd2129a7f8fbc3e45256d85890d9d63919b42dac1eb8dfa443a32")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	s, err := hex.DecodeString("6b2be3f225ae31f7ca18efc08fa403eb73b848359a63cd9fdeb61e1b83407690")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	value, err := hex.DecodeString("616263646566")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	address, err := hex.DecodeString("0100000000000000000000000000000000000000")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	data, err := hex.DecodeString("616263646566")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	enc, err := txs.RLPEncode(0, 0, 0, address, value, data)
+
+	sig := crypto.CompressedSignatureFromParams(0, r, s)
+	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	unc := crypto.UncompressedSignatureFromParams(r, s)
+	signature, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if err := pub.Verify(unc, signature); err != nil {
+		t.Error(err)
+		return
+	}
+	//	ref rpc/eth.go EthSendRawTransaction
 }

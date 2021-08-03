@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/hyperledger/burrow/crypto"
-	"github.com/hyperledger/burrow/encoding/rlp"
-	"github.com/hyperledger/burrow/rpc/web3"
 	"github.com/hyperledger/burrow/txs"
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"math/big"
@@ -199,11 +197,11 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	r1 := "9910f8e6fc72f08b0caddf1b1135ed4e4dbee034849fab65eed88003e76ac087"
 	s1 := "04bf09c57e9af2829a39859ba93525fd21da489abf78d0e4fe613d5411090a82"
 	hash1 := "549e6094d23179b5d0e092ee32621cf79d3bb35855043d713ca86fbd096a4639"
-	gas := string(args["gas"])
-	nonce := string(args["nonce"])
-	gasLimit := string(args["gas_limit"])
-	gasPrice := ""
-	amount := ""
+	//gas := string(args["gas"])
+	//nonce := string(args["nonce"])
+	//gasLimit := string(args["gas_limit"])
+	//gasPrice := ""
+	//amount := ""
 
 	r, err := hex.DecodeString(string(r1))
 	if err != nil {
@@ -230,22 +228,41 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	//hash:=req.Hash
 	// TODO  variable naming
 	//unc := crypto.UncompressedSignatureFromParams([]byte(req.R), []byte(req.S))
-	unc := crypto.UncompressedSignatureFromParams(r, s)
+	//unc := crypto.UncompressedSignatureFromParams(r, s)
 
-	sig, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
-	if err != nil {
-		return nil, err
-	}
-	hash, err := hex.DecodeString(hash1)
-	if err != nil {
-		return nil, err
-	}
+	//sig, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//hash, err := hex.DecodeString(hash1)
+	//if err != nil {
+	//	return nil, err
+	//}
 	//sig.RawBytes()
-	fmt.Println(sig.String())
+	//fmt.Println(sig.String())
 	//if !bytes.Equal(sig.RawBytes(), []byte(hash)) {
 	//	return nil, errors.New("signature verification failed")
 	//}
 	// TODO
+	chainID := 1
+	net := uint64(chainID)
+	enc, err := txs.RLPEncode(rawTx.Nonce, rawTx.GasPrice, rawTx.GasLimit, rawTx.To, rawTx.Value, rawTx.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
+	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	if err != nil {
+		return nil, err
+	}
+	from := pub.GetAddress()
+	unc := crypto.UncompressedSignatureFromParams(rawTx.R, rawTx.S)
+	signature, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	if err != nil {
+		return nil, err
+	}
+
 	input, err := hex.DecodeString(string(data))
 	if err != nil {
 		return nil, err
@@ -276,11 +293,11 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	if err != nil {
 		return nil, err
 	}
-	msg, err := txs.RLPEncode(nonce, gasPrice, gasLimit, from, amount, data)
+	//msg, err := txs.RLPEncode(nonce, gasPrice, gasLimit, from, amount, data)
 	if err != nil {
 		return nil, err
 	}
-	if err := pk.Verify(msg, sig); err != nil {
+	if err := pk.Verify(nil, sig); err != nil {
 		return nil, err
 	}
 	address, err := crypto.AddressFromHexString(string(to))
