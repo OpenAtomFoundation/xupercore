@@ -4,6 +4,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/xuperchain/crypto/core/account"
+	"github.com/xuperchain/crypto/core/sign"
 	"hash"
 	"unsafe"
 
@@ -114,25 +116,25 @@ func xvmDecode(ctx exec.Context,
 	return 0
 }
 
-// func xvmECVerify(ctx exec.Context,
-// 	pubptr, publen,
-// 	sigptr, siglen, hashptr, hashlen uint32) uint32 {
-// 	codec := exec.NewCodec(ctx)
+func xvmECVerify(ctx exec.Context,
+	pubptr, publen,
+	sigptr, siglen, hashptr, hashlen uint32) uint32 {
+	codec := exec.NewCodec(ctx)
 
-// 	pubkeyJSON := codec.Bytes(pubptr, publen)
-// 	sig := codec.Bytes(sigptr, siglen)
-// 	hash := codec.Bytes(hashptr, hashlen)
-// 	pubkey, err := account.GetEcdsaPublicKeyFromJSON(pubkeyJSON)
-// 	if err != nil {
-// 		return touint32(-1)
-// 	}
+	pubkeyJSON := codec.Bytes(pubptr, publen)
+	sig := codec.Bytes(sigptr, siglen)
+	hash := codec.Bytes(hashptr, hashlen)
+	pubkey, err := account.GetEcdsaPublicKeyFromJson(pubkeyJSON)
+	if err != nil {
+		return touint32(-1)
+	}
 
-// 	ok, _ := sign.VerifyECDSA(pubkey, sig, hash)
-// 	if ok {
-// 		return 0
-// 	}
-// 	return touint32(-1)
-// }
+	ok, _ := sign.VerifyECDSA(pubkey, sig, hash)
+	if ok {
+		return 0
+	}
+	return touint32(-1)
+}
 
 // func xvmMakeTx(ctx exec.Context, txptr, txlen, outpptr, outlenPtr uint32) uint32 {
 // 	codec := exec.NewCodec(ctx)
@@ -197,10 +199,10 @@ func strdup(ctx exec.Context, s string) uint32 {
 }
 
 var builtinResolver = exec.MapResolver(map[string]interface{}{
-	"env._xvm_hash":   xvmHash,
-	"env._xvm_encode": xvmEncode,
-	"env._xvm_decode": xvmDecode,
-	// "env._xvm_ecverify":         xvmECVerify,
+	"env._xvm_hash":     xvmHash,
+	"env._xvm_encode":   xvmEncode,
+	"env._xvm_decode":   xvmDecode,
+	"env._xvm_ecverify": xvmECVerify,
 	// "env._xvm_make_tx":          xvmMakeTx,
 	// "env._xvm_addr_from_pubkey": xvmAddressFromPubkey,
 })
