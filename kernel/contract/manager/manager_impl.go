@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/txs"
-	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"math/big"
 	"path/filepath"
 	"sync/atomic"
@@ -186,91 +185,72 @@ func (m *managerImpl) evmproxy(ctx contract.KContext) (*contract.Response, error
 }
 
 func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, error) {
-	args := ctx.Args()
-
-	//to := args["to"]
-	to := "313131312D2D2D2D2D2D2D2D2D636F756E746572"
-	// TODO length check
-	//from := args["from"]
-	from := "b60e8dd61c5d32be8058bb8eb970870f07233155"
-	data := args["param"]
-	r1 := "9910f8e6fc72f08b0caddf1b1135ed4e4dbee034849fab65eed88003e76ac087"
-	s1 := "04bf09c57e9af2829a39859ba93525fd21da489abf78d0e4fe613d5411090a82"
-	hash1 := "549e6094d23179b5d0e092ee32621cf79d3bb35855043d713ca86fbd096a4639"
-	//gas := string(args["gas"])
-	//nonce := string(args["nonce"])
-	//gasLimit := string(args["gas_limit"])
-	//gasPrice := ""
-	//amount := ""
-
-	r, err := hex.DecodeString(string(r1))
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO 避免来回转换
-	s, err := hex.DecodeString(string(s1))
-	if err != nil {
-		return nil, err
-	}
-	//hash, err := hex.DecodeString(string(args["hash"]))
+	//args := ctx.Args()
+	//
+	////to := args["to"]
+	//to := "313131312D2D2D2D2D2D2D2D2D636F756E746572"
+	//// TODO length check
+	////from := args["from"]
+	//from := "b60e8dd61c5d32be8058bb8eb970870f07233155"
+	//data := args["param"]
+	//r1 := "9910f8e6fc72f08b0caddf1b1135ed4e4dbee034849fab65eed88003e76ac087"
+	//s1 := "04bf09c57e9af2829a39859ba93525fd21da489abf78d0e4fe613d5411090a82"
+	//hash1 := "549e6094d23179b5d0e092ee32621cf79d3bb35855043d713ca86fbd096a4639"
+	////gas := string(args["gas"])
+	////nonce := string(args["nonce"])
+	////gasLimit := string(args["gas_limit"])
+	////gasPrice := ""
+	////amount := ""
+	//
+	//r, err := hex.DecodeString(string(r1))
 	//if err != nil {
 	//	return nil, err
 	//}
-	//all := args["all"]
-	// TODO 0x prefix
-
-	//req := &web3.EthSendTransactionParams{}
-	// TODO  两种的区别
-	//if err := json.Unmarshal(data, req); err != nil {
-	//	return nil, err
-	//}
-	//hash:=req.Hash
-	// TODO  variable naming
-	//unc := crypto.UncompressedSignatureFromParams([]byte(req.R), []byte(req.S))
-	//unc := crypto.UncompressedSignatureFromParams(r, s)
-
-	//sig, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	//
+	//// TODO 避免来回转换
+	//s, err := hex.DecodeString(string(s1))
 	//if err != nil {
 	//	return nil, err
 	//}
-	//hash, err := hex.DecodeString(hash1)
+	////hash, err := hex.DecodeString(string(args["hash"]))
+	////if err != nil {
+	////	return nil, err
+	////}
+	////all := args["all"]
+	//// TODO 0x prefix
+	//
+	////req := &web3.EthSendTransactionParams{}
+	//// TODO  两种的区别
+	////if err := json.Unmarshal(data, req); err != nil {
+	////	return nil, err
+	////}
+	////hash:=req.Hash
+	//// TODO  variable naming
+	////unc := crypto.UncompressedSignatureFromParams([]byte(req.R), []byte(req.S))
+	////unc := crypto.UncompressedSignatureFromParams(r, s)
+	//
+	////sig, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	////if err != nil {
+	////	return nil, err
+	////}
+	////hash, err := hex.DecodeString(hash1)
+	////if err != nil {
+	////	return nil, err
+	////}
+	////sig.RawBytes()
+	////fmt.Println(sig.String())
+	////if !bytes.Equal(sig.RawBytes(), []byte(hash)) {
+	////	return nil, errors.New("signature verification failed")
+	////}
+	//
+	//input, err := hex.DecodeString(string(data))
 	//if err != nil {
 	//	return nil, err
 	//}
-	//sig.RawBytes()
-	//fmt.Println(sig.String())
-	//if !bytes.Equal(sig.RawBytes(), []byte(hash)) {
-	//	return nil, errors.New("signature verification failed")
+	//args1 := map[string][]byte{
+	//	"input":       input,
+	//	"jsonEncoded": []byte("false"),
 	//}
-	// TODO
-	chainID := 1
-	net := uint64(chainID)
-	enc, err := txs.RLPEncode(rawTx.Nonce, rawTx.GasPrice, rawTx.GasLimit, rawTx.To, rawTx.Value, rawTx.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
-	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
-	if err != nil {
-		return nil, err
-	}
-	from := pub.GetAddress()
-	unc := crypto.UncompressedSignatureFromParams(rawTx.R, rawTx.S)
-	signature, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
-	if err != nil {
-		return nil, err
-	}
-
-	input, err := hex.DecodeString(string(data))
-	if err != nil {
-		return nil, err
-	}
-	args1 := map[string][]byte{
-		"input":       input,
-		"jsonEncoded": []byte("false"),
-	}
 	// for fields
 	//tx := web3.EthSendTransactionParams{web3.Transaction{
 	//	TransactionIndex: "",
@@ -289,58 +269,114 @@ func (m *managerImpl) evmproxy2(ctx contract.KContext) (*contract.Response, erro
 	//	BlockNumber: "",
 	//	R:           r1,
 	//}}
-	pk, err := crypto.PublicKeyFromSignature(sig.RawBytes(), hash)
-	if err != nil {
-		return nil, err
-	}
-	//msg, err := txs.RLPEncode(nonce, gasPrice, gasLimit, from, amount, data)
-	if err != nil {
-		return nil, err
-	}
-	if err := pk.Verify(nil, sig); err != nil {
-		return nil, err
-	}
-	address, err := crypto.AddressFromHexString(string(to))
-	if err != nil {
-		return nil, err
-	}
-	contractName, err := evm.DetermineContractNameFromEVM(address)
-	if err != nil {
-		return nil, err
-	}
-	fromAddress, err := crypto.AddressFromHexString(string(from))
-	if err != nil {
-		return nil, err
-	}
-	Initiator, err := evm.EVMAddressToXchain(fromAddress)
-	// TODO
-	// 1.地址转换相关问题
-	// 2. 跨合约调用
-	// 3.合约部署与合约升级
-	nctx, err := m.xbridge.NewContext(&contract.ContextConfig{
-		State:     ctx,
-		Initiator: Initiator,
+	//pk, err := crypto.PublicKeyFromSignature(sig.RawBytes(), hash)
+	//if err != nil {
+	//	return nil, err
+	//}
+	////msg, err := txs.RLPEncode(nonce, gasPrice, gasLimit, from, amount, data)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//if err := pk.Verify(nil, sig); err != nil {
+	//	return nil, err
+	//}
+	//address, err := crypto.AddressFromHexString(string(to))
+	//if err != nil {
+	//	return nil, err
+	//}
+	//contractName, err := evm.DetermineContractNameFromEVM(address)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//fromAddress, err := crypto.AddressFromHexString(string(from))
+	//if err != nil {
+	//	return nil, err
+	//}
+	//Initiator, err := evm.EVMAddressToXchain(fromAddress)
+	//// TODO
+	//// 1.地址转换相关问题
+	//// 2. 跨合约调用
+	//// 3.合约部署与合约升级
+	//nctx, err := m.xbridge.NewContext(&contract.ContextConfig{
+	//	State:     ctx,
+	//	Initiator: Initiator,
+	//
+	//	AuthRequire: []string{Initiator},
+	//	//
+	//	Caller:                "",
+	//	Module:                "evm",
+	//	ContractName:          contractName,
+	//	ResourceLimits:        contract.MaxLimits,
+	//	CanInitialize:         false,
+	//	TransferAmount:        "",
+	//	ContractSet:           nil,
+	//	ContractCodeFromCache: false,
+	//})
+	//if err != nil {
+	//	return nil, err
+	//}
+	//resp, err := nctx.Invoke("", args1)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//return resp, err
+	return nil, nil
 
-		AuthRequire: []string{Initiator},
-		//
-		Caller:                "",
-		Module:                "evm",
-		ContractName:          contractName,
-		ResourceLimits:        contract.MaxLimits,
-		CanInitialize:         false,
-		TransferAmount:        "",
-		ContractSet:           nil,
-		ContractCodeFromCache: false,
-	})
-	if err != nil {
-		return nil, err
-	}
-	resp, err := nctx.Invoke("", args1)
-	if err != nil {
-		return nil, err
-	}
-	return resp, err
+}
 
+func (m *managerImpl) VerifyEVM(ctx *contract.KContext) error {
+	var Nonce uint64 = 0
+	var GasPrice uint64 = 0
+	var GasLimit uint64 = 21000
+	toString := "f97798df751deb4b6e39d4cf998ee7cd4dcb9acc"
+	to, err := hex.DecodeString(toString)
+	if err != nil {
+		return err
+	}
+	valueStr := "0de0b6b3a7640000"
+	value, err := hex.DecodeString(valueStr)
+	if err != nil {
+		return err
+	}
+	dataStr := ""
+	data, err := hex.DecodeString(dataStr)
+	if err != nil {
+		return err
+	}
+
+	chainID := 1
+	var V uint64 = 37
+	net := uint64(chainID)
+	RStr := "f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440c"
+	R, err := hex.DecodeString(RStr)
+	if err != nil {
+		return err
+	}
+	SStr := "171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422"
+	S, err := hex.DecodeString(SStr)
+	if err != nil {
+		return err
+	}
+	enc, err := txs.RLPEncode(Nonce, GasPrice, GasLimit, to, value, data)
+	if err != nil {
+		return err
+	}
+
+	sig := crypto.CompressedSignatureFromParams(V-net-8-1, R, S)
+	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	if err != nil {
+		return err
+	}
+	//from := pub.GetAddress()
+	unc := crypto.UncompressedSignatureFromParams(R, S)
+	signature, err := crypto.SignatureFromBytes(unc, crypto.CurveTypeSecp256k1)
+	if err != nil {
+		return err
+	}
+	if err := pub.Verify(enc, signature); err != nil {
+		return err
+	}
+	return nil
 }
 
 //func UnmarshalTransaction(data []byte,)

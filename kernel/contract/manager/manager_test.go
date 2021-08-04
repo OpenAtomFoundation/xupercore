@@ -141,3 +141,10 @@ func TestRLP(t *testing.T) {
 	}
 	//	ref rpc/eth.go EthSendRawTransaction
 }
+
+func TestEVM1(t *testing.T) {
+	m := managerImpl{}
+	if err := m.VerifyEVM(nil); err != nil {
+		t.Error(err)
+	}
+}
