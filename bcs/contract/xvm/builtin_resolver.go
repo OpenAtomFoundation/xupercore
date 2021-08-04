@@ -157,19 +157,19 @@ func xvmECVerify(ctx exec.Context,
 // 	return 0
 // }
 
-// func xvmAddressFromPubkey(ctx exec.Context, pubptr, publen uint32) uint32 {
-// 	codec := exec.NewCodec(ctx)
-// 	pubkeystr := codec.Bytes(pubptr, publen)
-// 	pubkey, err := account.GetEcdsaPublicKeyFromJSON(pubkeystr)
-// 	if err != nil {
-// 		return 0
-// 	}
-// 	addr, err := account.GetAddressFromPublicKey(pubkey)
-// 	if err != nil {
-// 		return 0
-// 	}
-// 	return strdup(ctx, addr)
-// }
+func xvmAddressFromPubkey(ctx exec.Context, pubptr, publen uint32) uint32 {
+	codec := exec.NewCodec(ctx)
+	pubkeystr := codec.Bytes(pubptr, publen)
+	pubkey, err := account.GetEcdsaPublicKeyFromJson(pubkeystr)
+	if err != nil {
+		return 0
+	}
+	addr, err := account.GetAddressFromPublicKey(pubkey)
+	if err != nil {
+		return 0
+	}
+	return strdup(ctx, addr)
+}
 
 // Returns a pointer to a bytes, which is a duplicate of b.
 // The returned pointer must be passed to free to avoid a memory leak
@@ -204,5 +204,5 @@ var builtinResolver = exec.MapResolver(map[string]interface{}{
 	"env._xvm_decode":   xvmDecode,
 	"env._xvm_ecverify": xvmECVerify,
 	// "env._xvm_make_tx":          xvmMakeTx,
-	// "env._xvm_addr_from_pubkey": xvmAddressFromPubkey,
+	"env._xvm_addr_from_pubkey": xvmAddressFromPubkey,
 })
