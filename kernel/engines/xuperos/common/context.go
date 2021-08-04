@@ -13,6 +13,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
+	"github.com/xuperchain/xupercore/kernel/evm"
 	"github.com/xuperchain/xupercore/kernel/network"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
@@ -62,4 +63,6 @@ type ChainCtx struct {
 	Address *xaddress.Address
 	// 异步任务
 	Asyncworker AsyncworkerAgent
+	// EVM PROxy
+	EVMProxy evm.EVMProxy
 }

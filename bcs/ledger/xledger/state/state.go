@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
+	"github.com/xuperchain/xupercore/kernel/evm"
 
 	"github.com/golang/protobuf/proto"
 
@@ -174,6 +175,9 @@ func (t *State) SetProposalMG(proposalMgr propose.ProposeManager) {
 
 func (t *State) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
 	t.sctx.SetTimerTaskMG(timerTaskMgr)
+}
+func (t *State) SetEVMProy(proxy evm.EVMProxy) {
+	t.sctx.SetEVMProxy(proxy)
 }
 
 // 选择足够金额的utxo

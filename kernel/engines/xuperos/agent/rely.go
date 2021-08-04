@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/evm"
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -205,6 +206,24 @@ func (t *ChainRelyAgentImpl) CreateProposal() (propose.ProposeManager, error) {
 	}
 
 	return proposalObj, nil
+}
+
+func (t *ChainRelyAgentImpl) CreateEVManager() (evm.EVMProxy, error) {
+	ctx := t.chain.Context()
+	//legAgent := NewLedgerAgent(ctx)
+	//return evm.NewEVMProxy()
+	//aclCtx, err := actx.NewAclCtx(ctx.BCName, legAgent, ctx.Contract)
+	//if err != nil {
+	//	return nil, fmt.Errorf("create acl ctx failed.err:%v", err)
+	//}
+
+	//evmProxy, err := acl.NewACLManager(aclCtx)
+	evmProxy, err := evm.NewEVMProxy(ctx.Contract)
+	if err != nil {
+		return nil, fmt.Errorf("create acl failed.err:%v", err)
+	}
+
+	//return aclObj, nil
 }
 
 // 创建定时器任务实例

@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/evm"
 
 	lconf "github.com/xuperchain/xupercore/bcs/ledger/xledger/config"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
@@ -44,6 +45,8 @@ type StateCtx struct {
 	ProposalMgr propose.ProposeManager
 	// 注意：注入后才可以使用
 	TimerTaskMgr timerTask.TimerManager
+	// 注意：诸如后才可以使用
+	EVMPRoxy evm.EVMProxy
 }
 
 func NewStateCtx(envCfg *xconf.EnvConf, bcName string,
@@ -93,6 +96,9 @@ func (t *StateCtx) SetProposalMG(proposalMgr propose.ProposeManager) {
 
 func (t *StateCtx) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
 	t.TimerTaskMgr = timerTaskMgr
+}
+func (t *StateCtx) SetEVMProxy(proxy evm.EVMProxy) {
+	t.EVMPRoxy = proxy
 }
 
 //state各个func里尽量调一下判断
