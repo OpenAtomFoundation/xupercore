@@ -20,9 +20,9 @@ import (
 
 var (
 	// ErrBlockChainExist is returned when create an existed block chain
-	ErrBlockChainExist = errors.New("BlockChain Exist")
+	ErrBlockChainExist = errors.New("blockchain exist")
 	// ErrCreateBlockChain is returned when create block chain error
-	ErrCreateBlockChain = errors.New("Create BlockChain error")
+	ErrCreateBlockChain = errors.New("create blockchain error")
 )
 
 // 通过创世块配置创建全新账本
@@ -30,17 +30,28 @@ func CreateLedger(bcName, genesisConf string, envCfg *xconf.EnvConf) error {
 	if bcName == "" || genesisConf == "" || envCfg == nil {
 		return fmt.Errorf("param set error")
 	}
+	data, err := ioutil.ReadFile(genesisConf)
+	if err != nil {
+		return err
+	}
+	return createLedger(bcName, data, envCfg)
+}
 
+// 通过创世块全字段创建全新账本
+func CreateLedgerWithData(bcName string, genesisData []byte, envCfg *xconf.EnvConf) error {
+	if bcName == "" || genesisData == nil || envCfg == nil {
+		return fmt.Errorf("param set error")
+	}
+	return createLedger(bcName, genesisData, envCfg)
+}
+
+func createLedger(bcName string, data []byte, envCfg *xconf.EnvConf) error {
 	dataDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
 	fullpath := filepath.Join(dataDir, bcName)
 	if utils.PathExists(fullpath) {
 		return ErrBlockChainExist
 	}
 	err := os.MkdirAll(fullpath, 0755)
-	if err != nil {
-		return err
-	}
-	data, err := ioutil.ReadFile(genesisConf)
 	if err != nil {
 		return err
 	}
