@@ -21,19 +21,8 @@ const (
 	ledgerPath = "../../../../example/xchain/conf/ledger.yaml"
 	logPath    = "../../../../example/xchain/conf/log.yaml"
 
-	testBcName = "xuper"
+	testBcName = "parachain"
 )
-
-var (
-	tmpBaseDB      kvdb.Database
-	tmpFinishTable kvdb.Database
-)
-
-func init() {
-	dir := utils.GetCurFileDir()
-	asyncDBPath := filepath.Join(dir, "/tmp")
-	os.RemoveAll(asyncDBPath)
-}
 
 func newTx() []*protos.FilteredTransaction {
 	var txs []*protos.FilteredTransaction
@@ -65,11 +54,11 @@ func newTxs() []*protos.FilteredTransaction {
 	return txs
 }
 
-func newDB() error {
+func setupDB() (kvdb.Database, error) {
 	dir := utils.GetCurFileDir()
 	lcfg, err := lconf.LoadLedgerConf(filepath.Join(dir, ledgerPath))
 	if err != nil {
-		return err
+		return nil, err
 	}
 	asyncDBPath := filepath.Join(dir, "/tmp/db")
 	// 目前仅使用默认设置
@@ -81,17 +70,19 @@ func newDB() error {
 		OtherPaths:            lcfg.OtherPaths,
 		StorageType:           lcfg.StorageType,
 	}
-	if tmpBaseDB == nil {
-		baseDB, err := kvdb.CreateKVInstance(kvParam)
-		if err != nil {
-			return err
-		}
-		tmpBaseDB = baseDB
+	baseDB, err := kvdb.CreateKVInstance(kvParam)
+	if err != nil {
+		return nil, err
 	}
-	if tmpFinishTable == nil {
-		tmpFinishTable = kvdb.NewTable(tmpBaseDB, FinishTablePrefix)
-	}
-	return nil
+	tmpFinishTable := kvdb.NewTable(baseDB, FinishTablePrefix)
+	return tmpFinishTable, nil
+}
+
+func closeDB(db kvdb.Database) {
+	db.Close()
+	dir := utils.GetCurFileDir()
+	asyncDBPath := filepath.Join(dir, "/tmp")
+	os.RemoveAll(asyncDBPath)
 }
 
 func newAsyncWorker() *AsyncWorkerImpl {
@@ -121,14 +112,12 @@ func newAsyncWorkerWithDB(t *testing.T) (*AsyncWorkerImpl, error) {
 	aw.log = log
 
 	// db实例
-	err = newDB()
+	tmpFinishTable, err := setupDB()
 	if err != nil {
 		t.Errorf("newDB error %v", err)
 		return nil, err
 	}
-
 	aw.finishTable = tmpFinishTable
-
 	return aw, nil
 }
 
@@ -138,6 +127,7 @@ func handleCreateChain(ctx common.TaskContext) error {
 
 func TestRegisterHandler(t *testing.T) {
 	aw, _ := newAsyncWorkerWithDB(t)
+	defer closeDB(aw.finishTable)
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
 	if aw.methods["$parachain"] == nil {
 		t.Errorf("RegisterHandler register contract error")
@@ -177,12 +167,12 @@ func TestGetAsyncTask(t *testing.T) {
 }
 
 func TestCursor(t *testing.T) {
-	defer tmpFinishTable.Delete([]byte(testBcName))
 	aw, err := newAsyncWorkerWithDB(t)
 	if err != nil {
 		t.Errorf("create db error, err=%v", err)
 		return
 	}
+	defer closeDB(aw.finishTable)
 	_, err = aw.reloadCursor()
 	if err != emptyErr {
 		t.Errorf("reload error, err=%v", err)
@@ -215,12 +205,12 @@ func TestCursor(t *testing.T) {
 }
 
 func TestDoAsyncTasks(t *testing.T) {
-	defer tmpFinishTable.Delete([]byte(testBcName))
 	aw, err := newAsyncWorkerWithDB(t)
 	if err != nil {
 		t.Errorf("create db error, err=%v", err)
 		return
 	}
+	defer closeDB(aw.finishTable)
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
 	err = aw.doAsyncTasks(newTx(), 3, nil)
 	if err != nil {
@@ -256,10 +246,8 @@ func TestStartAsyncTask(t *testing.T) {
 		t.Errorf("create db error, err=%v", err)
 		return
 	}
+	defer closeDB(aw.finishTable)
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
 	aw.Start()
 	aw.Stop()
-
-	tmpBaseDB.Close()
-	aw.Start()
 }
