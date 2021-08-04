@@ -2,6 +2,7 @@ package asyncworker
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -27,6 +28,12 @@ var (
 	tmpBaseDB      kvdb.Database
 	tmpFinishTable kvdb.Database
 )
+
+func init() {
+	dir := utils.GetCurFileDir()
+	asyncDBPath := filepath.Join(dir, "/tmp")
+	os.RemoveAll(asyncDBPath)
+}
 
 func newTx() []*protos.FilteredTransaction {
 	var txs []*protos.FilteredTransaction
@@ -74,15 +81,15 @@ func newDB() error {
 		OtherPaths:            lcfg.OtherPaths,
 		StorageType:           lcfg.StorageType,
 	}
-	baseDB, err := kvdb.CreateKVInstance(kvParam)
-	if err != nil {
-		return err
-	}
 	if tmpBaseDB == nil {
+		baseDB, err := kvdb.CreateKVInstance(kvParam)
+		if err != nil {
+			return err
+		}
 		tmpBaseDB = baseDB
 	}
 	if tmpFinishTable == nil {
-		tmpFinishTable = kvdb.NewTable(baseDB, FinishTablePrefix)
+		tmpFinishTable = kvdb.NewTable(tmpBaseDB, FinishTablePrefix)
 	}
 	return nil
 }
