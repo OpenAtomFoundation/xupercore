@@ -5,28 +5,14 @@ import (
 	"errors"
 	"fmt"
 
-	"io/ioutil"
-	"os"
-	"path/filepath"
-
-	"github.com/xuperchain/xupercore/kernel/common/xconfig"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/utils"
+	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/utils"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
-	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/lib/crypto/client"
-	lutils "github.com/xuperchain/xupercore/lib/utils"
 )
 
 var (
-	// ErrBlockChainExist is returned when create an existed block chain
-	ErrBlockChainExist = errors.New("blockChain exist")
 	// ErrCreateBlockChain is returned when create block chain error
 	ErrCreateBlockChain = errors.New("create blockChain error")
 	ErrGroupNotFound    = errors.New("group not found")
@@ -100,12 +86,13 @@ func (p *paraChainContract) doCreateChain(bcName string, bcGenesisConfig string)
 		p.ChainCtx.XLog.Warn("Chain is running, no need be created", "chain", bcName)
 		return nil
 	}
-	err := createLedger(bcName, []byte(bcGenesisConfig), p.ChainCtx.EngCtx.EnvCfg)
-	if err != nil && err != ErrBlockChainExist {
+	err := utils.CreateLedgerWithData(bcName, []byte(bcGenesisConfig), p.ChainCtx.EngCtx.EnvCfg)
+	if err != nil && err != utils.ErrBlockChainExist {
 		return err
 	}
-	if err == ErrBlockChainExist {
+	if err == utils.ErrBlockChainExist {
 		p.ChainCtx.XLog.Warn("Chain created before, load again", "chain", bcName)
+
 	}
 	return p.ChainCtx.EngCtx.ChainM.LoadChain(bcName)
 }
@@ -155,7 +142,7 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	// 确保未创建过该链
 	chainRes, _ := ctx.Get(ParaChainKernelContract, []byte(bcName))
 	if chainRes != nil {
-		return newContractErrResponse(unAuthorized, ErrBlockChainExist.Error()), ErrBlockChainExist
+		return newContractErrResponse(unAuthorized, utils.ErrBlockChainExist.Error()), utils.ErrBlockChainExist
 	}
 	// 创建链时，自动写入Group信息
 	group := &Group{
@@ -272,7 +259,7 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *
 		return bcName, bcData, nil, ErrBcNameEmpty
 	}
 	if bcName == p.ChainCtx.EngCtx.EngCfg.RootChain {
-		return bcName, bcData, nil, ErrBlockChainExist
+		return bcName, bcData, nil, utils.ErrBlockChainExist
 	}
 	if bcData == "" {
 		return bcName, bcData, nil, ErrBcDataEmpty
@@ -300,73 +287,6 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *
 		return bcName, bcData, nil, ErrAdminEmpty
 	}
 	return bcName, bcData, &bcGroup, nil
-}
-
-func createLedger(bcName string, data []byte, envConf *xconfig.EnvConf) error {
-	dataDir := envConf.GenDataAbsPath(envConf.ChainDir)
-	fullpath := filepath.Join(dataDir, bcName)
-	if lutils.PathExists(fullpath) {
-		return ErrBlockChainExist
-	}
-	err := os.MkdirAll(fullpath, 0755)
-	if err != nil {
-		return err
-	}
-	rootfile := filepath.Join(fullpath, fmt.Sprintf("%s.json", bcName))
-	err = ioutil.WriteFile(rootfile, data, 0666)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return err
-	}
-	lctx, err := ledger.NewLedgerCtx(envConf, bcName)
-	if err != nil {
-		return err
-	}
-	xledger, err := ledger.CreateLedger(lctx, data)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return err
-	}
-	tx, err := tx.GenerateRootTx(data)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return err
-	}
-	txlist := []*xldgpb.Transaction{tx}
-	b, err := xledger.FormatRootBlock(txlist)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return ErrCreateBlockChain
-	}
-	xledger.ConfirmBlock(b, true)
-	cryptoType, err := utils.GetCryptoType(data)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return ErrCreateBlockChain
-	}
-	crypt, err := client.CreateCryptoClient(cryptoType)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return ErrCreateBlockChain
-	}
-	sctx, err := context.NewStateCtx(envConf, bcName, xledger, crypt)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return err
-	}
-	handleState, err := state.NewState(sctx)
-	if err != nil {
-		os.RemoveAll(fullpath)
-		return err
-	}
-
-	defer xledger.Close()
-	defer handleState.Close()
-	err = handleState.Play(b.Blockid)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 //////////// Group ///////////
