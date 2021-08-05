@@ -2,6 +2,8 @@ package asyncworker
 
 import (
 	"encoding/json"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -20,12 +22,7 @@ const (
 	ledgerPath = "../../../../example/xchain/conf/ledger.yaml"
 	logPath    = "../../../../example/xchain/conf/log.yaml"
 
-	testBcName = "xuper"
-)
-
-var (
-	tmpBaseDB      kvdb.Database
-	tmpFinishTable kvdb.Database
+	testBcName = "parachain"
 )
 
 func newTx() []*protos.FilteredTransaction {
@@ -58,35 +55,6 @@ func newTxs() []*protos.FilteredTransaction {
 	return txs
 }
 
-func newDB() error {
-	dir := utils.GetCurFileDir()
-	lcfg, err := lconf.LoadLedgerConf(filepath.Join(dir, ledgerPath))
-	if err != nil {
-		return err
-	}
-	asyncDBPath := filepath.Join(dir, "/tmp/db")
-	// 目前仅使用默认设置
-	kvParam := &kvdb.KVParameter{
-		DBPath:                asyncDBPath,
-		KVEngineType:          lcfg.KVEngineType,
-		MemCacheSize:          ledger.MemCacheSize,
-		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
-		OtherPaths:            lcfg.OtherPaths,
-		StorageType:           lcfg.StorageType,
-	}
-	baseDB, err := kvdb.CreateKVInstance(kvParam)
-	if err != nil {
-		return err
-	}
-	if tmpBaseDB == nil {
-		tmpBaseDB = baseDB
-	}
-	if tmpFinishTable == nil {
-		tmpFinishTable = kvdb.NewTable(baseDB, FinishTablePrefix)
-	}
-	return nil
-}
-
 func newAsyncWorker() *AsyncWorkerImpl {
 	aw := AsyncWorkerImpl{
 		bcname: testBcName,
@@ -99,38 +67,19 @@ func newAsyncWorker() *AsyncWorkerImpl {
 	return &aw
 }
 
-func newAsyncWorkerWithDB(t *testing.T) (*AsyncWorkerImpl, error) {
-	aw := newAsyncWorker()
-	dir := utils.GetCurFileDir()
-
-	// log实例
-	econf, err := mock.NewEnvConfForTest()
-	if err != nil {
-		return nil, err
-	}
-	logPath := filepath.Join(dir, "/tmp/log")
-	logs.InitLog(econf.GenConfFilePath(econf.LogConf), logPath)
-	log, _ := logs.NewLogger("", "asyncworker")
-	aw.log = log
-
-	// db实例
-	err = newDB()
-	if err != nil {
-		t.Errorf("newDB error %v", err)
-		return nil, err
-	}
-
-	aw.finishTable = tmpFinishTable
-
-	return aw, nil
-}
-
 func handleCreateChain(ctx common.TaskContext) error {
 	return nil
 }
 
 func TestRegisterHandler(t *testing.T) {
-	aw, _ := newAsyncWorkerWithDB(t)
+	aw := newAsyncWorker()
+	th, err := NewTestHelper()
+	if err != nil {
+		t.Errorf("NewTestHelper error")
+	}
+	defer th.close()
+	aw.finishTable = th.db
+	aw.log = th.log
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
 	if aw.methods["$parachain"] == nil {
 		t.Errorf("RegisterHandler register contract error")
@@ -170,12 +119,14 @@ func TestGetAsyncTask(t *testing.T) {
 }
 
 func TestCursor(t *testing.T) {
-	defer tmpFinishTable.Delete([]byte(testBcName))
-	aw, err := newAsyncWorkerWithDB(t)
+	aw := newAsyncWorker()
+	th, err := NewTestHelper()
 	if err != nil {
-		t.Errorf("create db error, err=%v", err)
-		return
+		t.Errorf("NewTestHelper error")
 	}
+	defer th.close()
+	aw.finishTable = th.db
+	aw.log = th.log
 	_, err = aw.reloadCursor()
 	if err != emptyErr {
 		t.Errorf("reload error, err=%v", err)
@@ -208,12 +159,14 @@ func TestCursor(t *testing.T) {
 }
 
 func TestDoAsyncTasks(t *testing.T) {
-	defer tmpFinishTable.Delete([]byte(testBcName))
-	aw, err := newAsyncWorkerWithDB(t)
+	aw := newAsyncWorker()
+	th, err := NewTestHelper()
 	if err != nil {
-		t.Errorf("create db error, err=%v", err)
-		return
+		t.Errorf("NewTestHelper error")
 	}
+	defer th.close()
+	aw.finishTable = th.db
+	aw.log = th.log
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
 	err = aw.doAsyncTasks(newTx(), 3, nil)
 	if err != nil {
@@ -244,15 +197,69 @@ func TestDoAsyncTasks(t *testing.T) {
 }
 
 func TestStartAsyncTask(t *testing.T) {
-	aw, err := newAsyncWorkerWithDB(t)
+	aw := newAsyncWorker()
+	th, err := NewTestHelper()
 	if err != nil {
-		t.Errorf("create db error, err=%v", err)
-		return
+		t.Errorf("NewTestHelper error")
 	}
+	defer th.close()
+	aw.finishTable = th.db
+	aw.log = th.log
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
 	aw.Start()
 	aw.Stop()
+}
 
-	tmpBaseDB.Close()
-	aw.Start()
+type TestHelper struct {
+	basedir string
+	db      kvdb.Database
+	log     logs.Logger
+}
+
+func NewTestHelper() (*TestHelper, error) {
+	basedir, err := ioutil.TempDir("", "asyncworker-test")
+	if err != nil {
+		panic(err)
+	}
+
+	dir := utils.GetCurFileDir()
+	lcfg, err := lconf.LoadLedgerConf(filepath.Join(dir, ledgerPath))
+	if err != nil {
+		return nil, err
+	}
+	// 目前仅使用默认设置
+	kvParam := &kvdb.KVParameter{
+		DBPath:                basedir,
+		KVEngineType:          lcfg.KVEngineType,
+		MemCacheSize:          ledger.MemCacheSize,
+		FileHandlersCacheSize: ledger.FileHandlersCacheSize,
+		OtherPaths:            lcfg.OtherPaths,
+		StorageType:           lcfg.StorageType,
+	}
+	baseDB, err := kvdb.CreateKVInstance(kvParam)
+	if err != nil {
+		return nil, err
+	}
+	tmpFinishTable := kvdb.NewTable(baseDB, FinishTablePrefix)
+
+	// log实例
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		return nil, err
+	}
+	logPath := filepath.Join(basedir, "/log")
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), logPath)
+	log, _ := logs.NewLogger("", "asyncworker")
+
+	th := &TestHelper{
+		basedir: basedir,
+		db:      tmpFinishTable,
+		log:     log,
+	}
+	return th, nil
+}
+
+func (th *TestHelper) close() {
+	th.db.Close()
+	os.RemoveAll(th.basedir)
 }
