@@ -9,9 +9,7 @@ import (
 	"github.com/hyperledger/burrow/txs"
 	"testing"
 
-	"encoding/hex"
 	log15 "github.com/xuperchain/log15"
-	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
@@ -64,9 +62,6 @@ func TestInvoke(t *testing.T) {
 	}
 
 	t.Logf("%s", resp.Body)
-}
-
-type evmTransaction struct {
 }
 
 type helloContract struct {
