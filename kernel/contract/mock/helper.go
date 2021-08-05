@@ -102,6 +102,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 		ContractName:   "$contract",
 		State:          state,
 		ResourceLimits: contract.MaxLimits,
+		Initiator:      ContractAccount,
 	})
 	if err != nil {
 		return nil, err

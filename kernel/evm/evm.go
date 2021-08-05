@@ -17,17 +17,13 @@ type EVMProxy interface {
 func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	registry := manager.GetKernRegistry()
 	p := proxy{}
-	p.verifySignatureFunc = p.verifySignature
 	registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
 	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
-	registry.RegisterKernMethod("$evm", "ContractCall", p.contractCall)
+	registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
 }
 
 type proxy struct {
-	//  func field for unit test convenience
-	verifySignatureFunc func(nonce, gasPrice, gasLimit uint64, to, value, data []byte, net, V uint64, S, R []byte,
-	) error
 }
 
 func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, error) {
@@ -41,7 +37,7 @@ func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, erro
 	//if err := p.verifySignature(); err != nil {
 	//	return nil, err
 	//}
-	return p.contractCall(ctx)
+	return p.ContractCall(ctx)
 
 }
 
@@ -162,7 +158,7 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	//}, nil
 }
 
-func (p *proxy) contractCall(ctx contract.KContext) (*contract.Response, error) {
+func (p *proxy) ContractCall(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 
 	// TODO length check
@@ -172,7 +168,7 @@ func (p *proxy) contractCall(ctx contract.KContext) (*contract.Response, error) 
 		return nil, err
 	}
 
-	args1 := map[string][]byte{
+	invokArgs := map[string][]byte{
 		"input":       input,
 		"jsonEncoded": []byte("false"),
 	}
@@ -191,7 +187,7 @@ func (p *proxy) contractCall(ctx contract.KContext) (*contract.Response, error) 
 	// 1.地址转换相关问题
 	// 2.跨合约调用
 	// 3.合约部署与合约升级
-	resp, err := ctx.Call("evm", contractName, "", args1)
+	resp, err := ctx.Call("evm", contractName, "", invokArgs)
 	return resp, err
 
 }

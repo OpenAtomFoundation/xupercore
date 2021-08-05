@@ -3,14 +3,13 @@ package evm
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
 
 	"github.com/hyperledger/burrow/crypto"
 	"github.com/hyperledger/burrow/execution/engine"
-	burror_errors "github.com/hyperledger/burrow/execution/errors"
+	"github.com/hyperledger/burrow/execution/errors"
 	"github.com/hyperledger/burrow/execution/evm"
 	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/execution/exec"
@@ -124,7 +123,6 @@ func (e *evmInstance) Exec() error {
 			return fmt.Errorf("get evm value error")
 		}
 	}
-	fmt.Println(hex.EncodeToString(input))
 	params := engine.CallParams{
 		CallType: exec.CallTypeCode,
 		Caller:   caller,
@@ -133,9 +131,6 @@ func (e *evmInstance) Exec() error {
 		Value:    value.Uint64(),
 		Gas:      &gas,
 	}
-	out1, _ := json.Marshal(params)
-	fmt.Println(string(out1))
-
 	out, err := e.vm.Execute(e.state, e.blockState, e, params, e.code)
 	if err != nil {
 		return err
@@ -170,7 +165,7 @@ func (e *evmInstance) Release() {
 func (e *evmInstance) Abort(msg string) {
 }
 
-func (e *evmInstance) Call(call *exec.CallEvent, exception *burror_errors.Exception) error {
+func (e *evmInstance) Call(call *exec.CallEvent, exception *errors.Exception) error {
 	return nil
 }
 

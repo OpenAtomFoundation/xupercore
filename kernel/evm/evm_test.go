@@ -1,7 +1,10 @@
 package evm
 
-import "encoding/hex"
-import "testing"
+import (
+	"encoding/hex"
+	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
+	"testing"
+)
 
 func TestEVM(t *testing.T) {
 	proxy := proxy{}
@@ -50,10 +53,10 @@ func TestEVM(t *testing.T) {
 	},
 	)
 	//t.Run("ContractCall", func(t *testing.T) {
-	//	// ignore verifySignature
-	//	proxy.verifySignatureFunc = func(nonce, gasPrice, gasLimit uint64, to, value, data []byte, net, V uint64, S, R []byte) error {
-	//		return nil
-	//	}
-	//	//proxy.sendTransaction()
-	////}
+	// ignore verifySignature
+	//proxy.verifySignatureFunc = func(nonce, gasPrice, gasLimit uint64, to, value, data []byte, net, V uint64, S, R []byte) error {
+	//	return nil
+	//}
+	//proxy.sendTransaction()
+	//}
 }

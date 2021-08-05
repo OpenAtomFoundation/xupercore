@@ -4,11 +4,32 @@ import (
 	"encoding/json"
 	log15 "github.com/xuperchain/log15"
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
+	_ "github.com/xuperchain/xupercore/bcs/contract/native"
+	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
+	_ "github.com/xuperchain/xupercore/kernel/contract"
+	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
+	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 	"io/ioutil"
 	"testing"
 )
+
+type MockLogger struct {
+	log15.Logger
+}
+
+func (*MockLogger) GetLogId() string {
+	return ""
+}
+
+func (*MockLogger) SetCommField(key string, value interface{}) {
+
+}
+func (*MockLogger) SetInfoField(key string, value interface{}) {
+
+}
 
 type evmtransaction struct {
 }
