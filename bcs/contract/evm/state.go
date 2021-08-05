@@ -42,10 +42,11 @@ func (s *stateManager) GetAccount(address crypto.Address) (*acm.Account, error) 
 	// if err != nil {
 	// return nil, nil
 	// }
-	var balance *big.Int
+	balance := big.NewInt(0)
+	//var balance *big.Int
 	return &acm.Account{
 		Address:     address,
-		Balance:     balance,
+		Balance:     balance.Uint64(),
 		EVMCode:     evmCode,
 		Permissions: permission.AllAccountPermissions,
 	}, nil
