@@ -38,11 +38,10 @@ func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
 	}
 
 	state := sandbox.NewMemXModel()
-	core := new(fakeChainCore)
 	m, err := contract.CreateManager("default", &contract.ManagerConfig{
 		Basedir:  basedir,
 		BCName:   "xuper",
-		Core:     core,
+		Core:     new(fakeChainCore),
 		XMReader: state,
 		Config:   cfg,
 	})
@@ -67,7 +66,7 @@ func (t *TestHelper) Basedir() string {
 	return t.basedir
 }
 
-func (t *TestHelper) State() *sandbox.MemXModel {
+func (t *TestHelper) State() ledger.XMReader {
 	return t.state
 }
 func (t *TestHelper) UTXOState() *contract.UTXORWSet {
@@ -92,8 +91,7 @@ func (t *TestHelper) initAccount() {
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader:   t.State(),
-		UTXOReader: t.utxoReader,
+		XMReader: t.State(),
 	})
 	if err != nil {
 		return nil, err
@@ -104,7 +102,6 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 		ContractName:   "$contract",
 		State:          state,
 		ResourceLimits: contract.MaxLimits,
-		Initiator:      ContractAccount,
 	})
 	if err != nil {
 		return nil, err
@@ -142,8 +139,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader:   t.State(),
-		UTXOReader: t.utxoReader,
+		XMReader: t.State(),
 	})
 	if err != nil {
 		return err
@@ -171,8 +167,7 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 func (t *TestHelper) Invoke(module, contractName, method string, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader:   t.State(),
-		UTXOReader: t.utxoReader,
+		XMReader: t.State(),
 	})
 	if err != nil {
 		return nil, err
@@ -183,7 +178,6 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 		ContractName:   contractName,
 		State:          state,
 		ResourceLimits: contract.MaxLimits,
-		Initiator:      ContractAccount,
 	})
 	if err != nil {
 		return nil, err
@@ -194,8 +188,6 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 	if err != nil {
 		return nil, err
 	}
-	state.Flush()
-	t.utxo = state.UTXORWSet()
 	t.Commit(state)
 	return resp, nil
 }
@@ -204,7 +196,6 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 	rwset := state.RWSet()
 	txbuf := make([]byte, 32)
 	rand.Read(txbuf)
-	fmt.Println("wset start")
 	for i, w := range rwset.WSet {
 		t.state.Put(w.Bucket, w.Key, &ledger.VersionedData{
 			RefTxid:   txbuf,
@@ -216,7 +207,6 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 			},
 		})
 	}
-	fmt.Println("wset stop")
 }
 
 func (t *TestHelper) Close() {
