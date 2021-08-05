@@ -95,6 +95,7 @@ func TestChain_SubmitTx(t *testing.T) {
 		t.Logf("%v", err)
 		return
 	}
+	go engine.Run()
 	defer engine.Exit()
 
 	chain, err := engine.Get("xuper")
@@ -201,6 +202,7 @@ func TestChain_PreExec(t *testing.T) {
 		t.Logf("%v", err)
 		return
 	}
+	go engine.Run()
 	defer engine.Exit()
 
 	chain, err := engine.Get("xuper")

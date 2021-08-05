@@ -72,7 +72,6 @@ func MockEngine(path string) (common.Engine, error) {
 		return nil, fmt.Errorf("engine convert error: %v", err)
 	}
 
-	go engine.Run()
 	return eng, nil
 }
 
@@ -82,6 +81,6 @@ func TestEngine(t *testing.T) {
 		t.Logf("%v", err)
 		return
 	}
-
+	go engine.Run()
 	engine.Exit()
 }
