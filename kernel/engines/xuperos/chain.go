@@ -101,8 +101,13 @@ func (t *Chain) Start() {
 }
 
 func (t *Chain) Stop() {
-	// 停止矿工
+	// 停止矿工等其余组件
 	t.miner.Stop()
+	t.ctx.Ledger.Close()
+	t.ctx.State.Close()
+	t.ctx = nil
+	t.miner = nil
+	t.txIdCache = nil
 }
 
 func (t *Chain) Context() *common.ChainCtx {
