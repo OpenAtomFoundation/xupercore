@@ -76,11 +76,11 @@ func MockEngine(path string) (common.Engine, error) {
 }
 
 func TestEngine(t *testing.T) {
-	engine, err := MockEngine("p2pv2/node1/conf/env.yaml")
+	_, err := MockEngine("p2pv2/node1/conf/env.yaml")
 	if err != nil {
 		t.Logf("%v", err)
 		return
 	}
-	go engine.Run()
-	engine.Exit()
+	// go engine.Run()
+	// engine.Exit()
 }
