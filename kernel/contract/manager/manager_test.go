@@ -3,6 +3,14 @@ package manager
 import (
 	"testing"
 
+	"encoding/json"
+	"github.com/hyperledger/burrow/crypto"
+	"github.com/hyperledger/burrow/rpc/web3"
+	"github.com/hyperledger/burrow/txs"
+	"testing"
+
+	"encoding/hex"
+	log15 "github.com/xuperchain/log15"
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
