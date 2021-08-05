@@ -41,15 +41,15 @@ import (
 )
 
 var (
-	ErrDoubleSpent          = errors.New("utxo can not be spent more than once")
-	ErrAlreadyInUnconfirmed = errors.New("this transaction is in unconfirmed state")
-	ErrPreBlockMissMatch    = errors.New("play block failed because pre-hash != latest_block")
-	ErrUnexpected           = errors.New("this is a unexpected error")
-	ErrInvalidAutogenTx     = errors.New("found invalid autogen-tx")
-	ErrUTXODuplicated       = errors.New("found duplicated utxo in same tx")
-	ErrRWSetInvalid         = errors.New("RWSet of transaction invalid")
-	ErrACLNotEnough         = errors.New("ACL not enough")
-	ErrInvalidSignature     = errors.New("the signature is invalid or not match the address")
+	ErrDoubleSpent                = errors.New("utxo can not be spent more than once")
+	ErrAlreadyInUnconfirmed       = errors.New("this transaction is in unconfirmed state")
+	ErrPreBlockMissMatch          = errors.New("play block failed because pre-hash != latest_block")
+	ErrUnexpected                 = errors.New("this is a unexpected error")
+	ErrInvalidAutogenTx           = errors.New("found invalid autogen-tx")
+	ErrUTXODuplicated             = errors.New("found duplicated utxo in same tx")
+	ErrRWSetInvalid         error = nil
+	ErrACLNotEnough               = errors.New("ACL not enough")
+	ErrInvalidSignature           = errors.New("the signature is invalid or not match the address")
 
 	ErrGasNotEnough   = errors.New("Gas not enough")
 	ErrVersionInvalid = errors.New("Invalid tx version")

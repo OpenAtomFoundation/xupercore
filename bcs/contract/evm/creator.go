@@ -133,6 +133,9 @@ func (e *evmInstance) Exec() error {
 		Value:    value,
 		Gas:      &gas,
 	}
+	out1, _ := json.Marshal(params)
+	fmt.Println(string(out1))
+
 	out, err := e.vm.Execute(e.state, e.blockState, e, params, e.code)
 	if err != nil {
 		return err
