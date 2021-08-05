@@ -128,7 +128,7 @@ func (e *evmInstance) Exec() error {
 		Caller:   caller,
 		Callee:   callee,
 		Input:    input,
-		Value:    value.Uint64(),
+		Value:    value,
 		Gas:      &gas,
 	}
 	out, err := e.vm.Execute(e.state, e.blockState, e, params, e.code)
@@ -260,7 +260,7 @@ func (e *evmInstance) deployContract() error {
 		Caller:   caller,
 		Callee:   callee,
 		Input:    input,
-		Value:    big.NewInt(0).Uint64(),
+		Value:    big.NewInt(0),
 		Gas:      &gas,
 	}
 	contractCode, err := e.vm.Execute(e.state, e.blockState, e, params, input)
