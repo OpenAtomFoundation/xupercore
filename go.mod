@@ -41,4 +41,4 @@ require (
 	google.golang.org/grpc v1.35.0
 )
 
-replace github.com/hyperledger/burrow => github.com/xuperchain/burrow v0.30.6-0.20210317023017-369050d94f4a
+replace github.com/hyperledger/burrow => github.com/xuperchain/burrow v0.30.6-0.20210806065218-1c6d40be4365
