@@ -3,6 +3,7 @@ package evm
 import (
 	"encoding/hex"
 	"github.com/hyperledger/burrow/acm/balance"
+	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"strconv"
 
 	//"github.com/hyperledger/burrow/acm/balance"
@@ -148,11 +149,11 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 
 	if len(rawTx.Data) == 0 {
 		from := pub.GetAddress()
-		xfrom, err := EVMAddressToXchain(from)
+		xfrom, err := evm.EVMAddressToXchain(from)
 		if err != nil {
 			return nil, err
 		}
-		xto, err := EVMAddressToXchain(to)
+		xto, err := evm.EVMAddressToXchain(to)
 		if err != nil {
 			return nil, err
 		}
@@ -165,7 +166,7 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 			Body:   []byte("ok"),
 		}, nil
 	}
-	contractName, err := DetermineContractNameFromEVM(to)
+	contractName, err := evm.DetermineContractNameFromEVM(to)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +196,7 @@ func (p *proxy) ContractCall(ctx contract.KContext) (*contract.Response, error) 
 	if err != nil {
 		return nil, err
 	}
-	contractName, err := DetermineContractNameFromEVM(address)
+	contractName, err := evm.DetermineContractNameFromEVM(address)
 	if err != nil {
 		return nil, err
 	}

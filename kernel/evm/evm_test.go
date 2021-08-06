@@ -52,11 +52,4 @@ func TestEVM(t *testing.T) {
 		}
 	},
 	)
-	//t.Run("ContractCall", func(t *testing.T) {
-	// ignore verifySignature
-	//proxy.verifySignatureFunc = func(nonce, gasPrice, gasLimit uint64, to, value, data []byte, net, V uint64, S, R []byte) error {
-	//	return nil
-	//}
-	//proxy.sendTransaction()
-	//}
 }
