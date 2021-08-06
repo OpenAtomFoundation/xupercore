@@ -54,12 +54,19 @@ func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Resp
 	desc.Digest = hash.DoubleSha256(code)
 	descbuf, _ = proto.Marshal(&desc)
 
-	state.Put("contract", ContractCodeDescKey(contractName), descbuf)
-	state.Put("contract", contractCodeKey(contractName), code)
+	if err := state.Put("contract", ContractCodeDescKey(contractName), descbuf); err != nil {
+		return nil, contract.Limits{}, err
+	}
+	if err := state.Put("contract", contractCodeKey(contractName), code); err != nil {
+		return nil, contract.Limits{}, err
+
+	}
 
 	if desc.ContractType == string(TypeEvm) {
 		abiBuf := args["contract_abi"]
-		state.Put("contract", contractAbiKey(contractName), abiBuf)
+		if err := state.Put("contract", contractAbiKey(contractName), abiBuf); err != nil {
+			return nil, contract.Limits{}, err
+		}
 	}
 
 	contractType, err := getContractType(&desc)
