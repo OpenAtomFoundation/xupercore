@@ -160,10 +160,9 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 		if err := ctx.Transfer(xfrom, xto, amount); err != nil {
 			return nil, err
 		}
-		//	TODO
 		return &contract.Response{
 			Status: 200,
-			Body:   []byte("TODO"),
+			Body:   []byte("ok"),
 		}, nil
 	}
 	contractName, err := DetermineContractNameFromEVM(to)
