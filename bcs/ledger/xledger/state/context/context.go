@@ -97,9 +97,6 @@ func (t *StateCtx) SetProposalMG(proposalMgr propose.ProposeManager) {
 func (t *StateCtx) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
 	t.TimerTaskMgr = timerTaskMgr
 }
-func (t *StateCtx) SetEVMProxy(proxy evm.EVMProxy) {
-	t.EVMPRoxy = proxy
-}
 
 //state各个func里尽量调一下判断
 func (t *StateCtx) IsInit() bool {
