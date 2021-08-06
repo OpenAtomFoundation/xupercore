@@ -2,6 +2,7 @@ package evm
 
 import (
 	"encoding/hex"
+	"github.com/hyperledger/burrow/acm/balance"
 	"strconv"
 
 	//"github.com/hyperledger/burrow/acm/balance"
@@ -128,23 +129,55 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	); err != nil {
 		return nil, err
 	}
-
-	to, err := crypto.AddressFromHexString(string(rawTx.To))
+	//from,err:=crypto.AddressFromBytes(rawt)
+	to, err := crypto.AddressFromBytes(rawTx.To)
 	if err != nil {
 		return nil, err
+	}
+
+	enc, err := txs.RLPEncode(rawTx.Nonce, rawTx.GasPrice, rawTx.GasLimit, rawTx.To, rawTx.Value, rawTx.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	sig := crypto.CompressedSignatureFromParams(rawTx.V-net-8-1, rawTx.R, rawTx.S)
+	pub, err := crypto.PublicKeyFromSignature(sig, crypto.Keccak256(enc))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(rawTx.Data) == 0 {
+		from := pub.GetAddress()
+		xfrom, err := EVMAddressToXchain(from)
+		if err != nil {
+			return nil, err
+		}
+		xto, err := EVMAddressToXchain(to)
+		if err != nil {
+			return nil, err
+		}
+		amount := balance.WeiToNative(rawTx.Value)
+		if err := ctx.Transfer(xfrom, xto, amount); err != nil {
+			return nil, err
+		}
+		//	TODO
+		return &contract.Response{
+			Status: 200,
+			Body:   []byte("TODO"),
+		}, nil
 	}
 	contractName, err := DetermineContractNameFromEVM(to)
 	if err != nil {
 		return nil, err
 	}
 
-	args1 := map[string][]byte{
+	invokArgs := map[string][]byte{
 		"input":       rawTx.Data,
 		"jsonEncoded": []byte("false"),
 	}
-	//TODO 如果value 非空，那么需要有 transfer
-	resp, err := ctx.Call("evm", contractName, "", args1)
+	resp, err := ctx.Call("evm", contractName, "", invokArgs)
 	return resp, err
+
 }
 
 func (p *proxy) ContractCall(ctx contract.KContext) (*contract.Response, error) {
