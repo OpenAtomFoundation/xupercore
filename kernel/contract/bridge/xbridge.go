@@ -170,8 +170,3 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		release:  release,
 	}, nil
 }
-
-// TODO templ
-func (v *XBridge) SysCallService(ctxCfg *contract.ContextConfig) *SyscallService {
-	return v.syscallService
-}

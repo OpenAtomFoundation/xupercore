@@ -212,7 +212,6 @@ func (t *ChainRelyAgentImpl) CreateEVManager() (evm.EVMProxy, error) {
 	ctx := t.chain.Context()
 	proxy, err := evm.NewEVMProxy(ctx.Contract)
 	return proxy, err
-
 }
 
 // 创建定时器任务实例
