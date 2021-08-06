@@ -2,7 +2,7 @@ package evm
 
 import (
 	"encoding/hex"
-	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
+	//_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	"testing"
 )
 

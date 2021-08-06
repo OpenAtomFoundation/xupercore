@@ -263,6 +263,9 @@ func (e *evmInstance) deployContract() error {
 		Value:    big.NewInt(0),
 		Gas:      &gas,
 	}
+	data, err := json.Marshal(params)
+
+	fmt.Println(string(data))
 	contractCode, err := e.vm.Execute(e.state, e.blockState, e, params, input)
 	if err != nil {
 		return err
