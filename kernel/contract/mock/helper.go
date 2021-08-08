@@ -180,13 +180,14 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 		ContractName:   contractName,
 		State:          state,
 		ResourceLimits: contract.MaxLimits,
+		Initiator:      ContractAccount,
 	})
 	if err != nil {
 		return nil, err
 	}
 	defer ctx.Release()
-
 	resp, err := ctx.Invoke(method, args)
+
 	if err != nil {
 		return nil, err
 	}
