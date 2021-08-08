@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 [
     {
         "inputs": [],
@@ -50,3 +51,6 @@
         "type": "function"
     }
 ]
+=======
+[{"inputs":[],"stateMutability":"nonpayable","type":"constructor"},{"inputs":[{"internalType":"uint256","name":"","type":"uint256"}],"name":"Id","outputs":[{"internalType":"string","name":"name","type":"string"},{"internalType":"uint256","name":"time","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[],"name":"number","outputs":[{"internalType":"uint256","name":"","type":"uint256"}],"stateMutability":"view","type":"function"},{"inputs":[{"internalType":"string","name":"_name","type":"string"}],"name":"testWrite","outputs":[],"stateMutability":"nonpayable","type":"function"}]
+>>>>>>> 82700c6 (update evm proxy test)
