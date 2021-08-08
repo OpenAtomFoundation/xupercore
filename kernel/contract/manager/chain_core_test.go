@@ -1,5 +1,6 @@
-package contract
+package manager
 
+// we put bridge feature test
 import (
 	"bytes"
 	"fmt"
@@ -14,24 +15,8 @@ import (
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
-	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
-
-type MockLogger struct {
-	log15.Logger
-}
-
-func (*MockLogger) GetLogId() string {
-	return ""
-}
-
-func (*MockLogger) SetCommField(key string, value interface{}) {
-
-}
-func (*MockLogger) SetInfoField(key string, value interface{}) {
-
-}
 
 func compile(th *mock.TestHelper) ([]byte, error) {
 	target := filepath.Join(th.Basedir(), "counter.bin")
@@ -48,7 +33,7 @@ func compile(th *mock.TestHelper) ([]byte, error) {
 	return bin, nil
 }
 
-func TestNativeInvoke(t *testing.T) {
+func TestBridgeFeatures(t *testing.T) {
 	var logger = log15.New()
 	var contractConfig = &contract.ContractConfig{
 		EnableUpgrade: true,
@@ -60,7 +45,7 @@ func TestNativeInvoke(t *testing.T) {
 			Enable: true,
 			Driver: "native",
 		},
-		LogDriver: &MockLogger{
+		LogDriver: &mock.MockLogger{
 			logger,
 		},
 	}
