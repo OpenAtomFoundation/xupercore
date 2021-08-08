@@ -15,7 +15,6 @@ import (
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/utils"
 )
@@ -266,7 +265,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 }
 
 // renewQCStatus 返回一个裁剪目标，供miner模块直接回滚并出块
-func (x *xpoaConsensus) renewQCStatus(tipBlock ledger.BlockHandle) (bool, []byte, error) {
+func (x *xpoaConsensus) renewQCStatus(tipBlock cctx.BlockInterface) (bool, []byte, error) {
 	if bytes.Equal(x.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
 		return false, nil, nil
 	}

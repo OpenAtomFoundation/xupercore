@@ -14,7 +14,6 @@ import (
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
@@ -299,7 +298,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 }
 
 // renewQCStatus 返回一个裁剪目标，供miner模块直接回滚并出块，否则返回一个错误，直接重制，或者返回一个shutdown标志
-func (tp *tdposConsensus) renewQCStatus(tipBlock ledger.BlockHandle) (bool, []byte, error) {
+func (tp *tdposConsensus) renewQCStatus(tipBlock cctx.BlockInterface) (bool, []byte, error) {
 	if bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
 		return false, nil, nil
 	}
