@@ -6,6 +6,7 @@ import (
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
+	"github.com/xuperchain/xupercore/kernel/evm"
 
 	"encoding/hex"
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -57,9 +58,13 @@ func TestEVM(t *testing.T) {
 	}
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
-	//m := th.Manager()
+	m := th.Manager()
+	_, err := evm.NewEVMProxy(m)
+	if err != nil {
+		t.Error(err)
+		return
+	}
 
-	//m.GetKernRegistry().RegisterKernMethod("$evm", "proxy", new(helloContract).Hi)
 	txData := evmtransaction{}
 	data, err := json.Marshal(txData)
 	if err != nil {
@@ -79,14 +84,18 @@ func TestEVM(t *testing.T) {
 	}
 	args := map[string][]byte{
 		"contract_abi": abi,
-		"input":        []byte(hex.EncodeToString(bin)),
+		"input":        bin,
 		"jsonEncoded":  []byte("false"),
 	}
-	resp, err := th.Deploy("evm", "counter", "counter", bin, args)
+	// TODO WTF
+	data1, err := hex.DecodeString(string((bin)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := th.Deploy("evm", "counter", "counter", data1, args)
 	if err != nil {
 		// TODO
-		return
-		//t.Fatal(err)
+		t.Fatal(err)
 	}
 
 	// unit test
@@ -94,7 +103,7 @@ func TestEVM(t *testing.T) {
 		"desc": data,
 	})
 	if err != nil {
-		//t.Fatal(err)
+		t.Fatal(err)
 	}
 
 	t.Logf("%s", resp.Body)
