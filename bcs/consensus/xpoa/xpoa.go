@@ -257,7 +257,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncateT != nil {
-		x.GetLog().Debug("consensus:xpoa:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
+		x.GetLog().Warn("consensus:xpoa:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
 			"ledger", tipBlock.GetHeight(), "HighQC", x.smr.GetHighQC().GetProposalView())
 		storage.TargetBits = int32(tipBlock.GetHeight())
 	}

@@ -199,6 +199,10 @@ func (t *QCPendingTree) updateQCs(highQCNode *ProposalNode) error {
 
 // insert 向本地QC树Insert一个ProposalNode，如有必要，连同HighQC、GenericQC、LockedQC、CommitQC一起修改
 func (t *QCPendingTree) insert(node *ProposalNode) error {
+	if node.In == nil {
+		t.Log.Error("QCPendingTree::insert err", "err", ErrNoValidQC)
+		return ErrNoValidQC
+	}
 	if node.In.GetParentProposalId() == nil {
 		return ErrNoValidParentId
 	}

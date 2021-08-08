@@ -287,7 +287,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	storage.Justify = oldQC
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncateT != nil {
-		tp.log.Debug("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
+		tp.log.Warn("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
 			"ledger", tipBlock.GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
 		storage.TargetBits = int32(tipBlock.GetHeight())
 	}
