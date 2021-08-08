@@ -81,16 +81,6 @@ func (t *TestHelper) initAccount() {
 	})
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
-		//{
-		//	RefTxid:              nil,
-		//	RefOffset:            0,
-		//	FromAddr:             []byte(ContractAccount),
-		//	Amount:               big.NewInt(9999).Bytes(),
-		//	FrozenHeight:         0,
-		//	XXX_NoUnkeyedLiteral: struct{}{},
-		//	XXX_unrecognized:     nil,
-		//	XXX_sizecache:        0,
-		//},
 		{
 			RefTxid:      nil,
 			RefOffset:    0,
