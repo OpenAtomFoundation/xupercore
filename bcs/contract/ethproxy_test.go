@@ -98,13 +98,39 @@ func TestEVM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// unit test
 	resp, err = th.Invoke("xkernel", "$evm", "proxy", map[string][]byte{
 		"desc": data,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Error(err)
+		return
 	}
 
-	t.Logf("%s", resp.Body)
+	t.Run("SendTransaction", func(t *testing.T) {
+		resp, err = th.Invoke("xkernel", "$evm", "proxy", map[string][]byte{
+			"desc": data,
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	})
+	t.Run("SendRawTransaction", func(t *testing.T) {
+		resp, err = th.Invoke("xkernel", "$evm", "proxy", map[string][]byte{
+			"desc": data,
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	})
+	t.Run("ContractCall", func(t *testing.T) {
+		resp, err = th.Invoke("xkernel", "$evm", "proxy", map[string][]byte{
+			"desc": data,
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+	})
 }
