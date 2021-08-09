@@ -94,7 +94,6 @@ func (t *TestHelper) initAccount() {
 }
 func (t *TestHelper) SetUtxoReader(reader contract.UtxoReader) {
 	t.utxoReader = reader
-
 }
 
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
@@ -132,7 +131,6 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 		"contract_code": bin,
 		"contract_desc": descbuf,
 		"init_args":     argsBuf,
-		"json_encoded":  []byte("true"),
 	}
 	if bridge.ContractType(module) == bridge.TypeEvm {
 		invokeArgs["contract_abi"] = args["contract_abi"]
