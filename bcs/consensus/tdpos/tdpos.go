@@ -272,6 +272,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	// 根据BFT配置判断是否需要加入Chained-BFT相关存储，及变更smr状态
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := tp.election.ledger.GetTipBlock()
+	// TODO: 目前xpoa和tdpos在回滚上逻辑一致，若有修改需要同时修改，此部分后续要考虑合并和复用
 	shundown, truncateT, err := tp.renewQCStatus(tipBlock)
 	if err != nil {
 		return nil, nil, err
@@ -310,6 +311,7 @@ func (tp *tdposConsensus) renewQCStatus(tipBlock cctx.BlockInterface) (bool, []b
 	targetHighQC, err := func() (chainedBft.QuorumCertInterface, error) {
 		targetId := tipBlock.GetBlockid()
 		for {
+			// TODO: rely需更改成QueryBlockHeader
 			block, err := tp.election.ledger.QueryBlock(targetId)
 			if err != nil {
 				return nil, err

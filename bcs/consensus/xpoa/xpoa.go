@@ -240,6 +240,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := x.election.ledger.GetTipBlock()
+	// TODO: 目前xpoa和tdpos在回滚上逻辑一致，若有修改需要同时修改，此部分后续要考虑合并和复用
 	shundown, truncateT, err := x.renewQCStatus(tipBlock)
 	if err != nil {
 		return nil, nil, err
@@ -277,6 +278,7 @@ func (x *xpoaConsensus) renewQCStatus(tipBlock cctx.BlockInterface) (bool, []byt
 	targetHighQC, err := func() (chainedBft.QuorumCertInterface, error) {
 		targetId := tipBlock.GetBlockid()
 		for {
+			// TODO: rely需更改成QueryBlockHeader
 			block, err := x.election.ledger.QueryBlock(targetId)
 			if err != nil {
 				return nil, err
