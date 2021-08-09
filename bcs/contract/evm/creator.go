@@ -328,7 +328,7 @@ func (e *evmInstance) encodeDeployInput() ([]byte, error) {
 	// 客户端如果未将参数进行 abi 编码，那么通过 input 获取的是参数 json 序列化的结果。
 	argsBytes, ok := e.ctx.Args[evmInput]
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("missing emvInput")
 	}
 
 	// map 的类型与客户端一致，如果 cli 或者 SDK 对此结构有改动，需要同时修改。

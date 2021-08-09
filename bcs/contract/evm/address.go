@@ -1,7 +1,6 @@
 package evm
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -29,7 +28,7 @@ const (
 func XchainToEVMAddress(addr string) (crypto.Address, error) {
 	rawAddr := base58.Decode(addr)
 	if len(rawAddr) < 21 {
-		return crypto.ZeroAddress, errors.New("bad address")
+		return crypto.ZeroAddress, fmt.Errorf("%s is not a valid address", addr)
 	}
 	ripemd160Hash := rawAddr[1:21]
 	return crypto.AddressFromBytes(ripemd160Hash)

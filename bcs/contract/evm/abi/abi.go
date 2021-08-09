@@ -1,6 +1,7 @@
 package abi
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/hyperledger/burrow/execution/evm/abi"
@@ -37,7 +38,7 @@ func (a *ABI) Encode(methodName string, args map[string]interface{}) ([]byte, er
 		if a.spec.Constructor != nil {
 			return a.encodeMethod(a.spec.Constructor, args)
 		}
-		return nil, nil
+		return nil, errors.New("missing method mane")
 	}
 	method, ok := a.spec.Functions[methodName]
 	if !ok {
