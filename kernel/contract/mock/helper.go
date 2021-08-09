@@ -82,19 +82,11 @@ func (t *TestHelper) initAccount() {
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 		{
-<<<<<<< HEAD
 			RefTxid:      nil,
 			RefOffset:    0,
 			FromAddr:     []byte(FeaturesContractName),
 			Amount:       big.NewInt(9999).Bytes(),
 			FrozenHeight: 0,
-=======
-			RefTxid:              nil,
-			RefOffset:            0,
-			FromAddr:             []byte(FeaturesContractName),
-			Amount:               big.NewInt(9999).Bytes(),
-			FrozenHeight:         0,
->>>>>>> 6edf5ab (remove xxx_ field in helper.go)
 		},
 	})
 
@@ -148,11 +140,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	ctx.Release()
 	t.Commit(state)
-	t.sandbox = state
 	return resp, nil
-}
-func (t *TestHelper) Sandbox() contract.StateSandbox {
-	return t.sandbox
 }
 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
