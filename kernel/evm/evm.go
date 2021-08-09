@@ -49,7 +49,6 @@ func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, erro
 	var S, R []byte
 	var err error
 	args := ctx.Args()
-	// TODO 1. 格式 2.
 	nonceStr := args["nonce"]
 	gasPriceStr := args["gas_price"]
 	gasLimitStr := args["gas_limit"]
@@ -83,7 +82,6 @@ func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, erro
 	}
 	net = DEFAULT_NET
 	VStr := args["v"]
-	// TODO 确认下这里
 	V, err = strconv.ParseUint(string(VStr), 10, 64)
 	if err != nil {
 		return nil, err
