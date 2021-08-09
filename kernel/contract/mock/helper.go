@@ -133,11 +133,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	ctx.Release()
 	t.Commit(state)
-	t.sandbox = state
 	return resp, nil
-}
-func (t *TestHelper) Sandbox() contract.StateSandbox {
-	return t.sandbox
 }
 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
