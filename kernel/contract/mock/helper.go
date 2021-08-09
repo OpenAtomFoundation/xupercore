@@ -27,8 +27,6 @@ type TestHelper struct {
 	utxoReader sandbox.UtxoReader
 	state      *sandbox.MemXModel
 	manager    contract.Manager
-	// for debug
-	sandbox contract.StateSandbox
 }
 
 func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
@@ -72,9 +70,6 @@ func (t *TestHelper) State() *sandbox.MemXModel {
 }
 func (t *TestHelper) UTXOState() *contract.UTXORWSet {
 	return t.utxo
-}
-func (t *TestHelper) GetBalance(addr string) {
-	//return t.state.Get(utils.)
 }
 
 func (t *TestHelper) initAccount() {
@@ -142,11 +137,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	ctx.Release()
 	t.Commit(state)
-	t.sandbox = state
 	return resp, nil
-}
-func (t *TestHelper) Sandbox() contract.StateSandbox {
-	return t.sandbox
 }
 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
@@ -173,7 +164,6 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 	})
-
 	ctx.Release()
 	t.Commit(state)
 	return err
