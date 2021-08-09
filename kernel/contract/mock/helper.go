@@ -3,6 +3,7 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -65,7 +66,7 @@ func (t *TestHelper) Basedir() string {
 	return t.basedir
 }
 
-func (t *TestHelper) State() ledger.XMReader {
+func (t *TestHelper) State() *sandbox.MemXModel {
 	return t.state
 }
 func (t *TestHelper) UTXOState() *contract.UTXORWSet {
@@ -128,11 +129,8 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 		"init_args":     argsBuf,
 		"json_encoded":  []byte("true"),
 	}
-	if module == "evm" {
+	if bridge.ContractType(module) == bridge.TypeEvm {
 		invokeArgs["contract_abi"] = args["contract_abi"]
-	}
-	for k, v := range args {
-		invokeArgs[k] = v
 	}
 	resp, err := ctx.Invoke("deployContract", invokeArgs)
 
