@@ -1,7 +1,6 @@
 package evm
 
 import (
-	log15 "github.com/xuperchain/log15"
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
@@ -16,23 +15,7 @@ import (
 	"testing"
 )
 
-type MockLogger struct {
-	log15.Logger
-}
-
-func (*MockLogger) GetLogId() string {
-	return ""
-}
-
-func (*MockLogger) SetCommField(key string, value interface{}) {
-
-}
-func (*MockLogger) SetInfoField(key string, value interface{}) {
-
-}
-
 func TestEVM1(t *testing.T) {
-	var logger = log15.New()
 	var contractConfig = &contract.ContractConfig{
 		EnableUpgrade: true,
 		Xkernel: contract.XkernelConfig{
@@ -47,9 +30,7 @@ func TestEVM1(t *testing.T) {
 			Enable: true,
 			Driver: "evm",
 		},
-		LogDriver: &MockLogger{
-			logger,
-		},
+		LogDriver: mock.NewMockLogger(),
 	}
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
@@ -75,7 +56,6 @@ func TestEVM1(t *testing.T) {
 		"input":        bin,
 		"jsonEncoded":  []byte("false"),
 	}
-	// TODO WTF
 	data, err := hex.DecodeString(string((bin)))
 	if err != nil {
 		t.Fatal(err)
@@ -85,19 +65,26 @@ func TestEVM1(t *testing.T) {
 		// TODO
 		t.Fatal(err)
 	}
-
-	t.Run("SendTransaction", func(t *testing.T) {
-		resp, err = th.Invoke("xkernel", "$evm", "SendTransaction", map[string][]byte{
-			"desc": data,
-		})
-		if err != nil {
-			t.Error(err)
-			return
-		}
-	})
+	// SendTransaction is not used currently
+	//t.Run("SendTransaction", func(t *testing.T) {
+	//web3.Transaction{
+	//	From: x.EncodeBytes(genesisAccounts[1].GetAddress().Bytes()),
+	//	To:   contractAddress,
+	//	Data: x.EncodeBytes(packed),
+	//}
+	//it is not used currently
+	//resp, err = th.Invoke("xkernel", "$evm", "SendTransaction", map[string][]byte{
+	//	"desc": data,
+	//})
+	//if err != nil {
+	//	t.Error(err)
+	//	return
+	//}
+	//})
 	t.Run("SendRawTransaction", func(t *testing.T) {
-		resp, err = th.Invoke("xkernel", "$evm", "SendTransaction", map[string][]byte{
-			"desc": data,
+		resp, err = th.Invoke("xkernel", "$evm", "SendRawTransaction", map[string][]byte{
+			"desc":      data,
+			"signed_tx": []byte("0xf867808082520894f97798df751deb4b6e39d4cf998ee7cd4dcb9acc880de0b6b3a76400008025a0f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440ca0171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422"),
 		})
 		if err != nil {
 			t.Error(err)
@@ -105,8 +92,10 @@ func TestEVM1(t *testing.T) {
 		}
 	})
 	t.Run("ContractCall", func(t *testing.T) {
-		resp, err = th.Invoke("xkernel", "$evm", "SendTransaction", map[string][]byte{
-			"desc": data,
+		resp, err = th.Invoke("xkernel", "$evm", "ContractCall", map[string][]byte{
+			"to":    []byte("313131312D2D2D2D2D2D2D2D2D636F756E746572"),
+			"from":  []byte("b60e8dd61c5d32be8058bb8eb970870f07233155"),
+			"input": []byte("ae896c870000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000678636861696e0000000000000000000000000000000000000000000000000000"),
 		})
 		if err != nil {
 			t.Error(err)

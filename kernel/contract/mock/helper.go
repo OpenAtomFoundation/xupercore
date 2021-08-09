@@ -80,7 +80,7 @@ func (t *TestHelper) initAccount() {
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 		{
-			FromAddr: []byte(FeaturesContractName),
+			FromAddr: []byte("UNBip6cQUyeM1Jfjgq7GMVUUkLZBp7p8K"),
 			Amount:   big.NewInt(9999).Bytes(),
 		},
 	})
@@ -169,7 +169,8 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 func (t *TestHelper) Invoke(module, contractName, method string, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: t.State(),
+		XMReader:   t.State(),
+		UTXOReader: t.utxoReader,
 	})
 	if err != nil {
 		return nil, err
