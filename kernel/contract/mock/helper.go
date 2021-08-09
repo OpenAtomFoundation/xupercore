@@ -3,6 +3,7 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -67,7 +68,7 @@ func (t *TestHelper) Basedir() string {
 	return t.basedir
 }
 
-func (t *TestHelper) State() ledger.XMReader {
+func (t *TestHelper) State() *sandbox.MemXModel {
 	return t.state
 }
 func (t *TestHelper) UTXOState() *contract.UTXORWSet {
@@ -81,18 +82,26 @@ func (t *TestHelper) initAccount() {
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 		{
-			FromAddr: []byte("UNBip6cQUyeM1Jfjgq7GMVUUkLZBp7p8K"),
-			Amount:   big.NewInt(9999).Bytes(),
+			RefTxid:      nil,
+			RefOffset:    0,
+			FromAddr:     []byte(FeaturesContractName),
+			Amount:       big.NewInt(9999).Bytes(),
+			FrozenHeight: 0,
 		},
 	})
 
 	t.utxoReader = utxoReader
 }
+func (t *TestHelper) SetUtxoReader(reader contract.UtxoReader) {
+	t.utxoReader = reader
+
+}
 
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: t.State(),
+		XMReader:   t.State(),
+		UTXOReader: t.utxoReader,
 	})
 	if err != nil {
 		return nil, err
@@ -142,7 +151,8 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: t.State(),
+		XMReader:   t.State(),
+		UTXOReader: t.utxoReader,
 	})
 	if err != nil {
 		return err
@@ -193,6 +203,8 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 	if err != nil {
 		return nil, err
 	}
+	state.Flush()
+	t.utxo = state.UTXORWSet()
 	t.Commit(state)
 	return resp, nil
 }

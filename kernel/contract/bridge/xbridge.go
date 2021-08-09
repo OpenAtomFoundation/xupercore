@@ -25,7 +25,6 @@ type XBridge struct {
 	debugLogger logs.Logger
 
 	*contractManager
-	//*SyscallService
 }
 
 type XBridgeConfig struct {

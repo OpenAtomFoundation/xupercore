@@ -130,7 +130,6 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	); err != nil {
 		return nil, err
 	}
-	//from,err:=crypto.AddressFromBytes(rawt)
 	to, err := crypto.AddressFromBytes(rawTx.To)
 	if err != nil {
 		return nil, err
@@ -149,16 +148,17 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 
 	if len(rawTx.Data) == 0 {
 		from := pub.GetAddress()
-		xfrom, err := evm.EVMAddressToXchain(from)
-		if err != nil {
-			return nil, err
-		}
-		xto, err := evm.EVMAddressToXchain(to)
-		if err != nil {
-			return nil, err
-		}
+		//xfrom, err := evm.EVMAddressToXchain(from)
+		//if err != nil {
+		//	return nil, err
+		//}
+		//xto, err := evm.EVMAddressToXchain(to)
+		//if err != nil {
+		//	return nil, err
+		//}
 		amount := balance.WeiToNative(rawTx.Value)
-		if err := ctx.Transfer(xfrom, xto, amount); err != nil {
+
+		if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
 			return nil, err
 		}
 		return &contract.Response{
