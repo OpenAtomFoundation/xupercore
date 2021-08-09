@@ -13,8 +13,8 @@ import (
 var _ QuorumCertInterface = (*QuorumCert)(nil)
 
 var (
-	NoValidQC       = errors.New("Target QC is empty.")
-	NoValidParentId = errors.New("ParentId is empty.")
+	ErrNoValidQC       = errors.New("target qc is empty")
+	ErrNoValidParentId = errors.New("parentId is empty")
 )
 
 // 本文件定义了chained-bft下有关的数据结构和接口
@@ -125,6 +125,9 @@ func (t *QCPendingTree) GetLockedQC() *ProposalNode {
 
 // 更新本地qcTree, insert新节点, 将新节点parentQC和本地HighQC对比，如有必要进行更新
 func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
+	if node.Sons == nil {
+		node.Sons = make([]*ProposalNode, 0)
+	}
 	if t.DFSQueryNode(node.In.GetProposalId()) != nil {
 		t.Log.Debug("QCPendingTree::updateQcStatus::has been inserted", "search", utils.F(node.In.GetProposalId()))
 		return nil
@@ -149,29 +152,8 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	if node.In.GetProposalView() < t.GetHighQC().In.GetProposalView() {
 		return
 	}
-	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
-	t.HighQC = node
-	t.Log.Debug("QCPendingTree::updateHighQC", "HighQC height", node.In.GetProposalView(), "HighQC", utils.F(node.In.GetProposalId()))
-	parent := t.DFSQueryNode(node.In.GetParentProposalId())
-	if parent == nil {
-		return
-	}
-	t.GenericQC = parent
-	t.Log.Debug("QCPendingTree::updateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
-	// 找grand节点，标为LockedQC
-	parentParent := t.DFSQueryNode(parent.In.GetParentProposalId())
-	if parentParent == nil {
-		return
-	}
-	t.LockedQC = parentParent
-	t.Log.Debug("QCPendingTree::updateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
-	// 找grandgrand节点，标为CommitQC
-	parentParentParent := t.DFSQueryNode(parentParent.In.GetParentProposalId())
-	if parentParentParent == nil {
-		return
-	}
-	t.CommitQC = parentParentParent
-	t.Log.Debug("QCPendingTree::updateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC::start.")
+	t.updateQCs(node)
 }
 
 // enforceUpdateHighQC 强制更改HighQC指针，用于错误时回滚，注意: 本实现没有timeoutQC因此需要此方法
@@ -179,41 +161,50 @@ func (t *QCPendingTree) enforceUpdateHighQC(inProposalId []byte) error {
 	node := t.DFSQueryNode(inProposalId)
 	if node == nil {
 		t.Log.Debug("QCPendingTree::enforceUpdateHighQC::DFSQueryNode nil")
-		return NoValidQC
+		return ErrNoValidQC
 	}
+	t.Log.Debug("QCPendingTree::enforceUpdateHighQC::start.")
+	return t.updateQCs(node)
+}
+
+func (t *QCPendingTree) updateQCs(highQCNode *ProposalNode) error {
 	// 更改HighQC以及一系列的GenericQC、LockedQC和CommitQC
-	t.HighQC = node
+	t.HighQC = highQCNode
 	t.GenericQC = nil
 	t.LockedQC = nil
 	t.CommitQC = nil
-	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "HighQC height", t.HighQC.In.GetProposalView(), "HighQC", utils.F(t.HighQC.In.GetProposalId()))
-	parent := t.DFSQueryNode(node.In.GetParentProposalId())
+	t.Log.Debug("QCPendingTree::updateHighQC", "HighQC height", highQCNode.In.GetProposalView(), "HighQC", utils.F(highQCNode.In.GetProposalId()))
+	parent := t.DFSQueryNode(highQCNode.In.GetParentProposalId())
 	if parent == nil {
 		return nil
 	}
 	t.GenericQC = parent
-	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "GenericQC height", t.GenericQC.In.GetProposalView(), "GenericQC", utils.F(t.GenericQC.In.GetProposalId()))
 	// 找grand节点，标为LockedQC
 	parentParent := t.DFSQueryNode(parent.In.GetParentProposalId())
 	if parentParent == nil {
 		return nil
 	}
 	t.LockedQC = parentParent
-	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
-	// 找grandgrand节点，标为Commit	QC
+	t.Log.Debug("QCPendingTree::updateHighQC", "LockedQC height", t.LockedQC.In.GetProposalView(), "LockedQC", utils.F(t.LockedQC.In.GetProposalId()))
+	// 找grandgrand节点，标为CommitQC
 	parentParentParent := t.DFSQueryNode(parentParent.In.GetParentProposalId())
 	if parentParentParent == nil {
 		return nil
 	}
 	t.CommitQC = parentParentParent
-	t.Log.Debug("QCPendingTree::enforceUpdateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
+	t.Log.Debug("QCPendingTree::updateHighQC", "CommitQC height", t.CommitQC.In.GetProposalView(), "CommitQC", utils.F(t.CommitQC.In.GetProposalId()))
 	return nil
 }
 
 // insert 向本地QC树Insert一个ProposalNode，如有必要，连同HighQC、GenericQC、LockedQC、CommitQC一起修改
 func (t *QCPendingTree) insert(node *ProposalNode) error {
+	if node.In == nil {
+		t.Log.Error("QCPendingTree::insert err", "err", ErrNoValidQC)
+		return ErrNoValidQC
+	}
 	if node.In.GetParentProposalId() == nil {
-		return NoValidParentId
+		return ErrNoValidParentId
 	}
 	parent := t.DFSQueryNode(node.In.GetParentProposalId())
 	if parent != nil {
@@ -249,7 +240,7 @@ func (t *QCPendingTree) insertOrphan(node *ProposalNode) error {
 		curPtr := ptr
 		n, ok := curPtr.Value.(*ProposalNode)
 		if !ok {
-			return errors.New("QCPendingTree::insertOrphan::element type invalid.")
+			return errors.New("QCPendingTree::insertOrphan::element type invalid")
 		}
 		ptr = ptr.Next()
 		// 查看头节点是否已经时间失效了, 失效的时候所有依赖该高度长得树实际上都没有意义了，需要删除
@@ -286,7 +277,7 @@ func (t *QCPendingTree) adoptOrphans(node *ProposalNode) error {
 		curPtr := ptr
 		n, ok := curPtr.Value.(*ProposalNode)
 		if !ok {
-			return errors.New("QCPendingTree::insertOrphan::element type invalid.")
+			return errors.New("QCPendingTree::insertOrphan::element type invalid")
 		}
 		ptr = ptr.Next()
 		if bytes.Equal(n.In.GetParentProposalId(), node.In.GetProposalId()) {
@@ -296,19 +287,6 @@ func (t *QCPendingTree) adoptOrphans(node *ProposalNode) error {
 	}
 	return nil
 }
-
-/*
-func (t *QCPendingTree) updateCommit(p QuorumCertInterface) {
-	// t.Ledger.ConsensusCommit(p.GetProposalId())
-	node := t.DFSQueryNode(p.GetProposalId())
-	parent := node.Parent
-	node.Parent = nil
-	if parent != nil {
-		parent.Sons = nil
-	}
-	t.Root = node
-}
-*/
 
 // updateCommit 此方法向存储接口发送一个ProcessCommit，通知存储落盘，此时的block将不再被回滚
 // 同时此方法将原先的root更改为commit node，因为commit node在本BFT中已确定不会回滚

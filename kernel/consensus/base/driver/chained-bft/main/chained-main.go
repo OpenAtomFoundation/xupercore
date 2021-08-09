@@ -232,12 +232,12 @@ func CompeteLoop(smr *chainedBft.Smr, log logs.Logger, validators []string) {
 			continue
 		}
 		if smr.GetCurrentView() == 0 {
-			if err := smr.ProcessProposal(1, []byte("1"), validators); err != nil {
+			if err := smr.ProcessProposal(1, []byte("1"), []byte("0"), validators); err != nil {
 				log.Error("Smr ProcessProposal error", "error", err)
 			}
 			continue
 		}
-		if err := smr.ProcessProposal(smr.GetCurrentView(), []byte(fmt.Sprint((smr.GetCurrentView()))), validators); err != nil {
+		if err := smr.ProcessProposal(smr.GetCurrentView(), []byte(fmt.Sprint((smr.GetCurrentView()))), []byte("0"), validators); err != nil {
 			log.Error("Smr ProcessProposal error", "error", err)
 		}
 	}
