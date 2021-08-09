@@ -1,7 +1,6 @@
 package evm
 
 import (
-	log15 "github.com/xuperchain/log15"
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
@@ -16,23 +15,7 @@ import (
 	"testing"
 )
 
-//type MockLogger struct {
-//	log15.Logger
-//}
-//
-//func (*MockLogger) GetLogId() string {
-//	return ""
-//}
-//
-//func (*MockLogger) SetCommField(key string, value interface{}) {
-//
-//}
-//func (*MockLogger) SetInfoField(key string, value interface{}) {
-//
-//}
-
 func BenchmarkEVM(b *testing.B) {
-	var logger = log15.New()
 	var contractConfig = &contract.ContractConfig{
 		EnableUpgrade: true,
 		Xkernel: contract.XkernelConfig{
@@ -47,18 +30,10 @@ func BenchmarkEVM(b *testing.B) {
 			Enable: true,
 			Driver: "evm",
 		},
-		LogDriver: &MockLogger{
-			logger,
-		},
+		LogDriver: mock.NewMockLogger(),
 	}
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
-	m := th.Manager()
-	_, err := NewEVMProxy(m)
-	if err != nil {
-		b.Error(err)
-		return
-	}
 
 	bin, err := ioutil.ReadFile("testdata/counter.bin")
 	if err != nil {
@@ -75,14 +50,12 @@ func BenchmarkEVM(b *testing.B) {
 		"input":        bin,
 		"jsonEncoded":  []byte("false"),
 	}
-	// TODO WTF
 	data, err := hex.DecodeString(string((bin)))
 	if err != nil {
 		b.Fatal(err)
 	}
 	resp, err := th.Deploy("evm", "counter", "counter", data, args)
 	if err != nil {
-		// TODO
 		b.Fatal(err)
 	}
 	b.Run("Benchmark", func(b *testing.B) {
