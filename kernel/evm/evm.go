@@ -25,7 +25,8 @@ type EVMProxy interface {
 func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	registry := manager.GetKernRegistry()
 	p := proxy{}
-	registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
+	// SendTransaction is not used currently
+	// registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
 	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
 	registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
@@ -106,7 +107,7 @@ func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, erro
 
 func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
-	signedTx := args["signedTx"]
+	signedTx := args["signed_tx"]
 	txHash := args["tx_hash"]
 	data, err := x.DecodeToBytes(string(signedTx))
 	if err != nil {
