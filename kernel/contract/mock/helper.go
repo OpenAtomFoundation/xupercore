@@ -90,9 +90,6 @@ func (t *TestHelper) initAccount() {
 			FromAddr:             []byte(FeaturesContractName),
 			Amount:               big.NewInt(9999).Bytes(),
 			FrozenHeight:         0,
-			XXX_NoUnkeyedLiteral: struct{}{},
-			XXX_unrecognized:     nil,
-			XXX_sizecache:        0,
 		},
 	})
 	t.utxoReader = utxoReader
