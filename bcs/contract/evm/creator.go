@@ -33,7 +33,6 @@ type evmCreator struct {
 
 func newEvmCreator(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
 	opt := evm.Options{}
-	opt.DebugOpcodes = true
 	vm := evm.New(opt)
 	return &evmCreator{
 		vm: vm,

@@ -3,6 +3,7 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -120,13 +121,18 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	argsBuf, _ := json.Marshal(args)
 
-	resp, err := ctx.Invoke("deployContract", map[string][]byte{
+	invokeArgs := map[string][]byte{
 		"account_name":  []byte(ContractAccount),
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 		"contract_desc": descbuf,
 		"init_args":     argsBuf,
-	})
+	}
+	if bridge.ContractType(module) == bridge.TypeEvm {
+		invokeArgs["contract_abi"] = args["contract_abi"]
+	}
+	resp, err := ctx.Invoke("deployContract", invokeArgs)
+
 	if err != nil {
 		return nil, err
 	}
