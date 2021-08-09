@@ -82,11 +82,19 @@ func (t *TestHelper) initAccount() {
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 		{
+<<<<<<< HEAD
 			RefTxid:      nil,
 			RefOffset:    0,
 			FromAddr:     []byte(FeaturesContractName),
 			Amount:       big.NewInt(9999).Bytes(),
 			FrozenHeight: 0,
+=======
+			RefTxid:              nil,
+			RefOffset:            0,
+			FromAddr:             []byte(FeaturesContractName),
+			Amount:               big.NewInt(9999).Bytes(),
+			FrozenHeight:         0,
+>>>>>>> 6edf5ab (remove xxx_ field in helper.go)
 		},
 	})
 
