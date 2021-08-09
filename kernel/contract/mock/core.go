@@ -26,9 +26,14 @@ func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authR
 }
 
 func (t *fakeChainCore) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
-	return state.NewBlockAgent(&xldgpb.InternalBlock{}), nil
+	return state.NewBlockAgent(&xldgpb.InternalBlock{
+		Blockid: []byte("testblockid"),
+	}), nil
 }
 
 func (t *fakeChainCore) QueryTransaction(txid []byte) (*pb.Transaction, error) {
-	return &pb.Transaction{}, nil
+	return &pb.Transaction{
+		Txid:    "testtxid",
+		Blockid: "testblockd",
+	}, nil
 }

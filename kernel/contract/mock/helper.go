@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"io/ioutil"
+	"math/big"
 	"os"
 
 	"github.com/golang/protobuf/proto"
@@ -15,15 +16,17 @@ import (
 )
 
 const (
-	ContractAccount = "XC1111111111111111@xuper"
+	ContractAccount      = "XC1111111111111111@xuper"
+	ContractAccount2     = "XC2222222222222222@xuper"
+	FeaturesContractName = "features"
 )
 
 type TestHelper struct {
-	basedir string
-
-	// state   ledger.XMReader
-	state   *sandbox.MemXModel
-	manager contract.Manager
+	basedir    string
+	utxo       *contract.UTXORWSet
+	utxoReader sandbox.UtxoReader
+	state      *sandbox.MemXModel
+	manager    contract.Manager
 }
 
 func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
@@ -33,11 +36,11 @@ func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
 	}
 
 	state := sandbox.NewMemXModel()
-
+	core := new(fakeChainCore)
 	m, err := contract.CreateManager("default", &contract.ManagerConfig{
 		Basedir:  basedir,
 		BCName:   "xuper",
-		Core:     new(fakeChainCore),
+		Core:     core,
 		XMReader: state,
 		Config:   cfg,
 	})
@@ -62,20 +65,37 @@ func (t *TestHelper) Basedir() string {
 	return t.basedir
 }
 
-func (t *TestHelper) State() ledger.XMReader {
+func (t *TestHelper) State() *sandbox.MemXModel {
 	return t.state
+}
+func (t *TestHelper) UTXOState() *contract.UTXORWSet {
+	return t.utxo
 }
 
 func (t *TestHelper) initAccount() {
 	t.state.Put(utils.GetAccountBucket(), []byte(ContractAccount), &ledger.VersionedData{
-		RefTxid: []byte("txid"),
+		RefTxid:  []byte("txid"),
+		PureData: nil,
 	})
+
+	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
+		{
+			RefTxid:      nil,
+			RefOffset:    0,
+			FromAddr:     []byte(FeaturesContractName),
+			Amount:       big.NewInt(9999).Bytes(),
+			FrozenHeight: 0,
+		},
+	})
+
+	t.utxoReader = utxoReader
 }
 
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: t.State(),
+		XMReader:   t.State(),
+		UTXOReader: t.utxoReader,
 	})
 	if err != nil {
 		return nil, err
@@ -86,6 +106,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 		ContractName:   "$contract",
 		State:          state,
 		ResourceLimits: contract.MaxLimits,
+		Initiator:      ContractAccount,
 	})
 	if err != nil {
 		return nil, err
@@ -109,6 +130,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 	if err != nil {
 		return nil, err
 	}
+
 	ctx.Release()
 	t.Commit(state)
 	return resp, nil
@@ -117,7 +139,8 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: t.State(),
+		XMReader:   t.State(),
+		UTXOReader: t.utxoReader,
 	})
 	if err != nil {
 		return err
@@ -145,7 +168,8 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 func (t *TestHelper) Invoke(module, contractName, method string, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader: t.State(),
+		XMReader:   t.State(),
+		UTXOReader: t.utxoReader,
 	})
 	if err != nil {
 		return nil, err
@@ -156,6 +180,7 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 		ContractName:   contractName,
 		State:          state,
 		ResourceLimits: contract.MaxLimits,
+		Initiator:      ContractAccount,
 	})
 	if err != nil {
 		return nil, err
@@ -166,6 +191,8 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 	if err != nil {
 		return nil, err
 	}
+	state.Flush()
+	t.utxo = state.UTXORWSet()
 	t.Commit(state)
 	return resp, nil
 }
