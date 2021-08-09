@@ -167,7 +167,6 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 	})
-
 	ctx.Release()
 	t.Commit(state)
 	return err
