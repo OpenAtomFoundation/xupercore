@@ -27,37 +27,13 @@ func (f *fakeChainCore) VerifyContractOwnerPermission(contractName string, authR
 
 func (t *fakeChainCore) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
 	return state.NewBlockAgent(&xldgpb.InternalBlock{
-		Version:      0,
-		Nonce:        0,
-		Blockid:      []byte("testblockid"),
-		PreHash:      nil,
-		Proposer:     nil,
-		Sign:         nil,
-		Pubkey:       nil,
-		MerkleRoot:   nil,
-		Height:       0,
-		Timestamp:    0,
-		Transactions: nil,
-		TxCount:      0,
-		MerkleTree:   nil,
-		CurTerm:      0,
-		CurBlockNum:  0,
-		FailedTxs:    nil,
-		TargetBits:   0,
-		Justify:      nil,
-		InTrunk:      false,
-		NextHash:     nil,
+		Blockid: []byte("testblockid"),
 	}), nil
 }
 
 func (t *fakeChainCore) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	return &pb.Transaction{
-		Txid:        "testtxid",
-		Blockid:     "testblockd",
-		TxInputs:    nil,
-		TxOutputs:   nil,
-		Desc:        nil,
-		Initiator:   "",
-		AuthRequire: nil,
+		Txid:    "testtxid",
+		Blockid: "testblockd",
 	}, nil
 }

@@ -1,6 +1,6 @@
 package manager
 
-// we put bridge feature test
+// we put bridge feature test here as a compromise of cycle import
 import (
 	"bytes"
 	"fmt"
