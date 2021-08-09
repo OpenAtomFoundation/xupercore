@@ -76,17 +76,13 @@ func (t *TestHelper) UTXOState() *contract.UTXORWSet {
 
 func (t *TestHelper) initAccount() {
 	t.state.Put(utils.GetAccountBucket(), []byte(ContractAccount), &ledger.VersionedData{
-		RefTxid:  []byte("txid"),
-		PureData: nil,
+		RefTxid: []byte("txid"),
 	})
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 		{
-			RefTxid:      nil,
-			RefOffset:    0,
-			FromAddr:     []byte(FeaturesContractName),
-			Amount:       big.NewInt(9999).Bytes(),
-			FrozenHeight: 0,
+			FromAddr: []byte(FeaturesContractName),
+			Amount:   big.NewInt(9999).Bytes(),
 		},
 	})
 
