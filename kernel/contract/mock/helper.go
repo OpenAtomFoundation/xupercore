@@ -91,10 +91,6 @@ func (t *TestHelper) initAccount() {
 	t.utxoReader = utxoReader
 }
 
-func (t *TestHelper) Balance(account string) *big.Int {
-	return new(big.Int)
-}
-
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
