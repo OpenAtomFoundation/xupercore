@@ -143,13 +143,13 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 		return nil, err
 	}
 
-	if len(rawTx.Data) == 0 {
-		from := pub.GetAddress()
-		amount := balance.WeiToNative(rawTx.Value)
+	from := pub.GetAddress()
+	amount := balance.WeiToNative(rawTx.Value)
 
-		if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
-			return nil, err
-		}
+	if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
+		return nil, err
+	}
+	if len(rawTx.Data) == 0 {
 		return &contract.Response{
 			Status: 200,
 			Body:   []byte("ok"),
@@ -161,25 +161,21 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	}
 
 	invokArgs := map[string][]byte{
-		"input":       rawTx.Data,
-		"jsonEncoded": []byte("false"),
+		"input": rawTx.Data,
 	}
 	resp, err := ctx.Call("evm", contractName, "", invokArgs)
 	return resp, err
-
 }
 
 func (p *proxy) ContractCall(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
-
 	input, err := hex.DecodeString(string(args["input"]))
 	if err != nil {
 		return nil, err
 	}
 
 	invokArgs := map[string][]byte{
-		"input":       input,
-		"jsonEncoded": []byte("false"),
+		"input": input,
 	}
 	address, err := crypto.AddressFromHexString(string(args["to"]))
 	if err != nil {

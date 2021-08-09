@@ -54,10 +54,9 @@ func TestEVMProxy(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
 	args := map[string][]byte{
 		"contract_abi": abi,
-		"input":        bin,
-		"jsonEncoded":  []byte("false"),
 	}
 	data, err := hex.DecodeString(string((bin)))
 	if err != nil {
@@ -67,39 +66,24 @@ func TestEVMProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// SendTransaction is not used currently
-	//t.Run("SendTransaction", func(t *testing.T) {
-	//web3.Transaction{
-	//	From: x.EncodeBytes(genesisAccounts[1].GetAddress().Bytes()),
-	//	To:   contractAddress,
-	//	Data: x.EncodeBytes(packed),
-	//}
-	//it is not used currently
-	//resp, err = th.Invoke("xkernel", "$evm", "SendTransaction", map[string][]byte{
-	//	"desc": data,
-	//})
-	//if err != nil {
-	//	t.Error(err)
-	//	return
-	//}
-	//})
 	t.Run("SendRawTransaction", func(t *testing.T) {
-		th.SetUtxoReader(
-			sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
-				{
-					FromAddr: []byte("2C2D14A9A3F0D078AC8B38E3043D78CA8BC11029"),
-					Amount:   big.NewInt(9999).Bytes(),
-				},
-			}))
+		th.SetUtxoReader(sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
+			{
+				FromAddr: []byte("2C2D14A9A3F0D078AC8B38E3043D78CA8BC11029"),
+				Amount:   big.NewInt(9999).Bytes(),
+			},
+		}))
+
 		resp, err = th.Invoke("xkernel", "$evm", "SendRawTransaction", map[string][]byte{
-			"desc":      data,
 			"signed_tx": []byte("0xf867808082520894f97798df751deb4b6e39d4cf998ee7cd4dcb9acc880de0b6b3a76400008025a0f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440ca0171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422"),
+			"tx_hash":   []byte("tx_hash"),
 		})
 		if err != nil {
 			t.Error(err)
 			return
 		}
 	})
+
 	t.Run("ContractCall", func(t *testing.T) {
 		resp, err = th.Invoke("xkernel", "$evm", "ContractCall", map[string][]byte{
 			"to":    []byte("313131312D2D2D2D2D2D2D2D2D636F756E746572"),
@@ -110,6 +94,19 @@ func TestEVMProxy(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		resp, err = th.Invoke("evm", "counter", "get", map[string][]byte{
+			"input":       []byte(`{"key":"xchain"}`),
+			"jsonEncoded": []byte("true"),
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if string(resp.Body) != `[{"0":"1"}]` {
+			t.Errorf("expect %s,get:%s", `[{"0":"1"}]`, string(resp.Body))
+			return
+		}
+
 	})
 	_ = resp
 }

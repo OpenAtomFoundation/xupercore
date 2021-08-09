@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
