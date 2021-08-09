@@ -67,7 +67,7 @@ func (t *TestHelper) Basedir() string {
 	return t.basedir
 }
 
-func (t *TestHelper) State() *sandbox.MemXModel {
+func (t *TestHelper) State() ledger.XMReader {
 	return t.state
 }
 func (t *TestHelper) UTXOState() *contract.UTXORWSet {
@@ -76,17 +76,13 @@ func (t *TestHelper) UTXOState() *contract.UTXORWSet {
 
 func (t *TestHelper) initAccount() {
 	t.state.Put(utils.GetAccountBucket(), []byte(ContractAccount), &ledger.VersionedData{
-		RefTxid:  []byte("txid"),
-		PureData: nil,
+		RefTxid: []byte("txid"),
 	})
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 		{
-			RefTxid:      nil,
-			RefOffset:    0,
-			FromAddr:     []byte(FeaturesContractName),
-			Amount:       big.NewInt(9999).Bytes(),
-			FrozenHeight: 0,
+			FromAddr: []byte("UNBip6cQUyeM1Jfjgq7GMVUUkLZBp7p8K"),
+			Amount:   big.NewInt(9999).Bytes(),
 		},
 	})
 
@@ -96,8 +92,7 @@ func (t *TestHelper) initAccount() {
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader:   t.State(),
-		UTXOReader: t.utxoReader,
+		XMReader: t.State(),
 	})
 	if err != nil {
 		return nil, err
@@ -122,7 +117,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	argsBuf, _ := json.Marshal(args)
 
-	resp, err := ctx.Invoke("deployContract", map[string][]byte{
+	invokeArgs := map[string][]byte{
 		"account_name":  []byte(ContractAccount),
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
@@ -147,8 +142,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 	m := t.Manager()
 	state, err := m.NewStateSandbox(&contract.SandboxConfig{
-		XMReader:   t.State(),
-		UTXOReader: t.utxoReader,
+		XMReader: t.State(),
 	})
 	if err != nil {
 		return err
@@ -194,13 +188,11 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 		return nil, err
 	}
 	defer ctx.Release()
-
 	resp, err := ctx.Invoke(method, args)
+
 	if err != nil {
 		return nil, err
 	}
-	state.Flush()
-	t.utxo = state.UTXORWSet()
 	t.Commit(state)
 	return resp, nil
 }
