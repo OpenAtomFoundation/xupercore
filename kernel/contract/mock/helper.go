@@ -65,7 +65,7 @@ func (t *TestHelper) Basedir() string {
 	return t.basedir
 }
 
-func (t *TestHelper) State() *sandbox.MemXModel {
+func (t *TestHelper) State() ledger.XMReader {
 	return t.state
 }
 func (t *TestHelper) UTXOState() *contract.UTXORWSet {
@@ -120,13 +120,22 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 
 	argsBuf, _ := json.Marshal(args)
 
-	resp, err := ctx.Invoke("deployContract", map[string][]byte{
+	invokeArgs := map[string][]byte{
 		"account_name":  []byte(ContractAccount),
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 		"contract_desc": descbuf,
 		"init_args":     argsBuf,
-	})
+		"json_encoded":  []byte("true"),
+	}
+	if module == "evm" {
+		invokeArgs["contract_abi"] = args["contract_abi"]
+	}
+	for k, v := range args {
+		invokeArgs[k] = v
+	}
+	resp, err := ctx.Invoke("deployContract", invokeArgs)
+
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +169,6 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 	})
-
 	ctx.Release()
 	t.Commit(state)
 	return err

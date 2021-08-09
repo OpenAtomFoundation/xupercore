@@ -60,8 +60,8 @@ func BenchmarkEVM(b *testing.B) {
 	}
 	b.Run("Benchmark", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
-			_, err := th.Invoke("evm", "counter", "testWrite", map[string][]byte{
-				"input":       []byte(`{"_name":"xchain"}`),
+			_, err := th.Invoke("evm", "counter", "increase", map[string][]byte{
+				"input":       []byte(`{"key":"xchain"}`),
 				"jsonEncoded": []byte("true"),
 			})
 			if err != nil {
