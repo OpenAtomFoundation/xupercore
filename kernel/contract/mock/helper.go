@@ -3,15 +3,13 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"io/ioutil"
 	"math/big"
 	"os"
 
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"

@@ -6,7 +6,6 @@ import (
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 	"strconv"
 
-	//"github.com/hyperledger/burrow/acm/balance"
 	"github.com/hyperledger/burrow/crypto"
 	x "github.com/hyperledger/burrow/encoding/hex"
 	"github.com/hyperledger/burrow/encoding/rlp"
