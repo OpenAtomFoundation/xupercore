@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	DEFAULT_NET = 1
+	DEFAULT_NET   = 1
+	ETH_TX_PREFIX = "ETH_TX_"
 )
 
 type EVMProxy interface {
@@ -105,8 +106,9 @@ func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, erro
 
 func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
-	signed_tx := args["signed_tx"]
-	data, err := x.DecodeToBytes(string(signed_tx))
+	signedTx := args["signedTx"]
+	txHash := args["tx_hash"]
+	data, err := x.DecodeToBytes(string(signedTx))
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +147,10 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 
 	from := pub.GetAddress()
 	amount := balance.WeiToNative(rawTx.Value)
+
+	if err := ctx.Put(ETH_TX_PREFIX, txHash, signedTx); err != nil {
+		return nil, err
+	}
 
 	if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
 		return nil, err
