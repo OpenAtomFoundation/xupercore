@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+
 	"github.com/golang/protobuf/proto"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
@@ -355,22 +357,22 @@ func (t *Miner) getTimerTx(height int64) (*lpb.Transaction, error) {
 }
 
 func (t *Miner) getUnconfirmedTx(sizeLimit int) ([]*lpb.Transaction, error) {
-	unconfirmedTxs, err := t.ctx.State.GetUnconfirmedTx(false)
+	unconfirmedTxs, err := t.ctx.State.GetUnconfirmedTx(false, sizeLimit)
 	if err != nil {
 		return nil, err
 	}
+	return unconfirmedTxs, nil
+	// txList := make([]*lpb.Transaction, 0)
+	// for _, tx := range unconfirmedTxs {
+	// 	size := proto.Size(tx)
+	// 	if size > sizeLimit {
+	// 		break
+	// 	}
+	// 	sizeLimit -= size
+	// 	txList = append(txList, tx)
+	// }
 
-	txList := make([]*lpb.Transaction, 0)
-	for _, tx := range unconfirmedTxs {
-		size := proto.Size(tx)
-		if size > sizeLimit {
-			break
-		}
-		sizeLimit -= size
-		txList = append(txList, tx)
-	}
-
-	return txList, nil
+	// return txList, nil
 }
 
 func (t *Miner) getAwardTx(height int64) (*lpb.Transaction, error) {

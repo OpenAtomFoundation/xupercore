@@ -25,6 +25,7 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
@@ -182,8 +183,8 @@ func (t *State) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exclu
 }
 
 // 获取一批未确认交易（用于矿工打包区块）
-func (t *State) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
-	return t.tx.GetUnconfirmedTx(dedup)
+func (t *State) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, error) {
+	return t.tx.GetUnconfirmedTx(dedup, sizeLimit)
 }
 
 func (t *State) GetLatestBlockid() []byte {
@@ -255,8 +256,9 @@ func (t *State) QueryAccountGovernTokenBalance(accountName string) (*protos.Gove
 
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供
 func (t *State) HasTx(txid []byte) (bool, error) {
-	_, exist := t.tx.UnconfirmTxInMem.Load(string(txid))
-	return exist, nil
+	return t.tx.Mempool.HasTx(string(txid)), nil
+	// _, exist := t.tx.UnconfirmTxInMem.Load(string(txid))
+	// return exist, nil
 }
 
 func (t *State) GetFrozenBalance(addr string) (*big.Int, error) {
@@ -456,7 +458,8 @@ func (t *State) PlayForMiner(blockid []byte) error {
 	}
 	//写盘成功再清理unconfirm内存镜像
 	for _, tx := range block.Transactions {
-		t.tx.UnconfirmTxInMem.Delete(string(tx.Txid))
+		// t.tx.UnconfirmTxInMem.Delete(string(tx.Txid)) // TT!! 交易已经写入账户和状态机，此时删除 mempool 中的交易（confirm tx?）。
+		t.tx.Mempool.ConfirmTx(tx)
 	}
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
@@ -487,7 +490,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	timer.Mark("get_utxo_lock")
 
 	// 下面开始处理unconfirmed的交易
-	unconfirmToConfirm, undoDone, err := t.processUnconfirmTxs(block, batch, needRepost)
+	unconfirmToConfirm, err := t.processUnconfirmTxs(block, batch, needRepost)
 	timer.Mark("process_unconfirmed_txs")
 	if err != nil {
 		return err
@@ -536,18 +539,22 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	}
 	//写盘成功再删除unconfirm的内存镜像
 	for txid := range unconfirmToConfirm {
-		t.tx.UnconfirmTxInMem.Delete(txid)
+		// t.tx.UnconfirmTxInMem.Delete(txid)
+		t.tx.Mempool.ConfirmTxID(txid)
 	}
-	for txid := range undoDone {
-		t.tx.UnconfirmTxInMem.Delete(txid)
-	}
+	// for txid := range undoDone {
+	// 	// t.tx.UnconfirmTxInMem.Delete(txid)
+	// 	t.tx.Mempool.DeleteTx(txid) // todo delete or confirm?
+	// }
+	t.log.Debug("write to state succ")
+
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
 	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
 	t.meta.Meta = newMeta
 	t.meta.MutexMeta.Unlock()
 
-	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "undo", len(undoDone), "costs", timer.Print())
+	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "costs", timer.Print())
 	return nil
 }
 
@@ -627,7 +634,7 @@ func (t *State) GetTimerTx(blockHeight int64) (*pb.Transaction, error) {
 func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, error) {
 	// 分析依赖关系
 	batch := t.NewBatch()
-	unconfirmTxMap, unconfirmTxGraph, _, loadErr := t.tx.SortUnconfirmedTx()
+	unconfirmTxs, _, loadErr := t.tx.SortUnconfirmedTx(0)
 	if loadErr != nil {
 		return nil, nil, loadErr
 	}
@@ -635,11 +642,10 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 	// 回滚未确认交易
 	undoDone := make(map[string]bool)
 	undoList := make([]*pb.Transaction, 0)
-	for txid, unconfirmTx := range unconfirmTxMap {
-		undoErr := t.undoUnconfirmedTx(unconfirmTx, unconfirmTxMap, unconfirmTxGraph,
-			batch, undoDone, &undoList)
+	for _, unconfirmTx := range unconfirmTxs {
+		undoErr := t.undoUnconfirmedTx(unconfirmTx, batch, undoDone, &undoList)
 		if undoErr != nil {
-			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", fmt.Sprintf("%x", txid))
+			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", fmt.Sprintf("%x", unconfirmTx.GetTxid()))
 			return nil, nil, undoErr
 		}
 	}
@@ -654,7 +660,8 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 
 	// 由于这里操作不是原子操作，需要保持按回滚顺序delete
 	for _, tx := range undoList {
-		t.tx.UnconfirmTxInMem.Delete(string(tx.Txid))
+		// t.tx.UnconfirmTxInMem.Delete(string(tx.Txid)) // todo delete or retrieve or confirm
+		t.tx.Mempool.DeleteTx(string(tx.GetTxid()))
 		t.log.Trace("delete from unconfirm tx memory", "txid", utils.F(tx.Txid))
 	}
 	return undoDone, undoList, nil
@@ -777,7 +784,8 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	if waitTime > TxWaitTimeout {
 		t.log.Warn("dotx wait too long!", "waitTime", waitTime, "txid", utils.F(tx.Txid))
 	}
-	_, exist := t.tx.UnconfirmTxInMem.Load(string(tx.Txid))
+	// _, exist := t.tx.UnconfirmTxInMem.Load(string(tx.Txid))
+	exist := t.tx.Mempool.HasTx(string(tx.GetTxid()))
 	if exist {
 		t.log.Debug("this tx already in unconfirm table, when DoTx", "txid", utils.F(tx.Txid))
 		return ErrAlreadyInUnconfirmed
@@ -801,8 +809,12 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		t.log.Warn("fail to save to ldb", "writeErr", writeErr)
 		return writeErr
 	}
-	beginTime = time.Now()
-	t.tx.UnconfirmTxInMem.Store(string(tx.Txid), tx)
+	// t.tx.UnconfirmTxInMem.Store(string(tx.Txid), tx)
+	err := t.tx.Mempool.PutTx(tx)
+	if err != nil {
+		fmt.Println("PutTx err:", err)
+		return err
+	}
 	cacheFiller.Commit()
 	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "cacheFiller").Observe(time.Since(beginTime).Seconds())
 	return nil
@@ -935,21 +947,21 @@ func (t *State) clearBalanceCache() {
 	t.xmodel.CleanCache()
 }
 
-func (t *State) undoUnconfirmedTx(tx *pb.Transaction, txMap map[string]*pb.Transaction, txGraph tx.TxGraph,
+func (t *State) undoUnconfirmedTx(tx *pb.Transaction,
 	batch kvdb.Batch, undoDone map[string]bool, pundoList *[]*pb.Transaction) error {
 	if undoDone[string(tx.Txid)] == true {
 		return nil
 	}
 
-	t.log.Info("start to undo transaction", "txid", fmt.Sprintf("%s", hex.EncodeToString(tx.Txid)))
-	childrenTxids, exist := txGraph[string(tx.Txid)]
-	if exist {
-		for _, childTxid := range childrenTxids {
-			childTx := txMap[childTxid]
-			// 先递归回滚依赖“我”的交易
-			t.undoUnconfirmedTx(childTx, txMap, txGraph, batch, undoDone, pundoList)
-		}
-	}
+	// t.log.Info("start to undo transaction", "txid", fmt.Sprintf("%s", hex.EncodeToString(tx.Txid)))
+	// childrenTxids, exist := txGraph[string(tx.Txid)]
+	// if exist {
+	// 	for _, childTxid := range childrenTxids {
+	// 		childTx := txMap[childTxid]
+	// 		// 先递归回滚依赖“我”的交易
+	// 		t.undoUnconfirmedTx(childTx, txMap, txGraph, batch, undoDone, pundoList)
+	// 	}
+	// }
 
 	// 下面开始回滚自身
 	undoErr := t.undoTxInternal(tx, batch)
@@ -1290,129 +1302,70 @@ func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
 
 //执行一个block的时候, 处理本地未确认交易
 //返回：被确认的txid集合、err
-func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, needRepost bool) (map[string]bool, map[string]bool, error) {
+// 目的：把 mempool（准确来说是未确认交易池）中与区块中交易有冲突的交易（双花等），状态机回滚这些交易同时从 mempool 删除。
+func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, needRepost bool) (map[string]bool, error) {
 	if !bytes.Equal(block.PreHash, t.latestBlockid) {
 		t.log.Warn("play failed", "block.PreHash", utils.F(block.PreHash),
 			"latestBlockid", utils.F(t.latestBlockid))
-		return nil, nil, ErrPreBlockMissMatch
+		return nil, ErrPreBlockMissMatch
 	}
-	txidsInBlock := map[string]bool{}    // block里面所有的txid
-	UTXOKeysInBlock := map[string]bool{} // block里面所有的交易需要用掉的utxo
-	keysVersionInBlock := map[string]string{}
+
+	txidsInBlock := map[string]bool{} // block里面所有的txid
 	for _, tx := range block.Transactions {
 		txidsInBlock[string(tx.Txid)] = true
+	}
+
+	unconfirmToConfirm := map[string]bool{}
+	undoTxs := make([]*pb.Transaction, 0, 0)
+	for _, tx := range block.Transactions {
 		for _, txInput := range tx.TxInputs {
-			utxoKey := utxo.GenUtxoKey(txInput.FromAddr, txInput.RefTxid, txInput.RefOffset)
-			if UTXOKeysInBlock[utxoKey] { //检查块内的utxo双花情况
-				t.log.Warn("found duplicated utxo in same block", "utxoKey", utxoKey, "txid", utils.F(tx.Txid))
-				return nil, nil, ErrUTXODuplicated
-			}
-			UTXOKeysInBlock[utxoKey] = true
+			undoTxs = append(undoTxs, t.tx.Mempool.DeleteUTXO(string(txInput.FromAddr), string(txInput.RefTxid), int(txInput.RefOffset), txidsInBlock)...)
 		}
-		for txOutOffset, txOut := range tx.TxOutputsExt {
-			valueVersion := xmodel.MakeVersion(tx.Txid, int32(txOutOffset))
-			bucketAndKey := xmodel.MakeRawKey(txOut.Bucket, txOut.Key)
-			keysVersionInBlock[string(bucketAndKey)] = valueVersion
+
+		for offset, output := range tx.TxOutputsExt {
+			undoTxs = append(undoTxs, t.tx.Mempool.DeleteUTXOExt(output.GetBucket(), string(output.GetKey()), string(tx.GetTxid()), offset, txidsInBlock)...)
+		}
+
+		txid := string(tx.GetTxid())
+		if t.tx.Mempool.HasTx(txid) {
+			unconfirmToConfirm[txid] = true
 		}
 	}
 
-	// 下面开始处理unconfirmed的交易
-	unconfirmTxMap, unconfirmTxGraph, delayedTxMap, loadErr := t.tx.SortUnconfirmedTx()
-	if loadErr != nil {
-		return nil, nil, loadErr
-	}
-	t.log.Info("unconfirm table size", "unconfirmTxCount", t.tx.UnconfirmTxAmount)
 	undoDone := map[string]bool{}
-	unconfirmToConfirm := map[string]bool{}
-	for txid, unconfirmTx := range unconfirmTxMap {
-		if _, exist := txidsInBlock[string(txid)]; exist {
-			// 说明这个交易已经被确认
-			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
-			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", txid))
-			// 直接从unconfirm表删除, 大部分情况是这样的
-			unconfirmToConfirm[txid] = true
+	for i := len(undoTxs) - 1; i >= 0; i-- {
+		undoErr := t.undoUnconfirmedTx(undoTxs[i], batch, undoDone, nil)
+		if undoErr != nil {
+			t.log.Warn("fail to undo tx", "undoErr", undoErr)
+			return nil, undoErr
+		}
+	}
+
+	// 此时 mempool 已经删除了和区块冲突的交易。
+	unconfirmTxs, delayedTxMap, loadErr := t.tx.SortUnconfirmedTx(0)
+	if loadErr != nil {
+		return nil, loadErr
+	}
+
+	for id, tx := range delayedTxMap {
+		if undoDone[id] || txidsInBlock[id] {
 			continue
 		}
-		hasConflict := false
-		for _, unconfirmTxInput := range unconfirmTx.TxInputs {
-			addr := unconfirmTxInput.FromAddr
-			txid := unconfirmTxInput.RefTxid
-			offset := unconfirmTxInput.RefOffset
-			utxoKey := utxo.GenUtxoKey(addr, txid, offset)
-			if _, exist := UTXOKeysInBlock[utxoKey]; exist {
-				// 说明此交易和block里面的交易存在双花冲突，需要回滚, 少数情况
-				t.log.Warn("conflict, refuse double spent", "key", utxoKey, "txid", utils.F(unconfirmTx.Txid))
-				hasConflict = true
-				break
-			}
-		}
-		for _, txInputExt := range unconfirmTx.TxInputsExt {
-			bucketAndKey := xmodel.MakeRawKey(txInputExt.Bucket, txInputExt.Key)
-			localVersion := xmodel.MakeVersion(txInputExt.RefTxid, txInputExt.RefOffset)
-			remoteVersion := keysVersionInBlock[string(bucketAndKey)]
-			if localVersion != remoteVersion && remoteVersion != "" {
-				txidInVer := xmodel.GetTxidFromVersion(remoteVersion)
-				if _, known := unconfirmTxMap[string(txidInVer)]; known {
-					continue
-				}
-				t.log.Warn("inputs version conflict", "key", bucketAndKey, "localVersion", localVersion, "remoteVersion", remoteVersion)
-				hasConflict = true
-				break
-			}
-		}
-		for txOutOffset, txOut := range unconfirmTx.TxOutputsExt {
-			bucketAndKey := xmodel.MakeRawKey(txOut.Bucket, txOut.Key)
-			localVersion := xmodel.MakeVersion(unconfirmTx.Txid, int32(txOutOffset))
-			remoteVersion := keysVersionInBlock[string(bucketAndKey)]
-			if localVersion != remoteVersion && remoteVersion != "" {
-				txidInVer := xmodel.GetTxidFromVersion(remoteVersion)
-				if _, known := unconfirmTxMap[string(txidInVer)]; known {
-					continue
-				}
-				t.log.Warn("outputs version conflict", "key", bucketAndKey, "localVersion", localVersion, "remoteVersion", remoteVersion)
-				hasConflict = true
-				break
-			}
-		}
-		tooDelayed := delayedTxMap[string(unconfirmTx.Txid)]
-		if tooDelayed {
-			t.log.Warn("will undo tx because it is beyond confirmed delay", "txid", utils.F(unconfirmTx.Txid))
-		}
-		if hasConflict || tooDelayed {
-			undoErr := t.undoUnconfirmedTx(unconfirmTx, unconfirmTxMap,
-				unconfirmTxGraph, batch, undoDone, nil)
-			if undoErr != nil {
-				t.log.Warn("fail to undo tx", "undoErr", undoErr)
-				return nil, nil, undoErr
-			}
+		undoErr := t.undoUnconfirmedTx(tx, batch, undoDone, nil)
+		if undoErr != nil {
+			t.log.Warn("fail to undo tx", "undoErr", undoErr)
+			return nil, undoErr
 		}
 	}
+
+	t.log.Info("unconfirm table size", "unconfirmTxCount", t.tx.UnconfirmTxAmount)
+
 	if needRepost {
 		go func() {
-			sortTxList, unexpectedCyclic, dagSizeList := tx.TopSortDFS(unconfirmTxGraph)
-			if unexpectedCyclic {
-				t.log.Warn("transaction conflicted", "unexpectedCyclic", unexpectedCyclic)
-				return
-			}
-			dagNo := 0
-			t.log.Info("parallel group of reposting", "dagGroupEach", dagSizeList)
-			for start := 0; start < len(sortTxList); {
-				dagsize := dagSizeList[dagNo]
-				batchTx := []*pb.Transaction{}
-				for _, txid := range sortTxList[start : start+dagsize] {
-					if txidsInBlock[txid] || undoDone[txid] {
-						continue
-					}
-					offlineTx := unconfirmTxMap[txid]
-					batchTx = append(batchTx, offlineTx)
-				}
-				t.utxo.OfflineTxChan <- batchTx
-				start += dagsize
-				dagNo++
-			}
+			t.utxo.OfflineTxChan <- unconfirmTxs
 		}()
 	}
-	return unconfirmToConfirm, undoDone, nil
+	return unconfirmToConfirm, nil
 }
 
 func (t *State) Close() {

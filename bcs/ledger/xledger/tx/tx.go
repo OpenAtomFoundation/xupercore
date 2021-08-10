@@ -43,6 +43,8 @@ type Tx struct {
 	AvgDelay          int64
 	ledger            *ledger.Ledger
 	maxConfirmedDelay uint32
+
+	Mempool *Mempool
 }
 
 // RootJSON xuper.json对应的struct，目前先只写了utxovm关注的字段
@@ -58,14 +60,19 @@ type RootJSON struct {
 }
 
 func NewTx(sctx *context.StateCtx, stateDB kvdb.Database) (*Tx, error) {
-	return &Tx{
-		log:               sctx.XLog,
-		ldb:               stateDB,
-		unconfirmedTable:  kvdb.NewTable(stateDB, pb.UnconfirmedTablePrefix),
-		UnconfirmTxInMem:  &sync.Map{},
+	sctx.XLog.Info("NEW MEMPOOL !!!!")
+
+	tx := &Tx{
+		log:              sctx.XLog,
+		ldb:              stateDB,
+		unconfirmedTable: kvdb.NewTable(stateDB, pb.UnconfirmedTablePrefix),
+		// UnconfirmTxInMem:  &sync.Map{},
 		ledger:            sctx.Ledger,
 		maxConfirmedDelay: DefaultMaxConfirmedDelay,
-	}, nil
+	}
+	m := NewMempool(tx)
+	tx.Mempool = m
+	return tx, nil
 }
 
 // 生成奖励TX
@@ -187,67 +194,69 @@ func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
 
 // GetUnconfirmedTx 挖掘一批unconfirmed的交易打包，返回的结果要保证是按照交易执行的先后顺序
 // maxSize: 打包交易最大的长度（in byte）, -1 表示不限制
-func (t *Tx) GetUnconfirmedTx(dedup bool) ([]*pb.Transaction, error) {
-	var selectedTxs []*pb.Transaction
-	txMap, txGraph, _, loadErr := t.SortUnconfirmedTx()
-	if loadErr != nil {
-		return nil, loadErr
-	}
-	// 拓扑排序，输出的顺序是被依赖的在前，依赖方在后
-	outputTxList, unexpectedCyclic, _ := TopSortDFS(txGraph)
-	if unexpectedCyclic { // 交易之间检测出了环形的依赖关系
-		t.log.Warn("transaction conflicted", "unexpectedCyclic", unexpectedCyclic)
-		return nil, ErrUnexpected
-	}
-	for _, txid := range outputTxList {
-		if dedup && t.ledger.IsTxInTrunk([]byte(txid)) {
-			continue
+func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, error) {
+	fmt.Println("AAAAA GetUnconfirmedTx:", "dedup:", dedup, "sizeLimit:", sizeLimit)
+	result := make([]*pb.Transaction, 0, 100)
+
+	f := func(tx *pb.Transaction) bool {
+		if dedup && t.ledger.IsTxInTrunk([]byte(tx.Txid)) {
+			fmt.Println("BBBBB")
+			return true
 		}
-		selectedTxs = append(selectedTxs, txMap[txid])
+
+		if sizeLimit > 0 {
+			size := proto.Size(tx)
+			if size > sizeLimit {
+				fmt.Println("cccccc")
+				return false
+			}
+			sizeLimit -= size
+		}
+		fmt.Println("append")
+		result = append(result, tx)
+		return true
 	}
-	return selectedTxs, nil
+
+	t.Mempool.Range(f)
+	t.UnconfirmTxAmount = int64(len(result))
+	return result, nil
 }
 
 // 加载所有未确认的订单表到内存
 // 参数: dedup : true-删除已经确认tx, false-保留已经确认tx
 // 返回: txMap : txid -> Transaction
 //        txGraph:  txid ->  [依赖此txid的tx]
-func (t *Tx) SortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[string]bool, error) {
+func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, map[string]*pb.Transaction, error) {
 	// 构造反向依赖关系图, key是被依赖的交易
-	txMap := map[string]*pb.Transaction{}
-	delayedTxMap := map[string]bool{}
-	txGraph := TxGraph{}
-	t.UnconfirmTxInMem.Range(func(k, v interface{}) bool {
-		txid := k.(string)
-		txMap[txid] = v.(*pb.Transaction)
-		txGraph[txid] = []string{}
-		return true
-	})
+	// txMap := map[string]*pb.Transaction{}
+	delayedTxMap := map[string]*pb.Transaction{}
+	// txGraph := TxGraph{}
+
+	result := make([]*pb.Transaction, 0, 100)
+
 	var totalDelay int64
 	now := time.Now().UnixNano()
-	for txID, tx := range txMap {
+
+	f := func(tx *pb.Transaction) bool {
 		txDelay := (now - tx.ReceivedTimestamp)
 		totalDelay += txDelay
 		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
-			delayedTxMap[txID] = true
+			delayedTxMap[string(tx.GetTxid())] = tx
 		}
-		for _, refTx := range tx.TxInputs {
-			refTxID := string(refTx.RefTxid)
-			if _, exist := txMap[refTxID]; !exist {
-				// 说明引用的tx不是在unconfirm里面
-				continue
+		if sizeLimit > 0 {
+			size := proto.Size(tx)
+			if size > sizeLimit {
+				return false
 			}
-			txGraph[refTxID] = append(txGraph[refTxID], txID)
+			sizeLimit -= size
 		}
-		for _, txIn := range tx.TxInputsExt {
-			refTxID := string(txIn.RefTxid)
-			if _, exist := txMap[refTxID]; !exist {
-				continue
-			}
-			txGraph[refTxID] = append(txGraph[refTxID], txID)
-		}
+
+		result = append(result, tx)
+		return true
 	}
-	txMapSize := int64(len(txMap))
+
+	t.Mempool.Range(f)
+	txMapSize := int64(len(result))
 	if txMapSize > 0 {
 		avgDelay := totalDelay / txMapSize //平均unconfirm滞留时间
 		microSec := avgDelay / 1e6
@@ -255,7 +264,7 @@ func (t *Tx) SortUnconfirmedTx() (map[string]*pb.Transaction, TxGraph, map[strin
 		t.AvgDelay = microSec
 	}
 	t.UnconfirmTxAmount = txMapSize
-	return txMap, txGraph, delayedTxMap, nil
+	return result, delayedTxMap, nil
 }
 
 //从disk还原unconfirm表到内存, 初始化的时候
@@ -273,7 +282,8 @@ func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 		if pbErr != nil {
 			return pbErr
 		}
-		t.UnconfirmTxInMem.Store(txid, tx)
+		// t.UnconfirmTxInMem.Store(txid, tx)
+		t.Mempool.RetrieveTx(tx) // todo err
 		count++
 	}
 	t.UnconfirmTxAmount = int64(count)
