@@ -21,6 +21,12 @@ type Mempool struct {
 	m *sync.RWMutex
 }
 
+const (
+	defaultMempoolUnconfirmedLen = 5000                             // 默认未确认交易表大小为5000。
+	defaultMempoolConfirmedLen   = defaultMempoolUnconfirmedLen / 2 // 默认确认交易表大小为2500。
+	defaultMempoolOrphansLen     = defaultMempoolUnconfirmedLen / 5 // 默认孤儿交易表大小为1000。
+)
+
 var (
 	emptyTxIDNode *Node
 	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
@@ -32,10 +38,10 @@ var (
 func NewMempool(tx *Tx) *Mempool {
 	m := &Mempool{
 		Tx:             tx,
-		confirmed:      make(map[string]*Node, 100),
-		unconfirmed:    make(map[string]*Node, 100),
-		orphans:        make(map[string]*Node, 100),
-		bucketKeyNodes: make(map[string]map[string]*Node),
+		confirmed:      make(map[string]*Node, defaultMempoolConfirmedLen),
+		unconfirmed:    make(map[string]*Node, defaultMempoolUnconfirmedLen),
+		orphans:        make(map[string]*Node, defaultMempoolOrphansLen),
+		bucketKeyNodes: make(map[string]map[string]*Node, defaultMempoolUnconfirmedLen),
 		m:              &sync.RWMutex{},
 	}
 
@@ -64,7 +70,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	tmpNodes := make([]*Node, 0, 10) // cap 暂定为10。此列表中为入度为0的节点。todo
+	tmpNodes := make([]*Node, 0, len(m.confirmed))
 	for _, root := range m.confirmed {
 
 		for _, n := range root.txOutputs {
@@ -145,6 +151,10 @@ func (m *Mempool) DeleteUTXO(addr, txid string, offset int, excludeTxs map[strin
 		return nil
 	}
 	result := make([]*pb.Transaction, 0, 100)
+	if excludeTxs[n.txid] {
+		return nil
+	}
+
 	result = append(result, n.tx)
 	result = append(result, m.deleteTx(node.txid)...)
 	return result
@@ -340,7 +350,7 @@ func (m *Mempool) gcOrphans() {
 
 func (m *Mempool) rangeNodes(f func(tx *pb.Transaction) bool, nodes []*Node) {
 	for len(nodes) > 0 {
-		tmpNodes := make([]*Node, 0)
+		tmpNodes := make([]*Node, 0, len(m.unconfirmed)/2) // cap 为未确认交易的一半，为了性能牺牲内存。
 		for _, root := range nodes {
 			if f != nil && !f(root.tx) {
 				return

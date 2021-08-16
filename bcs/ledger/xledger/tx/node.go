@@ -69,7 +69,7 @@ func (n *Node) getAllChildren() []*Node {
 	}
 
 	result := make([]*Node, 0, len(n.txOutputs)+len(n.txOutputsExt)+len(n.readonlyOutputs))
-	tmp := make(map[string]struct{})
+	tmp := make(map[string]struct{}, cap(result))
 
 	for _, v := range n.txOutputs {
 		if v != nil {
@@ -108,7 +108,7 @@ func (n *Node) getAllFathers() []*Node {
 	}
 
 	result := make([]*Node, 0, len(n.txInputs)+len(n.txInputsExt)+len(n.readonlyInputs))
-	tmp := make(map[string]struct{})
+	tmp := make(map[string]struct{}, cap(result))
 
 	for _, v := range n.txInputs {
 		if v != nil {
@@ -157,7 +157,7 @@ func (n *Node) updateInput(index, offset int, node *Node, retrieve bool) (*Node,
 	on := node.txOutputs[offset]
 	if on != nil {
 		if !retrieve {
-			return nil, errors.New("双花")
+			return nil, errors.New("double spent in mempool")
 		}
 		forDeleted = on
 	}
@@ -198,7 +198,7 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 		on := node.txOutputsExt[offset]
 		if on != nil {
 			if !retrieve {
-				return nil, errors.New("双花")
+				return nil, errors.New("double spent in mempool")
 			}
 			forDeleted = on
 		}
