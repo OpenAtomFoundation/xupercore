@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -39,7 +38,7 @@ type Tx struct {
 	ldb               kvdb.Database
 	unconfirmedTable  kvdb.Database
 	UnconfirmTxAmount int64
-	UnconfirmTxInMem  *sync.Map
+	// UnconfirmTxInMem  *sync.Map // 使用新版 mempool 就不用这个字段了。
 	AvgDelay          int64
 	ledger            *ledger.Ledger
 	maxConfirmedDelay uint32
@@ -195,24 +194,20 @@ func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
 // GetUnconfirmedTx 挖掘一批unconfirmed的交易打包，返回的结果要保证是按照交易执行的先后顺序
 // maxSize: 打包交易最大的长度（in byte）, -1 表示不限制
 func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, error) {
-	fmt.Println("AAAAA GetUnconfirmedTx:", "dedup:", dedup, "sizeLimit:", sizeLimit)
 	result := make([]*pb.Transaction, 0, 100)
 
 	f := func(tx *pb.Transaction) bool {
 		if dedup && t.ledger.IsTxInTrunk([]byte(tx.Txid)) {
-			fmt.Println("BBBBB")
 			return true
 		}
 
 		if sizeLimit > 0 {
 			size := proto.Size(tx)
 			if size > sizeLimit {
-				fmt.Println("cccccc")
 				return false
 			}
 			sizeLimit -= size
 		}
-		fmt.Println("append")
 		result = append(result, tx)
 		return true
 	}
@@ -222,7 +217,7 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 	return result, nil
 }
 
-// 加载所有未确认的订单表到内存
+// SortUnconfirmedTx 加载所有未确认的订单表到内存
 // 参数: dedup : true-删除已经确认tx, false-保留已经确认tx
 // 返回: txMap : txid -> Transaction
 //        txGraph:  txid ->  [依赖此txid的tx]

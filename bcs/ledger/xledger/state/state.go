@@ -812,7 +812,6 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	// t.tx.UnconfirmTxInMem.Store(string(tx.Txid), tx)
 	err := t.tx.Mempool.PutTx(tx)
 	if err != nil {
-		fmt.Println("PutTx err:", err)
 		return err
 	}
 	cacheFiller.Commit()

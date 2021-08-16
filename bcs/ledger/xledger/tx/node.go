@@ -152,18 +152,20 @@ func (n *Node) updateInput(index, offset int, node *Node, retrieve bool) (*Node,
 			node.txOutputs = append(node.txOutputs, make([]*Node, tmp)...)
 		}
 	}
+
+	var forDeleted *Node
 	on := node.txOutputs[offset]
 	if on != nil {
-
 		if !retrieve {
 			return nil, errors.New("双花")
 		}
-		return on, nil
+		forDeleted = on
 	}
 	n.txInputs[index] = node
 	n.inputSum++
 	node.txOutputs[offset] = n
-	return nil, nil
+
+	return forDeleted, nil
 }
 
 // 此处没有检查 index 是否越界，调用前需要保证安全。
@@ -191,13 +193,14 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 		}
 	}
 
+	var forDeleted *Node
 	if !readonly {
 		on := node.txOutputsExt[offset]
 		if on != nil {
 			if !retrieve {
 				return nil, errors.New("双花")
 			}
-			return on, nil
+			forDeleted = on
 		}
 	}
 
@@ -206,12 +209,12 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 		n.readonlyInputs[node.txid] = node
 		n.readonlyInputSum++
 	} else {
-		node.txOutputsExt[offset] = node
+		node.txOutputsExt[offset] = n
 		n.txInputsExt[index] = node
 		n.inputSum++
 	}
 
-	return nil, nil
+	return forDeleted, nil
 }
 
 // 删除 n 和其所有父节点的关系。断绝父子关系。
@@ -220,9 +223,9 @@ func (n *Node) breakOutputs() {
 		if fn == nil {
 			continue
 		}
-		for i, v := range fn.txOutputs {
+		for ii, v := range fn.txOutputs {
 			if v != nil && v.txid == n.txid {
-				fn.txOutputs[i] = nil
+				fn.txOutputs[ii] = nil
 			}
 		}
 		n.txInputs[i] = nil
@@ -238,7 +241,12 @@ func (n *Node) breakOutputs() {
 			}
 		}
 
-		delete(fn.bucketKeyToNode, n.txid)
+		for k, nn := range fn.bucketKeyToNode {
+			if nn.txid == n.txid {
+				delete(fn.bucketKeyToNode, k)
+			}
+		}
+
 		n.txInputsExt[i] = nil
 	}
 
@@ -246,7 +254,13 @@ func (n *Node) breakOutputs() {
 		if fn == nil {
 			continue
 		}
-		delete(fn.bucketKeyToNode, n.txid)
+		// delete(fn.bucketKeyToNode, n.txid)
+		for k, nn := range fn.bucketKeyToNode {
+			if nn.txid == n.txid {
+				delete(fn.bucketKeyToNode, k)
+			}
+		}
+
 		delete(fn.readonlyOutputs, n.txid)
 		delete(n.readonlyInputs, k)
 	}
