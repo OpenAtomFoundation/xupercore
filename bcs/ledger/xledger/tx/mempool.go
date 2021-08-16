@@ -373,11 +373,11 @@ func (m *Mempool) rangeNodes(f func(tx *pb.Transaction) bool, nodes []*Node) {
 	}
 }
 
-func (m *Mempool) isNextNode(n *Node, readonly bool) bool {
-	if n == nil {
+func (m *Mempool) isNextNode(node *Node, readonly bool) bool {
+	if node == nil {
 		return false
 	}
-	node, ok := m.unconfirmed[string(n.tx.Txid)]
+	_, ok := m.unconfirmed[node.txid]
 	if !ok {
 		return false
 	}
@@ -387,7 +387,7 @@ func (m *Mempool) isNextNode(n *Node, readonly bool) bool {
 		node.inputSum--
 	}
 
-	if node.inputSum == 0 && node.readonlyInputSum == 0 {
+	if node.inputSum <= 0 && node.readonlyInputSum <= 0 {
 		node.updateInputSum()
 		node.updateReadonlyInputSum()
 		return true
@@ -434,6 +434,8 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 	m.processNodeOutputs(node, isOrphan)
 
 	m.putBucketKey(node)
+	node.updateInputSum()
+	node.updateReadonlyInputSum()
 	return nil
 }
 
@@ -446,7 +448,9 @@ func (m *Mempool) deleteBucketKey(node *Node) {
 		key := input.GetBucket() + string(input.GetKey())
 		if nodes, ok := m.bucketKeyNodes[key]; ok {
 			delete(nodes, node.txid)
-			nodes[node.txid] = node
+			if len(nodes) == 0 {
+				delete(m.bucketKeyNodes, key)
+			}
 		}
 	}
 
@@ -454,7 +458,9 @@ func (m *Mempool) deleteBucketKey(node *Node) {
 		key := output.GetBucket() + string(output.GetKey())
 		if nodes, ok := m.bucketKeyNodes[key]; ok {
 			delete(nodes, node.txid)
-			nodes[node.txid] = node
+			if len(nodes) == 0 {
+				delete(m.bucketKeyNodes, key)
+			}
 		}
 	}
 }
@@ -663,11 +669,11 @@ func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 			n.updateReadonlyInputSum()
 			m.deleteBucketKey(n)
 		}
-		a := make([]*Node, 0, len(tmp))
+		next := make([]*Node, 0, len(tmp))
 		for _, v := range tmp {
-			a = append(a, v)
+			next = append(next, v)
 		}
-		children = a
+		children = next
 	}
 
 	return deletedTxs
@@ -905,6 +911,8 @@ func (m *Mempool) moveToConfirmed(node *Node) {
 
 			n.updateInputSum()
 			n.updateReadonlyInputSum()
+
+			m.deleteBucketKey(n)
 		}
 		nodes = tmp
 	}
