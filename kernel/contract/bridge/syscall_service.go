@@ -66,16 +66,17 @@ func (c *SyscallService) QueryBlock(ctx context.Context, in *pb.QueryBlockReques
 		return nil, err
 	}
 	blocksdk := &pb.Block{
-		Blockid:  hex.EncodeToString(block.GetBlockid()),
-		PreHash:  hex.EncodeToString(block.GetPreHash()),
-		Proposer: block.GetProposer(),
-		Sign:     hex.EncodeToString(block.GetSign()),
-		Pubkey:   []byte(block.GetPublicKey()),
-		Height:   block.GetHeight(),
-		Txids:    block.GetTxIDs(),
-		TxCount:  int32(len(block.GetTxIDs())),
-		InTrunk:  block.GetInTrunk(),
-		NextHash: hex.EncodeToString(block.GetNextHash()),
+		Blockid:   hex.EncodeToString(block.GetBlockid()),
+		PreHash:   hex.EncodeToString(block.GetPreHash()),
+		Proposer:  block.GetProposer(),
+		Sign:      hex.EncodeToString(block.GetSign()),
+		Pubkey:    []byte(block.GetPublicKey()),
+		Height:    block.GetHeight(),
+		Timestamp: block.GetTimestamp(),
+		Txids:     block.GetTxIDs(),
+		TxCount:   int32(len(block.GetTxIDs())),
+		InTrunk:   block.GetInTrunk(),
+		NextHash:  hex.EncodeToString(block.GetNextHash()),
 	}
 
 	return &pb.QueryBlockResponse{
