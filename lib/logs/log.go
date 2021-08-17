@@ -78,7 +78,7 @@ func OpenLog(lc *lconf.LogConf, logDir string) (LogDriver, error) {
 	}
 
 	// prints log level between `lvLevel` to Info to common log
-	nmfileh := log.BoundLvlFilterHandler(lvLevel, log.LvlInfo, nmHandler)
+	nmfileh := log.LvlFilterHandler(lvLevel, nmHandler)
 	// prints log level greater or equal to Warn to wf log
 	wffileh := log.LvlFilterHandler(log.LvlWarn, wfHandler)
 

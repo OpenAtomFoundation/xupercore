@@ -28,7 +28,6 @@ func FileIsExist(name string) bool {
 // Run unit test verification
 func GenPseudoUniqId() uint64 {
 	nano := time.Now().UnixNano()
-	rand.Seed(nano)
 
 	randNum1 := rand.Int63()
 	randNum2 := rand.Int63()
