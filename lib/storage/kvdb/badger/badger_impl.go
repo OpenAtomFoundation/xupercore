@@ -1,6 +1,6 @@
 //badger wrapper plugin
 //so
-package main
+package badgerdb
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 
 	log "github.com/xuperchain/log15"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
@@ -20,7 +20,7 @@ type BadgerDatabase struct {
 }
 
 func NewKVDBInstance(param *kvdb.KVParameter) (kvdb.Database, error) {
-	var baseDB kvdb.Database
+	var baseDB kvdb.Database = new(BadgerDatabase)
 	err := baseDB.Open(param.GetDBPath(), map[string]interface{}{
 		"cache":     param.GetMemCacheSize(),
 		"fds":       param.GetFileHandlersCacheSize(),
@@ -48,10 +48,12 @@ func (bdb *BadgerDatabase) Open(path string, options map[string]interface{}) err
 	}
 	logger := log.New("database", path)
 	bdb.fn = path
-	opts := badger.DefaultOptions
+	opts := badger.DefaultOptions(path)
 	opts.Dir = path
 	opts.ValueDir = path
 	opts.SyncWrites = false
+	opts.ValueThreshold = 256
+	opts.CompactL0OnClose = true
 	db, err := badger.Open(opts)
 	if err != nil {
 		log.Warn("badger open failed", "path", path, "err", err)
@@ -190,6 +192,8 @@ func (b *BadgerBatch) ValueSize() int {
 }
 
 func (b *BadgerBatch) Reset() {
+	b.b = b.db.NewWriteBatch()
+	b.keys = make(map[string]bool)
 	b.size = 0
 }
 

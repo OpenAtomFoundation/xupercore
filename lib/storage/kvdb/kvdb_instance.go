@@ -2,6 +2,7 @@ package kvdb
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -13,6 +14,7 @@ type KVParameter struct {
 	MemCacheSize          int
 	FileHandlersCacheSize int
 	OtherPaths            []string
+	Options               map[string]interface{}
 }
 
 const (
@@ -53,7 +55,7 @@ func CreateKVInstance(kvParam *KVParameter) (Database, error) {
 	if f, ok := services[kvParam.KVEngineType]; ok {
 		instance, err := f(kvParam)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get kvInstance fail:%w", err)
 		}
 		return instance, nil
 	}

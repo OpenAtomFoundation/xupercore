@@ -2,10 +2,9 @@ package p2pv2
 
 import (
 	"math/rand"
-	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-kbucket"
+	kbucket "github.com/libp2p/go-libp2p-kbucket"
 )
 
 // PeerFilter the interface for filter peers
@@ -70,7 +69,6 @@ func (nf *BucketsFilterWithFactor) Filter() ([]peer.ID, error) {
 		}
 		pos := 0
 		// 处理split1, split2, split3, split4
-		rand.Seed(time.Now().Unix())
 		for pos = 0; pos < splitSize; pos++ {
 			lastPos := pos * step
 			// for each split

@@ -1,10 +1,10 @@
-package main
+package badgerdb
 
 import (
 	"bytes"
 	"fmt"
 
-	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v3"
 	//"github.com/xuperchain/xuperchain/core/kv/kvdb"
 )
 
