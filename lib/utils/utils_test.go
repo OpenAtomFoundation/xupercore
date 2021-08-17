@@ -112,3 +112,11 @@ func TestGetCurFileDir(t *testing.T) {
 func TestGetCurExecDir(t *testing.T) {
 	fmt.Println(GetCurExecDir())
 }
+
+func BenchmarkGenId(b *testing.B) {
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			GenPseudoUniqId()
+		}
+	})
+}
