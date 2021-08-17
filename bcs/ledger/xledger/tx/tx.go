@@ -59,8 +59,6 @@ type RootJSON struct {
 }
 
 func NewTx(sctx *context.StateCtx, stateDB kvdb.Database) (*Tx, error) {
-	sctx.XLog.Info("NEW MEMPOOL !!!!")
-
 	tx := &Tx{
 		log:              sctx.XLog,
 		ldb:              stateDB,
@@ -217,14 +215,43 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 	return result, nil
 }
 
+// GetDelayedTxs 获取当前 mempool 中超时的交易。
+func (t *Tx) GetDelayedTxs() []*pb.Transaction {
+	delayedTxs := make([]*pb.Transaction, 0)
+	var totalDelay int64
+	now := time.Now().UnixNano()
+
+	f := func(tx *pb.Transaction) bool {
+		txDelay := (now - tx.ReceivedTimestamp)
+		totalDelay += txDelay
+		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
+			// delayedTxMap[string(tx.GetTxid())] = tx
+			delayedTxs = append(delayedTxs, tx)
+		}
+
+		return true
+	}
+
+	t.Mempool.Range(f)
+
+	result := make([]*pb.Transaction, 0, len(delayedTxs))
+	for i := len(delayedTxs) - 1; i >= 0; i-- {
+		tx := delayedTxs[i]
+		result = append(result, tx)
+		result = append(result, t.Mempool.DeleteTx(string(tx.GetTxid()))...)
+	}
+
+	return result
+}
+
 // SortUnconfirmedTx 加载所有未确认的订单表到内存
 // 参数: dedup : true-删除已经确认tx, false-保留已经确认tx
 // 返回: txMap : txid -> Transaction
 //        txGraph:  txid ->  [依赖此txid的tx]
-func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, map[string]*pb.Transaction, error) {
+func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transaction, error) {
 	// 构造反向依赖关系图, key是被依赖的交易
 	// txMap := map[string]*pb.Transaction{}
-	delayedTxMap := map[string]*pb.Transaction{}
+	delayedTxs := []*pb.Transaction{}
 	// txGraph := TxGraph{}
 
 	result := make([]*pb.Transaction, 0, 100)
@@ -236,7 +263,8 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, map[string]*pb
 		txDelay := (now - tx.ReceivedTimestamp)
 		totalDelay += txDelay
 		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
-			delayedTxMap[string(tx.GetTxid())] = tx
+			// delayedTxMap[string(tx.GetTxid())] = tx
+			delayedTxs = append(delayedTxs, tx)
 		}
 		if sizeLimit > 0 {
 			size := proto.Size(tx)
@@ -259,7 +287,7 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, map[string]*pb
 		t.AvgDelay = microSec
 	}
 	t.UnconfirmTxAmount = txMapSize
-	return result, delayedTxMap, nil
+	return result, delayedTxs, nil
 }
 
 //从disk还原unconfirm表到内存, 初始化的时候
