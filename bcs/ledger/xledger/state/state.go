@@ -73,6 +73,8 @@ const (
 	TxSizePercent = 0.8
 
 	TxWaitTimeout = 5
+
+	defaultUndoDelayedTxsInterval = 300 // 单位：秒
 )
 
 type State struct {
@@ -153,6 +155,8 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 	}
 
 	obj.heightNotifier = NewBlockHeightNotifier()
+
+	go obj.collectDelayedTxs(defaultUndoDelayedTxsInterval)
 
 	return obj, nil
 }
@@ -474,6 +478,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 // PlayAndRepost 执行一个新收到的block，要求block的pre_hash必须是当前vm的latest_block
 // 执行后会更新latestBlockid
 func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) error {
+	fmt.Println("PlayAndRepost")
 	beginTime := time.Now()
 	timer := timer.NewXTimer()
 	batch := t.ldb.NewBatch()
@@ -951,18 +956,8 @@ func (t *State) undoUnconfirmedTx(tx *pb.Transaction,
 	if undoDone[string(tx.Txid)] == true {
 		return nil
 	}
+	t.log.Info("start to undo transaction", "txid", fmt.Sprintf("%s", hex.EncodeToString(tx.Txid)))
 
-	// t.log.Info("start to undo transaction", "txid", fmt.Sprintf("%s", hex.EncodeToString(tx.Txid)))
-	// childrenTxids, exist := txGraph[string(tx.Txid)]
-	// if exist {
-	// 	for _, childTxid := range childrenTxids {
-	// 		childTx := txMap[childTxid]
-	// 		// 先递归回滚依赖“我”的交易
-	// 		t.undoUnconfirmedTx(childTx, txMap, txGraph, batch, undoDone, pundoList)
-	// 	}
-	// }
-
-	// 下面开始回滚自身
 	undoErr := t.undoTxInternal(tx, batch)
 	if undoErr != nil {
 		return undoErr
@@ -970,7 +965,10 @@ func (t *State) undoUnconfirmedTx(tx *pb.Transaction,
 	batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...))
 
 	// 记录回滚交易，用于重放
-	undoDone[string(tx.Txid)] = true
+	if undoDone != nil {
+		undoDone[string(tx.Txid)] = true
+	}
+
 	if pundoList != nil {
 		// 需要保持回滚顺序
 		*pundoList = append(*pundoList, tx)
@@ -1299,6 +1297,43 @@ func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
 		verifyErrCnt, "dotx_err_cnt", doTxErrCnt)
 }
 
+// collectDelayedTxs 收集 mempool 中超时的交易，定期 undo。
+func (t *State) collectDelayedTxs(interval int) {
+	timer := time.NewTimer(time.Second * time.Duration(interval))
+
+	select {
+	case <-timer.C:
+		t.log.Debug("undo unconfirmed and delayed txs start")
+
+		// 要更新数据库，需要 lock。
+		t.utxo.Mutex.Lock()
+		delayedTxs := t.tx.GetDelayedTxs()
+
+		batch := t.ldb.NewBatch()
+
+		var undoErr error
+		for i := len(delayedTxs) - 1; i >= 0; i-- {
+			// undo tx
+			undoErr = t.undoUnconfirmedTx(delayedTxs[i], batch, nil, nil)
+			if undoErr != nil {
+				t.log.Error("fail to undo tx for delayed tx", "undoErr", undoErr)
+				break
+			}
+		}
+
+		if undoErr == nil {
+			// undo 没有错误时更新数据库，有错误不更新交易。
+			batch.Write()
+			t.log.Debug("undo unconfirmed and delayed txs count", "count", len(delayedTxs))
+		}
+
+		t.utxo.Mutex.Unlock()
+
+		timer.Reset(time.Second * time.Duration(interval))
+	}
+
+}
+
 //执行一个block的时候, 处理本地未确认交易
 //返回：被确认的txid集合、err
 // 目的：把 mempool（准确来说是未确认交易池）中与区块中交易有冲突的交易（双花等），状态机回滚这些交易同时从 mempool 删除。
@@ -1327,9 +1362,13 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 
 		txid := string(tx.GetTxid())
 		if t.tx.Mempool.HasTx(txid) {
+			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
+			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 			unconfirmToConfirm[txid] = true
 		}
 	}
+
+	t.log.Trace("  undoTxs", "undoTxCount", len(undoTxs))
 
 	undoDone := map[string]bool{}
 	for i := len(undoTxs) - 1; i >= 0; i-- {
@@ -1340,26 +1379,15 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		}
 	}
 
-	// 此时 mempool 已经删除了和区块冲突的交易。
-	unconfirmTxs, delayedTxMap, loadErr := t.tx.SortUnconfirmedTx(0)
-	if loadErr != nil {
-		return nil, loadErr
-	}
-
-	for id, tx := range delayedTxMap {
-		if undoDone[id] || txidsInBlock[id] {
-			continue
-		}
-		undoErr := t.undoUnconfirmedTx(tx, batch, undoDone, nil)
-		if undoErr != nil {
-			t.log.Warn("fail to undo tx", "undoErr", undoErr)
-			return nil, undoErr
-		}
-	}
-
 	t.log.Info("unconfirm table size", "unconfirmTxCount", t.tx.UnconfirmTxAmount)
 
 	if needRepost {
+		// 此时 mempool 已经删除了和区块冲突的交易。
+		unconfirmTxs, _, loadErr := t.tx.SortUnconfirmedTx(0)
+		if loadErr != nil {
+			return nil, loadErr
+		}
+
 		go func() {
 			t.utxo.OfflineTxChan <- unconfirmTxs
 		}()
