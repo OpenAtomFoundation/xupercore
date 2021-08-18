@@ -2,9 +2,10 @@ package p2pv1
 
 import (
 	"errors"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"io"
 	"sync"
+
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -17,7 +18,6 @@ import (
 )
 
 type Conn struct {
-	ctx    *nctx.NetCtx
 	log    logs.Logger
 	config *config.NetConf
 
@@ -157,15 +157,72 @@ func (c *Conn) PeerID() string {
 }
 
 func NewConnPool(ctx *nctx.NetCtx) (*ConnPool, error) {
-	return &ConnPool{
-		ctx: ctx,
-	}, nil
+	p := ConnPool{
+		ctx:           ctx,
+		staticRouter:  make(map[string]string),
+		staticNodeSet: make(map[string]struct{}),
+	}
+	p.staticModeOn = len(ctx.P2PConf.StaticNodes) > 0 && len(ctx.P2PConf.BootNodes) <= 0
+	for _, addresses := range ctx.P2PConf.StaticNodes {
+		for _, address := range addresses {
+			if _, ok := p.staticNodeSet[address]; ok {
+				continue
+			}
+			p.staticNodeSet[address] = struct{}{}
+		}
+	}
+	return &p, nil
 }
 
 // ConnPool manage all the connection
 type ConnPool struct {
 	ctx  *nctx.NetCtx
 	pool sync.Map // map[peerID]*conn
+
+	staticModeOn  bool
+	staticNodeSet map[string]struct{} // 标记静态节点
+	staticRouter  map[string]string   // map[peerId]peerID
+	mutex         sync.Mutex
+}
+
+func (p *ConnPool) staticRouterInsert(addr string, mapping string) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.staticRouter[addr] = mapping
+}
+
+func (p *ConnPool) getStaticRouter(addr string) string {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	v, ok := p.staticRouter[addr]
+	if !ok {
+		return ""
+	}
+	return v
+}
+
+func (p *ConnPool) poolGet(addr string, m pb.XuperMessage_MessageType) (*Conn, error) {
+	if p.staticModeOn && m != pb.XuperMessage_GET_PEER_INFO {
+		addr = func() string {
+			if _, ok := p.staticNodeSet[addr]; ok {
+				// 该地址在静态列表里，直接转发
+				return addr
+			}
+			v := p.getStaticRouter(addr)
+			if v != "" {
+				// 该地址在路由表里，转发
+				return v
+			}
+			// 路由表查不到就转向默认出口
+			addr = p.getStaticRouter("default")
+			return v
+		}()
+	}
+	conn, err := p.Get(addr)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 func (p *ConnPool) Get(addr string) (*Conn, error) {

@@ -25,7 +25,7 @@ func (p *P2PServerV1) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage, optFu
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelBCName:      msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgSendCounter.With(labels).Inc()
@@ -56,7 +56,7 @@ func (p *P2PServerV1) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage, optFu
 func (p *P2PServerV1) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerIDs []string) error {
 	wg := sync.WaitGroup{}
 	for _, peerID := range peerIDs {
-		conn, err := p.pool.Get(peerID)
+		conn, err := p.pool.poolGet(peerID, msg.Header.Type)
 		if err != nil {
 			p.log.Warn("p2p: get conn error",
 				"log_id", msg.GetHeader().GetLogid(), "peerID", peerID, "error", err)
@@ -85,7 +85,7 @@ func (p *P2PServerV1) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelBCName:      msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgSendCounter.With(labels).Inc()
@@ -118,7 +118,7 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 	wg := sync.WaitGroup{}
 	respCh := make(chan *pb.XuperMessage, len(peerIDs))
 	for _, peerID := range peerIDs {
-		conn, err := p.pool.Get(peerID)
+		conn, err := p.pool.poolGet(peerID, msg.Header.Type)
 		if err != nil {
 			p.log.Warn("p2p: get conn error", "log_id", msg.GetHeader().GetLogid(),
 				"peerID", peerID, "error", err)
