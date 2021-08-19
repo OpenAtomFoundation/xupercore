@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -21,6 +22,31 @@ func getLeafSize(txCount int) int {
 	return 1 << exponent // 2^exponent
 }
 
+func merkleDoubleSha256(left, right, result []byte) []byte {
+	sum1 := sha256.New()
+	sum1.Write(left)
+	sum1.Write(right)
+	result = sum1.Sum(result[:0])
+
+	sum2 := sha256.New()
+	sum2.Write(result)
+	result = sum2.Sum(result[:0])
+	return result
+}
+
+func arenaAllocator(elemSize, elemNumer int) func() []byte {
+	idx := 0
+	arena := make([]byte, elemNumer*elemSize)
+	return func() []byte {
+		if idx >= elemNumer {
+			return nil
+		}
+		mem := arena[idx*elemSize : (idx+1)*elemSize]
+		idx++
+		return mem
+	}
+}
+
 // MakeMerkleTree generate merkele-tree
 func MakeMerkleTree(txList []*pb.Transaction) [][]byte {
 	txCount := len(txList)
@@ -29,9 +55,14 @@ func MakeMerkleTree(txList []*pb.Transaction) [][]byte {
 	}
 	leafSize := getLeafSize(txCount) //需要补充为完全树
 	treeSize := leafSize*2 - 1       //整个树的节点个数
+
+	alloc := arenaAllocator(256/8, treeSize)
+
 	tree := make([][]byte, treeSize)
 	for i, tx := range txList {
-		tree[i] = tx.Txid //用现有的txid填充部分叶子节点
+		tree[i] = alloc()
+		copy(tree[i], tx.Txid)
+		// tree[i] = tx.Txid //用现有的txid填充部分叶子节点
 	}
 	noneLeafOffset := leafSize //非叶子节点的插入点
 	for i := 0; i < treeSize-1; i += 2 {
@@ -39,16 +70,79 @@ func MakeMerkleTree(txList []*pb.Transaction) [][]byte {
 		case tree[i] == nil: //没有左孩子
 			tree[noneLeafOffset] = nil
 		case tree[i+1] == nil: //没有右孩子
-			concat := bytes.Join([][]byte{tree[i], tree[i]}, []byte{})
-			tree[noneLeafOffset] = hash.DoubleSha256(concat)
+			// concat := bytes.Join([][]byte{tree[i], tree[i]}, []byte{})
+			// tree[noneLeafOffset] = hash.DoubleSha256(concat)
+			tree[noneLeafOffset] = merkleDoubleSha256(tree[i], tree[i], alloc())
 		default: //左右都有
-			concat := bytes.Join([][]byte{tree[i], tree[i+1]}, []byte{})
-			tree[noneLeafOffset] = hash.DoubleSha256(concat)
+			// concat := bytes.Join([][]byte{tree[i], tree[i+1]}, []byte{})
+			// tree[noneLeafOffset] = hash.DoubleSha256(concat)
+			tree[noneLeafOffset] = merkleDoubleSha256(tree[i], tree[i+1], alloc())
 		}
 		noneLeafOffset++
 	}
 	return tree
 }
+
+// // FastMakeMerkleTree generate merkele-tree
+// func FastMakeMerkleTree(txList []*pb.Transaction) [][]byte {
+// 	txCount := len(txList)
+// 	if txCount == 0 {
+// 		return nil
+// 	}
+// 	ch := make(chan func(), 8)
+// 	for i := 0; i < 8; i++ {
+// 		go func() {
+// 			for f := range ch {
+// 				f()
+// 			}
+// 		}()
+// 	}
+
+// 	leafSize := getLeafSize(txCount) //需要补充为完全树
+// 	treeSize := leafSize*2 - 1       //整个树的节点个数
+// 	tree := make([][]byte, treeSize)
+// 	for i, tx := range txList {
+// 		tree[i] = tx.Txid //用现有的txid填充部分叶子节点
+// 	}
+// 	head := tree
+// 	for leafSize > 1 {
+// 		children := head[:leafSize]
+// 		parent := head[leafSize : leafSize+leafSize/2]
+// 		fastMakeMerkleTree(children, parent, ch)
+// 		head = head[leafSize:]
+// 		leafSize /= 2
+// 	}
+// 	close(ch)
+// 	return tree
+// }
+
+// func fastMakeMerkleTree(children [][]byte, parent [][]byte, ch chan func()) {
+// 	wg := sync.WaitGroup{}
+// 	j := 0
+// 	for i := 0; i < len(children); i += 2 {
+// 		idx := j
+// 		switch {
+// 		case children[i] == nil:
+// 			parent[j] = nil
+// 		case children[i+1] == nil:
+// 			left, right := children[i], children[i]
+// 			wg.Add(1)
+// 			ch <- func() {
+// 				parent[idx] = merkleDoubleSha256(left, right, nil)
+// 				wg.Done()
+// 			}
+// 		default:
+// 			left, right := children[i], children[i+1]
+// 			wg.Add(1)
+// 			ch <- func() {
+// 				parent[idx] = merkleDoubleSha256(left, right, nil)
+// 				wg.Done()
+// 			}
+// 		}
+// 		j++
+// 	}
+// 	wg.Wait()
+// }
 
 //序列化系统合约失败的Txs
 func encodeFailedTxs(buf *bytes.Buffer, block *pb.InternalBlock) error {
