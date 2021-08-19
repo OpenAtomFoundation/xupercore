@@ -225,7 +225,6 @@ func (t *Tx) GetDelayedTxs() []*pb.Transaction {
 		txDelay := (now - tx.ReceivedTimestamp)
 		totalDelay += txDelay
 		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
-			// delayedTxMap[string(tx.GetTxid())] = tx
 			delayedTxs = append(delayedTxs, tx)
 		}
 
@@ -238,7 +237,7 @@ func (t *Tx) GetDelayedTxs() []*pb.Transaction {
 	for i := len(delayedTxs) - 1; i >= 0; i-- {
 		tx := delayedTxs[i]
 		result = append(result, tx)
-		result = append(result, t.Mempool.DeleteTx(string(tx.GetTxid()))...)
+		result = append(result, t.Mempool.DeleteTxAndChildren(string(tx.GetTxid()))...)
 	}
 
 	return result
@@ -305,8 +304,10 @@ func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 		if pbErr != nil {
 			return pbErr
 		}
-		// t.UnconfirmTxInMem.Store(txid, tx)
-		t.Mempool.RetrieveTx(tx) // todo err
+		err := t.Mempool.PutTx(tx)
+		if err != nil {
+			return err
+		}
 		count++
 	}
 	t.UnconfirmTxAmount = int64(count)

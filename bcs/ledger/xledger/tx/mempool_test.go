@@ -80,7 +80,7 @@ func run(b *testing.B, t *testing.T) {
 
 	deleteID := string(result[800].Txid) //"8001"
 	fmt.Println("confirm tx:", deleteID)
-	m.DeleteTx(deleteID)
+	m.DeleteTxAndChildren(deleteID)
 	// m.ConfirmeTx(result[800])
 	// if e != nil {
 	// 	panic(e)
