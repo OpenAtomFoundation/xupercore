@@ -478,7 +478,6 @@ func (t *State) PlayForMiner(blockid []byte) error {
 // PlayAndRepost 执行一个新收到的block，要求block的pre_hash必须是当前vm的latest_block
 // 执行后会更新latestBlockid
 func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) error {
-	fmt.Println("PlayAndRepost")
 	beginTime := time.Now()
 	timer := timer.NewXTimer()
 	batch := t.ldb.NewBatch()
@@ -544,13 +543,8 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	}
 	//写盘成功再删除unconfirm的内存镜像
 	for txid := range unconfirmToConfirm {
-		// t.tx.UnconfirmTxInMem.Delete(txid)
 		t.tx.Mempool.ConfirmTxID(txid)
 	}
-	// for txid := range undoDone {
-	// 	// t.tx.UnconfirmTxInMem.Delete(txid)
-	// 	t.tx.Mempool.DeleteTx(txid) // todo delete or confirm?
-	// }
 	t.log.Debug("write to state succ")
 
 	// 内存级别更新UtxoMeta信息
@@ -647,7 +641,9 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 	// 回滚未确认交易
 	undoDone := make(map[string]bool)
 	undoList := make([]*pb.Transaction, 0)
-	for _, unconfirmTx := range unconfirmTxs {
+
+	for i := len(unconfirmTxs) - 1; i >= 0; i-- {
+		unconfirmTx := unconfirmTxs[i]
 		undoErr := t.undoUnconfirmedTx(unconfirmTx, batch, undoDone, &undoList)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr, "txid", fmt.Sprintf("%x", unconfirmTx.GetTxid()))
@@ -665,8 +661,7 @@ func (t *State) RollBackUnconfirmedTx() (map[string]bool, []*pb.Transaction, err
 
 	// 由于这里操作不是原子操作，需要保持按回滚顺序delete
 	for _, tx := range undoList {
-		// t.tx.UnconfirmTxInMem.Delete(string(tx.Txid)) // todo delete or retrieve or confirm
-		t.tx.Mempool.DeleteTx(string(tx.GetTxid()))
+		t.tx.Mempool.DeleteTxAndChildren(string(tx.GetTxid()))
 		t.log.Trace("delete from unconfirm tx memory", "txid", utils.F(tx.Txid))
 	}
 	return undoDone, undoList, nil
@@ -1352,19 +1347,13 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	unconfirmToConfirm := map[string]bool{}
 	undoTxs := make([]*pb.Transaction, 0, 0)
 	for _, tx := range block.Transactions {
-		for _, txInput := range tx.TxInputs {
-			undoTxs = append(undoTxs, t.tx.Mempool.DeleteUTXO(string(txInput.FromAddr), string(txInput.RefTxid), int(txInput.RefOffset), txidsInBlock)...)
-		}
-
-		for offset, output := range tx.TxOutputsExt {
-			undoTxs = append(undoTxs, t.tx.Mempool.DeleteUTXOExt(output.GetBucket(), string(output.GetKey()), string(tx.GetTxid()), offset, txidsInBlock)...)
-		}
-
 		txid := string(tx.GetTxid())
 		if t.tx.Mempool.HasTx(txid) {
 			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
 			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 			unconfirmToConfirm[txid] = true
+		} else { // 如果区块中的交易不在 mempool 中再去检查冲突交易。
+			undoTxs = append(undoTxs, t.tx.Mempool.DeleteConflictByTx(tx)...)
 		}
 	}
 
