@@ -2,9 +2,10 @@ package evm
 
 import (
 	"encoding/hex"
+	"strconv"
+
 	"github.com/hyperledger/burrow/acm/balance"
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
-	"strconv"
 
 	"github.com/hyperledger/burrow/crypto"
 	x "github.com/hyperledger/burrow/encoding/hex"
@@ -28,7 +29,7 @@ func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	// SendTransaction is not used currently
 	// registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
 	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
-	registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
+	// registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
 }
 
