@@ -29,6 +29,8 @@ func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	// SendTransaction is not used currently
 	// registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
 	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
+	registry.RegisterKernMethod("$evm", "GetTransactionReceipt", p.getTransactionReceipt)
+
 	// registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
 }
@@ -223,4 +225,16 @@ func (p *proxy) verifySignature(
 		return err
 	}
 	return nil
+}
+func (p *proxy) getTransactionReceipt(ctx contract.KContext) (*contract.Response, error) {
+	args := ctx.Args()
+	txHash := args["tx_hash"]
+	tx, err := ctx.Get(ETH_TX_PREFIX, txHash)
+	if err != nil {
+		return nil, err
+	}
+	return &contract.Response{
+		Status: 200,
+		Body:   tx,
+	}, nil
 }

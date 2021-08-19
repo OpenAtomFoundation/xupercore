@@ -1,21 +1,24 @@
 package evm
 
 import (
+	"bytes"
+	"math/big"
+
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/protos"
-	"math/big"
 
 	"encoding/hex"
+	"io/ioutil"
+	"testing"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
-	"io/ioutil"
-	"testing"
 )
 
 func TestEVMProxy(t *testing.T) {
@@ -66,6 +69,7 @@ func TestEVMProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	signedTx := []byte("0xf867808082520894f97798df751deb4b6e39d4cf998ee7cd4dcb9acc880de0b6b3a76400008025a0f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440ca0171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422")
 	t.Run("SendRawTransaction", func(t *testing.T) {
 		th.SetUtxoReader(sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 			{
@@ -75,7 +79,7 @@ func TestEVMProxy(t *testing.T) {
 		}))
 
 		resp, err = th.Invoke("xkernel", "$evm", "SendRawTransaction", map[string][]byte{
-			"signed_tx": []byte("0xf867808082520894f97798df751deb4b6e39d4cf998ee7cd4dcb9acc880de0b6b3a76400008025a0f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440ca0171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422"),
+			"signed_tx": signedTx,
 			"tx_hash":   []byte("tx_hash"),
 		})
 		if err != nil {
@@ -83,31 +87,44 @@ func TestEVMProxy(t *testing.T) {
 			return
 		}
 	})
-
-	t.Run("ContractCall", func(t *testing.T) {
-		resp, err = th.Invoke("xkernel", "$evm", "ContractCall", map[string][]byte{
-			"to":    []byte("313131312D2D2D2D2D2D2D2D2D636F756E746572"),
-			"from":  []byte("b60e8dd61c5d32be8058bb8eb970870f07233155"),
-			"input": []byte("ae896c870000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000678636861696e0000000000000000000000000000000000000000000000000000"),
+	t.Run("GetTransactionReceipt", func(t *testing.T) {
+		resp, err := th.Invoke("xkernel", "$evm", "GetTransactionReceipt", map[string][]byte{
+			"tx_hash": []byte("tx_hash"),
 		})
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		resp, err = th.Invoke("evm", "counter", "get", map[string][]byte{
-			"input":       []byte(`{"key":"xchain"}`),
-			"jsonEncoded": []byte("true"),
-		})
-		if err != nil {
+		if !bytes.Equal(resp.Body, signedTx) {
 			t.Error(err)
 			return
 		}
-		if string(resp.Body) != `[{"0":"1"}]` {
-			t.Errorf("expect %s,get:%s", `[{"0":"1"}]`, string(resp.Body))
-			return
-		}
-
 	})
+
+	// t.Run("ContractCall", func(t *testing.T) {
+	// 	resp, err = th.Invoke("xkernel", "$evm", "ContractCall", map[string][]byte{
+	// 		"to":    []byte("313131312D2D2D2D2D2D2D2D2D636F756E746572"),
+	// 		"from":  []byte("b60e8dd61c5d32be8058bb8eb970870f07233155"),
+	// 		"input": []byte("ae896c870000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000678636861696e0000000000000000000000000000000000000000000000000000"),
+	// 	})
+	// 	if err != nil {
+	// 		t.Error(err)
+	// 		return
+	// 	}
+	// 	resp, err = th.Invoke("evm", "counter", "get", map[string][]byte{
+	// 		"input":       []byte(`{"key":"xchain"}`),
+	// 		"jsonEncoded": []byte("true"),
+	// 	})
+	// 	if err != nil {
+	// 		t.Error(err)
+	// 		return
+	// 	}
+	// 	if string(resp.Body) != `[{"0":"1"}]` {
+	// 		t.Errorf("expect %s,get:%s", `[{"0":"1"}]`, string(resp.Body))
+	// 		return
+	// 	}
+	//
+	// })
 	_ = resp
 }
 
