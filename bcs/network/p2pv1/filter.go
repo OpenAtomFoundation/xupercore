@@ -26,7 +26,7 @@ func (ss *StaticNodeStrategy) Filter() ([]string, error) {
 	if len(ss.srv.bootNodes) != 0 {
 		peers = append(peers, ss.srv.bootNodes...)
 	}
-	if len(ss.srv.dynamicNodes) != 0 {
+	if !ss.srv.pool.staticModeOn && len(ss.srv.dynamicNodes) != 0 {
 		peers = append(peers, ss.srv.dynamicNodes...)
 	}
 	return peers, nil
