@@ -168,7 +168,7 @@ func (p *P2PServerV1) SendP2PMessage(stream pb.P2PService_SendP2PMessageServer) 
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelBCName:      msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgReceivedCounter.With(labels).Inc()
@@ -315,17 +315,5 @@ func (p *P2PServerV1) connectStaticNodes() {
 		p.staticNodes[def.BlockChain] = allAddresses
 	}
 
-	remotePeerInfos, err := p.GetPeerInfo(allAddresses)
-	if err != nil {
-		p.log.Error("connect static node error", "error", err, "address", allAddresses)
-		return
-	}
-
-	for _, peerInfo := range remotePeerInfos {
-		p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), 0)
-		p.log.Trace("connect static node", "local", p.address, "peer", peerInfo.Address, "account", peerInfo.Account)
-	}
-
-	p.log.Trace("connect static node", "local", p.address, "send", len(allAddresses), "recv", len(remotePeerInfos))
-	return
+	p.GetPeerInfo(allAddresses)
 }

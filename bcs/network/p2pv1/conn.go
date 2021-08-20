@@ -2,9 +2,10 @@ package p2pv1
 
 import (
 	"errors"
-	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"io"
 	"sync"
+
+	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -157,15 +158,21 @@ func (c *Conn) PeerID() string {
 }
 
 func NewConnPool(ctx *nctx.NetCtx) (*ConnPool, error) {
-	return &ConnPool{
+	cp := ConnPool{
 		ctx: ctx,
-	}, nil
+	}
+	if len(ctx.P2PConf.BootNodes) == 0 && len(ctx.P2PConf.StaticNodes) > 0 {
+		cp.staticModeOn = true
+	}
+	return &cp, nil
 }
 
 // ConnPool manage all the connection
 type ConnPool struct {
 	ctx  *nctx.NetCtx
 	pool sync.Map // map[peerID]*conn
+
+	staticModeOn bool
 }
 
 func (p *ConnPool) Get(addr string) (*Conn, error) {
