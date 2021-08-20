@@ -26,19 +26,10 @@ func (ss *StaticNodeStrategy) Filter() ([]string, error) {
 	if len(ss.srv.bootNodes) != 0 {
 		peers = append(peers, ss.srv.bootNodes...)
 	}
-	dn := ss.srv.getDynamicNodes()
-	if !ss.srv.pool.staticModeOn && len(dn) != 0 {
-		peers = append(peers, dn...)
+	if !ss.srv.pool.staticModeOn && len(ss.srv.dynamicNodes) != 0 {
+		peers = append(peers, ss.srv.dynamicNodes...)
 	}
-	var peer []string
-	v := ss.srv.pool.getStaticRouter("localhost")
-	for _, p := range peers {
-		if p == v {
-			continue
-		}
-		peer = append(peer, p)
-	}
-	return peer, nil
+	return peers, nil
 }
 
 // MultiStrategy a peer filter that contains multiple filters

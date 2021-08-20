@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -51,10 +50,9 @@ type P2PServerV1 struct {
 	pool       *ConnPool
 	dispatcher p2p.Dispatcher
 
-	bootNodes   []string
-	staticNodes map[string][]string
-	dynamicSet  map[string]struct{}
-	mutex       sync.RWMutex
+	bootNodes    []string
+	staticNodes  map[string][]string
+	dynamicNodes []string
 
 	// local host account
 	account string
@@ -67,25 +65,6 @@ var _ p2p.Server = &P2PServerV1{}
 // NewP2PServerV1 create P2PServerV1 instance
 func NewP2PServerV1() p2p.Server {
 	return &P2PServerV1{}
-}
-
-func (p *P2PServerV1) dynamicInsert(addr string) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	if _, ok := p.dynamicSet[addr]; ok {
-		return
-	}
-	p.dynamicSet[addr] = struct{}{}
-}
-
-func (p *P2PServerV1) getDynamicNodes() []string {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	var nodes []string
-	for k, _ := range p.dynamicSet {
-		nodes = append(nodes, k)
-	}
-	return nodes
 }
 
 // Init initialize p2p server using given config
@@ -108,13 +87,13 @@ func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
 		log.Printf("network address error: %v", err)
 		return ErrAddressIllegal
 	}
-	// 更新localhost
-	_, ip, err := manet.DialArgs(p.address)
+
+	_, _, err = manet.DialArgs(p.address)
 	if err != nil {
 		log.Printf("network address error: %v", err)
 		return ErrAddressIllegal
 	}
-	p.pool.staticRouterInsert("localhost", ip)
+
 	// account
 	keyPath := ctx.EnvCfg.GenDataAbsPath(ctx.EnvCfg.KeyDir)
 	p.account, err = xaddress.LoadAddress(keyPath)
@@ -123,8 +102,11 @@ func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
 		return ErrLoadAccount
 	}
 	p.accounts = cache.New(cache.NoExpiration, cache.NoExpiration)
+
 	p.bootNodes = make([]string, 0)
-	p.dynamicSet = make(map[string]struct{})
+	p.staticNodes = make(map[string][]string, 0)
+	p.dynamicNodes = make([]string, 0)
+
 	return nil
 }
 
@@ -273,28 +255,65 @@ func (p *P2PServerV1) connectBootNodes() {
 		}
 		addresses = append(addresses, address)
 	}
-	p.GetPeerInfo(addresses)
+
+	remotePeerInfos, err := p.GetPeerInfo(addresses)
+	if err != nil {
+		p.log.Error("connect boot node error", "error", err, "address", addresses)
+		return
+	}
+
+	uniq := make(map[string]struct{}, len(p.dynamicNodes))
+	for _, address := range p.dynamicNodes {
+		uniq[address] = struct{}{}
+	}
+
+	for _, peerInfo := range remotePeerInfos {
+		p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), 0)
+
+		if _, ok := uniq[peerInfo.Address]; ok {
+			p.log.Warn("P2PServerV1 dynamicNodes have been added", "address", peerInfo.Address)
+			continue
+		}
+
+		uniq[peerInfo.Address] = struct{}{}
+		p.dynamicNodes = append(p.dynamicNodes, peerInfo.Address)
+		p.log.Trace("connect boot node", "local", p.address, "peer", peerInfo.Address, "account", peerInfo.Account)
+	}
+
+	p.log.Trace("connect boot node", "local", p.address, "send", len(addresses), "recv", len(remotePeerInfos), "dynamic", len(p.dynamicNodes))
+	return
 }
 
 func (p *P2PServerV1) connectStaticNodes() {
 	p.staticNodes = p.config.StaticNodes
-	if len(p.pool.staticNodeSet) <= 0 {
+	if len(p.staticNodes) <= 0 {
 		p.log.Warn("connectStaticNodes error: static node empty")
 		return
 	}
 
 	allAddresses := make([]string, 0, 128)
-	for address, _ := range p.pool.staticNodeSet {
-		_, err := p.pool.Get(address)
-		if err != nil {
-			p.log.Warn("p2p connect to peer failed", "address", address, "error", err)
-			continue
+	uniqueAddr := map[string]bool{}
+	for _, addresses := range p.staticNodes {
+		for _, address := range addresses {
+			if _, ok := uniqueAddr[address]; ok {
+				continue
+			}
+
+			_, err := p.pool.Get(address)
+			if err != nil {
+				p.log.Warn("p2p connect to peer failed", "address", address, "error", err)
+				continue
+			}
+
+			uniqueAddr[address] = true
+			allAddresses = append(allAddresses, address)
 		}
-		allAddresses = append(allAddresses, address)
 	}
+
 	// "xuper" blockchain is super set of all blockchains
 	if len(p.staticNodes[def.BlockChain]) < len(allAddresses) {
 		p.staticNodes[def.BlockChain] = allAddresses
 	}
+
 	p.GetPeerInfo(allAddresses)
 }

@@ -1,7 +1,8 @@
 package p2pv1
 
 import (
-	"time"
+	"errors"
+	"sync"
 
 	"github.com/patrickmn/go-cache"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -9,56 +10,70 @@ import (
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
-const (
-	MAX_TRIES      = 3
-	SLEEP_INTERNAL = 3 * time.Second
-)
-
-func (p *P2PServerV1) GetPeerInfo(addresses []string) {
+func (p *P2PServerV1) GetPeerInfo(addresses []string) ([]*pb.PeerInfo, error) {
+	if len(addresses) == 0 {
+		return nil, errors.New("neighbors empty")
+	}
 	peerInfo := p.PeerInfo()
 	p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), 0)
+
+	var remotePeers []*pb.PeerInfo
+	var wg sync.WaitGroup
+	peersChan := make(chan []*pb.PeerInfo, len(addresses))
+	done := make(chan struct{})
+
 	for _, addr := range addresses {
-		go p.GetPeer(peerInfo, addr)
+		wg.Add(1)
+		go func(addr string) {
+			defer wg.Done()
+			rps := p.GetPeer(peerInfo, addr)
+			select {
+			case <-done:
+				return
+			case peersChan <- rps:
+			}
+		}(addr)
 	}
+
+	recv := func() {
+		count := 0
+		for ps := range peersChan {
+			count++
+			if ps != nil {
+				remotePeers = append(remotePeers, ps...)
+			}
+			if count >= len(addresses) {
+				close(done)
+				return
+			}
+		}
+	}
+	recv()
+
+	wg.Wait()
+	return remotePeers, nil
 }
 
-func (p *P2PServerV1) GetPeer(peerInfo pb.PeerInfo, addr string) {
-	f := func(peerInfo pb.PeerInfo, addr string) error {
-		msg := p2p.NewMessage(pb.XuperMessage_GET_PEER_INFO, &peerInfo)
-		response, err := p.SendMessageWithResponse(p.ctx, msg, p2p.WithAddresses([]string{addr}))
-		if err != nil {
-			p.log.Error("get peer error", "log_id", msg.GetHeader().GetLogid(), "error", err)
-			return err
-		}
-		for _, msg := range response {
-			var peer pb.PeerInfo
-			err := p2p.Unmarshal(msg, &peer)
-			if err != nil {
-				p.log.Error("unmarshal NewNode response error", "log_id", msg.GetHeader().GetLogid(), "error", err)
-				return err
-			}
-			// 更新路由表
-			p.log.Trace("connect static node", "log_id", msg.GetHeader().GetLogid(), "peer", peer.Address, "next", addr)
-			if peer.GetAddress() == peerInfo.Address && addr == peerInfo.Address {
-				continue
-			}
-			p.pool.staticRouterInsert(peer.GetAddress(), addr)
-			p.accounts.Set(peer.GetAccount(), peer.GetAddress(), 0)
-			// 更新动态节点
-			p.dynamicInsert(peer.Address)
-		}
+func (p *P2PServerV1) GetPeer(peerInfo pb.PeerInfo, addr string) []*pb.PeerInfo {
+	var remotePeers []*pb.PeerInfo
+	msg := p2p.NewMessage(pb.XuperMessage_GET_PEER_INFO, &peerInfo)
+	response, err := p.SendMessageWithResponse(p.ctx, msg, p2p.WithAddresses([]string{addr}))
+	if err != nil {
+		p.log.Error("get peer error", "log_id", msg.GetHeader().GetLogid(), "error", err)
 		return nil
 	}
-	try := 0
-	for try <= MAX_TRIES {
-		err := f(peerInfo, addr)
+	for _, msg := range response {
+		var peer pb.PeerInfo
+		err := p2p.Unmarshal(msg, &peer)
 		if err != nil {
-			try++
-			time.Sleep(SLEEP_INTERNAL)
+			p.log.Warn("unmarshal NewNode response error", "log_id", msg.GetHeader().GetLogid(), "error", err)
 			continue
 		}
-		return
+		peer.Address = addr
+		p.accounts.Set(peer.GetAccount(), peer.GetAddress(), cache.NoExpiration)
+		remotePeers = append(remotePeers, &peer)
 	}
+	return remotePeers
 }
 
 func (p *P2PServerV1) registerConnectHandler() error {
@@ -87,8 +102,17 @@ func (p *P2PServerV1) handleGetPeerInfo(ctx xctx.XContext, request *pb.XuperMess
 		return resp, nil
 	}
 
-	p.dynamicInsert(peerInfo.Address)
-	p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), cache.NoExpiration)
-	// TODO: 后续其余节点变更时，需要再次更新本地路由表
+	if !p.pool.staticModeOn {
+		uniq := make(map[string]struct{}, len(p.dynamicNodes))
+		for _, address := range p.dynamicNodes {
+			uniq[address] = struct{}{}
+		}
+
+		if _, ok := uniq[peerInfo.Address]; !ok {
+			p.dynamicNodes = append(p.dynamicNodes, peerInfo.Address)
+		}
+		p.accounts.Set(peerInfo.GetAccount(), peerInfo.GetAddress(), cache.NoExpiration)
+	}
+
 	return resp, nil
 }

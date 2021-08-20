@@ -56,7 +56,7 @@ func (p *P2PServerV1) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage, optFu
 func (p *P2PServerV1) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerIDs []string) error {
 	wg := sync.WaitGroup{}
 	for _, peerID := range peerIDs {
-		conn, err := p.pool.poolGet(peerID, msg.Header.Type)
+		conn, err := p.pool.Get(peerID)
 		if err != nil {
 			p.log.Warn("p2p: get conn error",
 				"log_id", msg.GetHeader().GetLogid(), "peerID", peerID, "error", err)
@@ -118,7 +118,7 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 	wg := sync.WaitGroup{}
 	respCh := make(chan *pb.XuperMessage, len(peerIDs))
 	for _, peerID := range peerIDs {
-		conn, err := p.pool.poolGet(peerID, msg.Header.Type)
+		conn, err := p.pool.Get(peerID)
 		if err != nil {
 			p.log.Warn("p2p: get conn error", "log_id", msg.GetHeader().GetLogid(),
 				"peerID", peerID, "error", err)
@@ -202,6 +202,31 @@ func (p *P2PServerV1) GetPeerIdByAccount(account string) (string, error) {
 	if value, ok := p.accounts.Get(account); ok {
 		return value.(string), nil
 	}
-
+	// xchain address can not mapping, try getPeerInfo again.
+	if p.pool.staticModeOn && len(p.accounts.Items()) != 0 {
+		addresses := make(map[string]struct{})
+		for _, nodes := range p.staticNodes {
+			for _, node := range nodes {
+				if _, ok := addresses[node]; ok {
+					continue
+				}
+				addresses[node] = struct{}{}
+			}
+		}
+		am := p.accounts.Items()
+		for _, v := range am {
+			addr, _ := v.Object.(string)
+			delete(addresses, addr)
+		}
+		var retryPeers []string
+		for k, _ := range addresses {
+			retryPeers = append(retryPeers, k)
+		}
+		p.GetPeerInfo(retryPeers)
+		// retry
+		if value, ok := p.accounts.Get(account); ok {
+			return value.(string), nil
+		}
+	}
 	return "", ErrAccountNotExist
 }
