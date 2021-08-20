@@ -22,16 +22,16 @@ func (p *P2PServerV1) GetPeerInfo(addresses []string) ([]*pb.PeerInfo, error) {
 	var mutex sync.Mutex
 	for _, addr := range addresses {
 		wg.Add(1)
-		go func(addr string, mu *sync.Mutex, peers []*pb.PeerInfo) {
+		go func(addr string) {
 			defer wg.Done()
 			rps := p.GetPeer(peerInfo, addr)
 			if rps == nil {
 				return
 			}
-			mu.Lock()
-			peers = append(peers, rps...)
-			mu.Unlock()
-		}(addr, &mutex, remotePeers)
+			mutex.Lock()
+			remotePeers = append(remotePeers, rps...)
+			mutex.Unlock()
+		}(addr)
 	}
 	wg.Wait()
 	return remotePeers, nil
