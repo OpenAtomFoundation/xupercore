@@ -161,7 +161,9 @@ func NewConnPool(ctx *nctx.NetCtx) (*ConnPool, error) {
 	cp := ConnPool{
 		ctx: ctx,
 	}
-	cp.staticModeOn = len(ctx.P2PConf.BootNodes) == 0 && len(ctx.P2PConf.StaticNodes) > 0
+	if len(ctx.P2PConf.BootNodes) == 0 && len(ctx.P2PConf.StaticNodes) > 0 {
+		cp.staticModeOn = true
+	}
 	return &cp, nil
 }
 

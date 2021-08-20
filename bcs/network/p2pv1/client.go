@@ -202,31 +202,32 @@ func (p *P2PServerV1) GetPeerIdByAccount(account string) (string, error) {
 	if value, ok := p.accounts.Get(account); ok {
 		return value.(string), nil
 	}
+	if !p.pool.staticModeOn {
+		return "", ErrAccountNotExist
+	}
 	// xchain address can not mapping, try getPeerInfo again.
-	if p.pool.staticModeOn && len(p.accounts.Items()) != 0 {
-		addresses := make(map[string]struct{})
-		for _, nodes := range p.staticNodes {
-			for _, node := range nodes {
-				if _, ok := addresses[node]; ok {
-					continue
-				}
-				addresses[node] = struct{}{}
+	addresses := make(map[string]struct{})
+	for _, nodes := range p.staticNodes {
+		for _, node := range nodes {
+			if _, ok := addresses[node]; ok {
+				continue
 			}
+			addresses[node] = struct{}{}
 		}
-		am := p.accounts.Items()
-		for _, v := range am {
-			addr, _ := v.Object.(string)
-			delete(addresses, addr)
-		}
-		var retryPeers []string
-		for k, _ := range addresses {
-			retryPeers = append(retryPeers, k)
-		}
-		p.GetPeerInfo(retryPeers)
-		// retry
-		if value, ok := p.accounts.Get(account); ok {
-			return value.(string), nil
-		}
+	}
+	am := p.accounts.Items()
+	for _, v := range am {
+		addr, _ := v.Object.(string)
+		delete(addresses, addr)
+	}
+	var retryPeers []string
+	for k, _ := range addresses {
+		retryPeers = append(retryPeers, k)
+	}
+	p.GetPeerInfo(retryPeers)
+	// retry
+	if value, ok := p.accounts.Get(account); ok {
+		return value.(string), nil
 	}
 	return "", ErrAccountNotExist
 }

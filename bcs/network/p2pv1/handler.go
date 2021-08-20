@@ -19,37 +19,20 @@ func (p *P2PServerV1) GetPeerInfo(addresses []string) ([]*pb.PeerInfo, error) {
 
 	var remotePeers []*pb.PeerInfo
 	var wg sync.WaitGroup
-	peersChan := make(chan []*pb.PeerInfo, len(addresses))
-	done := make(chan struct{})
-
+	var mutex sync.Mutex
 	for _, addr := range addresses {
 		wg.Add(1)
-		go func(addr string) {
+		go func(addr string, mu *sync.Mutex, peers []*pb.PeerInfo) {
 			defer wg.Done()
 			rps := p.GetPeer(peerInfo, addr)
-			select {
-			case <-done:
-				return
-			case peersChan <- rps:
-			}
-		}(addr)
-	}
-
-	recv := func() {
-		count := 0
-		for ps := range peersChan {
-			count++
-			if ps != nil {
-				remotePeers = append(remotePeers, ps...)
-			}
-			if count >= len(addresses) {
-				close(done)
+			if rps == nil {
 				return
 			}
-		}
+			mu.Lock()
+			peers = append(peers, rps...)
+			mu.Unlock()
+		}(addr, &mutex, remotePeers)
 	}
-	recv()
-
 	wg.Wait()
 	return remotePeers, nil
 }
