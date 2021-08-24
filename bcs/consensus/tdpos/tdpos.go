@@ -228,7 +228,6 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Warn("consensus:tdpos:CheckMinerMatch: OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err, "blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
-	pNode := tp.smr.BlockToProposalNode(block)
 	preBlock, _ := tp.election.ledger.QueryBlock(block.GetPreHash())
 	prestorage, _ := preBlock.GetConsensusStorage()
 	validators, err := tp.election.CalOldProposers(preBlock.GetHeight(), preBlock.GetTimestamp(), prestorage)
@@ -236,10 +235,12 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Error("consensus:tdpos:CheckMinerMatch: election error", "err", err, "preBlock", utils.F(preBlock.GetBlockid()))
 		return false, err
 	}
-	err = tp.smr.GetSaftyRules().CheckProposal(pNode.In, justify, validators)
+
+	// 包装成统一入口访问smr
+	err = tp.smr.HandleCheckMinerMatch(block, justify, validators)
 	if err != nil {
-		tp.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", pNode.In.GetProposalView(),
-			"proposalQC:[id]", utils.F(pNode.In.GetProposalId()), "justifyQC:[height]", justify.GetProposalView(),
+		tp.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
+			"proposalQC:[id]", utils.F(block.GetBlockid()), "justifyQC:[height]", justify.GetProposalView(),
 			"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
 		return false, err
 	}
@@ -272,92 +273,42 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	// 根据BFT配置判断是否需要加入Chained-BFT相关存储，及变更smr状态
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := tp.election.ledger.GetTipBlock()
-	// TODO: 目前xpoa和tdpos在回滚上逻辑一致，若有修改需要同时修改，此部分后续要考虑合并和复用
-	shundown, truncateT, err := tp.renewQCStatus(tipBlock)
+
+	// 从当前TipBlock开始往前追溯，生成BlockBranch，交给smr根据状态进行回滚。
+	rollbackBranch := []cctx.BlockInterface{tipBlock}
+	targetId := tipBlock.GetPreHash()
+	for i := chainedBft.PermissiveInternal - 1; i > 0; i-- {
+		// TODO: rely需更改成QueryBlockHeader
+		block, err := tp.election.ledger.QueryBlock(targetId)
+		if err != nil {
+			break
+		}
+		rollbackBranch = append(rollbackBranch, block)
+		targetId = block.GetPreHash()
+	}
+	// smr返回一个裁剪目标，供miner模块直接回滚并出块
+	truncate, qc, err := tp.smr.HandleProcessBeforeMiner(rollbackBranch, tp.election.validators, tp.election.CalOldProposers)
 	if err != nil {
 		return nil, nil, err
 	}
-	if shundown {
+	// 候选人组仅一个时无需操作
+	if qc == nil {
 		return nil, nil, nil
 	}
-	// 此处需要获取带签名的完整Justify, 此时HighQC已经更新
-	qc := tp.smr.GetCompleteHighQC()
+
 	qcQuorumCert, _ := qc.(*chainedBft.QuorumCert)
 	oldQC, _ := common.NewToOldQC(qcQuorumCert)
 	storage.Justify = oldQC
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
-	if truncateT != nil {
-		tp.log.Warn("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
-			"ledger", tipBlock.GetHeight(), "HighQC", tp.smr.GetHighQC().GetProposalView())
+	if truncate {
+		tp.log.Warn("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block",
+			"target", utils.F(qc.GetProposalId()), "ledger", tipBlock.GetHeight())
 		storage.TargetBits = int32(tipBlock.GetHeight())
+		storageBytes, _ := json.Marshal(storage)
+		return qc.GetProposalId(), storageBytes, nil
 	}
-	storageBytes, err := json.Marshal(storage)
-	if err != nil {
-		return nil, nil, err
-	}
-	return truncateT, storageBytes, nil
-}
-
-// renewQCStatus 返回一个裁剪目标，供miner模块直接回滚并出块，否则返回一个错误，直接重制，或者返回一个shutdown标志
-func (tp *tdposConsensus) renewQCStatus(tipBlock cctx.BlockInterface) (bool, []byte, error) {
-	if bytes.Equal(tp.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
-		return false, nil, nil
-	}
-	// 单个节点不存在投票验证的hotstuff流程，因此返回true
-	if len(tp.election.validators) == 1 {
-		return true, nil, nil
-	}
-	// 在本地状态树上找到指代TipBlock的QC，若找不到，则在状态树上找和TipBlock同一分支上的最近值
-	targetHighQC, err := func() (chainedBft.QuorumCertInterface, error) {
-		targetId := tipBlock.GetBlockid()
-		for {
-			// TODO: rely需更改成QueryBlockHeader
-			block, err := tp.election.ledger.QueryBlock(targetId)
-			if err != nil {
-				return nil, err
-			}
-			// 至多回滚到root节点
-			if block.GetHeight() <= tp.smr.GetRootQC().GetProposalView() {
-				tp.log.Warn("consensus:tdpos:renewQCStatus: set root qc.", "root", utils.F(tp.smr.GetRootQC().GetProposalId()), "root height", tp.smr.GetRootQC().GetProposalView(),
-					"block", utils.F(block.GetBlockid()), "block height", block.GetHeight())
-				return tp.smr.GetRootQC(), nil
-			}
-			// 查找目标Id是否挂在状态树上，若否，则从target网上查找知道状态树里有
-			node := tp.smr.QueryNode(block.GetBlockid())
-			if node == nil {
-				targetId = block.GetPreHash()
-				continue
-			}
-			// node在状态树上找到之后，以此为起点(包括当前点)，继续向上查找，知道找到符合全名数量要求的QC，该QC可强制转化为新的HighQC
-			storage, _ := block.GetConsensusStorage()
-			wantProposers, err := tp.election.CalOldProposers(block.GetHeight(), block.GetTimestamp(), storage)
-			if err != nil || wantProposers == nil {
-				tp.log.Error("consensus:tdpos:renewQCStatus: election error.", "error", err)
-				return nil, err
-			}
-			if !tp.smr.ValidNewHighQC(node.In.GetProposalId(), wantProposers) {
-				tp.log.Warn("consensus:tdpos:renewQCStatus: target not ready", "target", utils.F(node.In.GetProposalId()), "wantProposers", wantProposers, "height", node.In.GetProposalView())
-				targetId = block.GetPreHash()
-				continue
-			}
-			return node.In, nil
-		}
-	}()
-	if err != nil {
-		return false, nil, err
-	}
-	ok, err := tp.smr.EnforceUpdateHighQC(targetHighQC.GetProposalId())
-	if err != nil {
-		tp.log.Error("consensus:tdpos:renewQCStatus: EnforceUpdateHighQC error.", "error", err)
-		return false, nil, err
-	}
-	if ok {
-		tp.log.Debug("consensus:tdpos:renewQCStatus: EnforceUpdateHighQC success.", "target", utils.F(targetHighQC.GetProposalId()), "height", targetHighQC.GetProposalView())
-	}
-	if bytes.Equal(tipBlock.GetBlockid(), targetHighQC.GetProposalId()) {
-		return false, nil, nil
-	}
-	return false, targetHighQC.GetProposalId(), nil
+	storageBytes, _ := json.Marshal(storage)
+	return nil, storageBytes, nil
 }
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
@@ -372,33 +323,32 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 		tp.log.Warn("consensus:tdpos:ProcessConfirmBlock: parse storage error", "err", err)
 		return err
 	}
+	var justify chainedBft.QuorumCertInterface
 	if bv != nil && block.GetHeight() > tp.status.StartHeight {
-		justify, err := common.OldQCToNew(bv)
+		justify, err = common.OldQCToNew(bv)
 		if err != nil {
 			tp.log.Error("consensus:tdpos:ProcessConfirmBlock: OldQCToNew error", "err", err, "blockId", utils.F(block.GetBlockid()))
 			return err
 		}
-		tp.smr.UpdateJustifyQcStatus(justify)
 	}
+
 	// 查看本地是否是最新round的生产者
 	_, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
 	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Debug("consensus:tdpos:ProcessConfirmBlock: minerScheduling overflow.")
 		return scheduleErr
 	}
+	var nextValidators []string
 	if tp.election.validators[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {
 		// 如果是当前矿工，检测到下一轮需变更validates，且下一轮proposer并不在节点列表中，此时需在广播列表中新加入节点
-		validators := tp.election.GetValidators(block.GetHeight() + 1)
-		if err := tp.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), block.GetPreHash(), validators); err != nil {
-			tp.log.Warn("consensus:tdpos:ProcessConfirmBlock: bft next proposal failed", "error", err)
-			return err
-		}
-		tp.log.Debug("consensus:tdpos:ProcessConfirmBlock: miner confirm finish", "ledger:[height]", tp.election.ledger.GetTipBlock().GetHeight(), "viewNum", tp.smr.GetCurrentView())
+		nextValidators = tp.election.GetValidators(block.GetHeight() + 1)
 	}
-	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
-	pNode := tp.smr.BlockToProposalNode(block)
-	err = tp.smr.UpdateQcStatus(pNode)
-	tp.log.Debug("consensus:tdpos:ProcessConfirmBlock: Now HighQC", "highQC", utils.F(tp.smr.GetHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
+
+	// 包装成统一入口访问smr
+	if err = tp.smr.HandleProcessConfirmBlock(block, justify, nextValidators); err != nil {
+		tp.log.Warn("consensus:tdpos:ProcessConfirmBlock: update smr error.", "error", err)
+		return err
+	}
 	return nil
 }
 

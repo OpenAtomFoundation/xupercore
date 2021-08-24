@@ -219,15 +219,16 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 			"blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
-	pNode := x.smr.BlockToProposalNode(block)
 	preBlock, _ := x.election.ledger.QueryBlock(block.GetPreHash())
 	preConStoreBytes, _ := preBlock.GetConsensusStorage()
-	err = x.smr.GetSaftyRules().CheckProposal(pNode.In, justify,
-		x.election.GetLocalValidates(preBlock.GetTimestamp(), justify.GetProposalView(), preConStoreBytes))
+	validators, _ := x.election.GetLocalValidates(preBlock.GetTimestamp(), justify.GetProposalView(), preConStoreBytes)
+
+	// 包装成统一入口访问smr
+	err = x.smr.HandleCheckMinerMatch(block, justify, validators)
 	if err != nil {
-		ctx.GetLog().Error("consensus:xpoa:CheckMinerMatch: bft IsQuorumCertValidate failed", "logid", ctx.GetLog().GetLogId(),
-			"proposalQC:[height]", pNode.In.GetProposalView(), "proposalQC:[id]", utils.F(pNode.In.GetProposalId()),
-			"justifyQC:[height]", justify.GetProposalView(), "justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
+		x.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
+			"proposalQC:[id]", utils.F(block.GetBlockid()), "justifyQC:[height]", justify.GetProposalView(),
+			"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
 		return false, err
 	}
 	return true, nil
@@ -240,91 +241,44 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := x.election.ledger.GetTipBlock()
-	// TODO: 目前xpoa和tdpos在回滚上逻辑一致，若有修改需要同时修改，此部分后续要考虑合并和复用
-	shundown, truncateT, err := x.renewQCStatus(tipBlock)
+
+	// 从当前TipBlock开始往前追溯，生成BlockBranch，交给smr根据状态进行回滚。
+	rollbackBranch := []cctx.BlockInterface{tipBlock}
+	targetId := tipBlock.GetPreHash()
+	for i := chainedBft.PermissiveInternal - 1; i > 0; i-- {
+		// TODO: rely需更改成QueryBlockHeader
+		block, err := x.election.ledger.QueryBlock(targetId)
+		if err != nil {
+			break
+		}
+		rollbackBranch = append(rollbackBranch, block)
+		targetId = block.GetPreHash()
+	}
+	// smr返回一个裁剪目标，供miner模块直接回滚并出块
+	truncate, qc, err := x.smr.HandleProcessBeforeMiner(rollbackBranch, x.election.validators, x.election.GetLocalValidates)
 	if err != nil {
 		return nil, nil, err
 	}
-	if shundown {
+	// 候选人组仅一个时无需操作
+	if qc == nil {
 		return nil, nil, nil
 	}
-	// 此处需要获取带签名的完整Justify, 此时HighQC已经更新
-	qc := x.smr.GetCompleteHighQC()
+
 	qcQuorumCert, _ := qc.(*chainedBft.QuorumCert)
 	oldQC, _ := common.NewToOldQC(qcQuorumCert)
 	storage := common.ConsensusStorage{
 		Justify: oldQC,
 	}
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
-	if truncateT != nil {
-		x.GetLog().Warn("consensus:xpoa:ProcessBeforeMiner: last block not confirmed, walk to previous block", "target", utils.F(truncateT),
-			"ledger", tipBlock.GetHeight(), "HighQC", x.smr.GetHighQC().GetProposalView())
+	if truncate {
+		x.log.Warn("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block",
+			"target", utils.F(qc.GetProposalId()), "ledger", tipBlock.GetHeight())
 		storage.TargetBits = int32(tipBlock.GetHeight())
+		bytes, _ := json.Marshal(storage)
+		return qc.GetProposalId(), bytes, nil
 	}
 	bytes, _ := json.Marshal(storage)
-	return truncateT, bytes, nil
-}
-
-// renewQCStatus 返回一个裁剪目标，供miner模块直接回滚并出块
-func (x *xpoaConsensus) renewQCStatus(tipBlock cctx.BlockInterface) (bool, []byte, error) {
-	if bytes.Equal(x.smr.GetHighQC().GetProposalId(), tipBlock.GetBlockid()) {
-		return false, nil, nil
-	}
-	// 单个节点不存在投票验证的hotstuff流程，因此返回true
-	if len(x.election.validators) == 1 {
-		return true, nil, nil
-	}
-	// 在本地状态树上找到指代TipBlock的QC，若找不到，则在状态树上找和TipBlock同一分支上的最近值
-	targetHighQC, err := func() (chainedBft.QuorumCertInterface, error) {
-		targetId := tipBlock.GetBlockid()
-		for {
-			// TODO: rely需更改成QueryBlockHeader
-			block, err := x.election.ledger.QueryBlock(targetId)
-			if err != nil {
-				return nil, err
-			}
-			// 至多回滚到root节点
-			if block.GetHeight() <= x.smr.GetRootQC().GetProposalView() {
-				x.log.Warn("consensus:xpoa:renewQCStatus: set root qc.", "root", utils.F(x.smr.GetRootQC().GetProposalId()), "root height", x.smr.GetRootQC().GetProposalView(),
-					"block", utils.F(block.GetBlockid()), "block height", block.GetHeight())
-				return x.smr.GetRootQC(), nil
-			}
-			// 查找目标Id是否挂在状态树上，若否，则从target网上查找知道状态树里有
-			node := x.smr.QueryNode(block.GetBlockid())
-			if node == nil {
-				targetId = block.GetPreHash()
-				continue
-			}
-			// node在状态树上找到之后，以此为起点(包括当前点)，继续向上查找，知道找到符合全名数量要求的QC，该QC可强制转化为新的HighQC
-			storage, _ := block.GetConsensusStorage()
-			wantProposers := x.election.GetLocalValidates(block.GetTimestamp(), block.GetHeight(), storage)
-			if wantProposers == nil {
-				x.log.Error("consensus:xpoa:renewQCStatus: election error.", "error", err)
-				return nil, EmptyValidors
-			}
-			if !x.smr.ValidNewHighQC(node.In.GetProposalId(), wantProposers) {
-				x.log.Warn("consensus:xpoa:renewQCStatus: target not ready", "target", utils.F(node.In.GetProposalId()), "wantProposers", wantProposers, "height", node.In.GetProposalView())
-				targetId = block.GetPreHash()
-				continue
-			}
-			return node.In, nil
-		}
-	}()
-	if err != nil {
-		return false, nil, err
-	}
-	ok, err := x.smr.EnforceUpdateHighQC(targetHighQC.GetProposalId())
-	if err != nil {
-		x.log.Error("consensus:xpoa:renewQCStatus: EnforceUpdateHighQC error.", "error", err)
-		return false, nil, err
-	}
-	if ok {
-		x.log.Debug("consensus:xpoa:renewQCStatus: EnforceUpdateHighQC success.", "target", utils.F(targetHighQC.GetProposalId()), "height", targetHighQC.GetProposalView())
-	}
-	if bytes.Equal(tipBlock.GetBlockid(), targetHighQC.GetProposalId()) {
-		return false, nil, nil
-	}
-	return false, targetHighQC.GetProposalId(), nil
+	return nil, bytes, nil
 }
 
 // ProcessConfirmBlock 用于确认块后进行相应的处理
@@ -339,33 +293,33 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 		x.GetLog().Warn("consensus:xpoa:CheckMinerMatch: parse storage error", "err", err, "blockId", utils.F(block.GetBlockid()))
 		return err
 	}
+	var justify chainedBft.QuorumCertInterface
 	if justifyBytes != nil && block.GetHeight() > x.status.StartHeight {
-		justify, err := common.OldQCToNew(justifyBytes)
+		justify, err = common.OldQCToNew(justifyBytes)
 		if err != nil {
 			x.GetLog().Error("consensus:xpoa:ProcessConfirmBlock: OldQCToNew error", "err", err, "blockId", utils.F(block.GetBlockid()))
 			return err
 		}
-		x.smr.UpdateJustifyQcStatus(justify)
 	}
+
 	// 查看本地是否是最新round的生产者
 	_, pos, blockPos := x.election.minerScheduling(block.GetTimestamp(), len(x.election.validators))
 	if blockPos > x.election.blockNum || pos >= int64(len(x.election.validators)) {
 		x.GetLog().Debug("consensus:xpoa:smr::ProcessConfirmBlock: minerScheduling overflow.")
 		return scheduleErr
 	}
+
+	var minerValidator []string
 	// 如果是当前矿工，则发送Proposal消息
 	if x.election.validators[pos] == x.election.address && string(block.GetProposer()) == x.election.address {
-		validators := x.election.GetValidators(block.GetHeight() + 1)
-		if err := x.smr.ProcessProposal(block.GetHeight(), block.GetBlockid(), block.GetPreHash(), validators); err != nil {
-			x.GetLog().Warn("consensus:xpoa:ProcessConfirmBlock: bft next proposal failed", "error", err, "blockId", utils.F(block.GetBlockid()))
-			return err
-		}
-		x.GetLog().Debug("consensus:xpoa:ProcessConfirmBlock: miner confirm finish", "ledger:[height]", x.election.ledger.GetTipBlock().GetHeight(), "viewNum", x.smr.GetCurrentView(), "blockId", utils.F(block.GetBlockid()))
+		minerValidator = x.election.GetValidators(block.GetHeight() + 1)
 	}
-	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
-	pNode := x.smr.BlockToProposalNode(block)
-	err = x.smr.UpdateQcStatus(pNode)
-	x.GetLog().Debug("consensus:xpoa:ProcessConfirmBlock: Now HighQC", "highQC", utils.F(x.smr.GetHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
+
+	// 包装成统一入口访问smr
+	if err := x.smr.HandleProcessConfirmBlock(block, justify, minerValidator); err != nil {
+		x.log.Warn("consensus:xpoa:ProcessConfirmBlock: update smr error.", "error", err)
+		return err
+	}
 	return nil
 }
 

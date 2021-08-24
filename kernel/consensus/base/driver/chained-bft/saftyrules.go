@@ -7,6 +7,11 @@ import (
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
+const (
+	StrictInternal     = 3
+	PermissiveInternal = 6
+)
+
 var (
 	EmptyVoteSignErr   = errors.New("No signature in vote.")
 	InvalidVoteAddr    = errors.New("Vote address is not a validator in the target validators.")
@@ -56,10 +61,10 @@ func (s *DefaultSaftyRules) UpdatePreferredRound(round int64) bool {
 // 因此由于账本的可回滚性，因此lastVoteRound和preferredRound比对时，仅需比对新来的数据是否小于local数据-3即可
 // 此处-3代表数据已经落盘
 func (s *DefaultSaftyRules) VoteProposal(proposalId []byte, proposalRound int64, parentQc QuorumCertInterface) bool {
-	if proposalRound < s.lastVoteRound-3 {
+	if proposalRound < s.lastVoteRound-StrictInternal {
 		return false
 	}
-	if parentQc.GetProposalView() < s.preferredRound-3 {
+	if parentQc.GetProposalView() < s.preferredRound-StrictInternal {
 		return false
 	}
 	s.increaseLastVoteRound(proposalRound)
@@ -83,10 +88,10 @@ func (s *DefaultSaftyRules) CheckVote(qc QuorumCertInterface, logid string, vali
 		return err
 	}
 	// 检查voteinfo信息, proposalView小于lastVoteRound，parentView不小于preferredRound
-	if qc.GetProposalView() < s.lastVoteRound-3 {
+	if qc.GetProposalView() < s.lastVoteRound-StrictInternal {
 		return TooLowVoteView
 	}
-	if qc.GetParentView() < s.preferredRound-3 {
+	if qc.GetParentView() < s.preferredRound-StrictInternal {
 		return TooLowVParentView
 	}
 	// TODO: 检查commit消息
@@ -115,7 +120,7 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 // 需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
 // 因此在此proposal和parent的QC稍微宽松检查
 func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, justifyValidators []string) error {
-	if proposal.GetProposalView() < s.lastVoteRound-3 {
+	if proposal.GetProposalView() < s.lastVoteRound-StrictInternal {
 		return TooLowProposalView
 	}
 	if justifyValidators == nil {
@@ -132,7 +137,7 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, 
 	// 或者新qc目前为孤儿节点，有可能未来切换成HighQC，此时仅需要proposal在[root+1, root+6]
 	// 是+6不是+3的原因是考虑到重起的时候的情况，重起时，root为tipId-3，而外界状态最多到tipId+3，此处简化处理
 	if parentNode := s.QcTree.DFSQueryNode(parent.GetProposalId()); parentNode == nil {
-		if proposal.GetProposalView() <= s.QcTree.Root.In.GetParentView() || proposal.GetProposalView() > s.QcTree.Root.In.GetProposalView()+6 {
+		if proposal.GetProposalView() <= s.QcTree.Root.In.GetParentView() || proposal.GetProposalView() > s.QcTree.Root.In.GetProposalView()+PermissiveInternal {
 			return EmptyParentNode
 		}
 	}
@@ -160,7 +165,7 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, 
 // 注意： 由于本smr支持不同节点产生同一round， 因此下述round比较和leader比较与原文(验证Proposal的Round是否和pacemaker的Round相等)并不同。
 // 仅需proposal round不超过范围即可
 func (s *DefaultSaftyRules) CheckPacemaker(pending int64, local int64) bool {
-	if pending <= local-3 {
+	if pending <= local-StrictInternal {
 		return false
 	}
 	return true

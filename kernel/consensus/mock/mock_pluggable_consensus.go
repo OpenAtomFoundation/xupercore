@@ -200,6 +200,9 @@ func (l *FakeLedger) Put(block *FakeBlock) error {
 
 func (l *FakeLedger) QueryBlock(blockId []byte) (ledger.BlockHandle, error) {
 	id := fmt.Sprintf("%x", blockId)
+	if _, ok := l.ledgerMap[id]; !ok {
+		return nil, errors.New("not found")
+	}
 	return l.ledgerMap[id], nil
 }
 

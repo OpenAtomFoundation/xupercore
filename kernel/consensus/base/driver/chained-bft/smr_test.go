@@ -269,9 +269,9 @@ func TestSMR(t *testing.T) {
 		VoteInfo:  vote,
 		SignInfos: signs,
 	}
-	sA.UpdateJustifyQcStatus(justi)
-	sB.UpdateJustifyQcStatus(justi)
-	sC.UpdateJustifyQcStatus(justi)
+	sA.updateJustifyQcStatus(justi)
+	sB.updateJustifyQcStatus(justi)
+	sC.updateJustifyQcStatus(justi)
 
 	err = sA.ProcessProposal(2, []byte{3}, []byte{1}, []string{NodeA, NodeB, NodeC})
 	if err != nil {

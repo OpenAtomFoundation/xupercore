@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"container/list"
 	"errors"
+	"sync"
 
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -93,6 +94,8 @@ type QCPendingTree struct {
 	OrphanList *list.List // []*ProposalNode孤儿数组
 	OrphanMap  map[string]bool
 
+	mtx sync.Mutex
+
 	Log logs.Logger
 }
 
@@ -123,8 +126,16 @@ func (t *QCPendingTree) GetLockedQC() *ProposalNode {
 	return t.LockedQC
 }
 
+// DFSQueryNode实现的比较简单，从root节点开始寻找，后续有更优方法可优化
+func (t *QCPendingTree) DFSQueryNode(id []byte) *ProposalNode {
+	return dfsQuery(t.Root, id)
+}
+
 // 更新本地qcTree, insert新节点, 将新节点parentQC和本地HighQC对比，如有必要进行更新
 func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	if node.Sons == nil {
 		node.Sons = make([]*ProposalNode, 0)
 	}
@@ -136,13 +147,27 @@ func (t *QCPendingTree) updateQcStatus(node *ProposalNode) error {
 		t.Log.Error("QCPendingTree::updateQcStatus insert err", "err", err)
 		return err
 	}
-	t.updateHighQC(node.In.GetParentProposalId())
 	t.Log.Debug("QCPendingTree::updateQcStatus", "insert new", utils.F(node.In.GetProposalId()), "height", node.In.GetProposalView(), "highQC", utils.F(t.GetHighQC().In.GetProposalId()))
+
+	// HighQCs试图更新成收到node的parentQC
+	parent := t.DFSQueryNode(node.In.GetParentProposalId())
+	if parent == nil {
+		t.Log.Debug("QCPendingTree::updateHighQC::orphan", "id", utils.F(node.In.GetParentProposalId()))
+		return nil
+	}
+	// 若新验证过的node和原HighQC高度相同，使用新验证的node
+	if parent.In.GetProposalView() < t.GetHighQC().In.GetProposalView() {
+		return nil
+	}
+	t.updateQCs(parent)
 	return nil
 }
 
 // updateHighQC 对比QC树，将本地HighQC和输入id比较，高度更高的更新为HighQC，此时连同GenericQC、LockedQC、CommitQC一起修改
 func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	node := t.DFSQueryNode(inProposalId)
 	if node == nil {
 		t.Log.Debug("QCPendingTree::updateHighQC::DFSQueryNode nil!", "id", utils.F(inProposalId))
@@ -152,12 +177,14 @@ func (t *QCPendingTree) updateHighQC(inProposalId []byte) {
 	if node.In.GetProposalView() < t.GetHighQC().In.GetProposalView() {
 		return
 	}
-	t.Log.Debug("QCPendingTree::updateHighQC::start.")
 	t.updateQCs(node)
 }
 
 // enforceUpdateHighQC 强制更改HighQC指针，用于错误时回滚，注意: 本实现没有timeoutQC因此需要此方法
 func (t *QCPendingTree) enforceUpdateHighQC(inProposalId []byte) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	node := t.DFSQueryNode(inProposalId)
 	if node == nil {
 		t.Log.Debug("QCPendingTree::enforceUpdateHighQC::DFSQueryNode nil")
@@ -256,7 +283,7 @@ func (t *QCPendingTree) insertOrphan(node *ProposalNode) error {
 			return nil
 		}
 		// 否则遍历该树试图挂在子树上面
-		parent := DFSQuery(n, node.In.GetParentProposalId())
+		parent := dfsQuery(n, node.In.GetParentProposalId())
 		if parent != nil {
 			parent.Sons = append(parent.Sons, node)
 			return nil
@@ -291,6 +318,9 @@ func (t *QCPendingTree) adoptOrphans(node *ProposalNode) error {
 // updateCommit 此方法向存储接口发送一个ProcessCommit，通知存储落盘，此时的block将不再被回滚
 // 同时此方法将原先的root更改为commit node，因为commit node在本BFT中已确定不会回滚
 func (t *QCPendingTree) updateCommit(id []byte) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
 	node := t.DFSQueryNode(id)
 	if node == nil {
 		return
@@ -316,12 +346,7 @@ func (t *QCPendingTree) updateCommit(id []byte) {
 	// TODO: commitQC/lockedQC/genericQC/highQC是否有指向原root及以上的Node
 }
 
-// DFSQueryNode实现的比较简单，从root节点开始寻找，后续有更优方法可优化
-func (t *QCPendingTree) DFSQueryNode(id []byte) *ProposalNode {
-	return DFSQuery(t.Root, id)
-}
-
-func DFSQuery(node *ProposalNode, target []byte) *ProposalNode {
+func dfsQuery(node *ProposalNode, target []byte) *ProposalNode {
 	if target == nil || node == nil {
 		return nil
 	}
@@ -332,7 +357,7 @@ func DFSQuery(node *ProposalNode, target []byte) *ProposalNode {
 		return nil
 	}
 	for _, node := range node.Sons {
-		if n := DFSQuery(node, target); n != nil {
+		if n := dfsQuery(node, target); n != nil {
 			return n
 		}
 	}
