@@ -74,7 +74,7 @@ const (
 
 	TxWaitTimeout = 5
 
-	defaultUndoDelayedTxsInterval = 300 // 单位：秒
+	defaultUndoDelayedTxsInterval = time.Second * 300 // 五分钟间隔
 )
 
 type State struct {
@@ -261,8 +261,6 @@ func (t *State) QueryAccountGovernTokenBalance(accountName string) (*protos.Gove
 // HasTx 查询一笔交易是否在unconfirm表  这些可能是放在tx对外提供
 func (t *State) HasTx(txid []byte) (bool, error) {
 	return t.tx.Mempool.HasTx(string(txid)), nil
-	// _, exist := t.tx.UnconfirmTxInMem.Load(string(txid))
-	// return exist, nil
 }
 
 func (t *State) GetFrozenBalance(addr string) (*big.Int, error) {
@@ -799,6 +797,17 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		t.log.Info("doTxInternal failed, when DoTx", "doErr", doErr)
 		return doErr
 	}
+
+	err := t.tx.Mempool.PutTx(tx)
+	if err != nil {
+		t.log.Error("Mempool put tx failed, when DoTx", "err", err)
+		if e := t.undoTxInternal(tx, batch); e != nil {
+			t.log.Error("Mempool put tx failed and undo failed", "undoError", e)
+			return e
+		}
+		return err
+	}
+
 	batch.Put(append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...), pbTxBuf)
 	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", utils.F(tx.Txid))
 	beginTime = time.Now()
@@ -809,11 +818,7 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		t.log.Warn("fail to save to ldb", "writeErr", writeErr)
 		return writeErr
 	}
-	// t.tx.UnconfirmTxInMem.Store(string(tx.Txid), tx)
-	err := t.tx.Mempool.PutTx(tx)
-	if err != nil {
-		return err
-	}
+
 	cacheFiller.Commit()
 	metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "cacheFiller").Observe(time.Since(beginTime).Seconds())
 	return nil
@@ -1293,11 +1298,9 @@ func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
 }
 
 // collectDelayedTxs 收集 mempool 中超时的交易，定期 undo。
-func (t *State) collectDelayedTxs(interval int) {
-	timer := time.NewTimer(time.Second * time.Duration(interval))
-
-	select {
-	case <-timer.C:
+func (t *State) collectDelayedTxs(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	for range ticker.C {
 		t.log.Debug("undo unconfirmed and delayed txs start")
 
 		// 要更新数据库，需要 lock。
@@ -1307,9 +1310,9 @@ func (t *State) collectDelayedTxs(interval int) {
 		batch := t.ldb.NewBatch()
 
 		var undoErr error
-		for i := len(delayedTxs) - 1; i >= 0; i-- {
+		for _, tx := range delayedTxs {
 			// undo tx
-			undoErr = t.undoUnconfirmedTx(delayedTxs[i], batch, nil, nil)
+			undoErr = t.undoUnconfirmedTx(tx, batch, nil, nil)
 			if undoErr != nil {
 				t.log.Error("fail to undo tx for delayed tx", "undoErr", undoErr)
 				break
@@ -1323,8 +1326,6 @@ func (t *State) collectDelayedTxs(interval int) {
 		}
 
 		t.utxo.Mutex.Unlock()
-
-		timer.Reset(time.Second * time.Duration(interval))
 	}
 
 }
@@ -1361,6 +1362,9 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 
 	undoDone := map[string]bool{}
 	for i := len(undoTxs) - 1; i >= 0; i-- {
+		if undoDone[string(undoTxs[i].Txid)] {
+			continue
+		}
 		undoErr := t.undoUnconfirmedTx(undoTxs[i], batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)

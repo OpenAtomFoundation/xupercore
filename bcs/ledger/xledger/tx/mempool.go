@@ -1,25 +1,15 @@
 package tx
 
 import (
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/lib/logs"
 )
-
-// Mempool tx mempool.
-type Mempool struct {
-	Tx *Tx
-	// 所有的交易都在下面的三个集合中。三个集合中的元素不会重复。
-	confirmed   map[string]*Node // txID => *Node，所有的未确认交易树的 root，也就是确认交易。
-	unconfirmed map[string]*Node // txID => *Node，所有未确认交易的集合。
-	orphans     map[string]*Node // txID => *Node，所有的孤儿交易。
-
-	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。
-
-	m *sync.RWMutex
-}
 
 const (
 	defaultMempoolUnconfirmedLen = 5000                             // 默认未确认交易表大小为5000。
@@ -34,8 +24,23 @@ var (
 	stoneNodeID string = "stoneNodeID" // 暂定
 )
 
+// Mempool tx mempool.
+type Mempool struct {
+	log logs.Logger
+
+	Tx *Tx
+	// 所有的交易都在下面的三个集合中。三个集合中的元素不会重复。
+	confirmed   map[string]*Node // txID => *Node，所有的未确认交易树的 root，也就是确认交易。
+	unconfirmed map[string]*Node // txID => *Node，所有未确认交易的集合。
+	orphans     map[string]*Node // txID => *Node，所有的孤儿交易。
+
+	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。
+
+	m *sync.RWMutex
+}
+
 // NewMempool new mempool.
-func NewMempool(tx *Tx) *Mempool {
+func NewMempool(tx *Tx, log logs.Logger) *Mempool {
 	m := &Mempool{
 		Tx:             tx,
 		confirmed:      make(map[string]*Node, defaultMempoolConfirmedLen),
@@ -67,61 +72,61 @@ func (m *Mempool) HasTx(txid string) bool {
 	return false
 }
 
-// Range range.
+// Range v2.
 func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	ranged := map[string]bool{}
-	tmpNodes := make([]*Node, 0, len(m.confirmed))
-	for _, root := range m.confirmed {
-
-		for _, n := range root.txOutputs {
-			if n != nil && !ranged[n.txid] {
-				ranged[n.txid] = true
-				n.updateInputSum()
-				n.updateReadonlyInputSum()
-			}
-			if m.isNextNode(n, false) {
-				tmpNodes = append(tmpNodes, n)
-			}
-		}
-
-		for _, n := range root.txOutputsExt {
-			if n != nil && !ranged[n.txid] {
-				ranged[n.txid] = true
-				n.updateInputSum()
-				n.updateReadonlyInputSum()
-			}
-			if m.isNextNode(n, false) {
-				tmpNodes = append(tmpNodes, n)
-			}
-		}
-
-		for _, n := range root.readonlyOutputs {
-			if n != nil && !ranged[n.txid] {
-				ranged[n.txid] = true
-				n.updateInputSum()
-				n.updateReadonlyInputSum()
-			}
-			if m.isNextNode(n, true) {
-				tmpNodes = append(tmpNodes, n)
-			}
-		}
-		for _, n := range root.bucketKeyToNode {
-			if n != nil && !ranged[n.txid] {
-				ranged[n.txid] = true
-				n.updateInputSum()
-				n.updateReadonlyInputSum()
-			}
-			if m.isNextNode(n, false) {
-				tmpNodes = append(tmpNodes, n)
-			}
-		}
+	if m.log != nil {
+		m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	}
 
-	if len(tmpNodes) > 0 {
-		m.rangeNodes(f, tmpNodes, ranged)
+	ranged := map[string]bool{}
+	forRangeNode := make([]*Node, 0, len(m.confirmed))
+	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
+		forRangeNode = append(forRangeNode, n)
+	}
+
+	for len(forRangeNode) > 0 {
+		tmpNodes := make([]*Node, 0, len(m.confirmed))
+		for _, root := range forRangeNode {
+			for _, n := range root.txOutputs {
+				if m.isNextNode(n, false, ranged) {
+					if f != nil && !f(n.tx) {
+						return
+					}
+					tmpNodes = append(tmpNodes, n)
+				}
+			}
+
+			for _, n := range root.txOutputsExt {
+				if m.isNextNode(n, false, ranged) {
+					if f != nil && !f(n.tx) {
+						return
+					}
+					tmpNodes = append(tmpNodes, n)
+				}
+			}
+
+			for _, n := range root.readonlyOutputs {
+				if m.isNextNode(n, true, ranged) {
+					if f != nil && !f(n.tx) {
+						return
+					}
+					tmpNodes = append(tmpNodes, n)
+				}
+			}
+
+			for _, n := range root.bucketKeyToNode {
+				if m.isNextNode(n, false, ranged) {
+					if f != nil && !f(n.tx) {
+						return
+					}
+					tmpNodes = append(tmpNodes, n)
+				}
+			}
+		}
+		forRangeNode = tmpNodes
 	}
 }
 
@@ -138,18 +143,22 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	m.m.Lock()
 	defer m.m.Unlock()
 
+	if m.log != nil {
+		m.log.Debug("Mempool PutTx", "txid", tx.HexTxid())
+	}
+
 	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
 	txid := string(tx.Txid)
 	if _, ok := m.confirmed[txid]; ok {
-		return errors.New("tx already in mempool confirmd")
+		return errors.New("tx already in mempool confirmd, txid:" + tx.HexTxid())
 	}
 	if _, ok := m.unconfirmed[txid]; ok {
-		return errors.New("tx already in mempool unconfirmd")
+		return errors.New("tx already in mempool unconfirmd, txid:" + tx.HexTxid())
 	}
 
 	if n, ok := m.orphans[txid]; ok {
 		if n.tx != nil {
-			return errors.New("tx already in mempool orphans")
+			return errors.New("tx already in mempool orphans, txid:" + tx.HexTxid())
 		}
 	}
 
@@ -162,23 +171,25 @@ func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 		// 如果 mempool 中有此交易，说明没有冲突交易，在 PutTx 时会保证冲突。
 		return nil
 	}
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	if m.log != nil {
+		m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid())
+	}
 
 	deletedTxs := make([]*pb.Transaction, 0, 0)
 	for _, txInput := range tx.TxInputs {
-		deletedTxs = append(deletedTxs, m.DeleteByUtxo(string(txInput.RefTxid), int(txInput.RefOffset))...)
+		deletedTxs = append(deletedTxs, m.deleteByUtxo(string(txInput.RefTxid), int(txInput.RefOffset))...)
 	}
 
-	for offset, output := range tx.TxOutputsExt {
-		deletedTxs = append(deletedTxs, m.DeleteByBucketKey(output.GetBucket(), string(output.GetKey()), string(tx.GetTxid()), offset)...)
-	}
+	deletedTxs = append(deletedTxs, m.deleteBucketKeyByTx(tx)...)
 
 	return deletedTxs
 }
 
-// DeleteByUtxo delete txs by utxo(addr & txid & offset) 暂时 addr 没用到，根据 txid 和 offset 就可以锁定一个 utxo。
-func (m *Mempool) DeleteByUtxo(txid string, offset int) []*pb.Transaction {
-	m.m.Lock()
-	defer m.m.Unlock()
+// deleteByUtxo delete txs by utxo(addr & txid & offset) 暂时 addr 没用到，根据 txid 和 offset 就可以锁定一个 utxo。
+func (m *Mempool) deleteByUtxo(txid string, offset int) []*pb.Transaction {
 
 	node := m.getNode(txid)
 	if node == nil {
@@ -195,36 +206,70 @@ func (m *Mempool) DeleteByUtxo(txid string, offset int) []*pb.Transaction {
 	result := make([]*pb.Transaction, 0, 100)
 
 	result = append(result, n.tx)
-	result = append(result, m.deleteTx(node.txid)...)
+	result = append(result, m.deleteTx(n.txid)...)
 	return result
 }
 
-// DeleteByBucketKey delete txs by utxoExt(bucket, key & txid & offset)
-func (m *Mempool) DeleteByBucketKey(bucket, key, txid string, offset int) []*pb.Transaction {
-	m.m.Lock()
-	defer m.m.Unlock()
+func (m *Mempool) deleteBucketKeyByTx(tx *pb.Transaction) []*pb.Transaction {
+	usedKeyVersion := getTxUsedKeyVersion(tx)
+	result := make([]*pb.Transaction, 0, 0)
+	for k := range usedKeyVersion {
+		nodes, ok := m.bucketKeyNodes[k]
+		if !ok {
+			continue
+		}
 
-	// 找到 mempool 所有所有与此 bucket & key 相关的交易。
-	bKey := bucket + key
-	nodes, ok := m.bucketKeyNodes[bKey]
-	if !ok {
-		return nil
+		for _, n := range nodes {
+			result = append(result, m.deleteUsedKeyVersion(n, usedKeyVersion)...)
+		}
+	}
+	return nil
+}
+
+func (m *Mempool) deleteUsedKeyVersion(node *Node, usedKeyVersion map[string]string) []*pb.Transaction {
+	result := make([]*pb.Transaction, 0, 0)
+	outKeys := make(map[string]struct{})
+	tx := node.tx
+	for _, output := range tx.GetTxOutputsExt() {
+		outKeys[output.GetBucket()+string(output.GetKey())] = struct{}{}
 	}
 
-	result := make([]*pb.Transaction, 0, 0)
-
-	for _, node := range nodes {
-		ids, offsets := node.getRefTxids(bucket, key)
-		for i, id := range ids {
-			// bKey 的最新版本，如果有交易依赖的不是这个版本，并且依赖的交易不在未确认交易池，那么此交易无效。
-			if offsets[i] != offset && id != txid && !m.inUnconfirmedOrOrphans(id) {
-				// 此时 node 为无效交易，删除此交易以及子交易。
-				result = append(result, node.tx)
-				result = append(result, m.deleteTx(node.txid)...)
+	for _, input := range tx.GetTxInputsExt() {
+		bk := input.GetBucket() + string(input.GetKey())
+		if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
+			if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
+				if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
+					result = append(result, node.tx)
+					result = append(result, m.deleteTx(node.txid)...)
+				}
 			}
 		}
 	}
+
 	return result
+}
+
+// 返回 key：bucket+key，value：version。
+func getTxUsedKeyVersion(tx *pb.Transaction) map[string]string {
+	keyVersion := make(map[string]string, len(tx.GetTxOutputsExt()))
+
+	outKeys := make(map[string]struct{})
+	for _, output := range tx.GetTxOutputsExt() {
+		outKeys[output.GetBucket()+string(output.GetKey())] = struct{}{}
+	}
+
+	for _, input := range tx.GetTxInputsExt() {
+		bk := input.GetBucket() + string(input.GetKey())
+		if _, ok := outKeys[bk]; ok {
+			keyVersion[bk] = makeVersion(input.GetRefTxid(), input.GetRefOffset())
+		}
+	}
+
+	return keyVersion
+}
+
+func makeVersion(txid []byte, offset int32) string {
+	return fmt.Sprintf("%x_%d", txid, offset)
 }
 
 func (m *Mempool) inUnconfirmedOrOrphans(txid string) bool {
@@ -256,6 +301,10 @@ func (m *Mempool) getNode(txid string) *Node {
 func (m *Mempool) DeleteTxAndChildren(txid string) []*pb.Transaction { // DeletTeTxAndChildren
 	m.m.Lock()
 	defer m.m.Unlock()
+	if m.log != nil {
+		m.log.Debug("Mempool DeleteTxAndChildren", "txid", hex.EncodeToString([]byte(txid)))
+	}
+
 	if _, ok := m.confirmed[txid]; ok {
 		// TODO 是否删除确认交易表中的交易。不应该删除，confirmed 中应该是已经共识确认过的，回滚区块应该调用 retrieveTx 接口。
 		// 本次先按照删除处理。
@@ -291,6 +340,10 @@ func (m *Mempool) ConfirmTxID(txid string) {
 	m.m.RLock()
 	defer m.m.RUnlock()
 
+	if m.log != nil {
+		m.log.Debug("Mempool ConfirmTxID", "txid", hex.EncodeToString([]byte(txid)))
+	}
+
 	if _, ok := m.confirmed[txid]; ok {
 		// 已经在确认交易表
 		return
@@ -310,6 +363,9 @@ func (m *Mempool) ConfirmTxID(txid string) {
 func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 	m.m.RLock()
 	defer m.m.RUnlock()
+	if m.log != nil {
+		m.log.Debug("Mempool ConfirmTx", "txid", tx.HexTxid())
+	}
 
 	id := string(tx.Txid)
 	if _, ok := m.confirmed[id]; ok {
@@ -341,6 +397,10 @@ func (m *Mempool) RetrieveTx(tx *pb.Transaction) error {
 	}
 	m.m.RLock()
 	defer m.m.RUnlock()
+
+	if m.log != nil {
+		m.log.Debug("Mempool RetrieveTx", "txid", tx.HexTxid())
+	}
 
 	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
 	txid := string(tx.Txid)
@@ -385,65 +445,14 @@ func (m *Mempool) gcOrphans() {
 	}
 }
 
-func (m *Mempool) rangeNodes(f func(tx *pb.Transaction) bool, nodes []*Node, ranged map[string]bool) {
-
-	for len(nodes) > 0 {
-		tmpNodes := make([]*Node, 0, len(m.unconfirmed)/2) // cap 为未确认交易的一半，为了性能牺牲内存。
-		for _, root := range nodes {
-			if f != nil && !f(root.tx) {
-				return
-			}
-
-			for _, n := range root.txOutputs {
-				if n != nil && !ranged[n.txid] {
-					ranged[n.txid] = true
-					n.updateInputSum()
-					n.updateReadonlyInputSum()
-				}
-				if m.isNextNode(n, false) {
-					tmpNodes = append(tmpNodes, n)
-				}
-			}
-
-			for _, n := range root.txOutputsExt {
-				if n != nil && !ranged[n.txid] {
-					ranged[n.txid] = true
-					n.updateInputSum()
-					n.updateReadonlyInputSum()
-				}
-				if m.isNextNode(n, false) {
-					tmpNodes = append(tmpNodes, n)
-				}
-			}
-
-			for _, n := range root.readonlyOutputs {
-				if n != nil && !ranged[n.txid] {
-					ranged[n.txid] = true
-					n.updateInputSum()
-					n.updateReadonlyInputSum()
-				}
-				if m.isNextNode(n, true) {
-					tmpNodes = append(tmpNodes, n)
-				}
-			}
-			for _, n := range root.bucketKeyToNode {
-				if n != nil && !ranged[n.txid] {
-					ranged[n.txid] = true
-					n.updateInputSum()
-					n.updateReadonlyInputSum()
-				}
-				if m.isNextNode(n, false) {
-					tmpNodes = append(tmpNodes, n)
-				}
-			}
-		}
-		nodes = tmpNodes
-	}
-}
-
-func (m *Mempool) isNextNode(node *Node, readonly bool) bool {
+func (m *Mempool) isNextNode(node *Node, readonly bool, ranged map[string]bool) bool {
 	if node == nil {
 		return false
+	}
+	if !ranged[node.txid] { // 第一次遍历到此节点，更新 inputSum 并标记已经遍历过。
+		ranged[node.txid] = true
+		node.updateInputSum()
+		node.updateReadonlyInputSum()
 	}
 	_, ok := m.unconfirmed[node.txid]
 	if !ok {
@@ -787,9 +796,7 @@ func (m *Mempool) processTxInputs(node *Node, retrieve bool) (bool, error) {
 			}
 
 		} else {
-			if dbTx, err := m.queryTxFromDB(id); err != nil {
-				return false, err
-			} else if dbTx != nil {
+			if dbTx, _ := m.queryTxFromDB(id); dbTx != nil {
 				n := NewNode(string(dbTx.Txid), dbTx)
 				if forDeleteNode, err := node.updateInput(i, int(input.RefOffset), n, retrieve); err != nil {
 					return false, err
@@ -874,9 +881,7 @@ func (m *Mempool) processTxInputsExt(node *Node, retrieve bool) (bool, error) {
 			}
 
 		} else {
-			if dbTx, err := m.queryTxFromDB(id); err != nil {
-				return false, err
-			} else if dbTx != nil {
+			if dbTx, _ := m.queryTxFromDB(id); dbTx != nil {
 				n := NewNode(string(dbTx.GetTxid()), dbTx)
 				offset := int(input.RefOffset)
 				if forDeleteNode, err := node.updateInputExt(index, offset, n, retrieve); err != nil {
@@ -903,10 +908,17 @@ func (m *Mempool) processTxInputsExt(node *Node, retrieve bool) (bool, error) {
 	return isOrphan, nil
 }
 
-var dbTxs = make(map[string]*pb.Transaction, 10) // for test
+var (
+	isTest bool
+	dbTxs  = make(map[string]*pb.Transaction, 10) // for test
+)
 
 func (m *Mempool) queryTxFromDB(txid string) (*pb.Transaction, error) {
-	return m.Tx.ledger.QueryTransaction([]byte(txid))
+	if !isTest { // 单测使用。
+		return m.Tx.ledger.QueryTransaction([]byte(txid))
+	}
+	tx, _ := dbTxs[txid]
+	return tx, nil
 }
 
 func (m *Mempool) processConflict(tx *pb.Transaction) error {
