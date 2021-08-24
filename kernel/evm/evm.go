@@ -5,6 +5,8 @@ import (
 	"strconv"
 
 	"github.com/hyperledger/burrow/acm/balance"
+	"github.com/hyperledger/burrow/txs/payload"
+
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
 
 	"github.com/hyperledger/burrow/crypto"
@@ -111,7 +113,6 @@ func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, erro
 func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	signedTx := args["signed_tx"]
-	txHash := args["tx_hash"]
 	data, err := x.DecodeToBytes(string(signedTx))
 	if err != nil {
 		return nil, err
@@ -152,6 +153,10 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	from := pub.GetAddress()
 	amount := balance.WeiToNative(rawTx.Value)
 
+	txHash, err := p.TxHash(strconv.Itoa(chainID), rawTx)
+	if err != nil {
+		return nil, err
+	}
 	if err := ctx.Put(ETH_TX_PREFIX, txHash, signedTx); err != nil {
 		return nil, err
 	}
@@ -162,9 +167,10 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	if len(rawTx.Data) == 0 {
 		return &contract.Response{
 			Status: 200,
-			Body:   []byte("ok"),
+			Body:   txHash,
 		}, nil
 	}
+
 	contractName, err := evm.DetermineContractNameFromEVM(to)
 	if err != nil {
 		return nil, err
@@ -176,7 +182,30 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	resp, err := ctx.Call("evm", contractName, "", invokArgs)
 	return resp, err
 }
+func (p *proxy) TxHash(chainId string, rawTx *rpc.RawTx) ([]byte, error) {
+	to, err := crypto.AddressFromBytes(rawTx.To)
+	if err != nil {
+		return nil, err
+	}
 
+	tx := txs.Tx{
+		ChainID: chainId,
+		Payload: &payload.CallTx{
+			// Input: &payload.TxInput{
+			// 	Address: from,
+			// 	Amount:  amount,
+			// 	// first tx sequence should be 1,
+			// 	// but metamask starts at 0
+			// 	Sequence: rawTx.Nonce + 1,
+			// },
+			Address:  &to,
+			GasLimit: rawTx.GasLimit,
+			GasPrice: rawTx.GasPrice,
+			Data:     rawTx.Data,
+		},
+	}
+	return tx.Hash(), nil
+}
 func (p *proxy) ContractCall(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	input, err := hex.DecodeString(string(args["input"]))
