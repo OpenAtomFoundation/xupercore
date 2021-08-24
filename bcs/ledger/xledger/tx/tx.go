@@ -67,7 +67,7 @@ func NewTx(sctx *context.StateCtx, stateDB kvdb.Database) (*Tx, error) {
 		ledger:            sctx.Ledger,
 		maxConfirmedDelay: DefaultMaxConfirmedDelay,
 	}
-	m := NewMempool(tx)
+	m := NewMempool(tx, tx.log)
 	tx.Mempool = m
 	return tx, nil
 }
@@ -190,7 +190,7 @@ func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
 }
 
 // GetUnconfirmedTx 挖掘一批unconfirmed的交易打包，返回的结果要保证是按照交易执行的先后顺序
-// maxSize: 打包交易最大的长度（in byte）, -1 表示不限制
+// maxSize: 打包交易最大的长度（in byte）, -1（小于0） 表示不限制
 func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, error) {
 	result := make([]*pb.Transaction, 0, 100)
 
@@ -212,19 +212,17 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 
 	t.Mempool.Range(f)
 	t.UnconfirmTxAmount = int64(len(result))
+	t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount)
 	return result, nil
 }
 
 // GetDelayedTxs 获取当前 mempool 中超时的交易。
 func (t *Tx) GetDelayedTxs() []*pb.Transaction {
 	delayedTxs := make([]*pb.Transaction, 0)
-	var totalDelay int64
-	now := time.Now().UnixNano()
 
 	f := func(tx *pb.Transaction) bool {
-		txDelay := (now - tx.ReceivedTimestamp)
-		totalDelay += txDelay
-		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
+		rc := time.Unix(0, tx.ReceivedTimestamp)
+		if time.Since(rc).Seconds() > float64(t.maxConfirmedDelay) {
 			delayedTxs = append(delayedTxs, tx)
 		}
 
@@ -237,16 +235,17 @@ func (t *Tx) GetDelayedTxs() []*pb.Transaction {
 	for i := len(delayedTxs) - 1; i >= 0; i-- {
 		tx := delayedTxs[i]
 		result = append(result, tx)
-		result = append(result, t.Mempool.DeleteTxAndChildren(string(tx.GetTxid()))...)
+		deleted := t.Mempool.DeleteTxAndChildren(string(tx.GetTxid()))
+		for _, tx := range deleted {
+			result = append(result, tx)
+		}
+		result = append(result, tx)
 	}
-
+	t.log.Debug("Tx GetDelayedTxs", "delayedTxsCount", len(delayedTxs), "delayedTxsAndDeletedChildrenInMempool", len(result))
 	return result
 }
 
-// SortUnconfirmedTx 加载所有未确认的订单表到内存
-// 参数: dedup : true-删除已经确认tx, false-保留已经确认tx
-// 返回: txMap : txid -> Transaction
-//        txGraph:  txid ->  [依赖此txid的tx]
+// SortUnconfirmedTx 返回未确认交易列表以及延迟时间过长交易。
 func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transaction, error) {
 	// 构造反向依赖关系图, key是被依赖的交易
 	// txMap := map[string]*pb.Transaction{}
@@ -262,7 +261,6 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 		txDelay := (now - tx.ReceivedTimestamp)
 		totalDelay += txDelay
 		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
-			// delayedTxMap[string(tx.GetTxid())] = tx
 			delayedTxs = append(delayedTxs, tx)
 		}
 		if sizeLimit > 0 {

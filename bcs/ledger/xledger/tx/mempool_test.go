@@ -60,7 +60,7 @@ func run(b *testing.B, t *testing.T) {
 	if b != nil {
 		sum = b.N
 	}
-	m := NewMempool(nil)
+	m := NewMempool(nil, nil)
 	setup(m)
 	// printMempool(m)
 	// return
@@ -120,6 +120,7 @@ func batchTx(m *Mempool) []*pb.Transaction {
 }
 
 func setup(m *Mempool) {
+	isTest = true
 	type dbtxs struct {
 		Txid string
 	}
