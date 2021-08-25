@@ -2,13 +2,13 @@ package chained_bft
 
 import (
 	"bytes"
-	"container/list"
-	"path/filepath"
 	"testing"
 	"time"
 
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/mock"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
+	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	kmock "github.com/xuperchain/xupercore/kernel/consensus/mock"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -18,9 +18,6 @@ import (
 )
 
 var (
-	LogPath  = filepath.Join(utils.GetCurFileDir(), "/main/test")
-	NodePath = filepath.Join(utils.GetCurFileDir(), "../../../../mock/p2pv2")
-
 	NodeA   = "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
 	NodeAIp = "/ip4/127.0.0.1/tcp/38201/p2p/Qmf2HeHe4sspGkfRCTq6257Vm3UHzvh2TeQJHHvHzzuFw6"
 	PubKeyA = `{"Curvname":"P-256","X":36505150171354363400464126431978257855318414556425194490762274938603757905292,"Y":79656876957602994269528255245092635964473154458596947290316223079846501380076}`
@@ -66,47 +63,17 @@ func (e *ElectionA) GetIntAddress(a string) string {
 	return ""
 }
 
-func NewFakeLogger(node string) logs.Logger {
-	var Npath string
-	switch node {
-	case "nodeA":
-		Npath = "node1"
-	case "nodeB":
-		Npath = "node2"
-	case "nodeC":
-		Npath = "node3"
-	}
-	path := filepath.Join(LogPath, Npath)
-	confFile := filepath.Join(path, "log.yaml")
-	logDir := filepath.Join(path, "/logs")
-
-	logs.InitLog(confFile, logDir)
-	log, _ := logs.NewLogger(node, "smr_test")
-	return log
-}
-
-func InitQcTee(log logs.Logger) *QCPendingTree {
-	initQC := &QuorumCert{
-		VoteInfo: &VoteInfo{
-			ProposalId:   []byte{0},
-			ProposalView: 0,
-		},
-		LedgerCommitInfo: &LedgerCommitInfo{
-			CommitStateId: []byte{0},
-		},
-	}
-	rootNode := &ProposalNode{
+func InitQcTee(log logs.Logger) *storage.QCPendingTree {
+	initQC := storage.NewQuorumCert(&storage.VoteInfo{
+		ProposalId:   []byte{0},
+		ProposalView: 0,
+	}, &storage.LedgerCommitInfo{
+		CommitStateId: []byte{0},
+	}, nil)
+	rootNode := &storage.ProposalNode{
 		In: initQC,
 	}
-	return &QCPendingTree{
-		Genesis:    rootNode,
-		Root:       rootNode,
-		HighQC:     rootNode,
-		CommitQC:   rootNode,
-		Log:        log,
-		OrphanList: list.New(),
-		OrphanMap:  make(map[string]bool),
-	}
+	return storage.MockTree(rootNode, rootNode, rootNode, nil, nil, rootNode, log)
 }
 
 func NewFakeCryptoClient(node string, t *testing.T) (cctx.Address, cctx.CryptoClient) {
@@ -166,18 +133,17 @@ func NewSMR(node string, log logs.Logger, p2p network.Network, t *testing.T) *Sm
 }
 
 func TestSMR(t *testing.T) {
-	logA := NewFakeLogger("nodeA")
-	logB := NewFakeLogger("nodeB")
-	logC := NewFakeLogger("nodeC")
+	th, _ := mock.NewTestHelper()
+	defer th.Close()
 	pA, ctxA, _ := kmock.NewP2P("nodeA")
 	pB, ctxB, _ := kmock.NewP2P("nodeB")
 	pC, ctxC, _ := kmock.NewP2P("nodeC")
 	pA.Init(ctxA)
 	pB.Init(ctxB)
 	pC.Init(ctxC)
-	sA := NewSMR("nodeA", logA, pA, t)
-	sB := NewSMR("nodeB", logB, pB, t)
-	sC := NewSMR("nodeC", logC, pC, t)
+	sA := NewSMR("nodeA", th.Log, pA, t)
+	sB := NewSMR("nodeB", th.Log, pB, t)
+	sC := NewSMR("nodeC", th.Log, pC, t)
 	go pA.Start()
 	go pB.Start()
 	go pC.Start()
@@ -251,7 +217,7 @@ func TestSMR(t *testing.T) {
 	// 注意，由于本状态机支持回滚，因此round可重复
 	// 注意，为了支持回滚操作，必须调用smr的UpdateJustifyQcStatus
 	// 次数round1的全部选票在B手中
-	vote := &VoteInfo{
+	vote := &storage.VoteInfo{
 		ProposalId:   []byte{1},
 		ProposalView: 1,
 		ParentId:     []byte{0},
@@ -265,10 +231,7 @@ func TestSMR(t *testing.T) {
 	if !ok {
 		t.Error("B votesMsg transfer error")
 	}
-	justi := &QuorumCert{
-		VoteInfo:  vote,
-		SignInfos: signs,
-	}
+	justi := storage.NewQuorumCert(vote, nil, signs)
 	sA.updateJustifyQcStatus(justi)
 	sB.updateJustifyQcStatus(justi)
 	sC.updateJustifyQcStatus(justi)

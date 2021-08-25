@@ -12,6 +12,7 @@ import (
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
+	quorumcert "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/lib/utils"
@@ -105,7 +106,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 
 	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-	qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
+	qcTree := quorumcert.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 	if qcTree == nil {
 		cCtx.XLog.Error("consensus:tdpos:NewTdposConsensus: init QCTree err", "startHeight", cCfg.StartHeight)
 		return nil
@@ -115,7 +116,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	}
 	// 重启状态检查1，pacemaker需要重置
 	tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
-	if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		pacemaker.CurrentView = tipHeight - 1
 	}
 	saftyrules := &chainedBft.DefaultSaftyRules{
@@ -125,7 +126,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	}
 	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
 	// 重启状态检查2，重做tipBlock，此时需重装载justify签名
-	if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		for i := int64(0); i < 3; i++ {
 			b, err := cCtx.Ledger.QueryBlockByHeight(tipHeight - i)
 			if err != nil {
@@ -237,7 +238,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	}
 
 	// 包装成统一入口访问smr
-	err = tp.smr.HandleCheckMinerMatch(block, justify, validators)
+	err = tp.smr.CheckProposal(block, justify, validators)
 	if err != nil {
 		tp.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
 			"proposalQC:[id]", utils.F(block.GetBlockid()), "justifyQC:[height]", justify.GetProposalView(),
@@ -287,7 +288,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 		targetId = block.GetPreHash()
 	}
 	// smr返回一个裁剪目标，供miner模块直接回滚并出块
-	truncate, qc, err := tp.smr.HandleProcessBeforeMiner(rollbackBranch, tp.election.validators, tp.election.CalOldProposers)
+	truncate, qc, err := tp.smr.ResetProposerStatus(rollbackBranch, tp.election.validators, tp.election.CalOldProposers)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -296,7 +297,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 		return nil, nil, nil
 	}
 
-	qcQuorumCert, _ := qc.(*chainedBft.QuorumCert)
+	qcQuorumCert, _ := qc.(*quorumcert.QuorumCert)
 	oldQC, _ := common.NewToOldQC(qcQuorumCert)
 	storage.Justify = oldQC
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
@@ -323,7 +324,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 		tp.log.Warn("consensus:tdpos:ProcessConfirmBlock: parse storage error", "err", err)
 		return err
 	}
-	var justify chainedBft.QuorumCertInterface
+	var justify quorumcert.QuorumCertInterface
 	if bv != nil && block.GetHeight() > tp.status.StartHeight {
 		justify, err = common.OldQCToNew(bv)
 		if err != nil {
@@ -345,7 +346,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	}
 
 	// 包装成统一入口访问smr
-	if err = tp.smr.HandleProcessConfirmBlock(block, justify, nextValidators); err != nil {
+	if err = tp.smr.KeepUpWithBlock(block, justify, nextValidators); err != nil {
 		tp.log.Warn("consensus:tdpos:ProcessConfirmBlock: update smr error.", "error", err)
 		return err
 	}

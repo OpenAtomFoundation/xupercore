@@ -12,6 +12,7 @@ import (
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
+	quorumcert "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -115,7 +116,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 
 	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
 	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-	qcTree := common.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
+	qcTree := quorumcert.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
 	if qcTree == nil {
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: init QCTree err", "startHeight", cCfg.StartHeight)
 		return nil
@@ -125,7 +126,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 	}
 	// 重启状态检查1，pacemaker需要重置
 	tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
-	if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		pacemaker.CurrentView = tipHeight - 1
 	}
 	saftyrules := &chainedBft.DefaultSaftyRules{
@@ -135,7 +136,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 	}
 	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
 	// 重启状态检查2，重做tipBlock，此时需重装载justify签名
-	if !bytes.Equal(qcTree.Genesis.In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		for i := int64(0); i < 3; i++ {
 			b, err := cCtx.Ledger.QueryBlockByHeight(tipHeight - i)
 			if err != nil {
@@ -224,7 +225,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	validators, _ := x.election.GetLocalValidates(preBlock.GetTimestamp(), justify.GetProposalView(), preConStoreBytes)
 
 	// 包装成统一入口访问smr
-	err = x.smr.HandleCheckMinerMatch(block, justify, validators)
+	err = x.smr.CheckProposal(block, justify, validators)
 	if err != nil {
 		x.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
 			"proposalQC:[id]", utils.F(block.GetBlockid()), "justifyQC:[height]", justify.GetProposalView(),
@@ -255,7 +256,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 		targetId = block.GetPreHash()
 	}
 	// smr返回一个裁剪目标，供miner模块直接回滚并出块
-	truncate, qc, err := x.smr.HandleProcessBeforeMiner(rollbackBranch, x.election.validators, x.election.GetLocalValidates)
+	truncate, qc, err := x.smr.ResetProposerStatus(rollbackBranch, x.election.validators, x.election.GetLocalValidates)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -264,7 +265,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 		return nil, nil, nil
 	}
 
-	qcQuorumCert, _ := qc.(*chainedBft.QuorumCert)
+	qcQuorumCert, _ := qc.(*quorumcert.QuorumCert)
 	oldQC, _ := common.NewToOldQC(qcQuorumCert)
 	storage := common.ConsensusStorage{
 		Justify: oldQC,
@@ -293,7 +294,7 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 		x.GetLog().Warn("consensus:xpoa:CheckMinerMatch: parse storage error", "err", err, "blockId", utils.F(block.GetBlockid()))
 		return err
 	}
-	var justify chainedBft.QuorumCertInterface
+	var justify quorumcert.QuorumCertInterface
 	if justifyBytes != nil && block.GetHeight() > x.status.StartHeight {
 		justify, err = common.OldQCToNew(justifyBytes)
 		if err != nil {
@@ -316,7 +317,7 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	}
 
 	// 包装成统一入口访问smr
-	if err := x.smr.HandleProcessConfirmBlock(block, justify, minerValidator); err != nil {
+	if err := x.smr.KeepUpWithBlock(block, justify, minerValidator); err != nil {
 		x.log.Warn("consensus:xpoa:ProcessConfirmBlock: update smr error.", "error", err)
 		return err
 	}

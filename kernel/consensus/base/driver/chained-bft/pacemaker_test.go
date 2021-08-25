@@ -2,14 +2,16 @@ package chained_bft
 
 import (
 	"testing"
+
+	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 )
 
 func TestPaceMaker(t *testing.T) {
 	p := &DefaultPaceMaker{
 		CurrentView: 0,
 	}
-	qc := &QuorumCert{
-		VoteInfo: &VoteInfo{
+	qc := &storage.QuorumCert{
+		VoteInfo: &storage.VoteInfo{
 			ProposalId:   []byte{1},
 			ProposalView: 1,
 		},

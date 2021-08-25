@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
+	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
 
@@ -27,10 +28,10 @@ var (
 
 type saftyRulesInterface interface {
 	UpdatePreferredRound(round int64) bool
-	VoteProposal(proposalId []byte, proposalRound int64, parentQc QuorumCertInterface) bool
-	CheckVote(qc QuorumCertInterface, logid string, validators []string) error
+	VoteProposal(proposalId []byte, proposalRound int64, parentQc storage.QuorumCertInterface) bool
+	CheckVote(qc storage.QuorumCertInterface, logid string, validators []string) error
 	CalVotesThreshold(input, sum int) bool
-	CheckProposal(proposal, parent QuorumCertInterface, justifyValidators []string) error
+	CheckProposal(proposal, parent storage.QuorumCertInterface, justifyValidators []string) error
 	CheckPacemaker(pending, local int64) bool
 }
 
@@ -42,7 +43,7 @@ type DefaultSaftyRules struct {
 	// 若本地有相同高度的节点，则自然排序后选出preferredRound
 	preferredRound int64
 	Crypto         *cCrypto.CBFTCrypto
-	QcTree         *QCPendingTree
+	QcTree         *storage.QCPendingTree
 
 	Log logs.Logger
 }
@@ -60,7 +61,7 @@ func (s *DefaultSaftyRules) UpdatePreferredRound(round int64) bool {
 // 但需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
 // 因此由于账本的可回滚性，因此lastVoteRound和preferredRound比对时，仅需比对新来的数据是否小于local数据-3即可
 // 此处-3代表数据已经落盘
-func (s *DefaultSaftyRules) VoteProposal(proposalId []byte, proposalRound int64, parentQc QuorumCertInterface) bool {
+func (s *DefaultSaftyRules) VoteProposal(proposalId []byte, proposalRound int64, parentQc storage.QuorumCertInterface) bool {
 	if proposalRound < s.lastVoteRound-StrictInternal {
 		return false
 	}
@@ -72,7 +73,7 @@ func (s *DefaultSaftyRules) VoteProposal(proposalId []byte, proposalRound int64,
 }
 
 // CheckVote 检查logid、voteInfoHash是否正确
-func (s *DefaultSaftyRules) CheckVote(qc QuorumCertInterface, logid string, validators []string) error {
+func (s *DefaultSaftyRules) CheckVote(qc storage.QuorumCertInterface, logid string, validators []string) error {
 	// 检查签名, vote目前为单个签名，因此只需要验证第一个即可，验证的内容为签名信息是否在合法的validators里面
 	signs := qc.GetSignsInfo()
 	if len(signs) == 0 {
@@ -119,7 +120,7 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 // CheckProposalMsg 原IsQuorumCertValidate 判断justify，即需check的block的parentQC是否合法
 // 需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
 // 因此在此proposal和parent的QC稍微宽松检查
-func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, justifyValidators []string) error {
+func (s *DefaultSaftyRules) CheckProposal(proposal, parent storage.QuorumCertInterface, justifyValidators []string) error {
 	if proposal.GetProposalView() < s.lastVoteRound-StrictInternal {
 		return TooLowProposalView
 	}
@@ -137,7 +138,7 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent QuorumCertInterface, 
 	// 或者新qc目前为孤儿节点，有可能未来切换成HighQC，此时仅需要proposal在[root+1, root+6]
 	// 是+6不是+3的原因是考虑到重起的时候的情况，重起时，root为tipId-3，而外界状态最多到tipId+3，此处简化处理
 	if parentNode := s.QcTree.DFSQueryNode(parent.GetProposalId()); parentNode == nil {
-		if proposal.GetProposalView() <= s.QcTree.Root.In.GetParentView() || proposal.GetProposalView() > s.QcTree.Root.In.GetProposalView()+PermissiveInternal {
+		if proposal.GetProposalView() <= s.QcTree.GetRootQC().In.GetParentView() || proposal.GetProposalView() > s.QcTree.GetRootQC().In.GetProposalView()+PermissiveInternal {
 			return EmptyParentNode
 		}
 	}
