@@ -58,6 +58,12 @@ message XuperMessage {
 
         GET_PEER_INFO = 24;
         GET_PEER_INFO_RES = 25;
+
+        GET_BLOCK_HEADERS = 26;
+        GET_BLOCKS_HEADERS_RES = 27;
+
+        GET_BLOCK_TXS = 28;
+        GET_BLOCKS_TXS_RES = 29;
     }
 
     enum ErrorType {
