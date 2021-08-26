@@ -6,11 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"math/big"
 	"path/filepath"
 	"strconv"
 	"time"
+
+	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 
 	"github.com/golang/protobuf/proto"
 
@@ -205,6 +206,14 @@ func (t *State) GetAccountContracts(account string) ([]string, error) {
 	return t.utxo.GetAccountContracts(account)
 }
 
+func (t *State) GetUnconfirmedTxFromId(txid []byte) (*pb.Transaction, bool) {
+	tx, ok := t.tx.UnconfirmTxInMem.Load(string(txid))
+	if ok {
+		return tx.(*pb.Transaction), true
+	}
+	return nil, false
+}
+
 // 查询合约状态
 func (t *State) GetContractStatus(contractName string) (*protos.ContractStatus, error) {
 	res := &protos.ContractStatus{}
@@ -389,7 +398,7 @@ func (t *State) Play(blockid []byte) error {
 }
 
 func (t *State) PlayForMiner(blockid []byte) error {
-	beginTime:= time.Now()
+	beginTime := time.Now()
 	timer := timer.NewXTimer()
 	batch := t.NewBatch()
 	block, blockErr := t.sctx.Ledger.QueryBlock(blockid)
