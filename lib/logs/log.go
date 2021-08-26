@@ -63,9 +63,9 @@ func OpenLog(lc *lconf.LogConf, logDir string) (LogDriver, error) {
 	// only valid if `RotateInterval` and `RotateBackups` greater than 0
 	var nmHandler, wfHandler log.Handler
 	if lc.RotateInterval > 0 && lc.RotateBackups > 0 {
-		nmHandler = log.Must.RotateFileHandler(
+		nmHandler = mustBufferFileHandler(
 			infoFile, lfmt, lc.RotateInterval, lc.RotateBackups)
-		wfHandler = log.Must.RotateFileHandler(
+		wfHandler = mustBufferFileHandler(
 			wfFile, lfmt, lc.RotateInterval, lc.RotateBackups)
 	} else {
 		nmHandler = log.Must.FileHandler(infoFile, lfmt)
@@ -85,9 +85,9 @@ func OpenLog(lc *lconf.LogConf, logDir string) (LogDriver, error) {
 	var lhd log.Handler
 	if lc.Console {
 		hstd := log.StreamHandler(os.Stderr, lfmt)
-		lhd = log.SyncHandler(log.MultiHandler(hstd, nmfileh, wffileh))
+		lhd = log.MultiHandler(hstd, nmfileh, wffileh)
 	} else {
-		lhd = log.SyncHandler(log.MultiHandler(nmfileh, wffileh))
+		lhd = log.MultiHandler(nmfileh, wffileh)
 	}
 	xlog.SetHandler(lhd)
 
