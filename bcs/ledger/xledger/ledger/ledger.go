@@ -1071,6 +1071,19 @@ func (l *Ledger) QueryBlockByHeight(height int64) (*pb.InternalBlock, error) {
 	return l.QueryBlock(blockID)
 }
 
+// QueryBlockHeaderByHeight query block header by height
+func (l *Ledger) QueryBlockHeaderByHeight(height int64) (*pb.InternalBlock, error) {
+	sHeight := []byte(fmt.Sprintf("%020d", height))
+	blockID, kvErr := l.heightTable.Get(sHeight)
+	if kvErr != nil {
+		if def.NormalizedKVError(kvErr) == def.ErrKVNotFound {
+			return nil, ErrBlockNotExist
+		}
+		return nil, kvErr
+	}
+	return l.QueryBlockHeader(blockID)
+}
+
 // GetBaseDB get internal db instance
 func (l *Ledger) GetBaseDB() kvdb.Database {
 	return l.baseDB

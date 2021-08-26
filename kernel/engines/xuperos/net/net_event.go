@@ -2,9 +2,12 @@ package xuperos
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -16,6 +19,7 @@ import (
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -79,8 +83,8 @@ func (t *NetEvent) Subscriber() error {
 		protos.XuperMessage_GET_BLOCK:                t.handleGetBlock,
 		protos.XuperMessage_GET_BLOCKCHAINSTATUS:     t.handleGetChainStatus,
 		protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS: t.handleConfirmChainStatus,
-		//protos.XuperMessage_GET_BLOCKIDS:             t.handleGetBlockIds,
-		//protos.XuperMessage_GET_BLOCKS:               t.handleGetBlocks,
+		protos.XuperMessage_GET_BLOCK_HEADERS:        t.handleGetBlockHeaders,
+		protos.XuperMessage_GET_BLOCK_TXS:            t.handleGetBlockTxs,
 	}
 
 	net := t.engine.Context().Net
@@ -290,7 +294,10 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 	var input xpb.BlockID
-	var output *xpb.BlockInfo
+	var output *xpb.BlockInfo = new(xpb.BlockInfo)
+	defer func(begin time.Time) {
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlock").Observe(time.Now().Sub(begin).Seconds())
+	}(time.Now())
 
 	bcName := request.Header.Bcname
 	response := func(err error) (*protos.XuperMessage, error) {
@@ -316,15 +323,161 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	}
 
 	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
-	output, err = ledgerReader.QueryBlock(input.Blockid, input.NeedContent)
-	if err != nil {
-		ctx.GetLog().Error("ledger reader query block error", "error", err)
-		return response(err)
+	if input.Blockid != nil {
+		output, err = ledgerReader.QueryBlock(input.Blockid, input.NeedContent)
+		if err != nil {
+			ctx.GetLog().Error("ledger reader query block error", "error", err)
+			return response(err)
+		}
+		ctx.GetLog().SetInfoField("height", output.Block.Height)
+		ctx.GetLog().SetInfoField("blockId", utils.F(output.Block.Blockid))
+		ctx.GetLog().SetInfoField("status", output.Status)
 	}
 
-	ctx.GetLog().SetInfoField("height", output.Block.Height)
-	ctx.GetLog().SetInfoField("blockId", utils.F(output.Block.Blockid))
-	ctx.GetLog().SetInfoField("status", output.Status)
+	return response(nil)
+}
+
+func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
+	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+	output := new(xpb.GetBlockHeaderResponse)
+	defer func(begin time.Time) {
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockHeaders").Observe(time.Now().Sub(begin).Seconds())
+	}(time.Now())
+
+	bcName := request.Header.Bcname
+	response := func(err error) (*protos.XuperMessage, error) {
+		opts := []p2p.MessageOption{
+			p2p.WithBCName(bcName),
+			p2p.WithErrorType(ErrorType(err)),
+			p2p.WithLogId(request.GetHeader().GetLogid()),
+		}
+		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
+		return resp, nil
+	}
+
+	var input xpb.GetBlockHeaderRequest
+	err := p2p.Unmarshal(request, &input)
+	if err != nil {
+		ctx.GetLog().Error("unmarshal error", "bcName", bcName, "error", err)
+		return response(common.ErrParameter)
+	}
+
+	chain, err := t.engine.Get(bcName)
+	if err != nil {
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
+		return response(common.ErrChainNotExist)
+	}
+
+	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
+
+	if input.Height < 0 {
+		return response(errors.New("bad input height"))
+	}
+
+	// TODO: max input.Size
+	blocks := make([]*lpb.InternalBlock, input.Size)
+	group := errgroup.Group{}
+	mutex := sync.Mutex{}
+	maxIdx := -1
+	for i := int64(0); i < input.GetSize(); i++ {
+		i := i
+		height := input.Height + i
+		group.Go(func() error {
+			blkInfo, err := ledgerReader.QueryBlockHeaderByHeight(height)
+			if err != nil {
+				ctx.GetLog().Debug("query block header error", "error", err, "height", height)
+				return err
+			}
+			if blkInfo.Status == lpb.BlockStatus_BLOCK_NOEXIST {
+				ctx.GetLog().Debug("query block header error", "error", "not exist", "height", height)
+				return nil
+			}
+			// 拷贝区块头，避免修改原缓存
+			block := *blkInfo.Block
+			// 取coinbase交易
+			if block.TxCount > 0 {
+				txid := block.MerkleTree[0]
+				coinbaseTx, err := ledgerReader.QueryTx(txid)
+				if err == nil {
+					// 避免修改Transactions结构
+					block.Transactions = []*lpb.Transaction{coinbaseTx.GetTx()}
+				}
+			}
+			ctx.GetLog().Debug("query block header", "size", proto.Size(&block))
+			mutex.Lock()
+			blocks[i] = &block
+			if int(i) > maxIdx {
+				maxIdx = int(i)
+			}
+			mutex.Unlock()
+			return nil
+		})
+	}
+	err = group.Wait()
+	if err != nil {
+		return response(err)
+	}
+	output.Blocks = blocks[:maxIdx+1]
+
+	return response(nil)
+}
+
+func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
+	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+
+	output := new(xpb.GetBlockTxsResponse)
+	defer func(begin time.Time) {
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockTxs").Observe(time.Now().Sub(begin).Seconds())
+	}(time.Now())
+
+	bcName := request.Header.Bcname
+	response := func(err error) (*protos.XuperMessage, error) {
+		opts := []p2p.MessageOption{
+			p2p.WithBCName(bcName),
+			p2p.WithErrorType(ErrorType(err)),
+			p2p.WithLogId(request.GetHeader().GetLogid()),
+		}
+		resp := p2p.NewMessage(p2p.GetRespMessageType(request.GetHeader().GetType()), output, opts...)
+		return resp, nil
+	}
+
+	var input xpb.GetBlockTxsRequest
+	err := p2p.Unmarshal(request, &input)
+	if err != nil {
+		ctx.GetLog().Error("unmarshal error", "bcName", bcName, "error", err)
+		return response(common.ErrParameter)
+	}
+
+	chain, err := t.engine.Get(bcName)
+	if err != nil {
+		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
+		return response(common.ErrChainNotExist)
+	}
+
+	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
+
+	if input.Blockid != nil && len(input.Txs) > 0 {
+		header, err := ledgerReader.QueryBlockHeader(input.Blockid)
+		if err != nil {
+			return response(err)
+		}
+		if header.Status == lpb.BlockStatus_BLOCK_NOEXIST {
+			return response(fmt.Errorf("block %x not found", input.Blockid))
+		}
+		blockTxids := header.Block.GetMerkleTree()[:header.Block.GetTxCount()]
+		for _, idx := range input.Txs {
+			if int(idx) >= len(blockTxids) {
+				return response(fmt.Errorf("bad tx index, got:%d, max:%d, count:%d", idx, len(blockTxids)-1, header.Block.TxCount))
+			}
+			txid := blockTxids[idx]
+			tx, err := ledgerReader.QueryTx(txid)
+			if err != nil {
+				return response(err)
+			}
+			output.Txs = append(output.Txs, tx.Tx)
+		}
+	}
+
 	return response(nil)
 }
 

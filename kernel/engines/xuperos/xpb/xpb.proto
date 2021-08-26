@@ -52,3 +52,23 @@ message ConsensusStatus {
     string start_height = 3;
     string validators_info = 4;
 }
+
+message GetBlockHeaderRequest {
+    string bcname = 1;
+    int64 height = 2;
+    int64 size = 3;
+}
+
+message GetBlockHeaderResponse {
+    repeated xldgpb.InternalBlock blocks = 1;
+}
+
+message GetBlockTxsRequest {
+    string bcname = 1; 
+    bytes blockid = 2;
+    repeated int32 txs = 3;
+}
+
+message GetBlockTxsResponse {
+    repeated xldgpb.Transaction txs = 4;
+}
