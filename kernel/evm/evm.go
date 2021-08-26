@@ -160,10 +160,10 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	if err := ctx.Put(ETH_TX_PREFIX, txHash, signedTx); err != nil {
 		return nil, err
 	}
-
-	if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
-		return nil, err
-	}
+	_, _ = from, amount
+	//if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
+	//	return nil, err
+	//}
 	if len(rawTx.Data) == 0 {
 		return &contract.Response{
 			Status: 200,
