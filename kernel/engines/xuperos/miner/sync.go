@@ -30,8 +30,8 @@ const (
 )
 
 var (
-	ErrHashMismatch = errors.New("hash mismatch")
-	ErrNoNewBlock   = errors.New("no new block found")
+	ErrHashMissMatch = errors.New("hash miss match")
+	ErrNoNewBlock    = errors.New("no new block found")
 )
 
 func traceSync() func(string) {
@@ -171,7 +171,7 @@ func (t *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (
 	trace("getBlockByHeight")
 	ctx.GetLog().Info("getBlocksByHeight return blocks", "height", height, "size", size, "realSize", len(blocks))
 	err = t.batchConfirmBlocks(ctx, blocks)
-	if err == ErrHashMismatch {
+	if err == ErrHashMissMatch {
 		// 发生了分叉，处理分叉
 		ctx.GetLog().Error("sync peers with fork")
 		err = t.handleFork(ctx)
@@ -348,7 +348,7 @@ func (t *Miner) batchConfirmBlocks(ctx xctx.XContext, blocks []*lpb.InternalBloc
 				"block", utils.F(block.Blockid),
 				"block.prehash", utils.F(block.PreHash),
 			)
-			return ErrHashMismatch
+			return ErrHashMissMatch
 		}
 
 		blockAgent := state.NewBlockAgent(block)
