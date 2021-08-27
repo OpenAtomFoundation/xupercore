@@ -262,7 +262,11 @@ func (p *proxy) verifySignature(
 func (p *proxy) getTransactionReceipt(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	txHash := args["tx_hash"]
-	tx, err := ctx.Get(ETH_TX_PREFIX, txHash)
+	txHashByte, err := hex.DecodeString(string(txHash))
+	if err != nil {
+		return nil, err
+	}
+	tx, err := ctx.Get(ETH_TX_PREFIX, txHashByte)
 	if err != nil {
 		return nil, err
 	}
