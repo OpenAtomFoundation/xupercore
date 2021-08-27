@@ -80,12 +80,17 @@ func TestEVMProxy(t *testing.T) {
 
 		resp, err = th.Invoke("xkernel", "$evm", "SendRawTransaction", map[string][]byte{
 			"signed_tx": signedTx,
-			"tx_hash":   []byte("tx_hash"),
 		})
 		if err != nil {
 			t.Error(err)
 			return
 		}
+
+		if hex.EncodeToString(resp.Body) != "6a59649d00a90b8333d7b188cb1fef3f940484eaac7844381da8c4cbc702a1d9" {
+			t.Errorf("wrong tx hash:%s", hex.EncodeToString(resp.Body))
+			return
+		}
+
 	})
 	t.Run("GetTransactionReceipt", func(t *testing.T) {
 		resp, err := th.Invoke("xkernel", "$evm", "GetTransactionReceipt", map[string][]byte{
@@ -101,6 +106,9 @@ func TestEVMProxy(t *testing.T) {
 		}
 	})
 
+	t.Run("TxHash", func(t *testing.T) {
+
+	})
 	// t.Run("ContractCall", func(t *testing.T) {
 	// 	resp, err = th.Invoke("xkernel", "$evm", "ContractCall", map[string][]byte{
 	// 		"to":    []byte("313131312D2D2D2D2D2D2D2D2D636F756E746572"),

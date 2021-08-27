@@ -2,6 +2,7 @@ package evm
 
 import (
 	"encoding/hex"
+	"math/big"
 	"strconv"
 
 	"github.com/hyperledger/burrow/acm/balance"
@@ -18,8 +19,9 @@ import (
 )
 
 const (
-	DEFAULT_NET   = 1
-	ETH_TX_PREFIX = "ETH_TX_"
+	DEFAULT_NET    = 1
+	ETH_TX_PREFIX  = "ETH_TX_"
+	BALANCE_PREFIX = "BALANCE_"
 )
 
 type EVMProxy interface {
@@ -32,6 +34,7 @@ func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	// registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
 	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
 	registry.RegisterKernMethod("$evm", "GetTransactionReceipt", p.getTransactionReceipt)
+	// registry.RegisterKernMethod("$evn", "GetBalance", p.balanceOf)
 
 	// registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
@@ -153,7 +156,7 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	from := pub.GetAddress()
 	amount := balance.WeiToNative(rawTx.Value)
 
-	txHash, err := p.TxHash(strconv.Itoa(chainID), rawTx)
+	txHash, err := p.TxHash(from, strconv.Itoa(chainID), rawTx, amount)
 	if err != nil {
 		return nil, err
 	}
@@ -182,22 +185,23 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	resp, err := ctx.Call("evm", contractName, "", invokArgs)
 	return resp, err
 }
-func (p *proxy) TxHash(chainId string, rawTx *rpc.RawTx) ([]byte, error) {
+func (p *proxy) TxHash(from crypto.Address, chainId string, rawTx *rpc.RawTx, amount *big.Int) ([]byte, error) {
 	to, err := crypto.AddressFromBytes(rawTx.To)
 	if err != nil {
 		return nil, err
 	}
 
+	chainId = "15321"
 	tx := txs.Tx{
 		ChainID: chainId,
 		Payload: &payload.CallTx{
-			// Input: &payload.TxInput{
-			// 	Address: from,
-			// 	Amount:  amount,
-			// 	// first tx sequence should be 1,
-			// 	// but metamask starts at 0
-			// 	Sequence: rawTx.Nonce + 1,
-			// },
+			Input: &payload.TxInput{
+				Address: from,
+				Amount:  amount.Uint64(),
+				// first tx sequence should be 1,
+				// but metamask starts at 0
+				Sequence: rawTx.Nonce + 1,
+			},
 			Address:  &to,
 			GasLimit: rawTx.GasLimit,
 			GasPrice: rawTx.GasPrice,
@@ -266,4 +270,13 @@ func (p *proxy) getTransactionReceipt(ctx contract.KContext) (*contract.Response
 		Status: 200,
 		Body:   tx,
 	}, nil
+}
+
+func (p *proxy) transfer(ctx contract.KContext, from, to string, amount *big.Int) error {
+	return nil
+}
+
+func (p *proxy) balanceOf(ctx contract.KContext) error {
+	return nil
+	// key:=
 }
