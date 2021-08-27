@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -53,7 +54,7 @@ func newContractProcess(cfg *contract.NativeConfig, name, basedir, chainAddr str
 	return process, nil
 }
 
-func (c *contractProcess) makeHostProcess() (Process, error) {
+func (c *contractProcess) makeNativeProcess() (Process, error) {
 	envs := []string{
 		"XCHAIN_CODE_PORT=" + strconv.Itoa(c.rpcPort),
 		"XCHAIN_CHAIN_ADDR=" + c.chainAddr,
@@ -171,7 +172,7 @@ func (c *contractProcess) start(startMonitor bool) error {
 	if err != nil {
 		return err
 	}
-	c.process, err = c.makeHostProcess()
+	c.process, err = c.makeNativeProcess()
 	if err != nil {
 		return err
 	}
@@ -212,14 +213,14 @@ func (c *contractProcess) GetDesc() *protos.WasmCodeDesc {
 	return c.desc
 }
 
-func (c *contractProcess) makeStartCommand() (string, error) {
+func (c *contractProcess) makeStartCommand() (*exec.Cmd, error) {
 	switch c.desc.GetRuntime() {
 	case "java":
-		return "java -jar " + c.binpath, nil
+		return exec.Command("java", "-jar", c.binpath), nil
 	case "go":
-		return c.binpath, nil
+		return exec.Command(c.binpath), nil
 	default:
-		return "", fmt.Errorf("unsupported native contract runtime %s", c.desc.GetRuntime())
+		return nil, fmt.Errorf("unsupported native contract runtime %s", c.desc.GetRuntime())
 	}
 }
 
