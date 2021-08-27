@@ -56,7 +56,8 @@ const (
 	// BlockVersion for version 1
 	BlockVersion = 1
 	// BlockCacheSize block counts in lru cache
-	BlockCacheSize              = 100 //block counts in lru cache
+	BlockCacheSize              = 1000   // block counts in lru cache
+	TxCacheSize                 = 100000 // tx counts in lru cache
 	MaxBlockSizeKey             = "MaxBlockSize"
 	ReservedContractsKey        = "ReservedContracts"
 	ForbiddenContractKey        = "ForbiddenContract"
@@ -84,6 +85,7 @@ type Ledger struct {
 	heightTable    kvdb.Database   //保存高度到Blockid的映射
 	blockCache     *cache.LRUCache // block cache, 加速QueryBlock
 	blkHeaderCache *cache.LRUCache // block header cache, 加速fetchBlock
+	txCache        *cache.LRUCache // tx cache
 	cryptoClient   cryptoBase.CryptoClient
 	confirmBatch   kvdb.Batch //新增区块
 }
@@ -140,6 +142,7 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool, genesisCfg []byte) (*Ledge
 	ledger.meta = &pb.LedgerMeta{}
 	ledger.blockCache = cache.NewLRUCache(BlockCacheSize)
 	ledger.blkHeaderCache = cache.NewLRUCache(BlockCacheSize)
+	ledger.txCache = cache.NewLRUCache(TxCacheSize)
 	ledger.confirmBatch = baseDB.NewBatch()
 	metaBuf, metaErr := ledger.metaTable.Get([]byte(""))
 	emptyLedger := false
@@ -341,8 +344,9 @@ func (l *Ledger) formatBlock(txList []*pb.Transaction,
 //保存一个区块（只包括区块头）
 // 注：只是打包到一个leveldb batch write对象中
 func (l *Ledger) saveBlock(block *pb.InternalBlock, batchWrite kvdb.Batch) error {
+	header := *block
 	blockBuf, pbErr := proto.Marshal(block)
-	l.blkHeaderCache.Add(string(block.Blockid), block)
+	l.blkHeaderCache.Add(string(block.Blockid), &header)
 	if pbErr != nil {
 		l.xlog.Warn("marshal block fail", "pbErr", pbErr)
 		return pbErr
@@ -510,31 +514,33 @@ func (l *Ledger) UpdateBlockChainData(txid string, ptxid string, publickey strin
 	return nil
 }
 
-func (l *Ledger) parallelCheckTx(txs []*pb.Transaction, block *pb.InternalBlock) (map[string]bool, map[string][]byte) {
+func (l *Ledger) parallelCheckTx(txs []*pb.Transaction, block *pb.InternalBlock) (map[string]bool, [][]byte) {
+	txData := make([][]byte, len(txs))
+
 	parallelLevel := NumCPU
 	if len(txs) < parallelLevel {
 		parallelLevel = len(txs)
 	}
-	ch := make(chan *pb.Transaction)
+	ch := make(chan int)
 	mu := &sync.Mutex{}
 	wg := &sync.WaitGroup{}
 	txExist := map[string]bool{}
-	txData := map[string][]byte{}
 	total := len(txs)
 	wg.Add(total)
 	for i := 0; i <= parallelLevel; i++ {
 		go func() {
-			for tx := range ch {
+			for i := range ch {
+				tx := txs[i]
 				tx.Blockid = block.Blockid
 				pbTxBuf, err := proto.Marshal(tx)
 				if err != nil {
 					l.xlog.Warn("marshal trasaction failed when confirm block", "err", err)
 					mu.Lock()
-					txData[string(tx.Txid)] = nil
+					txData[i] = nil
 					mu.Unlock()
 				} else {
 					mu.Lock()
-					txData[string(tx.Txid)] = pbTxBuf
+					txData[i] = pbTxBuf
 					mu.Unlock()
 				}
 				if !DisableTxDedup || !block.InTrunk {
@@ -547,16 +553,25 @@ func (l *Ledger) parallelCheckTx(txs []*pb.Transaction, block *pb.InternalBlock)
 			}
 		}()
 	}
-	for _, tx := range txs {
-		ch <- tx
+	for i := range txs {
+		ch <- i
 	}
 	wg.Wait()
 	close(ch)
 	return txExist, txData
 }
 
+func traceMiner() func(string) {
+	last := time.Now()
+	return func(action string) {
+		metrics.CallMethodHistogram.WithLabelValues("miner", action).Observe(time.Since(last).Seconds())
+		last = time.Now()
+	}
+}
+
 // ConfirmBlock submit a block to ledger
 func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatus {
+	trace := traceMiner()
 	l.mutex.Lock()
 	beginTime := time.Now()
 	var confirmStatus ConfirmStatus
@@ -653,6 +668,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 			}
 		}
 	}
+	trace("beforeSave")
 	saveErr := l.saveBlock(block, batchWrite)
 	blkTimer.Mark("saveHeader")
 	if saveErr != nil {
@@ -660,6 +676,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		l.xlog.Warn("save current block fail", "saveErr", saveErr)
 		return confirmStatus
 	}
+	trace("saveBlock")
 	// update branch head
 	updateBranchErr := l.updateBranchInfo(block.Blockid, block.PreHash, block.Height, batchWrite)
 	if updateBranchErr != nil {
@@ -670,7 +687,8 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 	txExist, txData := l.parallelCheckTx(realTransactions, block)
 	cbNum := 0
 	oldBlockCache := map[string]*pb.InternalBlock{}
-	for _, tx := range realTransactions {
+	trace("checktx")
+	for i, tx := range realTransactions {
 		if tx.Coinbase {
 			cbNum = cbNum + 1
 		}
@@ -681,7 +699,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 			return confirmStatus
 		}
 
-		pbTxBuf := txData[string(tx.Txid)]
+		pbTxBuf := txData[i]
 		if pbTxBuf == nil {
 			confirmStatus.Succ = false
 			l.xlog.Warn("marshal trasaction failed when confirm block")
@@ -736,6 +754,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 			}
 		}
 	}
+	trace("saveTx")
 	blkTimer.Mark("saveAllTxs")
 	//删除pendingBlock中对应的数据
 	batchWrite.Delete(append([]byte(pb.PendingBlocksTablePrefix), block.Blockid...))
@@ -750,6 +769,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 	l.xlog.Debug("print block size when confirm block", "blockSize", batchWrite.ValueSize(), "blockid", utils.F(block.Blockid))
 	kvErr := batchWrite.Write() // blocks, confirmed_transaction两张表原子写入
 	blkTimer.Mark("saveToDisk")
+	trace("batchWrite")
 	if kvErr != nil {
 		confirmStatus.Succ = false
 		confirmStatus.Error = kvErr
@@ -768,6 +788,9 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		}
 	}
 	l.blockCache.Add(string(block.Blockid), block)
+	for _, tx := range realTransactions {
+		l.txCache.Add(string(tx.Txid), tx)
+	}
 	l.xlog.Debug("confirm block cost", "blkTimer", blkTimer.Print())
 	return confirmStatus
 }
@@ -834,12 +857,23 @@ func (l *Ledger) QueryBlockHeader(blockid []byte) (*pb.InternalBlock, error) {
 
 // HasTransaction check if a transaction exists in the ledger
 func (l *Ledger) HasTransaction(txid []byte) (bool, error) {
+	txidstr := string(txid)
+	_, ok := l.txCache.Get(txidstr)
+	if ok {
+		return true, nil
+	}
 	table := l.confirmedTable
 	return table.Has(txid)
 }
 
 // QueryTransaction query a transaction in the ledger and return it if exist
 func (l *Ledger) QueryTransaction(txid []byte) (*pb.Transaction, error) {
+	txidstr := string(txid)
+	itx, ok := l.txCache.Get(txidstr)
+	if ok {
+		return itx.(*pb.Transaction), nil
+	}
+
 	table := l.confirmedTable
 	pbTxBuf, kvErr := table.Get(txid)
 	if kvErr != nil {
@@ -853,6 +887,7 @@ func (l *Ledger) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	if parserErr != nil {
 		return nil, parserErr
 	}
+	l.txCache.Add(txidstr, realTx)
 	return realTx, nil
 }
 
