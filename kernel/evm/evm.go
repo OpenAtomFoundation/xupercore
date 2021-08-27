@@ -2,6 +2,7 @@ package evm
 
 import (
 	"encoding/hex"
+	"errors"
 	"math/big"
 	"strconv"
 
@@ -34,7 +35,7 @@ func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	// registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
 	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
 	registry.RegisterKernMethod("$evm", "GetTransactionReceipt", p.getTransactionReceipt)
-	// registry.RegisterKernMethod("$evn", "GetBalance", p.balanceOf)
+	registry.RegisterKernMethod("$evn", "GetBalance", p.balanceOf)
 
 	// registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
@@ -164,9 +165,9 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 		return nil, err
 	}
 	_, _ = from, amount
-	//if err := ctx.Transfer(from.String(), to.String(), amount); err != nil {
-	//	return nil, err
-	//}
+	if err := p.transfer(ctx, from.Bytes(), to.Bytes(), amount); err != nil {
+		return nil, err
+	}
 	if len(rawTx.Data) == 0 {
 		return &contract.Response{
 			Status: 200,
@@ -276,11 +277,37 @@ func (p *proxy) getTransactionReceipt(ctx contract.KContext) (*contract.Response
 	}, nil
 }
 
-func (p *proxy) transfer(ctx contract.KContext, from, to string, amount *big.Int) error {
+func (p *proxy) transfer(ctx contract.KContext, from, to []byte, amount *big.Int) error {
+	fromBalanceByte, err := ctx.Get(BALANCE_PREFIX, from)
+	if err != nil {
+		return err
+	}
+	toBalanceByte, err := ctx.Get(BALANCE_PREFIX, to)
+	if err != nil {
+		return err
+	}
+	fromBalance := new(big.Int).SetBytes(fromBalanceByte)
+	//  TODO 处理是 0 的情况
+	toBalance := new(big.Int).SetBytes(toBalanceByte)
+	if fromBalance.Cmp(amount) < 0 {
+		return errors.New("balance not enough")
+	}
+	fromBalance = fromBalance.Sub(fromBalance, amount)
+	toBalance = toBalance.Add(toBalance, amount)
+	if err := ctx.Put(BALANCE_PREFIX, from, fromBalance.Bytes()); err != nil {
+		return err
+	}
+	if err := ctx.Put(BALANCE_PREFIX, to, toBalance.Bytes()); err != nil {
+		return err
+	}
 	return nil
 }
 
-func (p *proxy) balanceOf(ctx contract.KContext) error {
-	return nil
-	// key:=
+func (p *proxy) balanceOf(ctx contract.KContext) (*contract.Response, error) {
+	address := ctx.Args()["address"]
+	balance, err := ctx.Get(BALANCE_PREFIX, address)
+	if err != nil {
+		return nil, err
+	}
+	return &contract.Response{Body: balance}, nil
 }
