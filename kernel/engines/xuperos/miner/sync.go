@@ -11,7 +11,9 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/bcs/consensus/tdpos"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
@@ -218,6 +220,14 @@ func (t *Miner) getBlocksByHeight(ctx xctx.XContext, height int64, size int) ([]
 	}
 	trace("getBlockHeader")
 	blocks := quorumBlocks(responses, size)
+	for _, blk := range blocks {
+		blkid, _ := ledger.MakeBlockID(blk)
+		if !bytes.Equal(blkid, blk.GetBlockid()) {
+			ctx.GetLog().Warn("download bad block id", "height", blk.GetHeight(),
+				"got", utils.F(blk.GetBlockid()), "expect", utils.F(blkid))
+			return nil, errors.New("bad block id")
+		}
+	}
 
 	if len(blocks) == 0 {
 		return nil, ErrNoNewBlock
@@ -319,6 +329,13 @@ func (t *Miner) downloadMissingTxs(ctx xctx.XContext, blockid []byte, txidx []in
 	}
 	if len(txs) == 0 {
 		return nil, errors.New("get block txs no response")
+	}
+	for _, tx := range txs {
+		txid, _ := txhash.MakeTransactionID(tx)
+		if !bytes.Equal(txid, tx.GetTxid()) {
+			ctx.GetLog().Warn("download bad tx id", "expect", utils.F(txid), "got", tx.GetTxid())
+			return nil, errors.New("bad tx id")
+		}
 	}
 	return txs, nil
 }
