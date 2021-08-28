@@ -2,7 +2,7 @@ package evm
 
 import (
 	"encoding/hex"
-	"errors"
+	"fmt"
 	"math/big"
 	"strconv"
 
@@ -10,12 +10,14 @@ import (
 	"github.com/hyperledger/burrow/txs/payload"
 
 	"github.com/xuperchain/xupercore/bcs/contract/evm"
+	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 
 	"github.com/hyperledger/burrow/crypto"
 	x "github.com/hyperledger/burrow/encoding/hex"
 	"github.com/hyperledger/burrow/encoding/rlp"
 	"github.com/hyperledger/burrow/rpc"
 	"github.com/hyperledger/burrow/txs"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
 )
 
@@ -23,6 +25,8 @@ const (
 	DEFAULT_NET    = 1
 	ETH_TX_PREFIX  = "ETH_TX_"
 	BALANCE_PREFIX = "BALANCE_"
+	// TODO  why add $
+	CONTRACT_EVM = "$evm"
 )
 
 type EVMProxy interface {
@@ -31,87 +35,14 @@ type EVMProxy interface {
 func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	registry := manager.GetKernRegistry()
 	p := proxy{}
-	// SendTransaction is not used currently
-	// registry.RegisterKernMethod("$evm", "SendTransaction", p.sendTransaction)
-	registry.RegisterKernMethod("$evm", "SendRawTransaction", p.sendRawTransaction)
-	registry.RegisterKernMethod("$evm", "GetTransactionReceipt", p.getTransactionReceipt)
-	registry.RegisterKernMethod("$evn", "GetBalance", p.balanceOf)
+	registry.RegisterKernMethod(CONTRACT_EVM, "SendRawTransaction", p.sendRawTransaction)
+	registry.RegisterKernMethod(CONTRACT_EVM, "GetTransactionReceipt", p.getTransactionReceipt)
+	registry.RegisterKernMethod(CONTRACT_EVM, "BalanceOf", p.balanceOf)
 
-	// registry.RegisterKernMethod("$evm", "ContractCall", p.ContractCall)
 	return &p, nil
 }
 
 type proxy struct {
-}
-
-// not used currently
-func (p *proxy) sendTransaction(ctx contract.KContext) (*contract.Response, error) {
-	// 数据类型转换
-	//byte:
-	// byte --> hex string --> byte -->
-	// byte  <-- hex string <--
-	// string
-	//string --> byte -->
-	//string <--
-	var nonce, gasPrice, gasLimit int
-	var to, value, data []byte
-	var net, V uint64
-	var S, R []byte
-	var err error
-	args := ctx.Args()
-	nonceStr := args["nonce"]
-	gasPriceStr := args["gas_price"]
-	gasLimitStr := args["gas_limit"]
-	nonce, err = strconv.Atoi(string(nonceStr))
-	if err != nil {
-		return nil, err
-	}
-	gasPrice, err = strconv.Atoi(string(gasPriceStr))
-	if err != nil {
-		return nil, err
-	}
-
-	gasLimit, err = strconv.Atoi(string(gasLimitStr))
-	if err != nil {
-		return nil, err
-	}
-	toStr := args["to"]
-	to, err = hex.DecodeString(string(toStr))
-	if err != nil {
-		return nil, err
-	}
-	valueStr := args["value"]
-	value, err = hex.DecodeString(string((valueStr)))
-	if err != nil {
-		return nil, err
-	}
-	dataStr := args["data"]
-	data, err = hex.DecodeString(string(dataStr))
-	if err != nil {
-		return nil, err
-	}
-	net = DEFAULT_NET
-	VStr := args["v"]
-	V, err = strconv.ParseUint(string(VStr), 10, 64)
-	if err != nil {
-		return nil, err
-	}
-
-	SStr := args["s"]
-	S, err = hex.DecodeString(string(SStr))
-	if err != nil {
-		return nil, err
-	}
-	RStr := args["r"]
-	R, err = hex.DecodeString(string(RStr))
-	if err != nil {
-		return nil, err
-	}
-
-	if err := p.verifySignature(uint64(nonce), uint64(gasPrice), uint64(gasLimit), to, value, data, net, V, S, R); err != nil {
-		return nil, err
-	}
-	return p.ContractCall(ctx)
 }
 
 func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, error) {
@@ -211,29 +142,6 @@ func (p *proxy) TxHash(from crypto.Address, chainId string, rawTx *rpc.RawTx, am
 	}
 	return tx.Hash(), nil
 }
-func (p *proxy) ContractCall(ctx contract.KContext) (*contract.Response, error) {
-	args := ctx.Args()
-	input, err := hex.DecodeString(string(args["input"]))
-	if err != nil {
-		return nil, err
-	}
-
-	invokArgs := map[string][]byte{
-		"input": input,
-	}
-	address, err := crypto.AddressFromHexString(string(args["to"]))
-	if err != nil {
-		return nil, err
-	}
-	contractName, err := evm.DetermineContractNameFromEVM(address)
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := ctx.Call("evm", contractName, "", invokArgs)
-	return resp, err
-
-}
 
 func (p *proxy) verifySignature(
 	nonce, gasPrice, gasLimit uint64,
@@ -278,26 +186,37 @@ func (p *proxy) getTransactionReceipt(ctx contract.KContext) (*contract.Response
 }
 
 func (p *proxy) transfer(ctx contract.KContext, from, to []byte, amount *big.Int) error {
+	bigZero := []byte(new(big.Int).String())
 	fromBalanceByte, err := ctx.Get(BALANCE_PREFIX, from)
 	if err != nil {
-		return err
+		if err != sandbox.ErrNotFound {
+			return err
+		}
+		fromBalanceByte = bigZero
 	}
 	toBalanceByte, err := ctx.Get(BALANCE_PREFIX, to)
 	if err != nil {
-		return err
+		if err != sandbox.ErrNotFound {
+			return err
+		} else {
+			toBalanceByte = bigZero
+		}
 	}
-	fromBalance := new(big.Int).SetBytes(fromBalanceByte)
-	//  TODO 处理是 0 的情况
-	toBalance := new(big.Int).SetBytes(toBalanceByte)
-	if fromBalance.Cmp(amount) < 0 {
-		return errors.New("balance not enough")
-	}
+	fromBalance, _ := new(big.Int).SetString(string(fromBalanceByte), 10)
+	toBalance, _ := new(big.Int).SetString(string(toBalanceByte), 10)
+	// TODO 处理 coinbase 交易
+	// if fromBalance.Cmp(amount) < 0 {
+	// 	return errors.New("balance not enough")
+	// }
 	fromBalance = fromBalance.Sub(fromBalance, amount)
 	toBalance = toBalance.Add(toBalance, amount)
-	if err := ctx.Put(BALANCE_PREFIX, from, fromBalance.Bytes()); err != nil {
+
+	//  这里不能直接存 bytes, 当结果是0的时候会有大问题
+	fmt.Println(fromBalance.String())
+	if err := ctx.Put(BALANCE_PREFIX, from, []byte(fromBalance.String())); err != nil {
 		return err
 	}
-	if err := ctx.Put(BALANCE_PREFIX, to, toBalance.Bytes()); err != nil {
+	if err := ctx.Put(BALANCE_PREFIX, to, []byte(toBalance.String())); err != nil {
 		return err
 	}
 	return nil
@@ -305,7 +224,12 @@ func (p *proxy) transfer(ctx contract.KContext, from, to []byte, amount *big.Int
 
 func (p *proxy) balanceOf(ctx contract.KContext) (*contract.Response, error) {
 	address := ctx.Args()["address"]
-	balance, err := ctx.Get(BALANCE_PREFIX, address)
+	addrss1, err := hex.DecodeString(string(address))
+	if err != nil {
+		return nil, err
+	}
+	balance, err := ctx.Get(BALANCE_PREFIX, addrss1)
+	fmt.Println(address)
 	if err != nil {
 		return nil, err
 	}

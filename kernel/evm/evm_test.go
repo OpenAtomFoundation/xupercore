@@ -2,17 +2,17 @@ package evm
 
 import (
 	"bytes"
+	"encoding/hex"
+	"fmt"
+	"io/ioutil"
 	"math/big"
+	"testing"
 
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/protos"
-
-	"encoding/hex"
-	"io/ioutil"
-	"testing"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract"
@@ -70,6 +70,7 @@ func TestEVMProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 	signedTx := []byte("0xf867808082520894f97798df751deb4b6e39d4cf998ee7cd4dcb9acc880de0b6b3a76400008025a0f0d2396973296cd6a71141c974d4a851f5eae8f08a8fba2dc36a0fef9bd6440ca0171995aa750d3f9f8e4d0eac93ff67634274f3c5acf422723f49ff09a6885422")
+	var txHash []byte
 	t.Run("SendRawTransaction", func(t *testing.T) {
 		th.SetUtxoReader(sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
 			{
@@ -86,15 +87,12 @@ func TestEVMProxy(t *testing.T) {
 			return
 		}
 
-		if hex.EncodeToString(resp.Body) != "6a59649d00a90b8333d7b188cb1fef3f940484eaac7844381da8c4cbc702a1d9" {
-			t.Errorf("wrong tx hash:%s", hex.EncodeToString(resp.Body))
-			return
-		}
-
+		txHash = resp.Body
 	})
 	t.Run("GetTransactionReceipt", func(t *testing.T) {
 		resp, err := th.Invoke("xkernel", "$evm", "GetTransactionReceipt", map[string][]byte{
-			"tx_hash": []byte("tx_hash"),
+			//  for xuper-sdk-go
+			"tx_hash": []byte(hex.EncodeToString(txHash)),
 		})
 		if err != nil {
 			t.Error(err)
@@ -106,36 +104,29 @@ func TestEVMProxy(t *testing.T) {
 		}
 	})
 
-	t.Run("TxHash", func(t *testing.T) {
-
+	t.Run("BalanceOf", func(t *testing.T) {
+		addressStr := "f97798df751deb4b6e39d4cf998ee7cd4dcb9acc"
+		resp, err := th.Invoke("xkernel", "$evm", "BalanceOf", map[string][]byte{
+			"address": []byte(addressStr),
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		balcne1, ok := new(big.Int).SetString(string(resp.Body), 10)
+		if !ok {
+			t.Error(err)
+			return
+		}
+		if balcne1.Uint64() != 1 {
+			fmt.Println()
+			t.Error("balance error")
+		}
 	})
-	// t.Run("ContractCall", func(t *testing.T) {
-	// 	resp, err = th.Invoke("xkernel", "$evm", "ContractCall", map[string][]byte{
-	// 		"to":    []byte("313131312D2D2D2D2D2D2D2D2D636F756E746572"),
-	// 		"from":  []byte("b60e8dd61c5d32be8058bb8eb970870f07233155"),
-	// 		"input": []byte("ae896c870000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000678636861696e0000000000000000000000000000000000000000000000000000"),
-	// 	})
-	// 	if err != nil {
-	// 		t.Error(err)
-	// 		return
-	// 	}
-	// 	resp, err = th.Invoke("evm", "counter", "get", map[string][]byte{
-	// 		"input":       []byte(`{"key":"xchain"}`),
-	// 		"jsonEncoded": []byte("true"),
-	// 	})
-	// 	if err != nil {
-	// 		t.Error(err)
-	// 		return
-	// 	}
-	// 	if string(resp.Body) != `[{"0":"1"}]` {
-	// 		t.Errorf("expect %s,get:%s", `[{"0":"1"}]`, string(resp.Body))
-	// 		return
-	// 	}
-	//
-	// })
 	_ = resp
 }
 
+//  DOTO Add TxHash Unit Test for TDD
 func TestVerifySignature(t *testing.T) {
 	var nonce uint64 = 0
 	var gasPrice uint64 = 0
