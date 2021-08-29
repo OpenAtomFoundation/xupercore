@@ -123,6 +123,17 @@ func TestEVMProxy(t *testing.T) {
 			t.Error("balance error")
 		}
 	})
+	t.Run("TransactionCount", func(t *testing.T) {
+		resp, err := th.Invoke("xkernel", "$evm", "TransactionCount", map[string][]byte{})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if string(resp.Body) != "1" {
+			t.Errorf("need %s,got %s", "1", string(resp.Body))
+			return
+		}
+	})
 	_ = resp
 }
 

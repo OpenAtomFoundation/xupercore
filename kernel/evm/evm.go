@@ -26,7 +26,9 @@ const (
 	ETH_TX_PREFIX  = "ETH_TX_"
 	BALANCE_PREFIX = "BALANCE_"
 	// TODO  why add $
-	CONTRACT_EVM = "$evm"
+	CONTRACT_EVM      = "$evm"
+	STATUS            = "STATUS"
+	TRANSACTION_COUNT = "TRANSACTION_COUNT"
 )
 
 type EVMProxy interface {
@@ -38,7 +40,7 @@ func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	registry.RegisterKernMethod(CONTRACT_EVM, "SendRawTransaction", p.sendRawTransaction)
 	registry.RegisterKernMethod(CONTRACT_EVM, "GetTransactionReceipt", p.getTransactionReceipt)
 	registry.RegisterKernMethod(CONTRACT_EVM, "BalanceOf", p.balanceOf)
-
+	registry.RegisterKernMethod(CONTRACT_EVM, "TransactionCount", p.transactionCount)
 	return &p, nil
 }
 
@@ -92,10 +94,22 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	if err != nil {
 		return nil, err
 	}
+
 	if err := ctx.Put(ETH_TX_PREFIX, txHash, signedTx); err != nil {
 		return nil, err
 	}
-	_, _ = from, amount
+
+	resp, err := p.transactionCount(ctx)
+	if err != nil {
+		return nil, err
+	}
+	transactionCount, _ := new(big.Int).SetString(string(resp.Body), 10)
+	transactionCount = transactionCount.Add(transactionCount, big.NewInt(1))
+
+	if err := ctx.Put(STATUS, []byte(TRANSACTION_COUNT), []byte(transactionCount.String())); err != nil {
+		return nil, err
+	}
+
 	if err := p.transfer(ctx, from.Bytes(), to.Bytes(), amount); err != nil {
 		return nil, err
 	}
@@ -114,7 +128,7 @@ func (p *proxy) sendRawTransaction(ctx contract.KContext) (*contract.Response, e
 	invokArgs := map[string][]byte{
 		"input": rawTx.Data,
 	}
-	resp, err := ctx.Call("evm", contractName, "", invokArgs)
+	resp, err = ctx.Call("evm", contractName, "", invokArgs)
 	return resp, err
 }
 func (p *proxy) TxHash(from crypto.Address, chainId string, rawTx *rpc.RawTx, amount *big.Int) ([]byte, error) {
@@ -123,7 +137,6 @@ func (p *proxy) TxHash(from crypto.Address, chainId string, rawTx *rpc.RawTx, am
 		return nil, err
 	}
 
-	chainId = "15321"
 	tx := txs.Tx{
 		ChainID: chainId,
 		Payload: &payload.CallTx{
@@ -229,9 +242,22 @@ func (p *proxy) balanceOf(ctx contract.KContext) (*contract.Response, error) {
 		return nil, err
 	}
 	balance, err := ctx.Get(BALANCE_PREFIX, addrss1)
-	fmt.Println(address)
 	if err != nil {
 		return nil, err
 	}
 	return &contract.Response{Body: balance}, nil
+}
+
+func (p *proxy) transactionCount(ctx contract.KContext) (*contract.Response, error) {
+	count, err := ctx.Get(STATUS, []byte(TRANSACTION_COUNT))
+	if err != nil {
+		if err != sandbox.ErrNotFound {
+			return nil, err
+		}
+		count = []byte(big.NewInt(0).String())
+	}
+	return &contract.Response{
+		Status: contract.StatusOK,
+		Body:   count,
+	}, nil
 }
