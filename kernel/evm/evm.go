@@ -2,7 +2,6 @@ package evm
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"strconv"
 
@@ -40,7 +39,7 @@ func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
 	registry.RegisterKernMethod(CONTRACT_EVM, "SendRawTransaction", p.sendRawTransaction)
 	registry.RegisterKernMethod(CONTRACT_EVM, "GetTransactionReceipt", p.getTransactionReceipt)
 	registry.RegisterKernMethod(CONTRACT_EVM, "BalanceOf", p.balanceOf)
-	registry.RegisterKernMethod(CONTRACT_EVM, "TransactionCount", p.transactionCount)
+	registry.RegisterKernMethod(CONTRACT_EVM, "GetTransactionCount", p.transactionCount)
 	return &p, nil
 }
 
@@ -225,7 +224,6 @@ func (p *proxy) transfer(ctx contract.KContext, from, to []byte, amount *big.Int
 	toBalance = toBalance.Add(toBalance, amount)
 
 	//  这里不能直接存 bytes, 当结果是0的时候会有大问题
-	fmt.Println(fromBalance.String())
 	if err := ctx.Put(BALANCE_PREFIX, from, []byte(fromBalance.String())); err != nil {
 		return err
 	}
