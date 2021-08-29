@@ -2,6 +2,7 @@ package evm
 
 import (
 	"encoding/hex"
+	"errors"
 	"math/big"
 	"strconv"
 
@@ -33,7 +34,7 @@ const (
 type EVMProxy interface {
 }
 
-func NewEVMProxy(manager contract.Manager) (EVMProxy, error) {
+func NewEVMProxy(manager contract.Manager) (*proxy, error) {
 	registry := manager.GetKernRegistry()
 	p := proxy{}
 	registry.RegisterKernMethod(CONTRACT_EVM, "SendRawTransaction", p.sendRawTransaction)
@@ -198,35 +199,33 @@ func (p *proxy) getTransactionReceipt(ctx contract.KContext) (*contract.Response
 }
 
 func (p *proxy) transfer(ctx contract.KContext, from, to []byte, amount *big.Int) error {
-	bigZero := []byte(new(big.Int).String())
-	fromBalanceByte, err := ctx.Get(BALANCE_PREFIX, from)
-	if err != nil {
-		if err != sandbox.ErrNotFound {
+	if new(big.Int).SetBytes(from).Cmp(new(big.Int)) != 0 {
+		fromBalanceByte, err := ctx.Get(BALANCE_PREFIX, from)
+		if err != nil {
 			return err
 		}
-		fromBalanceByte = bigZero
+		fromBalance, _ := new(big.Int).SetString(string(fromBalanceByte), 10)
+		fromBalance = fromBalance.Sub(fromBalance, amount)
+		if fromBalance.Cmp(amount) < 0 {
+			return errors.New("balance not enough")
+		}
+		//  这里不能直接存 bytes, 当结果是0的时候会有大问题
+		if err := ctx.Put(BALANCE_PREFIX, from, []byte(fromBalance.String())); err != nil {
+			return err
+		}
 	}
+
 	toBalanceByte, err := ctx.Get(BALANCE_PREFIX, to)
 	if err != nil {
 		if err != sandbox.ErrNotFound {
 			return err
 		} else {
-			toBalanceByte = bigZero
+			toBalanceByte = []byte("0")
 		}
 	}
-	fromBalance, _ := new(big.Int).SetString(string(fromBalanceByte), 10)
 	toBalance, _ := new(big.Int).SetString(string(toBalanceByte), 10)
-	// TODO 处理 coinbase 交易
-	// if fromBalance.Cmp(amount) < 0 {
-	// 	return errors.New("balance not enough")
-	// }
-	fromBalance = fromBalance.Sub(fromBalance, amount)
-	toBalance = toBalance.Add(toBalance, amount)
 
-	//  这里不能直接存 bytes, 当结果是0的时候会有大问题
-	if err := ctx.Put(BALANCE_PREFIX, from, []byte(fromBalance.String())); err != nil {
-		return err
-	}
+	toBalance = toBalance.Add(toBalance, amount)
 	if err := ctx.Put(BALANCE_PREFIX, to, []byte(toBalance.String())); err != nil {
 		return err
 	}

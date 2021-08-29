@@ -3,7 +3,6 @@ package evm
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"io/ioutil"
 	"math/big"
 	"testing"
@@ -41,12 +40,23 @@ func TestEVMProxy(t *testing.T) {
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
 	m := th.Manager()
-	_, err := NewEVMProxy(m)
+	p, err := NewEVMProxy(m)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
+	r := m.GetKernRegistry()
+	r.RegisterKernMethod(CONTRACT_EVM, "initializeAccount", p.initialize)
+
+	resp, err := th.Invoke("xkernel", CONTRACT_EVM, "initializeAccount", map[string][]byte{
+		"address": []byte("2c2d14a9a3f0d078ac8b38e3043d78ca8bc11029"),
+	})
+	if err != nil {
+		t.Error(err)
+		return
+
+	}
 	bin, err := ioutil.ReadFile("testdata/counter.bin")
 	if err != nil {
 		t.Error(err)
@@ -65,7 +75,7 @@ func TestEVMProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := th.Deploy("evm", "counter", "counter", data, args)
+	resp, err = th.Deploy("evm", "counter", "counter", data, args)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +129,6 @@ func TestEVMProxy(t *testing.T) {
 			return
 		}
 		if balcne1.Uint64() != 1 {
-			fmt.Println()
 			t.Error("balance error")
 		}
 	})
@@ -181,4 +190,22 @@ func TestVerifySignature(t *testing.T) {
 		t.Error(err)
 		return
 	}
+}
+
+//  used for debug, *_test.go file will be ignored by golang build system
+func (p *proxy) initialize(ctx contract.KContext) (*contract.Response, error) {
+	address := ctx.Args()["address"]
+	addr, err := hex.DecodeString(string(address))
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ctx.Put(BALANCE_PREFIX, addr, []byte(big.NewInt(9999).String())); err != nil {
+		return nil, err
+	}
+
+	return &contract.Response{
+		Status: contract.StatusOK,
+		Body:   []byte("ok"),
+	}, nil
 }
