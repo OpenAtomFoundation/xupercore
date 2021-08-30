@@ -72,7 +72,7 @@ func (m *Mempool) HasTx(txid string) bool {
 	return false
 }
 
-// Range v2.
+// Range 按照拓扑排序遍历节点交易.
 func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -81,7 +81,8 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 		m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	}
 
-	ranged := map[string]bool{}
+	nodeInputSumMap := make(map[string]int, len(m.confirmed))
+
 	forRangeNode := make([]*Node, 0, len(m.confirmed))
 	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
 		forRangeNode = append(forRangeNode, n)
@@ -91,7 +92,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 		tmpNodes := make([]*Node, 0, len(m.confirmed))
 		for _, root := range forRangeNode {
 			for _, n := range root.txOutputs {
-				if m.isNextNode(n, false, ranged) {
+				if m.isNextNode(n, false, nodeInputSumMap) {
 					if f != nil && !f(n.tx) {
 						return
 					}
@@ -100,7 +101,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 
 			for _, n := range root.txOutputsExt {
-				if m.isNextNode(n, false, ranged) {
+				if m.isNextNode(n, false, nodeInputSumMap) {
 					if f != nil && !f(n.tx) {
 						return
 					}
@@ -109,7 +110,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 
 			for _, n := range root.readonlyOutputs {
-				if m.isNextNode(n, true, ranged) {
+				if m.isNextNode(n, true, nodeInputSumMap) {
 					if f != nil && !f(n.tx) {
 						return
 					}
@@ -118,7 +119,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 
 			for _, n := range root.bucketKeyToNode {
-				if m.isNextNode(n, false, ranged) {
+				if m.isNextNode(n, false, nodeInputSumMap) {
 					if f != nil && !f(n.tx) {
 						return
 					}
@@ -328,8 +329,6 @@ func (m *Mempool) deleteTx(txid string) []*pb.Transaction {
 	if node != nil {
 		m.deleteBucketKey(node)
 		node.breakOutputs()
-		node.updateInputSum()
-		node.updateReadonlyInputSum()
 		return m.deleteChildrenFromNode(node)
 	}
 	return nil
@@ -445,30 +444,25 @@ func (m *Mempool) gcOrphans() {
 	}
 }
 
-func (m *Mempool) isNextNode(node *Node, readonly bool, ranged map[string]bool) bool {
+func (m *Mempool) isNextNode(node *Node, readonly bool, inputSum map[string]int) bool {
 	if node == nil {
 		return false
 	}
-	if !ranged[node.txid] { // 第一次遍历到此节点，更新 inputSum 并标记已经遍历过。
-		ranged[node.txid] = true
-		node.updateInputSum()
-		node.updateReadonlyInputSum()
-	}
-	_, ok := m.unconfirmed[node.txid]
-	if !ok {
-		return false
-	}
-	if readonly {
-		node.readonlyInputSum--
+
+	if sum, ok := inputSum[node.txid]; ok {
+		if sum <= 1 { // 如果此时节点入度为1，说明只剩下当前父节点这一个依赖，返回 true。
+			delete(inputSum, node.txid)
+			return true
+		}
+		inputSum[node.txid] = sum - 1
 	} else {
-		node.inputSum--
+		sum := node.getInputSum() - 1
+		if sum <= 0 { // 第一次遍历到此节点，且入度为1，返回true。
+			return true
+		}
+		inputSum[node.txid] = sum
 	}
 
-	if node.inputSum <= 0 && node.readonlyInputSum <= 0 {
-		node.updateInputSum()
-		node.updateReadonlyInputSum()
-		return true
-	}
 	return false
 }
 
@@ -511,8 +505,6 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 	m.processNodeOutputs(node, isOrphan)
 
 	m.putBucketKey(node)
-	node.updateInputSum()
-	node.updateReadonlyInputSum()
 	return nil
 }
 
@@ -572,7 +564,6 @@ func (m *Mempool) processEvidenceNode(node *Node) {
 		stoneNode = NewNode(stoneNodeID, nil)
 	}
 	m.confirmed[stoneNode.txid] = stoneNode
-	node.readonlyInputSum++
 	stoneNode.readonlyOutputs[node.txid] = node
 	m.unconfirmed[node.txid] = node
 }
@@ -739,9 +730,6 @@ func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 			}
 
 			n.breakOutputs()
-
-			n.updateInputSum()
-			n.updateReadonlyInputSum()
 			m.deleteBucketKey(n)
 		}
 		next := make([]*Node, 0, len(tmp))
@@ -836,11 +824,9 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) *Node {
 	if node.isReadonlyKey(index) {
 		emptyTxIDNode.readonlyOutputs[node.txid] = node
 		node.readonlyInputs[emptyTxIDNode.txid] = emptyTxIDNode
-		node.readonlyInputSum++
 	} else {
 		emptyTxIDNode.bucketKeyToNode[bk] = node
 		node.txInputsExt[offset] = emptyTxIDNode
-		node.inputSum++
 	}
 	return nil
 }
@@ -975,10 +961,6 @@ func (m *Mempool) moveToConfirmed(node *Node) {
 
 			// 遍历所有子交易，判断是否需要将孤儿交易移动到未确认交易表
 			m.checkAndMoveOrphan(n)
-
-			n.updateInputSum()
-			n.updateReadonlyInputSum()
-
 			m.deleteBucketKey(n)
 		}
 		nodes = tmp
