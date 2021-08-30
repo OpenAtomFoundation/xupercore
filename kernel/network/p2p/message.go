@@ -2,8 +2,9 @@ package p2p
 
 import (
 	"errors"
-	"github.com/xuperchain/xupercore/kernel/network/def"
 	"hash/crc32"
+
+	"github.com/xuperchain/xupercore/kernel/network/def"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/snappy"
@@ -161,6 +162,8 @@ var requestToResponse = map[pb.XuperMessage_MessageType]pb.XuperMessage_MessageT
 	pb.XuperMessage_CONFIRM_BLOCKCHAINSTATUS: pb.XuperMessage_CONFIRM_BLOCKCHAINSTATUS_RES,
 	pb.XuperMessage_GET_RPC_PORT:             pb.XuperMessage_GET_RPC_PORT_RES,
 	pb.XuperMessage_GET_AUTHENTICATION:       pb.XuperMessage_GET_AUTHENTICATION_RES,
+	pb.XuperMessage_GET_BLOCK_HEADERS:        pb.XuperMessage_GET_BLOCKS_HEADERS_RES,
+	pb.XuperMessage_GET_BLOCK_TXS:            pb.XuperMessage_GET_BLOCKS_TXS_RES,
 }
 
 // GetRespMessageType get the message type

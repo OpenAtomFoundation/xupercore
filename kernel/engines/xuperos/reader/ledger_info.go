@@ -15,8 +15,10 @@ type LedgerReader interface {
 	QueryTx(txId []byte) (*xpb.TxInfo, error)
 	// 查询区块ID信息（GetBlock）
 	QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInfo, error)
+	QueryBlockHeader(blkId []byte) (*xpb.BlockInfo, error)
 	// 通过区块高度查询区块信息（GetBlockByHeight）
 	QueryBlockByHeight(height int64, needContent bool) (*xpb.BlockInfo, error)
+	QueryBlockHeaderByHeight(height int64) (*xpb.BlockInfo, error)
 }
 
 type ledgerReader struct {
@@ -108,6 +110,29 @@ func (t *ledgerReader) QueryBlock(blkId []byte, needContent bool) (*xpb.BlockInf
 	return out, nil
 }
 
+func (t *ledgerReader) QueryBlockHeader(blkId []byte) (*xpb.BlockInfo, error) {
+	out := &xpb.BlockInfo{}
+	block, err := t.chainCtx.Ledger.QueryBlockHeader(blkId)
+	if err != nil {
+		if err == ledger.ErrBlockNotExist {
+			out.Status = lpb.BlockStatus_BLOCK_NOEXIST
+			return out, common.ErrBlockNotExist
+		}
+
+		t.log.Warn("query block error", "err", err)
+		return nil, common.ErrBlockNotExist
+	}
+
+	out.Block = block
+	if block.InTrunk {
+		out.Status = lpb.BlockStatus_BLOCK_TRUNK
+	} else {
+		out.Status = lpb.BlockStatus_BLOCK_BRANCH
+	}
+
+	return out, nil
+}
+
 // 注意不需要交易内容的时候不要查询
 func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*xpb.BlockInfo, error) {
 	out := &xpb.BlockInfo{}
@@ -126,6 +151,30 @@ func (t *ledgerReader) QueryBlockByHeight(height int64, needContent bool) (*xpb.
 		out.Block = block
 	}
 
+	if block.InTrunk {
+		out.Status = lpb.BlockStatus_BLOCK_TRUNK
+	} else {
+		out.Status = lpb.BlockStatus_BLOCK_BRANCH
+	}
+
+	return out, nil
+}
+
+// 注意不需要交易内容的时候不要查询
+func (t *ledgerReader) QueryBlockHeaderByHeight(height int64) (*xpb.BlockInfo, error) {
+	out := &xpb.BlockInfo{}
+	block, err := t.chainCtx.Ledger.QueryBlockHeaderByHeight(height)
+	if err != nil {
+		if err == ledger.ErrBlockNotExist {
+			out.Status = lpb.BlockStatus_BLOCK_NOEXIST
+			return out, nil
+		}
+
+		t.log.Warn("query block by height error", "err", err)
+		return nil, common.ErrBlockNotExist
+	}
+
+	out.Block = block
 	if block.InTrunk {
 		out.Status = lpb.BlockStatus_BLOCK_TRUNK
 	} else {
