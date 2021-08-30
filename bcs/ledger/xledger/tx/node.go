@@ -12,9 +12,6 @@ type Node struct {
 
 	tx *pb.Transaction
 
-	inputSum         int // 当前 node 已经找到的依赖交易和。
-	readonlyInputSum int
-
 	readonlyInputs  map[string]*Node // 当前交易对某些key为只读，将只读父交易加入此列表，rang 时使用。
 	readonlyOutputs map[string]*Node
 
@@ -162,7 +159,6 @@ func (n *Node) updateInput(index, offset int, node *Node, retrieve bool) (*Node,
 		forDeleted = on
 	}
 	n.txInputs[index] = node
-	n.inputSum++
 	node.txOutputs[offset] = n
 
 	return forDeleted, nil
@@ -207,11 +203,9 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 	if readonly {
 		node.readonlyOutputs[n.txid] = n
 		n.readonlyInputs[node.txid] = node
-		n.readonlyInputSum++
 	} else {
 		node.txOutputsExt[offset] = n
 		n.txInputsExt[index] = node
-		n.inputSum++
 	}
 
 	return forDeleted, nil
@@ -266,7 +260,7 @@ func (n *Node) breakOutputs() {
 	}
 }
 
-func (n *Node) updateInputSum() {
+func (n *Node) getInputSum() int {
 	sum := 0
 	for _, n := range n.txInputs {
 		if n != nil {
@@ -280,11 +274,7 @@ func (n *Node) updateInputSum() {
 		}
 	}
 
-	n.inputSum = sum
-}
-
-func (n *Node) updateReadonlyInputSum() {
-	n.readonlyInputSum = len(n.readonlyInputs)
+	return sum + len(n.readonlyInputs)
 }
 
 func (n *Node) removeAllInputs() {
