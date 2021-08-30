@@ -42,6 +42,7 @@ type Mempool struct {
 // NewMempool new mempool.
 func NewMempool(tx *Tx, log logs.Logger) *Mempool {
 	m := &Mempool{
+		log:            log,
 		Tx:             tx,
 		confirmed:      make(map[string]*Node, defaultMempoolConfirmedLen),
 		unconfirmed:    make(map[string]*Node, defaultMempoolUnconfirmedLen),
