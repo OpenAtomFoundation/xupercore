@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"time"
 
-	pb2 "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
-
 	"github.com/golang/protobuf/proto"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
@@ -212,11 +210,7 @@ func (t *State) GetAccountContracts(account string) ([]string, error) {
 }
 
 func (t *State) GetUnconfirmedTxFromId(txid []byte) (*pb.Transaction, bool) {
-	tx, ok := t.tx.UnconfirmTxInMem.Load(string(txid))
-	if ok {
-		return tx.(*pb.Transaction), true
-	}
-	return nil, false
+	return t.tx.Mempool.GetTx(string(txid))
 }
 
 // 查询合约状态

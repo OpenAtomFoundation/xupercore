@@ -186,8 +186,23 @@ func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	}
 
 	deletedTxs = append(deletedTxs, m.deleteBucketKeyByTx(tx)...)
-
+	m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid(), "deletedRTxs", len(deletedTxs))
 	return deletedTxs
+}
+
+// GetTx 从 mempool 中查询一笔交易，先查未确认交易表，然后是孤儿交易表。
+func (m *Mempool) GetTx(txid string) (*pb.Transaction, bool) {
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	if n := m.unconfirmed[txid]; n != nil {
+		return n.tx, true
+	}
+
+	if n := m.orphans[txid]; n != nil {
+		return n.tx, true
+	}
+	return nil, false
 }
 
 // deleteByUtxo delete txs by utxo(addr & txid & offset) 暂时 addr 没用到，根据 txid 和 offset 就可以锁定一个 utxo。
@@ -341,7 +356,7 @@ func (m *Mempool) ConfirmTxID(txid string) {
 	defer m.m.RUnlock()
 
 	if m.log != nil {
-		m.log.Debug("Mempool ConfirmTxID", "txid", hex.EncodeToString([]byte(txid)))
+		m.log.Debug("Mempool ConfirmTxID", "txid", hex.EncodeToString([]byte(txid)), "unconfirmedLen", len(m.unconfirmed))
 	}
 
 	if _, ok := m.confirmed[txid]; ok {
@@ -356,6 +371,9 @@ func (m *Mempool) ConfirmTxID(txid string) {
 			m.moveToConfirmed(n)
 		}
 	}
+	if m.log != nil {
+		m.log.Debug("Mempool ConfirmTxID end", "txid", hex.EncodeToString([]byte(txid)), "unconfirmedLen", len(m.unconfirmed))
+	}
 }
 
 // ConfirmTx confirm tx.
@@ -364,12 +382,13 @@ func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 	m.m.RLock()
 	defer m.m.RUnlock()
 	if m.log != nil {
-		m.log.Debug("Mempool ConfirmTx", "txid", tx.HexTxid())
+		m.log.Debug("Mempool ConfirmTx", "txid", tx.HexTxid(), "unconfirmedLen", len(m.unconfirmed))
 	}
 
 	id := string(tx.Txid)
 	if _, ok := m.confirmed[id]; ok {
 		// 已经在确认交易表
+		m.log.Debug("Mempool ConfirmTx inConfirmed", "txid", tx.HexTxid(), "unconfirmedLen", len(m.unconfirmed))
 		return nil
 	}
 
@@ -382,9 +401,11 @@ func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 		}
 		m.moveToConfirmed(n)
 	} else {
+		m.log.Debug("Mempool ConfirmTxID111 end", "txid", hex.EncodeToString([]byte(id)), "unconfirmedLen", len(m.unconfirmed))
 		// mempool 中所有交易与此交易没有联系，但是可能有冲突交易。
 		return m.processConflict(tx)
 	}
+	m.log.Debug("Mempool ConfirmTxID end", "txid", hex.EncodeToString([]byte(id)), "unconfirmedLen", len(m.unconfirmed))
 	return nil
 }
 
@@ -421,7 +442,7 @@ func (m *Mempool) RetrieveTx(tx *pb.Transaction) error {
 }
 
 // 暂定每隔十分钟处理一次孤儿交易
-func (m *Mempool) gc() {
+func (m *Mempool) gc() { // todo
 	timer := time.NewTimer(time.Minute * 10)
 	select {
 	case <-timer.C:

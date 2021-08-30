@@ -206,10 +206,11 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 			}
 			sizeLimit -= size
 		}
+		fmt.Println("AAA ranged tx:", tx.HexTxid())
 		result = append(result, tx)
 		return true
 	}
-
+	fmt.Println("AAA range end")
 	t.Mempool.Range(f)
 	t.UnconfirmTxAmount = int64(len(result))
 	t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount)

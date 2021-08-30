@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
-
 	"github.com/golang/protobuf/proto"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
