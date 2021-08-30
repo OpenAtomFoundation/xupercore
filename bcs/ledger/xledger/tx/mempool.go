@@ -82,7 +82,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 		m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	}
 
-	nodeInputSumMap := make(map[string]int, len(m.confirmed))
+	nodeInputSumMap := make(map[*Node]int, len(m.confirmed))
 
 	forRangeNode := make([]*Node, 0, len(m.confirmed))
 	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
@@ -445,23 +445,23 @@ func (m *Mempool) gcOrphans() {
 	}
 }
 
-func (m *Mempool) isNextNode(node *Node, readonly bool, inputSum map[string]int) bool {
+func (m *Mempool) isNextNode(node *Node, readonly bool, inputSum map[*Node]int) bool {
 	if node == nil {
 		return false
 	}
 
-	if sum, ok := inputSum[node.txid]; ok {
+	if sum, ok := inputSum[node]; ok {
 		if sum <= 1 { // 如果此时节点入度为1，说明只剩下当前父节点这一个依赖，返回 true。
-			delete(inputSum, node.txid)
+			delete(inputSum, node)
 			return true
 		}
-		inputSum[node.txid] = sum - 1
+		inputSum[node] = sum - 1
 	} else {
 		sum := node.getInputSum() - 1
 		if sum <= 0 { // 第一次遍历到此节点，且入度为1，返回true。
 			return true
 		}
-		inputSum[node.txid] = sum
+		inputSum[node] = sum
 	}
 
 	return false
