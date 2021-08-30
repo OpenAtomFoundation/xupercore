@@ -29,6 +29,11 @@ const (
 	CONTRACT_EVM      = "$evm"
 	STATUS            = "STATUS"
 	TRANSACTION_COUNT = "TRANSACTION_COUNT"
+	PLEDGE_PREFIX     = "PLEDGE"
+)
+
+var (
+	errNotImplemented = errors.New("not implemented")
 )
 
 type EVMProxy interface {
@@ -41,6 +46,11 @@ func NewEVMProxy(manager contract.Manager) (*proxy, error) {
 	registry.RegisterKernMethod(CONTRACT_EVM, "GetTransactionReceipt", p.getTransactionReceipt)
 	registry.RegisterKernMethod(CONTRACT_EVM, "BalanceOf", p.balanceOf)
 	registry.RegisterKernMethod(CONTRACT_EVM, "GetTransactionCount", p.transactionCount)
+
+	// 质压赎回相关
+	registry.RegisterKernMethod(CONTRACT_EVM, "Pledge", p.pledge)
+	registry.RegisterKernMethod(CONTRACT_EVM, "Redeem", p.redeem)
+	registry.RegisterKernMethod(CONTRACT_EVM, "Allowance", p.allowance)
 	return &p, nil
 }
 
@@ -209,7 +219,7 @@ func (p *proxy) transfer(ctx contract.KContext, from, to []byte, amount *big.Int
 		if fromBalance.Cmp(amount) < 0 {
 			return errors.New("balance not enough")
 		}
-		//  这里不能直接存 bytes, 当结果是0的时候会有大问题
+		//  这里不能直接存 bytes, 当结果是0的时候会有问题
 		if err := ctx.Put(BALANCE_PREFIX, from, []byte(fromBalance.String())); err != nil {
 			return err
 		}
@@ -256,5 +266,58 @@ func (p *proxy) transactionCount(ctx contract.KContext) (*contract.Response, err
 	return &contract.Response{
 		Status: contract.StatusOK,
 		Body:   count,
+	}, nil
+}
+
+func (p *proxy) pledge(ctx contract.KContext) (*contract.Response, error) {
+	//  这里用十进制还是十六进制呢
+	amount, _ := new(big.Int).SetString(ctx.TransferAmount(), 10)
+	to := ctx.Args()["to"]
+	toByte, err := hex.DecodeString(string(to))
+	if err != nil {
+		return nil, err
+	}
+	//  only 1:1 pedge is supported
+
+	if err := ctx.Put(BALANCE_PREFIX, toByte, []byte(amount.String())); err != nil {
+		return nil, err
+	}
+	if err := ctx.Put(PLEDGE_PREFIX, []byte(ctx.Initiator()), toByte); err != nil {
+		return nil, err
+	}
+	return &contract.Response{
+		Status: contract.StatusOK,
+	}, nil
+}
+
+//  赎回
+func (p *proxy) redeem(ctx contract.KContext) (*contract.Response, error) {
+	initiator := ctx.Initiator()
+	to, err := ctx.Get(PLEDGE_PREFIX, []byte(initiator))
+	if err != nil {
+		return nil, err
+	}
+	balance1, err := ctx.Get(BALANCE_PREFIX, to)
+	if err != nil {
+		return nil, err
+	}
+	amount, _ := new(big.Int).SetString(string(balance1), 10)
+	if err := ctx.Transfer(ctx.ContractName(), initiator, amount); err != nil {
+		return nil, err
+	}
+	return &contract.Response{
+		Status: contract.StatusOK,
+	}, nil
+}
+
+//  质压额度
+func (p *proxy) allowance(ctx contract.KContext) (*contract.Response, error) {
+	balance, err := ctx.Get(PLEDGE_PREFIX, []byte(ctx.Initiator()))
+	if err != nil {
+		return nil, err
+	}
+	return &contract.Response{
+		Status: contract.StatusOK,
+		Body:   balance,
 	}, nil
 }

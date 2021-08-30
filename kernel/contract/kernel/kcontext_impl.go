@@ -97,3 +97,11 @@ func (k *kcontextImpl) EmitAsyncTask(event string, args interface{}) (err error)
 	k.AddEvent(&e)
 	return
 }
+
+func (k *kcontextImpl) TransferAmount() string {
+	return k.ctx.TransferAmount
+}
+
+func (k *kcontextImpl) ContractName() string {
+	return k.ctx.ContractName
+}

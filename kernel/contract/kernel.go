@@ -15,7 +15,8 @@ type KContext interface {
 	Initiator() string
 	Caller() string
 	AuthRequire() []string
-
+	TransferAmount() string
+	ContractName() string
 	// 状态修改接口
 	StateSandbox
 
