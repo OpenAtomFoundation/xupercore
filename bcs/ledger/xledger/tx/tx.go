@@ -30,7 +30,7 @@ var (
 const (
 	TxVersion                = 1
 	RootTxVersion            = 0
-	DefaultMaxConfirmedDelay = 300
+	DefaultMaxConfirmedDelay = time.Second * 300
 )
 
 type Tx struct {
@@ -41,7 +41,7 @@ type Tx struct {
 	// UnconfirmTxInMem  *sync.Map // 使用新版 mempool 就不用这个字段了。
 	AvgDelay          int64
 	ledger            *ledger.Ledger
-	maxConfirmedDelay uint32
+	maxConfirmedDelay time.Duration
 
 	Mempool *Mempool
 }
@@ -206,11 +206,10 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 			}
 			sizeLimit -= size
 		}
-		fmt.Println("AAA ranged tx:", tx.HexTxid())
 		result = append(result, tx)
 		return true
 	}
-	fmt.Println("AAA range end")
+
 	t.Mempool.Range(f)
 	t.UnconfirmTxAmount = int64(len(result))
 	t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount)
@@ -223,7 +222,7 @@ func (t *Tx) GetDelayedTxs() []*pb.Transaction {
 
 	f := func(tx *pb.Transaction) bool {
 		rc := time.Unix(0, tx.ReceivedTimestamp)
-		if time.Since(rc).Seconds() > float64(t.maxConfirmedDelay) {
+		if time.Since(rc) > t.maxConfirmedDelay {
 			delayedTxs = append(delayedTxs, tx)
 		}
 
@@ -261,7 +260,8 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 	f := func(tx *pb.Transaction) bool {
 		txDelay := (now - tx.ReceivedTimestamp)
 		totalDelay += txDelay
-		if uint32(txDelay/1e9) > t.maxConfirmedDelay {
+		rc := time.Unix(0, tx.ReceivedTimestamp)
+		if time.Since(rc) > t.maxConfirmedDelay {
 			delayedTxs = append(delayedTxs, tx)
 		}
 		if sizeLimit > 0 {
@@ -314,6 +314,6 @@ func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 }
 
 func (t *Tx) SetMaxConfirmedDelay(seconds uint32) {
-	t.maxConfirmedDelay = seconds
+	t.maxConfirmedDelay = time.Second * time.Duration(seconds)
 	t.log.Info("set max confirmed delay of tx", "seconds", seconds)
 }

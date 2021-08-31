@@ -38,27 +38,6 @@ func NewNode(txid string, tx *pb.Transaction) *Node {
 	}
 }
 
-func (n *Node) getRefTxids(bucket, key string) ([]string, []int) {
-	txIDResult := make([]string, 0, 0)
-	offsetResult := make([]int, 0, 0)
-	for _, input := range n.tx.GetTxInputsExt() {
-		if input.GetBucket() == bucket &&
-			string(input.GetKey()) == key {
-
-			txIDResult = append(txIDResult, string(input.GetRefTxid()))
-			offsetResult = append(offsetResult, int(input.GetRefOffset()))
-		}
-	}
-
-	// 注释掉是因为根据 inputsExt 就可以了。
-	// for _, output := range n.tx.GetTxOutputsExt() {
-	// 	if output.GetBucket() == bucket && string(output.GetKey()) == key {
-	// 		result = append(result, n.txid)
-	// 	}
-	// }
-	return txIDResult, offsetResult
-}
-
 // 已经去重。
 func (n *Node) getAllChildren() []*Node {
 	if n == nil {
@@ -98,7 +77,7 @@ func (n *Node) getAllChildren() []*Node {
 }
 
 // 已经去重。
-func (n *Node) getAllFathers() []*Node {
+func (n *Node) getAllParent() []*Node {
 
 	if n == nil {
 		return nil

@@ -78,9 +78,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	if m.log != nil {
-		m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
-	}
+	m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 
 	nodeInputSumMap := make(map[*Node]int, len(m.confirmed))
 
@@ -145,9 +143,7 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	if m.log != nil {
-		m.log.Debug("Mempool PutTx", "txid", tx.HexTxid())
-	}
+	m.log.Debug("Mempool PutTx", "txid", tx.HexTxid())
 
 	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
 	txid := string(tx.Txid)
@@ -176,9 +172,7 @@ func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	if m.log != nil {
-		m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid())
-	}
+	m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid())
 
 	deletedTxs := make([]*pb.Transaction, 0, 0)
 	for _, txInput := range tx.TxInputs {
@@ -186,7 +180,6 @@ func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	}
 
 	deletedTxs = append(deletedTxs, m.deleteBucketKeyByTx(tx)...)
-	m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid(), "deletedRTxs", len(deletedTxs))
 	return deletedTxs
 }
 
@@ -318,9 +311,8 @@ func (m *Mempool) getNode(txid string) *Node {
 func (m *Mempool) DeleteTxAndChildren(txid string) []*pb.Transaction { // DeletTeTxAndChildren
 	m.m.Lock()
 	defer m.m.Unlock()
-	if m.log != nil {
-		m.log.Debug("Mempool DeleteTxAndChildren", "txid", hex.EncodeToString([]byte(txid)))
-	}
+
+	m.log.Debug("Mempool DeleteTxAndChildren", "txid", hex.EncodeToString([]byte(txid)))
 
 	if _, ok := m.confirmed[txid]; ok {
 		// TODO 是否删除确认交易表中的交易。不应该删除，confirmed 中应该是已经共识确认过的，回滚区块应该调用 retrieveTx 接口。
@@ -355,9 +347,7 @@ func (m *Mempool) ConfirmTxID(txid string) {
 	m.m.RLock()
 	defer m.m.RUnlock()
 
-	if m.log != nil {
-		m.log.Debug("Mempool ConfirmTxID", "txid", hex.EncodeToString([]byte(txid)), "unconfirmedLen", len(m.unconfirmed))
-	}
+	m.log.Debug("Mempool ConfirmTxID", "txid", hex.EncodeToString([]byte(txid)))
 
 	if _, ok := m.confirmed[txid]; ok {
 		// 已经在确认交易表
@@ -371,9 +361,6 @@ func (m *Mempool) ConfirmTxID(txid string) {
 			m.moveToConfirmed(n)
 		}
 	}
-	if m.log != nil {
-		m.log.Debug("Mempool ConfirmTxID end", "txid", hex.EncodeToString([]byte(txid)), "unconfirmedLen", len(m.unconfirmed))
-	}
 }
 
 // ConfirmTx confirm tx.
@@ -381,14 +368,12 @@ func (m *Mempool) ConfirmTxID(txid string) {
 func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 	m.m.RLock()
 	defer m.m.RUnlock()
-	if m.log != nil {
-		m.log.Debug("Mempool ConfirmTx", "txid", tx.HexTxid(), "unconfirmedLen", len(m.unconfirmed))
-	}
+
+	m.log.Debug("Mempool ConfirmTx", "txid", tx.HexTxid())
 
 	id := string(tx.Txid)
 	if _, ok := m.confirmed[id]; ok {
 		// 已经在确认交易表
-		m.log.Debug("Mempool ConfirmTx inConfirmed", "txid", tx.HexTxid(), "unconfirmedLen", len(m.unconfirmed))
 		return nil
 	}
 
@@ -401,55 +386,49 @@ func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 		}
 		m.moveToConfirmed(n)
 	} else {
-		m.log.Debug("Mempool ConfirmTxID111 end", "txid", hex.EncodeToString([]byte(id)), "unconfirmedLen", len(m.unconfirmed))
 		// mempool 中所有交易与此交易没有联系，但是可能有冲突交易。
 		return m.processConflict(tx)
 	}
-	m.log.Debug("Mempool ConfirmTxID end", "txid", hex.EncodeToString([]byte(id)), "unconfirmedLen", len(m.unconfirmed))
 	return nil
 }
 
 // RetrieveTx tx.
 // 将交易恢复到 mempool。与mempool中交易冲突时，保留此交易。
 // 此次版本暂时不用此接口。
-func (m *Mempool) RetrieveTx(tx *pb.Transaction) error {
-	if tx == nil {
-		return errors.New("tx is nil")
-	}
-	m.m.RLock()
-	defer m.m.RUnlock()
+// func (m *Mempool) RetrieveTx(tx *pb.Transaction) error {
+// 	if tx == nil {
+// 		return errors.New("tx is nil")
+// 	}
+// 	m.m.RLock()
+// 	defer m.m.RUnlock()
 
-	if m.log != nil {
-		m.log.Debug("Mempool RetrieveTx", "txid", tx.HexTxid())
-	}
+// 	m.log.Debug("Mempool RetrieveTx", "txid", tx.HexTxid())
 
-	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
-	txid := string(tx.Txid)
-	if _, ok := m.confirmed[txid]; ok {
-		return nil
-	}
-	if _, ok := m.unconfirmed[txid]; ok {
-		return nil
-	}
+// 	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
+// 	txid := string(tx.Txid)
+// 	if _, ok := m.confirmed[txid]; ok {
+// 		return nil
+// 	}
+// 	if _, ok := m.unconfirmed[txid]; ok {
+// 		return nil
+// 	}
 
-	if n, ok := m.orphans[txid]; ok {
-		if n.tx != nil {
-			return nil
-		}
-	}
+// 	if n, ok := m.orphans[txid]; ok {
+// 		if n.tx != nil {
+// 			return nil
+// 		}
+// 	}
 
-	return m.putTx(tx, true)
-}
+// 	return m.putTx(tx, true)
+// }
 
 // 暂定每隔十分钟处理一次孤儿交易
-func (m *Mempool) gc() { // todo
-	timer := time.NewTimer(time.Minute * 10)
-	select {
-	case <-timer.C:
-		m.gcOrphans()
-		timer.Reset(time.Minute * 10)
-	}
-}
+// func (m *Mempool) gc() { // todo
+// 	ticker := time.NewTicker(time.Minute * 10)
+// 	for range ticker.C {
+// 		m.gcOrphans()
+// 	}
+// }
 
 func (m *Mempool) gcOrphans() {
 	m.m.Lock()
@@ -587,6 +566,7 @@ func (m *Mempool) processEvidenceNode(node *Node) {
 	}
 	m.confirmed[stoneNode.txid] = stoneNode
 	stoneNode.readonlyOutputs[node.txid] = node
+	node.readonlyInputs[stoneNode.txid] = stoneNode
 	m.unconfirmed[node.txid] = node
 }
 
@@ -697,7 +677,7 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 				m.unconfirmed[n.txid] = n
 				tmp = append(tmp, n.getAllChildren()...)
 			} else {
-				tmp = append(tmp, n.getAllFathers()...)
+				tmp = append(tmp, n.getAllParent()...)
 			}
 		}
 
@@ -973,7 +953,7 @@ func (m *Mempool) moveToConfirmed(node *Node) {
 	for len(nodes) > 0 {
 		tmp := make([]*Node, 0)
 		for _, n := range nodes {
-			tmp = append(tmp, n.getAllFathers()...)
+			tmp = append(tmp, n.getAllParent()...)
 
 			n.breakOutputs() // 断绝父子关系
 			m.confirmed[n.txid] = n
