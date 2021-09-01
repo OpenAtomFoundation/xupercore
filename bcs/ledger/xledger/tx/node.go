@@ -45,32 +45,26 @@ func (n *Node) getAllChildren() []*Node {
 	}
 
 	result := make([]*Node, 0, len(n.txOutputs)+len(n.txOutputsExt)+len(n.readonlyOutputs))
-	tmp := make(map[string]struct{}, cap(result))
+	nodesDuplicate := make(map[string]bool, cap(result))
 
 	for _, v := range n.txOutputs {
-		if v != nil {
-			if _, ok := tmp[v.txid]; !ok {
-				result = append(result, v)
-				tmp[v.txid] = struct{}{}
-			}
+		if v != nil && !nodesDuplicate[v.txid] {
+			result = append(result, v)
+			nodesDuplicate[v.txid] = true
 		}
 	}
 
 	for _, v := range n.txOutputsExt {
-		if v != nil {
-			if _, ok := tmp[v.txid]; !ok {
-				result = append(result, v)
-				tmp[v.txid] = struct{}{}
-			}
+		if v != nil && !nodesDuplicate[v.txid] {
+			result = append(result, v)
+			nodesDuplicate[v.txid] = true
 		}
 	}
 
 	for _, v := range n.readonlyOutputs {
-		if v != nil {
-			if _, ok := tmp[v.txid]; !ok {
-				result = append(result, v)
-				tmp[v.txid] = struct{}{}
-			}
+		if v != nil && !nodesDuplicate[v.txid] {
+			result = append(result, v)
+			nodesDuplicate[v.txid] = true
 		}
 	}
 	return result
@@ -78,38 +72,31 @@ func (n *Node) getAllChildren() []*Node {
 
 // 已经去重。
 func (n *Node) getAllParent() []*Node {
-
 	if n == nil {
 		return nil
 	}
 
 	result := make([]*Node, 0, len(n.txInputs)+len(n.txInputsExt)+len(n.readonlyInputs))
-	tmp := make(map[string]struct{}, cap(result))
+	nodesDuplicate := make(map[string]bool, cap(result))
 
 	for _, v := range n.txInputs {
-		if v != nil {
-			if _, ok := tmp[v.txid]; !ok {
-				result = append(result, v)
-				tmp[v.txid] = struct{}{}
-			}
+		if v != nil && !nodesDuplicate[v.txid] {
+			result = append(result, v)
+			nodesDuplicate[v.txid] = true
 		}
 	}
 
 	for _, v := range n.txInputsExt {
-		if v != nil {
-			if _, ok := tmp[v.txid]; !ok {
-				result = append(result, v)
-				tmp[v.txid] = struct{}{}
-			}
+		if v != nil && !nodesDuplicate[v.txid] {
+			result = append(result, v)
+			nodesDuplicate[v.txid] = true
 		}
 	}
 
 	for _, v := range n.readonlyInputs {
-		if v != nil {
-			if _, ok := tmp[v.txid]; !ok {
-				result = append(result, v)
-				tmp[v.txid] = struct{}{}
-			}
+		if v != nil && !nodesDuplicate[v.txid] {
+			result = append(result, v)
+			nodesDuplicate[v.txid] = true
 		}
 	}
 
@@ -123,9 +110,9 @@ func (n *Node) updateInput(index, offset int, node *Node, retrieve bool) (*Node,
 	}
 	if node.tx == nil {
 		// mock node. 处理 txOutputs 字段。
-		tmp := offset - len(node.txOutputs) + 1
-		if tmp > 0 {
-			node.txOutputs = append(node.txOutputs, make([]*Node, tmp)...)
+		index := offset - len(node.txOutputs) + 1
+		if index > 0 {
+			node.txOutputs = append(node.txOutputs, make([]*Node, index)...)
 		}
 	}
 
@@ -162,9 +149,9 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 
 	readonly := n.isReadonlyKey(index)
 	if node.tx == nil && !readonly {
-		tmp := offset - len(node.txOutputsExt) + 1
-		if tmp > 0 {
-			node.txOutputsExt = append(node.txOutputsExt, make([]*Node, tmp)...)
+		index := offset - len(node.txOutputsExt) + 1
+		if index > 0 {
+			node.txOutputsExt = append(node.txOutputsExt, make([]*Node, index)...)
 		}
 	}
 
@@ -227,7 +214,6 @@ func (n *Node) breakOutputs() {
 		if fn == nil {
 			continue
 		}
-		// delete(fn.bucketKeyToNode, n.txid)
 		for k, nn := range fn.bucketKeyToNode {
 			if nn.txid == n.txid {
 				delete(fn.bucketKeyToNode, k)
