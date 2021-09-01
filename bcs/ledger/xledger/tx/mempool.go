@@ -813,10 +813,9 @@ func (m *Mempool) processTxInputs(node *Node, retrieve bool) (bool, error) {
 }
 
 // txid 为空的 node
-func (m *Mempool) processEmptyRefTxID(node *Node, index int) *Node {
+func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 	bucket := node.tx.TxInputsExt[index].GetBucket()
 	key := node.tx.TxInputsExt[index].GetKey()
-	offset := int(node.tx.TxInputsExt[index].GetRefOffset())
 	bk := bucket + string(key)
 	if emptyTxIDNode == nil {
 		emptyTxIDNode = NewNode("", nil)
@@ -827,8 +826,11 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) *Node {
 		emptyTxIDNode.readonlyOutputs[node.txid] = node
 		node.readonlyInputs[emptyTxIDNode.txid] = emptyTxIDNode
 	} else {
+		if _, ok := emptyTxIDNode.bucketKeyToNode[bk]; ok {
+			return errors.New("bucket and key invalid:" + bucket + "_" + string(key))
+		}
 		emptyTxIDNode.bucketKeyToNode[bk] = node
-		node.txInputsExt[offset] = emptyTxIDNode
+		node.txInputsExt[index] = emptyTxIDNode
 	}
 	return nil
 }
