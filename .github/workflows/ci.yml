@@ -13,13 +13,6 @@ jobs:
       with:
         go-version: ${{ matrix.go-version }}
 
-    - name: setup Docker
-      uses: docker-practice/actions-setup-docker@master
-
-    - name: pull unit test related images
-      run: |
-        docker pull openjdk:8u292-slim-buster && docker pull ubuntu:18.04
-
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Test
