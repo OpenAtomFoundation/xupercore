@@ -274,21 +274,8 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	// 根据BFT配置判断是否需要加入Chained-BFT相关存储，及变更smr状态
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := tp.election.ledger.GetTipBlock()
-
-	// 从当前TipBlock开始往前追溯，生成BlockBranch，交给smr根据状态进行回滚。
-	rollbackBranch := []cctx.BlockInterface{tipBlock}
-	targetId := tipBlock.GetPreHash()
-	for i := chainedBft.PermissiveInternal - 1; i > 0; i-- {
-		// TODO: rely需更改成QueryBlockHeader
-		block, err := tp.election.ledger.QueryBlock(targetId)
-		if err != nil {
-			break
-		}
-		rollbackBranch = append(rollbackBranch, block)
-		targetId = block.GetPreHash()
-	}
 	// smr返回一个裁剪目标，供miner模块直接回滚并出块
-	truncate, qc, err := tp.smr.ResetProposerStatus(rollbackBranch, tp.election.validators, tp.election.CalOldProposers)
+	truncate, qc, err := tp.smr.ResetProposerStatus(tipBlock, tp.election.ledger.QueryBlock, tp.election.validators)
 	if err != nil {
 		return nil, nil, err
 	}

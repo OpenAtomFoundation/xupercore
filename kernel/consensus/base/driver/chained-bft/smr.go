@@ -13,6 +13,7 @@ import (
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
 	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -200,19 +201,17 @@ func (s *Smr) KeepUpWithBlock(block cctx.BlockInterface, justify storage.QuorumC
 	if err != nil {
 		return err
 	}
-	s.log.Debug("consensus:smr:HandleProcessConfirmBlock: Now HighQC", "highQC", utils.F(s.getHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
+	s.log.Debug("consensus:smr:KeepUpWithBlock: Now HighQC", "highQC", utils.F(s.getHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
 	return nil
 }
 
-func (s *Smr) ResetProposerStatus(rollbackBranch []cctx.BlockInterface, validators []string,
-	handler func(timestamp int64, round int64, storage []byte) ([]string, error)) (bool, storage.QuorumCertInterface, error) {
+func (s *Smr) ResetProposerStatus(tipBlock cctx.BlockInterface,
+	queryBlockFunc func(blkId []byte) (ledger.BlockHandle, error),
+	validators []string) (bool, storage.QuorumCertInterface, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if len(rollbackBranch) == 0 {
-		return false, nil, ErrEmptyTarget
-	}
-	if bytes.Equal(s.getHighQC().GetProposalId(), rollbackBranch[0].GetBlockid()) {
+	if bytes.Equal(s.getHighQC().GetProposalId(), tipBlock.GetBlockid()) {
 		// 此处需要获取带签名的完整Justify
 		return false, s.getCompleteHighQC(), nil
 	}
@@ -221,12 +220,19 @@ func (s *Smr) ResetProposerStatus(rollbackBranch []cctx.BlockInterface, validato
 		return false, nil, nil
 	}
 
+	// 从当前TipBlock开始往前追溯，交给smr根据状态进行回滚。
 	// 在本地状态树上找到指代TipBlock的QC，若找不到，则在状态树上找和TipBlock同一分支上的最近值
 	var qc storage.QuorumCertInterface
-	for _, block := range rollbackBranch {
+	targetId := tipBlock.GetBlockid()
+	for {
+		block, err := queryBlockFunc(targetId)
+		if err != nil {
+			s.log.Error("consensus:smr:ResetProposerStatus: queryBlockFunc error.", "error", err)
+			return false, nil, ErrEmptyTarget
+		}
 		// 至多回滚到root节点
 		if block.GetHeight() <= s.GetRootQC().GetProposalView() {
-			s.log.Warn("consensus:smr:HandleProcessBeforeMiner: set root qc.", "root", utils.F(s.GetRootQC().GetProposalId()), "root height", s.GetRootQC().GetProposalView(),
+			s.log.Warn("consensus:smr:ResetProposerStatus: set root qc.", "root", utils.F(s.GetRootQC().GetProposalId()), "root height", s.GetRootQC().GetProposalView(),
 				"block", utils.F(block.GetBlockid()), "block height", block.GetHeight())
 			qc = s.GetRootQC()
 			break
@@ -234,17 +240,18 @@ func (s *Smr) ResetProposerStatus(rollbackBranch []cctx.BlockInterface, validato
 		// 查找目标Id是否挂在状态树上，若否，则从target网上查找知道状态树里有
 		node := s.qcTree.DFSQueryNode(block.GetBlockid())
 		if node == nil {
+			targetId = block.GetPreHash()
 			continue
 		}
 		// node在状态树上找到之后，以此为起点(包括当前点)，继续向上查找，知道找到符合全名数量要求的QC，该QC可强制转化为新的HighQC
-		storage, _ := block.GetConsensusStorage()
-		wantProposers, err := handler(block.GetHeight(), block.GetTimestamp(), storage)
-		if err != nil || wantProposers == nil {
-			s.log.Error("consensus:smr:HandleProcessBeforeMiner: election error.", "error", err)
+		wantProposers := s.election.GetValidators(block.GetHeight())
+		if wantProposers == nil {
+			s.log.Error("consensus:smr:ResetProposerStatus: election error.")
 			return false, nil, ErrEmptyTarget
 		}
 		if !s.validNewHighQC(node.In.GetProposalId(), wantProposers) {
-			s.log.Warn("consensus:smr:HandleProcessBeforeMiner: target not ready", "target", utils.F(node.In.GetProposalId()), "wantProposers", wantProposers, "height", node.In.GetProposalView())
+			s.log.Warn("consensus:smr:ResetProposerStatus: target not ready", "target", utils.F(node.In.GetProposalId()), "wantProposers", wantProposers, "height", node.In.GetProposalView())
+			targetId = block.GetPreHash()
 			continue
 		}
 		qc = node.In
@@ -255,11 +262,11 @@ func (s *Smr) ResetProposerStatus(rollbackBranch []cctx.BlockInterface, validato
 	}
 	ok, err := s.enforceUpdateHighQC(qc.GetProposalId())
 	if err != nil {
-		s.log.Error("consensus:smr:HandleProcessBeforeMiner: EnforceUpdateHighQC error.", "error", err)
+		s.log.Error("consensus:smr:ResetProposerStatus: EnforceUpdateHighQC error.", "error", err)
 		return false, nil, err
 	}
 	if ok {
-		s.log.Debug("consensus:smr:HandleProcessBeforeMiner: EnforceUpdateHighQC success.", "target", utils.F(qc.GetProposalId()), "height", qc.GetProposalView())
+		s.log.Debug("consensus:smr:ResetProposerStatus: EnforceUpdateHighQC success.", "target", utils.F(qc.GetProposalId()), "height", qc.GetProposalView())
 	}
 	// 此处需要获取带签名的完整Justify, 此时HighQC已经更新
 	return true, s.getCompleteHighQC(), nil
@@ -374,11 +381,11 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 }
 
 // reloadJustifyQC 与LibraBFT不同，返回一个指定的parentQC
-func (s *Smr) reloadJustifyQC(parentID []byte) (*storage.QuorumCertInterface, error) {
+func (s *Smr) reloadJustifyQC(parentID []byte) (storage.QuorumCertInterface, error) {
 	// 第一次proposal，highQC==rootQC==genesisQC
 	if bytes.Equal(s.qcTree.GetGenesisQC().In.GetProposalId(), parentID) {
 		highQC := s.getHighQC()
-		return &highQC, nil
+		return highQC, nil
 	}
 	// 若当前找不到，可能是qcTree已经更新了，废弃
 	qc := s.qcTree.DFSQueryNode(parentID)
@@ -405,7 +412,7 @@ func (s *Smr) reloadJustifyQC(parentID []byte) (*storage.QuorumCertInterface, er
 	parentQuorumCert := storage.NewQuorumCert(v, &storage.LedgerCommitInfo{
 		CommitStateId: commitId,
 	}, signs)
-	return &parentQuorumCert, nil
+	return parentQuorumCert, nil
 }
 
 // handleReceivedProposal 该阶段在收到一个ProposalMsg后触发，与LibraBFT的process_proposal阶段类似

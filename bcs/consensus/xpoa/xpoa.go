@@ -242,21 +242,8 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := x.election.ledger.GetTipBlock()
-
-	// 从当前TipBlock开始往前追溯，生成BlockBranch，交给smr根据状态进行回滚。
-	rollbackBranch := []cctx.BlockInterface{tipBlock}
-	targetId := tipBlock.GetPreHash()
-	for i := chainedBft.PermissiveInternal - 1; i > 0; i-- {
-		// TODO: rely需更改成QueryBlockHeader
-		block, err := x.election.ledger.QueryBlock(targetId)
-		if err != nil {
-			break
-		}
-		rollbackBranch = append(rollbackBranch, block)
-		targetId = block.GetPreHash()
-	}
 	// smr返回一个裁剪目标，供miner模块直接回滚并出块
-	truncate, qc, err := x.smr.ResetProposerStatus(rollbackBranch, x.election.validators, x.election.GetLocalValidates)
+	truncate, qc, err := x.smr.ResetProposerStatus(tipBlock, x.election.ledger.QueryBlock, x.election.validators)
 	if err != nil {
 		return nil, nil, err
 	}
