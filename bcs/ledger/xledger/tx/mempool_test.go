@@ -7,6 +7,8 @@ import (
 	"time"
 
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	"github.com/xuperchain/xupercore/kernel/mock"
+	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -14,17 +16,6 @@ var sum = 10000
 
 func TestMy(t *testing.T) {
 	run(nil, t)
-}
-
-func TestMy111(t *testing.T) {
-	mm := make(map[string]map[string]string)
-	mm["1"] = map[string]string{"11": "11"}
-	mm["2"] = map[string]string{"22": "22"}
-
-	a := mm["1"]
-	a["aa"] = "aa"
-
-	fmt.Println(mm)
 }
 
 // 打包50010个交易，耗时200ms左右
@@ -60,7 +51,13 @@ func run(b *testing.B, t *testing.T) {
 	if b != nil {
 		sum = b.N
 	}
-	m := NewMempool(nil, nil)
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	l, _ := logs.NewLogger("1111", "test")
+	m := NewMempool(nil, l)
 	setup(m)
 	// printMempool(m)
 	// return
