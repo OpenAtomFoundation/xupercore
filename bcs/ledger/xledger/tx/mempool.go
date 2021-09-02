@@ -74,14 +74,19 @@ func (m *Mempool) HasTx(txid string) bool {
 	return false
 }
 
-// Range 按照拓扑排序遍历节点交易。如果交易存在循环引用，会 panic，外层需要 recover。
+// Range 按照拓扑排序遍历节点交易。
 func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	if f == nil {
 		return
 	}
 
 	m.m.Lock()
-	defer m.m.Unlock()
+	defer func() {
+		if err := recover(); err != nil {
+			m.log.Error("Mempool Range panic", "error", err)
+		}
+		m.m.Unlock()
+	}()
 
 	m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	var q deque.Deque
