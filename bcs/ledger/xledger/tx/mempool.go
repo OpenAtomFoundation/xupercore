@@ -480,6 +480,14 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 	var node *Node
 	if n, ok := m.orphans[string(tx.Txid)]; ok {
 		node = n
+		if node.tx == nil {
+			node.tx = tx
+			node.readonlyInputs = make(map[string]*Node)
+			node.readonlyOutputs = make(map[string]*Node)
+			node.bucketKeyToNode = make(map[string]*Node)
+			node.txInputs = make([]*Node, len(tx.GetTxInputs()))
+			node.txInputsExt = make([]*Node, len(tx.GetTxInputsExt()))
+		}
 	} else {
 		node = NewNode(string(tx.Txid), tx)
 	}

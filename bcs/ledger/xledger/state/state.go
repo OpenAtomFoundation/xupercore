@@ -1305,7 +1305,16 @@ func (t *State) collectDelayedTxs(interval time.Duration) {
 
 		var undoErr error
 		for _, tx := range delayedTxs {
+			// todo 锁放到这，检查交易是否在账本中。
 			// undo tx
+			// has, err := t.sctx.Ledger.HasTransaction(tx.Txid)
+			// if err != nil {
+			// 	t.log.Error("fail query tx from ledger", "err", err)
+			// 	break
+			// }
+			// if has {
+			// 	continue
+			// }
 			undoErr = t.undoUnconfirmedTx(tx, batch, nil, nil)
 			if undoErr != nil {
 				t.log.Error("fail to undo tx for delayed tx", "undoErr", undoErr)
@@ -1341,7 +1350,17 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 
 	unconfirmToConfirm := map[string]bool{}
 	undoTxs := make([]*pb.Transaction, 0, 0)
+	UTXOKeysInBlock := map[string]bool{}
 	for _, tx := range block.Transactions {
+		for _, txInput := range tx.TxInputs {
+			utxoKey := utxo.GenUtxoKey(txInput.FromAddr, txInput.RefTxid, txInput.RefOffset)
+			if UTXOKeysInBlock[utxoKey] { //检查块内的utxo双花情况
+				t.log.Warn("found duplicated utxo in same block", "utxoKey", utxoKey, "txid", utils.F(tx.Txid))
+				return nil, ErrUTXODuplicated
+			}
+			UTXOKeysInBlock[utxoKey] = true
+		}
+
 		txid := string(tx.GetTxid())
 		if t.tx.Mempool.HasTx(txid) {
 			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))

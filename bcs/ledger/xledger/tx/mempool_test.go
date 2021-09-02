@@ -14,6 +14,84 @@ import (
 
 var sum = 100
 
+func TestPutOrphanTx(t *testing.T) {
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	l, _ := logs.NewLogger("1111", "test")
+	isTest = true
+	m := NewMempool(nil, l)
+	id := "orphanTest"
+	input := []*protos.TxInput{{RefTxid: []byte("orphanTest1")}}
+	output := []*protos.TxOutput{{Amount: []byte("1")}}
+	inputsExt := []*protos.TxInputExt{{RefTxid: []byte("orphanTest1")}}
+	outputsExt := []*protos.TxOutputExt{{Bucket: "nil", Key: []byte("nil"), Value: []byte("nil")}}
+	tx := NewTxForTest([]byte(id), input, output, inputsExt, outputsExt)
+	e := m.PutTx(tx) // 添加孤儿交易，mempool 应该生成一个 mock node 以及把当前交易加入孤儿列表。
+	if e != nil {
+		t.Fatal(err)
+	}
+	if len(m.orphans) != 2 {
+		t.Fatal("test failed for TestPutOrphanTx")
+	}
+	// printMempool(m)
+
+	id1 := "orphanTest1"
+	input1 := []*protos.TxInput{{RefTxid: []byte("orphanTest2")}}
+	output1 := []*protos.TxOutput{{Amount: []byte("1")}}
+	inputsExt1 := []*protos.TxInputExt{{RefTxid: []byte("orphanTest2")}}
+	outputsExt1 := []*protos.TxOutputExt{{Bucket: "nil", Key: []byte("nil"), Value: []byte("nil")}}
+	tx1 := NewTxForTest([]byte(id1), input1, output1, inputsExt1, outputsExt1)
+	e = m.PutTx(tx1) // 添加上一个孤儿交易的所依赖的交易，也就是已经在 mempool 中的 mock node。orphans 中应该有三个节点。
+	if e != nil {
+		t.Fatal(err)
+	}
+	if len(m.orphans) != 3 {
+		t.Fatal("test failed for TestPutOrphanTx when put mock node tx")
+	}
+	// printMempool(m)
+}
+
+func NewTxForTest(txid []byte, txInputs []*protos.TxInput, txOutput []*protos.TxOutput,
+	txInputsExt []*protos.TxInputExt, txOutputsExt []*protos.TxOutputExt) *pb.Transaction {
+	return &pb.Transaction{
+		Txid:         txid,
+		TxInputs:     txInputs,
+		TxOutputs:    txOutput,
+		TxInputsExt:  txInputsExt,
+		TxOutputsExt: txOutputsExt,
+	}
+}
+
+func TestConfirmTx(t *testing.T) {
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	l, _ := logs.NewLogger("1111", "test")
+	isTest = true
+	m := NewMempool(nil, l)
+	id := "orphanTest"
+	input := []*protos.TxInput{{RefTxid: []byte("orphanTest1")}}
+	output := []*protos.TxOutput{{Amount: []byte("1")}}
+	inputsExt := []*protos.TxInputExt{{RefTxid: []byte("orphanTest1")}}
+	outputsExt := []*protos.TxOutputExt{{Bucket: "nil", Key: []byte("nil"), Value: []byte("nil")}}
+	tx := NewTxForTest([]byte(id), input, output, inputsExt, outputsExt)
+	e := m.PutTx(tx) // 添加孤儿交易，mempool 应该生成一个 mock node 以及把当前交易加入孤儿列表。
+	if e != nil {
+		t.Fatal(err)
+	}
+	if len(m.orphans) != 2 {
+		t.Fatal("test failed for TestPutOrphanTx")
+	}
+
+	m.ConfirmTxID(id)
+	printMempool(m)
+}
+
 func TestMy(t *testing.T) {
 	run(nil, t)
 }
@@ -29,22 +107,6 @@ func printMempool(m *Mempool) {
 	fmt.Println("MEMPOOL confirmed len:", len(m.confirmed))
 	fmt.Println("MEMPOOL orphans len:", len(m.orphans))
 	fmt.Println("MEMPOOL bucketKeys len:", len(m.bucketKeyNodes))
-	// for k, v := range m.bucketKeyNodes {
-	// 	fmt.Println(k)
-	// 	fmt.Println(len(v))
-	// }
-	// fmt.Println("m.confirmed::::::")
-	// for _, v := range m.confirmed {
-	// 	fmt.Println(v)
-	// }
-	// fmt.Println("m.unconfirmed::::::")
-	// for _, v := range m.unconfirmed {
-	// 	fmt.Println(v)
-	// }
-	// fmt.Println("m.orphans::::::")
-	// for _, v := range m.orphans {
-	// 	fmt.Println(v)
-	// }
 }
 
 func run(b *testing.B, t *testing.T) {
@@ -69,16 +131,16 @@ func run(b *testing.B, t *testing.T) {
 
 	result := batchTx(m)
 	printMempool(m)
-	// fmt.Println("确认一笔交易")
-	// e := m.ConfirmTx(result[80]) //
-	// if e != nil {
-	// 	panic(e)
-	// }
-	// fmt.Println("confirm tx:", string(result[40].Txid))
+	fmt.Println("确认一笔交易")
+	e := m.ConfirmTx(result[80]) //
+	if e != nil {
+		panic(e)
+	}
+	fmt.Println("confirm tx:", string(result[40].Txid))
 
-	deleteID := string(result[80].Txid) //"8001"
-	fmt.Println("delete tx:", deleteID)
-	m.DeleteTxAndChildren(deleteID)
+	// deleteID := string(result[80].Txid) //"8001"
+	// fmt.Println("delete tx:", deleteID)
+	// m.DeleteTxAndChildren(deleteID)
 	// m.ConfirmeTx(result[800])
 	// if e != nil {
 	// 	panic(e)
@@ -166,7 +228,6 @@ func setup(m *Mempool) {
 		dbTxs[string(id)] = tx0
 	}
 
-	// begin := time.Now()
 	for k, t := range txs {
 		fatherID := []byte(t)
 		id := strconv.Itoa(k)
@@ -272,10 +333,6 @@ func setup(m *Mempool) {
 
 	for ii := 1; ii <= sum; ii++ {
 		for i := 0; i < 10; i++ {
-			if ii == 90 && i == 9 {
-				continue
-			}
-
 			id := strconv.Itoa(ii*100 + i)
 			tx1 := &pb.Transaction{
 				Txid: []byte(id),
@@ -448,23 +505,7 @@ func setup(m *Mempool) {
 					},
 				},
 			}
-			// aaa := time.Now()
 			m.PutTx(tx1)
-			// bbb := time.Now()
-			// fmt.Println("插入单笔交易耗时：", bbb.Sub(aaa))
 		}
-	}
-	// end := time.Now()
-	// fmt.Println("插入交易耗时：", end.Sub(begin))
-}
-
-func TestTime(t *testing.T) {
-	recvTimestamp := time.Now().UnixNano()
-	fmt.Println("recvTimestamp:", recvTimestamp)
-	tt := time.Unix(0, recvTimestamp)
-	time.Sleep(time.Second * 5)
-	fmt.Println(time.Since(tt))
-	if time.Since(tt) > time.Second*2 {
-		fmt.Println("aaa")
 	}
 }
