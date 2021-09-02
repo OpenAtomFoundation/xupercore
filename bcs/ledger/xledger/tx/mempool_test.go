@@ -12,7 +12,7 @@ import (
 	"github.com/xuperchain/xupercore/protos"
 )
 
-var sum = 10000
+var sum = 100
 
 func TestMy(t *testing.T) {
 	run(nil, t)
@@ -29,11 +29,11 @@ func printMempool(m *Mempool) {
 	fmt.Println("MEMPOOL confirmed len:", len(m.confirmed))
 	fmt.Println("MEMPOOL orphans len:", len(m.orphans))
 	fmt.Println("MEMPOOL bucketKeys len:", len(m.bucketKeyNodes))
-	for k, v := range m.bucketKeyNodes {
-		fmt.Println(k)
-		fmt.Println(len(v))
-	}
-	fmt.Println("m.confirmed::::::")
+	// for k, v := range m.bucketKeyNodes {
+	// 	fmt.Println(k)
+	// 	fmt.Println(len(v))
+	// }
+	// fmt.Println("m.confirmed::::::")
 	// for _, v := range m.confirmed {
 	// 	fmt.Println(v)
 	// }
@@ -69,14 +69,15 @@ func run(b *testing.B, t *testing.T) {
 
 	result := batchTx(m)
 	printMempool(m)
-	fmt.Println("确认一笔交易")
-	// e := m.ConfirmeTx(result[800]) // 确认交易好像未生效！！！！
+	// fmt.Println("确认一笔交易")
+	// e := m.ConfirmTx(result[80]) //
 	// if e != nil {
 	// 	panic(e)
 	// }
+	// fmt.Println("confirm tx:", string(result[40].Txid))
 
-	deleteID := string(result[800].Txid) //"8001"
-	fmt.Println("confirm tx:", deleteID)
+	deleteID := string(result[80].Txid) //"8001"
+	fmt.Println("delete tx:", deleteID)
 	m.DeleteTxAndChildren(deleteID)
 	// m.ConfirmeTx(result[800])
 	// if e != nil {
@@ -271,6 +272,9 @@ func setup(m *Mempool) {
 
 	for ii := 1; ii <= sum; ii++ {
 		for i := 0; i < 10; i++ {
+			if ii == 90 && i == 9 {
+				continue
+			}
 
 			id := strconv.Itoa(ii*100 + i)
 			tx1 := &pb.Transaction{

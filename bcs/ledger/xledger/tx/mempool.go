@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gammazero/deque"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/logs"
 )
@@ -73,7 +74,7 @@ func (m *Mempool) HasTx(txid string) bool {
 	return false
 }
 
-// Range 按照拓扑排序遍历节点交易.
+// Range 按照拓扑排序遍历节点交易。如果交易存在循环引用，会 panic，外层需要 recover。
 func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	if f == nil {
 		return
@@ -83,53 +84,49 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	defer m.m.Unlock()
 
 	m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
-
+	var q deque.Deque
 	nodeInputSumMap := make(map[*Node]int, len(m.confirmed))
-	forRangeNode := make([]*Node, 0, len(m.confirmed))
 	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
-		forRangeNode = append(forRangeNode, n)
+		q.PushBack(n)
 	}
 
-	for len(forRangeNode) > 0 {
-		tmpNodes := make([]*Node, 0, len(m.confirmed))
-		for _, root := range forRangeNode {
-			for _, n := range root.txOutputs {
-				if m.isNextNode(n, false, nodeInputSumMap) {
-					if !f(n.tx) {
-						return
-					}
-					tmpNodes = append(tmpNodes, n)
+	for q.Len() > 0 {
+		node := q.PopFront().(*Node)
+		for _, n := range node.txOutputs {
+			if m.isNextNode(n, false, nodeInputSumMap) {
+				if !f(n.tx) {
+					return
 				}
-			}
-
-			for _, n := range root.txOutputsExt {
-				if m.isNextNode(n, false, nodeInputSumMap) {
-					if !f(n.tx) {
-						return
-					}
-					tmpNodes = append(tmpNodes, n)
-				}
-			}
-
-			for _, n := range root.readonlyOutputs {
-				if m.isNextNode(n, true, nodeInputSumMap) {
-					if !f(n.tx) {
-						return
-					}
-					tmpNodes = append(tmpNodes, n)
-				}
-			}
-
-			for _, n := range root.bucketKeyToNode {
-				if m.isNextNode(n, false, nodeInputSumMap) {
-					if !f(n.tx) {
-						return
-					}
-					tmpNodes = append(tmpNodes, n)
-				}
+				q.PushBack(n)
 			}
 		}
-		forRangeNode = tmpNodes
+
+		for _, n := range node.txOutputsExt {
+			if m.isNextNode(n, false, nodeInputSumMap) {
+				if !f(n.tx) {
+					return
+				}
+				q.PushBack(n)
+			}
+		}
+
+		for _, n := range node.readonlyOutputs {
+			if m.isNextNode(n, true, nodeInputSumMap) {
+				if !f(n.tx) {
+					return
+				}
+				q.PushBack(n)
+			}
+		}
+
+		for _, n := range node.bucketKeyToNode {
+			if m.isNextNode(n, false, nodeInputSumMap) {
+				if !f(n.tx) {
+					return
+				}
+				q.PushBack(n)
+			}
+		}
 	}
 }
 
@@ -140,7 +137,7 @@ func (m *Mempool) GetTxCounnt() int {
 	return len(m.unconfirmed) + len(m.orphans)
 }
 
-// PutTx put tx.
+// PutTx put tx. TODO：后续判断新增的交易是否会导致循环依赖。
 func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	if tx == nil {
 		return errors.New("can not put nil tx into mempool")
@@ -450,26 +447,27 @@ func (m *Mempool) gcOrphans() {
 	}
 }
 
-func (m *Mempool) isNextNode(node *Node, readonly bool, inputSum map[*Node]int) bool {
+func (m *Mempool) isNextNode(node *Node, readonly bool, inputSumMap map[*Node]int) bool {
 	if node == nil {
 		return false
 	}
 
-	if sum, ok := inputSum[node]; ok {
-		if sum <= 1 { // 如果此时节点入度为1，说明只剩下当前父节点这一个依赖，返回 true。
-			delete(inputSum, node)
-			return true
-		}
-		inputSum[node] = sum - 1
+	var inputSum int
+	if sum, ok := inputSumMap[node]; ok {
+		inputSum = sum - 1
 	} else {
-		sum := node.getInputSum() - 1
-		if sum <= 0 { // 第一次遍历到此节点，且入度为1，返回true。
-			return true
-		}
-		inputSum[node] = sum
+		inputSum = node.getInputSum() - 1
 	}
+	inputSumMap[node] = inputSum // 即使只有一个依赖交易，那么子交易也需要加入到 inputSumMap 中，用来循环依赖判断。
 
-	return false
+	switch inputSum {
+	case 0: // 入度为0，说明所有依赖交易都已经遍历过。
+		return true
+	case -1: // 入度为-1，说明存在循环引用。
+		panic("tx circular dependence in mempool")
+	default:
+		return false
+	}
 }
 
 // putTx 添加交易核心逻辑。
@@ -642,47 +640,62 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 	if len(orphans) == 0 {
 		return
 	}
-	nodes := orphans
 
-	for len(nodes) > 0 {
-		tmp := make([]*Node, 0)
-		for _, n := range nodes {
-			allFatherFound := true
+	var q deque.Deque
+	for _, n := range orphans {
+		q.PushBack(n)
+	}
 
-			for _, v := range n.txInputs {
+	for q.Len() > 0 {
+		n := q.PopFront().(*Node)
+		allFatherFound := true
+		for _, v := range n.txInputs {
+			if v == nil {
+				continue
+			}
+			if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
+				allFatherFound = false
+				break
+			}
+		}
+
+		if allFatherFound {
+			for _, v := range n.txInputsExt {
+				if v == nil {
+					continue
+				}
 				if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 					allFatherFound = false
 					break
 				}
 			}
+		}
 
-			if allFatherFound {
-				for _, v := range n.txInputsExt {
-					if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
-						allFatherFound = false
-						break
-					}
+		if allFatherFound {
+			for _, v := range n.readonlyInputs {
+				if v == nil {
+					continue
 				}
-			}
-
-			if allFatherFound {
-				for _, v := range n.readonlyInputs {
-					if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
-						allFatherFound = false
-						break
-					}
+				if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
+					allFatherFound = false
+					break
 				}
-			}
-
-			if allFatherFound {
-				delete(m.orphans, n.txid)
-				m.unconfirmed[n.txid] = n
-				tmp = append(tmp, n.getAllChildren()...)
-			} else {
-				tmp = append(tmp, n.getAllParent()...)
 			}
 		}
-		nodes = tmp
+
+		if allFatherFound {
+			delete(m.orphans, n.txid)
+			m.unconfirmed[n.txid] = n
+			for _, cn := range n.getAllChildren() {
+				q.PushBack(cn)
+			}
+		} else {
+			for _, fn := range n.getAllParent() {
+				if _, ok := m.orphans[fn.txid]; ok {
+					q.PushBack(fn)
+				}
+			}
+		}
 	}
 }
 
@@ -712,34 +725,30 @@ func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 // 删除 node 的所有子交易，先从 orphans 中查找。
 func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 	deletedTxs := make([]*pb.Transaction, 0, 10)
-	children := node.getAllChildren()
+	var q deque.Deque
+	for _, n := range node.getAllChildren() {
+		q.PushBack(n)
+	}
 
-	for len(children) > 0 {
-		tmp := make(map[string]*Node, 0)
-		for _, n := range children {
-			if _, ok := m.orphans[n.txid]; ok {
-				delete(m.orphans, n.txid)
-			} else if _, ok := m.unconfirmed[n.txid]; ok {
-				delete(m.unconfirmed, n.txid)
-			} else {
-				continue // 按道理不应出现此情况。
-			}
-
-			deletedTxs = append(deletedTxs, n.tx)
-			for _, v := range n.getAllChildren() {
-				if m.inMempool(v.txid) {
-					tmp[v.txid] = v
-				}
-			}
-
-			n.breakOutputs()
-			m.deleteBucketKey(n)
+	for q.Len() > 0 {
+		n := q.PopFront().(*Node)
+		if _, ok := m.orphans[n.txid]; ok {
+			delete(m.orphans, n.txid)
+		} else if _, ok := m.unconfirmed[n.txid]; ok {
+			delete(m.unconfirmed, n.txid)
+		} else {
+			continue // 按道理不应出现此情况。
 		}
-		next := make([]*Node, 0, len(tmp))
-		for _, v := range tmp {
-			next = append(next, v)
+
+		deletedTxs = append(deletedTxs, n.tx) // 当前 n 已经从 mempool 删除。
+		for _, v := range n.getAllChildren() {
+			if m.inMempool(v.txid) {
+				q.PushBack(v) // 将 n 的所有子节点加入队列，等到从 mempool 中删除。
+			}
 		}
-		children = next
+
+		n.breakOutputs()     // 断绝 n 的所有父关系。
+		m.deleteBucketKey(n) // 删除和 bucket key 相关。
 	}
 
 	return deletedTxs
@@ -959,23 +968,26 @@ func (m *Mempool) updateNodeTxInput(tx *pb.Transaction, refTxid string, offset i
 }
 
 func (m *Mempool) moveToConfirmed(node *Node) {
-	nodes := []*Node{node}
-	for len(nodes) > 0 {
-		tmp := make([]*Node, 0)
-		for _, n := range nodes {
-			tmp = append(tmp, n.getAllParent()...)
-
-			n.breakOutputs() // 断绝父子关系
-			m.confirmed[n.txid] = n
-
-			delete(m.unconfirmed, n.txid)
-			delete(m.orphans, n.txid)
-
-			// 遍历所有子交易，判断是否需要将孤儿交易移动到未确认交易表
-			m.checkAndMoveOrphan(n)
-			m.deleteBucketKey(n)
+	var q deque.Deque
+	q.PushBack(node)
+	for q.Len() > 0 {
+		n := q.PopFront().(*Node)
+		for _, v := range n.getAllParent() {
+			if _, ok := m.confirmed[v.txid]; ok {
+				continue
+			}
+			q.PushBack(v)
 		}
-		nodes = tmp
+
+		n.breakOutputs() // 断绝父子关系
+		m.confirmed[n.txid] = n
+
+		delete(m.unconfirmed, n.txid)
+		delete(m.orphans, n.txid)
+
+		// 遍历所有子交易，判断是否需要将孤儿交易移动到未确认交易表
+		m.checkAndMoveOrphan(n)
+		m.deleteBucketKey(n)
 	}
 
 	m.cleanConfirmedTxs()
