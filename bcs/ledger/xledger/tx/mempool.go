@@ -351,8 +351,8 @@ func (m *Mempool) deleteTx(txid string) []*pb.Transaction {
 
 // ConfirmTxID txid
 func (m *Mempool) ConfirmTxID(txid string) {
-	m.m.RLock()
-	defer m.m.RUnlock()
+	m.m.Lock()
+	defer m.m.Unlock()
 
 	m.log.Debug("Mempool ConfirmTxID", "txid", hex.EncodeToString([]byte(txid)))
 

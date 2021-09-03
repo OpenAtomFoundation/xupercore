@@ -85,11 +85,14 @@ func TestConfirmTx(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(m.orphans) != 2 {
-		t.Fatal("test failed for TestPutOrphanTx")
+		t.Fatal("test failed for TestConfirmTx")
 	}
 
 	m.ConfirmTxID(id)
 	printMempool(m)
+	if len(m.confirmed) != 0 || len(m.unconfirmed) != 0 || len(m.orphans) != 0 {
+		t.Fatal("test failed for TestConfirmTx mempool size error")
+	}
 }
 
 func TestMy(t *testing.T) {
