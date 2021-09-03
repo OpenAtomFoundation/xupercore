@@ -373,8 +373,8 @@ func (m *Mempool) ConfirmTxID(txid string) {
 // ConfirmTx confirm tx.
 // 将 tx 从未确认交易表放入确认交易表，或者删除。
 func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
-	m.m.RLock()
-	defer m.m.RUnlock()
+	m.m.Lock()
+	defer m.m.Unlock()
 
 	m.log.Debug("Mempool ConfirmTx", "txid", tx.HexTxid())
 
