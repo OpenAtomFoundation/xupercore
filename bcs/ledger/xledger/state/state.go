@@ -1297,40 +1297,34 @@ func (t *State) collectDelayedTxs(interval time.Duration) {
 	for range ticker.C {
 		t.log.Debug("undo unconfirmed and delayed txs start")
 
-		// 要更新数据库，需要 lock。
-		t.utxo.Mutex.Lock()
 		delayedTxs := t.tx.GetDelayedTxs()
 
-		batch := t.ldb.NewBatch()
-
 		var undoErr error
-		for _, tx := range delayedTxs {
-			// todo 锁放到这，检查交易是否在账本中。
+		for _, tx := range delayedTxs { // 这些延迟交易已经是按照依赖关系进行排序，前面的交易依赖后面的交易。
 			// undo tx
-			// has, err := t.sctx.Ledger.HasTransaction(tx.Txid)
-			// if err != nil {
-			// 	t.log.Error("fail query tx from ledger", "err", err)
-			// 	break
-			// }
-			// if has {
-			// 	continue
-			// }
+			// 要更新数据库，需要 lock。
+			t.utxo.Mutex.Lock()
+
+			inLedger, err := t.sctx.Ledger.HasTransaction(tx.Txid)
+			if err != nil {
+				t.log.Error("fail query tx from ledger", "err", err)
+				break
+			}
+			if inLedger { // 账本中如果已经存在，就不需要回滚了。
+				continue
+			}
+
+			batch := t.ldb.NewBatch()
 			undoErr = t.undoUnconfirmedTx(tx, batch, nil, nil)
 			if undoErr != nil {
 				t.log.Error("fail to undo tx for delayed tx", "undoErr", undoErr)
 				break
 			}
-		}
-
-		if undoErr == nil {
-			// undo 没有错误时更新数据库，有错误不更新交易。
 			batch.Write()
-			t.log.Debug("undo unconfirmed and delayed txs count", "count", len(delayedTxs))
+			t.log.Debug("undo unconfirmed and delayed tx", "txid", tx.HexTxid())
+			t.utxo.Mutex.Unlock()
 		}
-
-		t.utxo.Mutex.Unlock()
 	}
-
 }
 
 //执行一个block的时候, 处理本地未确认交易
@@ -1367,6 +1361,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 			unconfirmToConfirm[txid] = true
 		} else { // 如果区块中的交易不在 mempool 中再去检查冲突交易。
+			// 删除 mempool 中与此交易有冲突的交易，比如 utxo 双花、某个 key 的版本冲突。
 			undoTxs = append(undoTxs, t.tx.Mempool.DeleteConflictByTx(tx)...)
 		}
 	}
