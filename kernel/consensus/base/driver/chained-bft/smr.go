@@ -11,7 +11,9 @@ import (
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
 	chainedBftPb "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/pb"
+	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -27,6 +29,7 @@ var (
 	ErrSameProposalNotify = errors.New("same proposal has been made")
 	ErrJustifyVotesEmpty  = errors.New("justify qc's votes are empty")
 	ErrEmptyTarget        = errors.New("target parameter is empty")
+	ErrRegisterErr        = errors.New("register to p2p error")
 )
 
 const (
@@ -54,12 +57,12 @@ type Smr struct {
 	cryptoClient *cCrypto.CBFTCrypto
 
 	// quitCh stop channel
-	QuitCh chan bool
+	quitCh chan bool
 
 	pacemaker  PacemakerInterface
 	saftyrules saftyRulesInterface
-	Election   ProposerElectionInterface
-	qcTree     *QCPendingTree
+	election   ProposerElectionInterface
+	qcTree     *storage.QCPendingTree
 	// smr本地存储和外界账本存储的唯一关联，该字段标识了账本状态，
 	// 但此处并不直接使用ledger handler作为变量，旨在结偶smr存储和本地账本存储
 	// smr存储应该仅仅是账本区块头存储的很小的子集
@@ -69,10 +72,13 @@ type Smr struct {
 	localProposal *sync.Map
 	// votes of QC in mem, key: voteId, value: []*QuorumCertSign
 	qcVoteMsgs *sync.Map
+
+	// 该锁保护状态机处理msg或者bcs层操作过程，防止状态机get/set时由于bcs操作和msg处理并发导致的脏读脏写
+	mtx sync.Mutex
 }
 
 func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus, cryptoClient *cCrypto.CBFTCrypto, pacemaker PacemakerInterface,
-	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *QCPendingTree) *Smr {
+	saftyrules saftyRulesInterface, election ProposerElectionInterface, qcTree *storage.QCPendingTree) *Smr {
 	s := &Smr{
 		bcName:        bcName,
 		log:           log,
@@ -81,22 +87,18 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 		subscribeList: list.New(),
 		p2p:           p2p,
 		cryptoClient:  cryptoClient,
-		QuitCh:        make(chan bool, 1),
+		quitCh:        make(chan bool, 1),
 		pacemaker:     pacemaker,
 		saftyrules:    saftyrules,
-		Election:      election,
+		election:      election,
 		qcTree:        qcTree,
 		localProposal: &sync.Map{},
 		qcVoteMsgs:    &sync.Map{},
 	}
 	// smr初始值装载
-	s.localProposal.Store(utils.F(qcTree.Root.In.GetProposalId()), 0)
+	s.localProposal.Store(utils.F(qcTree.GetRootQC().In.GetProposalId()), 0)
 	return s
 }
-
-var (
-	ErrRegisterErr = errors.New("register to p2p error")
-)
 
 func (s *Smr) LoadVotes(proposalId []byte, signs []*chainedBftPb.QuorumCertSign) {
 	if signs != nil {
@@ -146,7 +148,7 @@ func (s *Smr) Start() {
 			select {
 			case msg := <-s.p2pMsgChan:
 				s.handleReceivedMsg(msg)
-			case <-s.QuitCh:
+			case <-s.quitCh:
 				return
 			}
 		}
@@ -155,42 +157,119 @@ func (s *Smr) Start() {
 
 // stop used to stop smr instance
 func (s *Smr) Stop() {
-	s.QuitCh <- true
+	s.quitCh <- true
 	s.UnRegisterToNetwork()
 }
 
-// UpdateJustifyQcStatus 用于支持可回滚的账本，生成相同高度的块
-// 为了支持生成相同round的块，需要拿到justify的full votes，因此需要在上层账本收到新块时调用，在CheckMinerMatch后
-// 注意：为了支持回滚操作，必须调用该函数
-func (s *Smr) UpdateJustifyQcStatus(justify *QuorumCert) {
-	if justify == nil {
-		return
-	}
-	v, ok := s.qcVoteMsgs.Load(utils.F(justify.GetProposalId()))
-	var signs []*chainedBftPb.QuorumCertSign
-	if ok {
-		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
-	}
-	justifySigns := justify.SignInfos
-	if justifySigns == nil {
-		return
-	}
-	signs = appendSigns(signs, justifySigns)
-	s.qcVoteMsgs.Store(utils.F(justify.GetProposalId()), signs)
-	// 根据justify check情况更新本地HighQC, 注意：由于CheckMinerMatch已经检查justify签名
-	s.qcTree.updateHighQC(justify.GetProposalId())
+// GetRootQC 查询状态树的Root节点，Root节点已经被账本commit
+func (s *Smr) GetRootQC() storage.QuorumCertInterface {
+	return s.qcTree.GetRootQC().In
 }
 
-// UpdateQcStatus 除了更新本地smr的QC之外，还更新了smr的和账本相关的状态，以此区别于smr receive proposal时的updateQcStatus
-func (s *Smr) UpdateQcStatus(node *ProposalNode) error {
-	if node == nil {
-		return ErrEmptyTarget
+func (s *Smr) GetCurrentView() int64 {
+	return s.pacemaker.GetCurrentView()
+}
+
+func (s *Smr) GetAddress() string {
+	return s.address
+}
+
+func (s *Smr) CheckProposal(block cctx.BlockInterface, justify storage.QuorumCertInterface, validators []string) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	pNode := s.blockToProposalNode(block)
+	return s.saftyrules.CheckProposal(pNode.In, justify, validators)
+}
+
+func (s *Smr) KeepUpWithBlock(block cctx.BlockInterface, justify storage.QuorumCertInterface, validators []string) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	if justify != nil {
+		s.updateJustifyQcStatus(justify)
 	}
-	// 更新ledgerStatus
-	if node.In.GetProposalView() > s.ledgerState {
-		s.ledgerState = node.In.GetProposalView()
+	if validators != nil {
+		err := s.ProcessProposal(block.GetHeight(), block.GetBlockid(), block.GetPreHash(), validators)
+		if err != nil && err != ErrSameProposalNotify {
+			return err
+		}
 	}
-	return s.qcTree.updateQcStatus(node)
+	// 在不在候选人节点中，都直接调用smr生成新的qc树，矿工调用避免了proposal消息后于vote消息
+	pNode := s.blockToProposalNode(block)
+	err := s.updateQcStatus(pNode)
+	if err != nil {
+		return err
+	}
+	s.log.Debug("consensus:smr:KeepUpWithBlock: Now HighQC", "highQC", utils.F(s.getHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
+	return nil
+}
+
+func (s *Smr) ResetProposerStatus(tipBlock cctx.BlockInterface,
+	queryBlockFunc func(blkId []byte) (ledger.BlockHandle, error),
+	validators []string) (bool, storage.QuorumCertInterface, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	if bytes.Equal(s.getHighQC().GetProposalId(), tipBlock.GetBlockid()) {
+		// 此处需要获取带签名的完整Justify
+		return false, s.getCompleteHighQC(), nil
+	}
+	// 单个节点不存在投票验证的hotstuff流程，因此返回true
+	if len(validators) == 1 {
+		return false, nil, nil
+	}
+
+	// 从当前TipBlock开始往前追溯，交给smr根据状态进行回滚。
+	// 在本地状态树上找到指代TipBlock的QC，若找不到，则在状态树上找和TipBlock同一分支上的最近值
+	var qc storage.QuorumCertInterface
+	targetId := tipBlock.GetBlockid()
+	for {
+		block, err := queryBlockFunc(targetId)
+		if err != nil {
+			s.log.Error("consensus:smr:ResetProposerStatus: queryBlockFunc error.", "error", err)
+			return false, nil, ErrEmptyTarget
+		}
+		// 至多回滚到root节点
+		if block.GetHeight() <= s.GetRootQC().GetProposalView() {
+			s.log.Warn("consensus:smr:ResetProposerStatus: set root qc.", "root", utils.F(s.GetRootQC().GetProposalId()), "root height", s.GetRootQC().GetProposalView(),
+				"block", utils.F(block.GetBlockid()), "block height", block.GetHeight())
+			qc = s.GetRootQC()
+			break
+		}
+		// 查找目标Id是否挂在状态树上，若否，则从target网上查找知道状态树里有
+		node := s.qcTree.DFSQueryNode(block.GetBlockid())
+		if node == nil {
+			targetId = block.GetPreHash()
+			continue
+		}
+		// node在状态树上找到之后，以此为起点(包括当前点)，继续向上查找，知道找到符合全名数量要求的QC，该QC可强制转化为新的HighQC
+		wantProposers := s.election.GetValidators(block.GetHeight())
+		if wantProposers == nil {
+			s.log.Error("consensus:smr:ResetProposerStatus: election error.")
+			return false, nil, ErrEmptyTarget
+		}
+		if !s.validNewHighQC(node.In.GetProposalId(), wantProposers) {
+			s.log.Warn("consensus:smr:ResetProposerStatus: target not ready", "target", utils.F(node.In.GetProposalId()), "wantProposers", wantProposers, "height", node.In.GetProposalView())
+			targetId = block.GetPreHash()
+			continue
+		}
+		qc = node.In
+		break
+	}
+	if qc == nil {
+		return false, nil, ErrEmptyHighQC
+	}
+	ok, err := s.enforceUpdateHighQC(qc.GetProposalId())
+	if err != nil {
+		s.log.Error("consensus:smr:ResetProposerStatus: EnforceUpdateHighQC error.", "error", err)
+		return false, nil, err
+	}
+	if ok {
+		s.log.Debug("consensus:smr:ResetProposerStatus: EnforceUpdateHighQC success.", "target", utils.F(qc.GetProposalId()), "height", qc.GetProposalView())
+	}
+	// 此处需要获取带签名的完整Justify, 此时HighQC已经更新
+	return true, s.getCompleteHighQC(), nil
 }
 
 // handleReceivedMsg used to process msg received from network
@@ -201,14 +280,48 @@ func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) error {
 	}
 	switch msg.GetHeader().GetType() {
 	case xuperp2p.XuperMessage_CHAINED_BFT_NEW_PROPOSAL_MSG:
-		go s.handleReceivedProposal(msg)
+		s.handleReceivedProposal(msg)
 	case xuperp2p.XuperMessage_CHAINED_BFT_VOTE_MSG:
-		go s.handleReceivedVoteMsg(msg)
+		s.handleReceivedVoteMsg(msg)
 	default:
 		s.log.Error("smr::handleReceivedMsg receive unknow type msg", "type", msg.GetHeader().GetType())
 		return nil
 	}
 	return nil
+}
+
+// UpdateJustifyQcStatus 用于支持可回滚的账本，生成相同高度的块
+// 为了支持生成相同round的块，需要拿到justify的full votes，因此需要在上层账本收到新块时调用，在CheckMinerMatch后
+// 注意：为了支持回滚操作，必须调用该函数
+func (s *Smr) updateJustifyQcStatus(justify storage.QuorumCertInterface) {
+	if justify == nil {
+		return
+	}
+	v, ok := s.qcVoteMsgs.Load(utils.F(justify.GetProposalId()))
+	var signs []*chainedBftPb.QuorumCertSign
+	if ok {
+		signs, _ = v.([]*chainedBftPb.QuorumCertSign)
+	}
+	justifySigns := justify.GetSignsInfo()
+	if justifySigns == nil {
+		return
+	}
+	signs = appendSigns(signs, justifySigns)
+	s.qcVoteMsgs.Store(utils.F(justify.GetProposalId()), signs)
+	// 根据justify check情况更新本地HighQC, 注意：由于CheckMinerMatch已经检查justify签名
+	s.qcTree.UpdateHighQC(justify.GetProposalId())
+}
+
+// UpdateQcStatus 除了更新本地smr的QC之外，还更新了smr的和账本相关的状态，以此区别于smr receive proposal时的updateQcStatus
+func (s *Smr) updateQcStatus(node *storage.ProposalNode) error {
+	if node == nil {
+		return ErrEmptyTarget
+	}
+	// 更新ledgerStatus
+	if node.In.GetProposalView() > s.ledgerState {
+		s.ledgerState = node.In.GetProposalView()
+	}
+	return s.qcTree.UpdateQcStatus(node)
 }
 
 // ProcessProposal 即Chained-HotStuff的NewView阶段，LibraBFT的process_proposal阶段
@@ -220,13 +333,13 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 	if validatesIpInfo == nil {
 		return ErrEmptyTarget
 	}
-	if s.pacemaker.GetCurrentView() != s.qcTree.Genesis.In.GetProposalView()+1 &&
+	if s.pacemaker.GetCurrentView() != s.qcTree.GetGenesisQC().In.GetProposalView()+1 &&
 		s.qcTree.GetLockedQC() != nil && s.pacemaker.GetCurrentView() < s.qcTree.GetLockedQC().In.GetProposalView() {
 		s.log.Debug("smr::ProcessProposal error", "error", ErrTooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
 			s.qcTree.GetLockedQC().In.GetProposalView())
 		return ErrTooLowNewProposal
 	}
-	if s.qcTree.GetHighQC() == nil {
+	if s.getHighQC() == nil {
 		s.log.Error("smr::ProcessProposal empty HighQC error")
 		return ErrEmptyHighQC
 	}
@@ -262,28 +375,24 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 		return ErrP2PInternalErr
 	}
 	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(validatesIpInfo))
+	s.localProposal.Store(utils.F(proposalID), proposal.Timestamp)
 	s.log.Debug("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID))
 	return nil
 }
 
 // reloadJustifyQC 与LibraBFT不同，返回一个指定的parentQC
-func (s *Smr) reloadJustifyQC(parentID []byte) (*QuorumCert, error) {
+func (s *Smr) reloadJustifyQC(parentID []byte) (storage.QuorumCertInterface, error) {
 	// 第一次proposal，highQC==rootQC==genesisQC
-	if bytes.Equal(s.qcTree.Genesis.In.GetProposalId(), parentID) {
-		highQC := s.qcTree.GetHighQC()
-		return &QuorumCert{
-			VoteInfo: &VoteInfo{
-				ProposalView: highQC.In.GetProposalView(),
-				ProposalId:   highQC.In.GetProposalId(),
-			},
-		}, nil
+	if bytes.Equal(s.qcTree.GetGenesisQC().In.GetProposalId(), parentID) {
+		highQC := s.getHighQC()
+		return highQC, nil
 	}
 	// 若当前找不到，可能是qcTree已经更新了，废弃
 	qc := s.qcTree.DFSQueryNode(parentID)
 	if qc == nil {
 		return nil, ErrEmptyTarget
 	}
-	v := &VoteInfo{
+	v := &storage.VoteInfo{
 		ProposalView: qc.In.GetProposalView(),
 		ProposalId:   qc.In.GetProposalId(),
 	}
@@ -292,22 +401,17 @@ func (s *Smr) reloadJustifyQC(parentID []byte) (*QuorumCert, error) {
 	if s.qcTree.GetCommitQC() != nil {
 		commitId = s.qcTree.GetCommitQC().In.GetProposalId()
 	}
+
 	// 根据qcTree生成一个parentQC
-	parentQuorumCert := &QuorumCert{
-		VoteInfo: v,
-		LedgerCommitInfo: &LedgerCommitInfo{
-			CommitStateId: commitId,
-		},
-	}
 	// 上一个view的votes
 	value, ok := s.qcVoteMsgs.Load(utils.F(v.ProposalId))
 	if !ok {
 		return nil, ErrJustifyVotesEmpty
 	}
-	signs, ok := value.([]*chainedBftPb.QuorumCertSign)
-	if ok {
-		parentQuorumCert.SignInfos = signs
-	}
+	signs, _ := value.([]*chainedBftPb.QuorumCertSign)
+	parentQuorumCert := storage.NewQuorumCert(v, &storage.LedgerCommitInfo{
+		CommitStateId: commitId,
+	}, signs)
 	return parentQuorumCert, nil
 }
 
@@ -322,44 +426,47 @@ func (s *Smr) reloadJustifyQC(parentID []byte) (*QuorumCert, error) {
 // 6. 发送一个vote消息给下一个Leader
 // 注意：该过程删除了当前round的leader是否符合计算，将该步骤后置到上层共识CheckMinerMatch，原因：需要支持上层基于时间调度而不是基于round调度，减小耦合
 func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	newProposalMsg := &chainedBftPb.ProposalMsg{}
 	if err := p2p.Unmarshal(msg, newProposalMsg); err != nil {
 		s.log.Error("smr::handleReceivedProposal Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return
 	}
-	if _, ok := s.localProposal.LoadOrStore(utils.F(newProposalMsg.GetProposalId()), newProposalMsg.Timestamp); ok {
+
+	_, ok := s.localProposal.LoadOrStore(utils.F(newProposalMsg.GetProposalId()), newProposalMsg.Timestamp)
+	if ok && newProposalMsg.GetSign().Address != s.address {
 		return
 	}
 
 	s.log.Debug("smr::handleReceivedProposal::received a proposal", "logid", msg.GetHeader().GetLogid(),
 		"newView", newProposalMsg.GetProposalView(), "newProposalId", utils.F(newProposalMsg.GetProposalId()))
 	parentQCBytes := newProposalMsg.GetJustifyQC()
-	parentQC := &QuorumCert{}
+	parentQC := &storage.QuorumCert{}
 	if err := json.Unmarshal(parentQCBytes, parentQC); err != nil {
 		s.log.Error("smr::handleReceivedProposal Unmarshal parentQC error", "error", err)
 		return
 	}
 
-	newVote := &VoteInfo{
+	newVote := &storage.VoteInfo{
 		ProposalId:   newProposalMsg.GetProposalId(),
 		ProposalView: newProposalMsg.GetProposalView(),
 		ParentId:     parentQC.GetProposalId(),
 		ParentView:   parentQC.GetProposalView(),
 	}
-	isFirstJustify := bytes.Equal(s.qcTree.Genesis.In.GetProposalId(), parentQC.GetProposalId())
+	isFirstJustify := bytes.Equal(s.qcTree.GetGenesisQC().In.GetProposalId(), parentQC.GetProposalId())
 	// 0.若为初始状态，则无需检查justify，否则需要检查qc有效性
 	if !isFirstJustify {
-		if err := s.saftyrules.CheckProposal(&QuorumCert{
-			VoteInfo:  newVote,
-			SignInfos: []*chainedBftPb.QuorumCertSign{newProposalMsg.GetSign()},
-		}, parentQC, s.Election.GetValidators(parentQC.GetProposalView())); err != nil {
+		proposalQC := storage.NewQuorumCert(newVote, nil, []*chainedBftPb.QuorumCertSign{newProposalMsg.GetSign()})
+		if err := s.saftyrules.CheckProposal(proposalQC, parentQC, s.election.GetValidators(parentQC.GetProposalView())); err != nil {
 			s.log.Debug("smr::handleReceivedProposal::CheckProposal error", "error", err,
 				"parentView", parentQC.GetProposalView(), "parentId", utils.F(parentQC.GetProposalId()))
 			return
 		}
 	}
 	// 1.检查账本状态和收到新round是否符合要求
-	if s.ledgerState+3 < newVote.ProposalView {
+	if s.ledgerState+StrictInternal < newVote.ProposalView {
 		s.log.Error("smr::handleReceivedProposal::local ledger hasn't been updated.", "LedgerState", s.ledgerState, "ProposalView", newVote.ProposalView)
 		return
 	}
@@ -379,7 +486,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	// 3.本地safetyrules更新, 如有可以commit的QC，执行commit操作并更新本地rootQC
 	if parentQC.LedgerCommitInfo != nil && parentQC.LedgerCommitInfo.CommitStateId != nil &&
 		s.saftyrules.UpdatePreferredRound(parentQC.GetProposalView()) {
-		s.qcTree.updateCommit(parentQC.GetProposalId())
+		s.qcTree.UpdateCommit(parentQC.GetProposalId())
 	}
 	// 4.查看收到的view是否符合要求, 此处接受孤儿节点
 	if !s.saftyrules.CheckPacemaker(newProposalMsg.GetProposalView(), s.pacemaker.GetCurrentView()) {
@@ -396,23 +503,20 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	}
 
 	// 这个newVoteId表示的是本地最新一次vote的id，生成voteInfo的hash，标识vote消息
-	newLedgerInfo := &LedgerCommitInfo{
+	newLedgerInfo := &storage.LedgerCommitInfo{
 		VoteInfoHash: newProposalMsg.GetProposalId(),
 	}
-	newNode := &ProposalNode{
-		In: &QuorumCert{
-			VoteInfo:         newVote,
-			LedgerCommitInfo: newLedgerInfo,
-		},
+	newNode := &storage.ProposalNode{
+		In: storage.NewQuorumCert(newVote, newLedgerInfo, nil),
 	}
 	// 5.与proposal.ParentId相比，更新本地qcTree，insert新节点, 包括更新CommitQC等等
-	if err := s.qcTree.updateQcStatus(newNode); err != nil {
+	if err := s.qcTree.UpdateQcStatus(newNode); err != nil {
 		s.log.Error("smr::handleReceivedProposal::updateQcStatus error", "err", err)
 		return
 	}
 	s.log.Debug("smr::handleReceivedProposal::pacemaker changed", "round", s.pacemaker.GetCurrentView())
 	// 6.发送一个vote消息给下一个Leader
-	nextLeader := s.Election.GetLeader(s.pacemaker.GetCurrentView() + 1)
+	nextLeader := s.election.GetLeader(s.pacemaker.GetCurrentView() + 1)
 	if nextLeader == "" {
 		s.log.Debug("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
 		return
@@ -423,7 +527,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 // voteProposal 当Replica收到一个Proposal并对该Proposal检查之后，该节点会针对该QC投票
 // 节点的vote包含一个本次vote的对象的基本信息，和本地上次vote对象的基本信息，和本地账本的基本信息，和一个签名
 // 只要vote过，就在本地map中更新值
-func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo, voteTo string) {
+func (s *Smr) voteProposal(msg []byte, vote *storage.VoteInfo, ledger *storage.LedgerCommitInfo, voteTo string) {
 	// 若为自己直接先返回
 	if voteTo == s.address {
 		return
@@ -462,22 +566,25 @@ func (s *Smr) voteProposal(msg []byte, vote *VoteInfo, ledger *LedgerCommitInfo,
 // 当收到2f+1个vote消息之后，本地pacemaker调用AdvanceView，并更新highQC
 // 该方法针对Leader而言
 func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	newVoteMsg := &chainedBftPb.VoteMsg{}
 	if err := p2p.Unmarshal(msg, newVoteMsg); err != nil {
 		s.log.Error("smr::handleReceivedVoteMsg Unmarshal msg error", "logid", msg.GetHeader().GetLogid(), "error", err)
 		return err
 	}
-	voteQC, err := s.VoteMsgToQC(newVoteMsg)
+	voteQC, err := s.voteMsgToQC(newVoteMsg)
 	if err != nil {
 		s.log.Error("smr::handleReceivedVoteMsg VoteMsgToQC error", "error", err)
 		return err
 	}
 	// 检查logid、voteInfoHash是否正确
-	if err := s.saftyrules.CheckVote(voteQC, msg.GetHeader().GetLogid(), s.Election.GetValidators(voteQC.GetProposalView())); err != nil {
+	if err := s.saftyrules.CheckVote(voteQC, msg.GetHeader().GetLogid(), s.election.GetValidators(voteQC.GetProposalView())); err != nil {
 		s.log.Error("smr::handleReceivedVoteMsg CheckVote error", "error", err, "msg", utils.F(voteQC.GetProposalId()))
 		return err
 	}
-	s.log.Debug("smr::handleReceivedVoteMsg::receive vote", "voteId", utils.F(voteQC.GetProposalId()), "voteView", voteQC.GetProposalView(), "from", voteQC.SignInfos[0].Address)
+	s.log.Debug("smr::handleReceivedVoteMsg::receive vote", "voteId", utils.F(voteQC.GetProposalId()), "voteView", voteQC.GetProposalView(), "from", voteQC.GetSignsInfo()[0].Address)
 
 	// 若vote先于proposal到达，则直接丢弃票数
 	if _, ok := s.localProposal.Load(utils.F(voteQC.GetProposalId())); !ok {
@@ -492,7 +599,7 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	// 存入本地voteInfo内存，查看签名数量是否超过2f+1
 	var VoteLen int
 	// 注意隐式，若!ok则证明签名数量为1，此时不可能超过2f+1
-	v, ok := s.qcVoteMsgs.LoadOrStore(utils.F(voteQC.GetProposalId()), voteQC.SignInfos)
+	v, ok := s.qcVoteMsgs.LoadOrStore(utils.F(voteQC.GetProposalId()), voteQC.GetSignsInfo())
 	// 若ok=false，则仅store一个vote签名
 	VoteLen = 1
 	if ok {
@@ -500,18 +607,18 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 		stored := false
 		for _, sign := range signs {
 			// 自己给自己投票将自动忽略
-			if sign.Address == voteQC.SignInfos[0].Address || voteQC.SignInfos[0].Address == s.address {
+			if sign.Address == voteQC.GetSignsInfo()[0].Address || voteQC.GetSignsInfo()[0].Address == s.address {
 				stored = true
 			}
 		}
 		if !stored {
-			signs = append(signs, voteQC.SignInfos[0])
+			signs = append(signs, voteQC.GetSignsInfo()[0])
 			s.qcVoteMsgs.Store(utils.F(voteQC.GetProposalId()), signs)
 		}
 		VoteLen = len(signs)
 	}
 	// 查看签名数量是否达到2f+1, 需要获取justify对应的validators
-	if !s.saftyrules.CalVotesThreshold(VoteLen, len(s.Election.GetValidators(voteQC.GetProposalView()))) {
+	if !s.saftyrules.CalVotesThreshold(VoteLen, len(s.election.GetValidators(voteQC.GetProposalView()))) {
 		return nil
 	}
 
@@ -519,93 +626,59 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	s.pacemaker.AdvanceView(voteQC)
 	s.log.Debug("smr::handleReceivedVoteMsg::FULL VOTES!", "pacemaker view", s.pacemaker.GetCurrentView())
 	// 更新HighQC
-	s.qcTree.updateHighQC(voteQC.GetProposalId())
+	s.qcTree.UpdateHighQC(voteQC.GetProposalId())
 	return nil
 }
 
-// VoteMsgToQC 提供一个从VoteMsg转化为quorumCert的方法，注意，两者struct其实相仿
-func (s *Smr) VoteMsgToQC(msg *chainedBftPb.VoteMsg) (*QuorumCert, error) {
-	voteInfo := &VoteInfo{}
+// voteMsgToQC 提供一个从VoteMsg转化为quorumCert的方法，注意，两者struct其实相仿
+func (s *Smr) voteMsgToQC(msg *chainedBftPb.VoteMsg) (storage.QuorumCertInterface, error) {
+	voteInfo := &storage.VoteInfo{}
 	if err := json.Unmarshal(msg.VoteInfo, voteInfo); err != nil {
 		return nil, err
 	}
-	ledgerCommitInfo := &LedgerCommitInfo{}
+	ledgerCommitInfo := &storage.LedgerCommitInfo{}
 	if err := json.Unmarshal(msg.LedgerCommitInfo, ledgerCommitInfo); err != nil {
 		return nil, err
 	}
-	return &QuorumCert{
-		VoteInfo:         voteInfo,
-		LedgerCommitInfo: ledgerCommitInfo,
-		SignInfos:        msg.GetSignature(),
-	}, nil
+	return storage.NewQuorumCert(voteInfo, ledgerCommitInfo, msg.GetSignature()), nil
 }
 
-func (s *Smr) GetCurrentView() int64 {
-	return s.pacemaker.GetCurrentView()
-}
-
-func (s *Smr) GetAddress() string {
-	return s.address
-}
-
-func (s *Smr) BlockToProposalNode(block cctx.BlockInterface) *ProposalNode {
+func (s *Smr) blockToProposalNode(block cctx.BlockInterface) *storage.ProposalNode {
 	targetId := block.GetBlockid()
 	if node := s.qcTree.DFSQueryNode(targetId); node != nil {
 		return node
 	}
-	return &ProposalNode{
-		In: &QuorumCert{
-			VoteInfo: &VoteInfo{
-				ProposalId:   block.GetBlockid(),
-				ProposalView: block.GetHeight(),
-				ParentId:     block.GetPreHash(),
-				ParentView:   block.GetHeight() - 1,
-			},
-		},
+	v := &storage.VoteInfo{
+		ProposalId:   block.GetBlockid(),
+		ProposalView: block.GetHeight(),
+		ParentId:     block.GetPreHash(),
+		ParentView:   block.GetHeight() - 1,
 	}
+	return &storage.ProposalNode{In: storage.NewQuorumCert(v, nil, nil)}
 }
 
-func (s *Smr) GetSaftyRules() saftyRulesInterface {
-	return s.saftyrules
-}
-
-func (s *Smr) GetHighQC() QuorumCertInterface {
+func (s *Smr) getHighQC() storage.QuorumCertInterface {
 	return s.qcTree.GetHighQC().In
 }
 
-// GetCompleteHighQC 本地qcTree不带签名，因此smr需要重新组装完整的QC
-func (s *Smr) GetCompleteHighQC() QuorumCertInterface {
-	raw := s.qcTree.GetHighQC().In
-	renew := &QuorumCert{
-		VoteInfo: &VoteInfo{
-			ProposalId:   raw.GetProposalId(),
-			ProposalView: raw.GetProposalView(),
-		},
-	}
-	if raw.GetParentProposalId() != nil {
-		renew.VoteInfo.ParentId = raw.GetParentProposalId()
-		renew.VoteInfo.ParentView = raw.GetProposalView()
+// getCompleteHighQC 本地qcTree不带签名，因此smr需要重新组装完整的QC
+func (s *Smr) getCompleteHighQC() storage.QuorumCertInterface {
+	raw := s.getHighQC()
+	vote := &storage.VoteInfo{
+		ProposalId:   raw.GetProposalId(),
+		ProposalView: raw.GetProposalView(),
+		ParentId:     raw.GetParentProposalId(),
+		ParentView:   raw.GetProposalView(),
 	}
 	signInfo, ok := s.qcVoteMsgs.Load(utils.F(raw.GetProposalId()))
 	if !ok {
-		return renew
+		return storage.NewQuorumCert(vote, nil, nil)
 	}
 	signs, _ := signInfo.([]*chainedBftPb.QuorumCertSign)
-	renew.SignInfos = signs
-	return renew
+	return storage.NewQuorumCert(vote, nil, signs)
 }
 
-// QueryNode 查询状态机QcTree结构中是否有指定QC挂上
-func (s *Smr) QueryNode(inProposalId []byte) *ProposalNode {
-	return s.qcTree.DFSQueryNode(inProposalId)
-}
-
-// GetRootQC 查询状态树的Root节点，Root节点已经被账本commit
-func (s *Smr) GetRootQC() QuorumCertInterface {
-	return s.qcTree.GetRootQC().In
-}
-
-func (s *Smr) ValidNewHighQC(inProposalId []byte, validators []string) bool {
+func (s *Smr) validNewHighQC(inProposalId []byte, validators []string) bool {
 	signInfo, ok := s.qcVoteMsgs.Load(utils.F(inProposalId))
 	if !ok {
 		return false
@@ -617,11 +690,11 @@ func (s *Smr) ValidNewHighQC(inProposalId []byte, validators []string) bool {
 	return s.saftyrules.CalVotesThreshold(len(signs), len(validators))
 }
 
-func (s *Smr) EnforceUpdateHighQC(inProposalId []byte) (bool, error) {
-	if bytes.Equal(s.GetHighQC().GetProposalId(), inProposalId) {
+func (s *Smr) enforceUpdateHighQC(inProposalId []byte) (bool, error) {
+	if bytes.Equal(s.getHighQC().GetProposalId(), inProposalId) {
 		return false, nil
 	}
-	return true, s.qcTree.enforceUpdateHighQC(inProposalId)
+	return true, s.qcTree.EnforceUpdateHighQC(inProposalId)
 }
 
 func createNewBCtx() *xctx.BaseCtx {

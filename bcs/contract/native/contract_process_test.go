@@ -1,11 +1,12 @@
 package native
 
 import (
-	"github.com/xuperchain/xupercore/kernel/contract"
-	"github.com/xuperchain/xupercore/protos"
 	"os/exec"
 	"testing"
 	"time"
+
+	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/protos"
 )
 
 func TestCommandNotFound(t *testing.T) {
@@ -46,6 +47,9 @@ func TestCommandNotFound(t *testing.T) {
 	t.Run("testDockerOpenJDK", func(t *testing.T) {
 		if resp, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
 			t.Skip(string(resp))
+		}
+		if resp,err:=exec.Command("docker",[]string{"image","inspect","openjdk:8u292-slim-buster"}...).CombinedOutput();err!=nil{
+			t.Skip((string(resp)))
 		}
 		cp, err := newContractProcess(&contract.NativeConfig{
 			Driver:      "native",

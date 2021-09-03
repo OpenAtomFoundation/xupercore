@@ -119,7 +119,7 @@ func (s *xpoaSchedule) GetValidators(round int64) []string {
 		validators, calErr = s.getValidates(round - 1)
 	} else {
 		storage, _ := block.GetConsensusStorage()
-		validators = s.GetLocalValidates(block.GetTimestamp(), round, storage)
+		validators, _ = s.GetLocalValidates(block.GetTimestamp(), round, storage)
 	}
 	if calErr != nil {
 		return nil
@@ -128,10 +128,10 @@ func (s *xpoaSchedule) GetValidators(round int64) []string {
 }
 
 // GetLocalValidates 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
-func (s *xpoaSchedule) GetLocalValidates(timestamp int64, round int64, storage []byte) []string {
+func (s *xpoaSchedule) GetLocalValidates(timestamp int64, round int64, storage []byte) ([]string, error) {
 	targetHeight := round - 1
 	if targetHeight <= 3 {
-		return s.initValidators
+		return s.initValidators, nil
 	}
 	// ATTENTION: 获取候选人信息时，时刻注意拿取的是check目的round的前三个块，候选人变更是在3个块之后生效，即round-3
 	// 注意: 在competeMaster时，拿到的当前tipHeightMiner-3的快照生成的候选人集合，
@@ -140,7 +140,7 @@ func (s *xpoaSchedule) GetLocalValidates(timestamp int64, round int64, storage [
 	if s.enableBFT && storage != nil {
 		conStorage, err := common.ParseOldQCStorage(storage)
 		if err != nil {
-			return nil
+			return nil, targetParamErr
 		}
 		if conStorage.TargetBits != 0 {
 			targetHeight = int64(conStorage.TargetBits)
@@ -150,15 +150,15 @@ func (s *xpoaSchedule) GetLocalValidates(timestamp int64, round int64, storage [
 	// 目前使用的是targetHeight，后面需要变为Blockid
 	localValidators, err := s.getValidates(targetHeight)
 	if err != nil || localValidators == nil {
-		return nil
+		return nil, targetParamErr
 	}
-	return localValidators
+	return localValidators, nil
 }
 
 // GetLocalLeader 用于收到一个新块时, 验证该块的时间戳和proposer是否能与本地计算结果匹配
 func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64, storage []byte) string {
-	localValidators := s.GetLocalValidates(timestamp, round, storage)
-	if localValidators == nil {
+	localValidators, err := s.GetLocalValidates(timestamp, round, storage)
+	if err != nil {
 		return ""
 	}
 	_, pos, blockPos := s.minerScheduling(timestamp, len(localValidators))
