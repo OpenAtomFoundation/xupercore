@@ -37,7 +37,7 @@ type Mempool struct {
 
 	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。
 
-	m *sync.RWMutex
+	m *sync.Mutex
 }
 
 // NewMempool new mempool.
@@ -49,7 +49,7 @@ func NewMempool(tx *Tx, log logs.Logger) *Mempool {
 		unconfirmed:    make(map[string]*Node, defaultMempoolUnconfirmedLen),
 		orphans:        make(map[string]*Node, defaultMempoolOrphansLen),
 		bucketKeyNodes: make(map[string]map[string]*Node, defaultMempoolUnconfirmedLen),
-		m:              &sync.RWMutex{},
+		m:              &sync.Mutex{},
 	}
 
 	// go m.gc() // 目前此版本不会有孤儿交易进入 mempool。
