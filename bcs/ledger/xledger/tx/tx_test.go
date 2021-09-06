@@ -120,17 +120,17 @@ func TestTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	unConfirmedTx, err := txHandle.GetUnconfirmedTx(false)
+	unConfirmedTx, err := txHandle.GetUnconfirmedTx(false, 0)
 	if err != nil {
 		t.Fatal(err)
 	} else {
 		t.Log("unconfirmed tx len:", len(unConfirmedTx))
 	}
 	txHandle.SetMaxConfirmedDelay(500)
-	txMap, txGraph, txDelay, err := txHandle.SortUnconfirmedTx()
+	txs, txDelay, err := txHandle.SortUnconfirmedTx(0)
 	if err != nil {
 		t.Fatal(err)
 	} else {
-		t.Log("sort txs", "txMap", txMap, "txGraph", txGraph, "txDelay", txDelay)
+		t.Log("sort txs", "txMap", txs, txDelay)
 	}
 }

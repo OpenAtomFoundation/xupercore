@@ -176,7 +176,7 @@ func transfer(from string, to string, t *testing.T, stateHandle *State, ledger *
 		t.Log("query tx ", tx.Txid, "error ", err.Error())
 	}
 
-	txlist, packErr := stateHandle.GetUnconfirmedTx(true)
+	txlist, packErr := stateHandle.GetUnconfirmedTx(true, 0)
 	timer.Mark("GetUnconfirmedTx")
 	if packErr != nil {
 		return nil, packErr
