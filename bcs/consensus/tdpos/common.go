@@ -35,29 +35,18 @@ const (
 )
 
 var (
-	invalidProposerErr = errors.New("Invalid proposer.")
-	invalidTermErr     = errors.New("Invalid term.")
-	timeoutBlockErr    = errors.New("New block is out of date.")
-
-	MinerSelectErr   = errors.New("Node isn't a miner, calculate error.")
-	EmptyValidors    = errors.New("Current validators is empty.")
-	NotValidContract = errors.New("Cannot get valid res with contract.")
-	InvalidQC        = errors.New("QC struct is invalid.")
-
-	proposerNotEnoughErr = errors.New("Term publish proposer num less than config.")
-	heightTooLow         = errors.New("The target height is lower than 4.")
-
-	tooLowHeight      = errors.New("TipHeight < 3, use init parameters.")
-	nominateAddrErr   = errors.New("Addr in nominate candidate tx can not be empty.")
-	nominateUrlErr    = errors.New("NetUrl in nominate candidate tx can not be empty.")
-	emptyVoteAddrErr  = errors.New("Addr in vote candidate tx can not be empty.")
-	voteNominateErr   = errors.New("Addr in vote candidate hasn't been nominated.")
-	amountErr         = errors.New("Amount in contract can not be empty.")
-	authErr           = errors.New("Candidate has not authenticated your submission.")
-	repeatNominateErr = errors.New("The candidate had been nominate.")
-	emptyNominateKey  = errors.New("No valid candidate key when revoke.")
-	notFoundErr       = errors.New("Value not found, please check your input parameters.")
-	scheduleErr       = errors.New("minerScheduling overflow")
+	ErrInvalidProposer  = errors.New("invalid proposer")
+	ErrTimeoutBlock     = errors.New("new block is out of date")
+	ErrHeightTooLow     = errors.New("target height is lower than 4")
+	ErrNominateAddr     = errors.New("addr in nominate candidate tx can not be empty")
+	ErrVoteNominate     = errors.New("addr in vote candidate hasn't been nominated")
+	ErrAmount           = errors.New("amount in contract can not be empty")
+	ErrAuth             = errors.New("candidate has not authenticated your submission")
+	ErrRepeatNominate   = errors.New("candidate had been nominate")
+	ErrEmptyNominateKey = errors.New("no valid candidate key when revoke")
+	ErrValueNotFound    = errors.New("value not found, please check your input parameters")
+	ErrSchedule         = errors.New("minerScheduling overflow")
+	ErrNotFound         = errors.New("Key not found")
 )
 
 // tdpos 共识机制的配置

@@ -168,11 +168,6 @@ func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64, storage []by
 	return localValidators[pos]
 }
 
-// GetIntAddress: for unit test
-func (s *xpoaSchedule) GetIntAddress(addr string) string {
-	return ""
-}
-
 // getValidatesByBlockId 根据当前输入blockid，用快照的方式在xmodel中寻找<=当前blockid的最新的候选人值，若无则使用xuper.json中指定的初始值
 func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 	reader, err := s.ledger.CreateSnapshot(blockId)

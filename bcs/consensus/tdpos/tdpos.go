@@ -89,6 +89,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		contractRevokeCandidate:   tdpos.runRevokeCandidate,
 		contractVote:              tdpos.runVote,
 		contractRevokeVote:        tdpos.runRevokeVote,
+		contractGetTdposInfos:     tdpos.runGetTdposInfos,
 	}
 	for method, f := range tdposKMethods {
 		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
@@ -202,7 +203,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	_, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
 	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Warn("consensus:tdpos:CheckMinerMatch: minerScheduling overflow.")
-		return false, scheduleErr
+		return false, ErrValueNotFound
 	}
 	var wantProposers []string
 	storage, _ := block.GetConsensusStorage()
@@ -213,7 +214,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 	}
 	if wantProposers[pos] != string(block.GetProposer()) {
 		tp.log.Error("consensus:tdpos:CheckMinerMatch: invalid proposer", "want", wantProposers[pos], "have", string(block.GetProposer()))
-		return false, invalidProposerErr
+		return false, ErrInvalidProposer
 	}
 
 	if !tp.election.enableChainedBFT {
@@ -254,10 +255,10 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	if blockPos < 0 || term != tp.election.curTerm || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Warn("consensus:tdpos:ProcessBeforeMiner: timeoutBlockErr", "term", term, "tp.election.curTerm", tp.election.curTerm,
 			"blockPos", blockPos, "tp.election.blockNum", tp.election.blockNum, "pos", pos, "tp.election.proposerNum", tp.election.proposerNum)
-		return nil, nil, timeoutBlockErr
+		return nil, nil, ErrTimeoutBlock
 	}
 	if tp.election.validators[pos] != tp.election.address {
-		return nil, nil, timeoutBlockErr
+		return nil, nil, ErrTimeoutBlock
 	}
 	storage := common.ConsensusStorage{
 		CurTerm:     tp.election.curTerm,
@@ -324,7 +325,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	_, pos, blockPos := tp.election.minerScheduling(block.GetTimestamp())
 	if blockPos < 0 || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Debug("consensus:tdpos:ProcessConfirmBlock: minerScheduling overflow.")
-		return scheduleErr
+		return ErrSchedule
 	}
 	var nextValidators []string
 	if tp.election.validators[pos] == tp.election.address && string(block.GetProposer()) == tp.election.address {

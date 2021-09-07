@@ -51,18 +51,6 @@ func (e *ElectionA) GetValidators(round int64) []string {
 	return []string{NodeA, NodeB, NodeC}
 }
 
-func (e *ElectionA) GetIntAddress(a string) string {
-	switch a {
-	case NodeA:
-		return NodeAIp
-	case NodeB:
-		return NodeBIp
-	case NodeC:
-		return NodeCIp
-	}
-	return ""
-}
-
 func InitQcTee(log logs.Logger) *storage.QCPendingTree {
 	initQC := storage.NewQuorumCert(&storage.VoteInfo{
 		ProposalId:   []byte{0},
