@@ -762,8 +762,8 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		return pbErr
 	}
 	recvTime := time.Now()
-	t.utxo.Mutex.RLock()
-	defer t.utxo.Mutex.RUnlock() //lock guard
+	t.utxo.Mutex.Lock()
+	defer t.utxo.Mutex.Unlock() //lock guard
 	spLockKeys := t.utxo.SpLock.ExtractLockKeys(tx)
 	succLockKeys, lockOK := t.utxo.SpLock.TryLock(spLockKeys)
 	defer t.utxo.SpLock.Unlock(succLockKeys)
@@ -1303,26 +1303,32 @@ func (t *State) collectDelayedTxs(interval time.Duration) {
 		for _, tx := range delayedTxs { // 这些延迟交易已经是按照依赖关系进行排序，前面的交易依赖后面的交易。
 			// undo tx
 			// 要更新数据库，需要 lock。
-			t.utxo.Mutex.Lock()
+			undo := func(tx *pb.Transaction) bool {
+				t.utxo.Mutex.Lock()
+				defer t.utxo.Mutex.Unlock()
+				inLedger, err := t.sctx.Ledger.HasTransaction(tx.Txid)
+				if err != nil {
+					t.log.Error("fail query tx from ledger", "err", err)
+					return false
+				}
+				if inLedger { // 账本中如果已经存在，就不需要回滚了。
+					return true
+				}
 
-			inLedger, err := t.sctx.Ledger.HasTransaction(tx.Txid)
-			if err != nil {
-				t.log.Error("fail query tx from ledger", "err", err)
+				batch := t.ldb.NewBatch()
+				undoErr = t.undoUnconfirmedTx(tx, batch, nil, nil)
+				if undoErr != nil {
+					t.log.Error("fail to undo tx for delayed tx", "undoErr", undoErr)
+					return false
+				}
+				batch.Write()
+				t.log.Debug("undo unconfirmed and delayed tx", "txid", tx.HexTxid())
+
+				return true
+			}
+			if !undo(tx) {
 				break
 			}
-			if inLedger { // 账本中如果已经存在，就不需要回滚了。
-				continue
-			}
-
-			batch := t.ldb.NewBatch()
-			undoErr = t.undoUnconfirmedTx(tx, batch, nil, nil)
-			if undoErr != nil {
-				t.log.Error("fail to undo tx for delayed tx", "undoErr", undoErr)
-				break
-			}
-			batch.Write()
-			t.log.Debug("undo unconfirmed and delayed tx", "txid", tx.HexTxid())
-			t.utxo.Mutex.Unlock()
 		}
 	}
 }
