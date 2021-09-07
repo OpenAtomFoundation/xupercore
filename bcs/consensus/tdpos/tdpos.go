@@ -230,7 +230,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		tp.log.Warn("consensus:tdpos:CheckMinerMatch: OldQCToNew error.", "logid", ctx.GetLog().GetLogId(), "err", err, "blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
-	preBlock, _ := tp.election.ledger.QueryBlock(block.GetPreHash())
+	preBlock, _ := tp.election.ledger.QueryBlockHeader(block.GetPreHash())
 	prestorage, _ := preBlock.GetConsensusStorage()
 	validators, err := tp.election.CalOldProposers(preBlock.GetHeight(), preBlock.GetTimestamp(), prestorage)
 	if err != nil {
@@ -276,7 +276,7 @@ func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, e
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := tp.election.ledger.GetTipBlock()
 	// smr返回一个裁剪目标，供miner模块直接回滚并出块
-	truncate, qc, err := tp.smr.ResetProposerStatus(tipBlock, tp.election.ledger.QueryBlock, tp.election.validators)
+	truncate, qc, err := tp.smr.ResetProposerStatus(tipBlock, tp.election.ledger.QueryBlockHeader, tp.election.validators)
 	if err != nil {
 		return nil, nil, err
 	}

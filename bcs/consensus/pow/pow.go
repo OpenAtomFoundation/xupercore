@@ -196,7 +196,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 		return false, err
 	}
 	// 验证时间戳是否正确
-	preBlock, err := pow.Ledger.QueryBlock(block.GetPreHash())
+	preBlock, err := pow.Ledger.QueryBlockHeader(block.GetPreHash())
 	if err != nil {
 		ctx.GetLog().Warn("PoW::CheckMinerMatch::get preblock error", "miner", string(block.GetProposer()))
 		return false, err
@@ -317,11 +317,11 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (ui
 		return pow.config.DefaultTarget, nil
 	}
 	// 检查block结构是否合法，获取上一区块difficulty
-	block, err := pow.Ledger.QueryBlock(tipHash)
+	block, err := pow.Ledger.QueryBlockHeader(tipHash)
 	if err != nil {
 		return pow.config.DefaultTarget, nil
 	}
-	preBlock, err := pow.Ledger.QueryBlock(block.GetPreHash())
+	preBlock, err := pow.Ledger.QueryBlockHeader(block.GetPreHash())
 	if err != nil {
 		return pow.config.DefaultTarget, nil
 	}
@@ -344,7 +344,7 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (ui
 	farBlock := preBlock
 	// preBlock已经回溯过一次，因此回溯总量-1，获取
 	for i := int32(0); i < pow.config.AdjustHeightGap-1; i++ {
-		prevBlock, err := pow.Ledger.QueryBlock(farBlock.GetPreHash())
+		prevBlock, err := pow.Ledger.QueryBlockHeader(farBlock.GetPreHash())
 		if err != nil {
 			return pow.config.DefaultTarget, nil
 		}

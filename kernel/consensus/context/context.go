@@ -18,7 +18,7 @@ type P2pCtxInConsensus network.Network
 // LedgerCtxInConsensus使用到的ledger接口
 type LedgerRely interface {
 	GetConsensusConf() ([]byte, error)
-	QueryBlock(blkId []byte) (ledger.BlockHandle, error)
+	QueryBlockHeader(blkId []byte) (ledger.BlockHandle, error)
 	QueryBlockByHeight(int64) (ledger.BlockHandle, error)
 	GetTipBlock() ledger.BlockHandle
 	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)

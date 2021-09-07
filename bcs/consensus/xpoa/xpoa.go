@@ -220,7 +220,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 			"blockId", utils.F(block.GetBlockid()))
 		return false, err
 	}
-	preBlock, _ := x.election.ledger.QueryBlock(block.GetPreHash())
+	preBlock, _ := x.election.ledger.QueryBlockHeader(block.GetPreHash())
 	preConStoreBytes, _ := preBlock.GetConsensusStorage()
 	validators, _ := x.election.GetLocalValidates(preBlock.GetTimestamp(), justify.GetProposalView(), preConStoreBytes)
 
@@ -243,7 +243,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	// 即本地smr的HightQC和账本TipId不相等，tipId尚未收集到足够签名，回滚到本地HighQC，重做区块
 	tipBlock := x.election.ledger.GetTipBlock()
 	// smr返回一个裁剪目标，供miner模块直接回滚并出块
-	truncate, qc, err := x.smr.ResetProposerStatus(tipBlock, x.election.ledger.QueryBlock, x.election.validators)
+	truncate, qc, err := x.smr.ResetProposerStatus(tipBlock, x.election.ledger.QueryBlockHeader, x.election.validators)
 	if err != nil {
 		return nil, nil, err
 	}
