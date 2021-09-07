@@ -74,7 +74,7 @@ func NewSchedule(xconfig *tdposConfig, log logs.Logger, ledger cctx.LedgerRely, 
 		return nil
 	}
 	refresh, err := schedule.CalOldProposers(tipBlock.GetHeight(), tipBlock.GetTimestamp(), s)
-	if err != nil && err != heightTooLow {
+	if err != nil && err != ErrHeightTooLow {
 		schedule.log.Error("Tdpos::NewSchedule error", "err", err)
 		return nil
 	}
@@ -121,7 +121,7 @@ func (s *tdposSchedule) minerScheduling(timestamp int64) (term int64, pos int64,
 // getSnapshotKey 获取当前tip高度对应key的快照
 func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) ([]byte, error) {
 	if height <= 0 {
-		return nil, heightTooLow
+		return nil, ErrHeightTooLow
 	}
 	block, err := s.ledger.QueryBlockByHeight(height)
 	if err != nil {
@@ -198,11 +198,6 @@ func (s *tdposSchedule) GetValidators(round int64) []string {
 		return nil
 	}
 	return proposers
-}
-
-// GetIntAddress election接口实现，获取候选人地址到网络地址的映射，for unit test
-func (s *tdposSchedule) GetIntAddress(address string) string {
-	return ""
 }
 
 // updateProposers 根据各合约存储计算当前proposers
@@ -405,7 +400,7 @@ func (s *tdposSchedule) getTerm(pos int64) (int64, error) {
 	}
 	storage, ok := in.(*common.ConsensusStorage)
 	if !ok {
-		return -1, notFoundErr
+		return -1, ErrValueNotFound
 	}
 	return storage.CurTerm, nil
 }

@@ -25,9 +25,6 @@ func getTdposConsensusConf() string {
         "vote_unit_price": "1",
         "init_proposer": {
             "1": ["TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY", "SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"]
-        },
-        "init_proposer_neturl": {
-            "1": ["/ip4/127.0.0.1/tcp/38101/p2p/Qmf2HeHe4sspGkfRCTq6257Vm3UHzvh2TeQJHHvHzzuFw6e", "/ip4/127.0.0.1/tcp/38102/p2p/QmQKp8pLWSgV4JiGjuULKV1JsdpxUtnDEUMP8sGaaUbwVL"]
         }
 	}`
 }
@@ -43,9 +40,6 @@ func getBFTTdposConsensusConf() string {
         "vote_unit_price": "1",
         "init_proposer": {
             "1": ["TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY", "SmJG3rH2ZzYQ9ojxhbRCPwFiE9y6pD1Co"]
-        },
-        "init_proposer_neturl": {
-            "1": ["/ip4/127.0.0.1/tcp/38101/p2p/Qmf2HeHe4sspGkfRCTq6257Vm3UHzvh2TeQJHHvHzzuFw6e", "/ip4/127.0.0.1/tcp/38102/p2p/QmQKp8pLWSgV4JiGjuULKV1JsdpxUtnDEUMP8sGaaUbwVL"]
         },
 		"bft_config":{}
 	}`
@@ -140,7 +134,7 @@ func TestProcessBeforeMiner(t *testing.T) {
 		return
 	}
 	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
-	if err != timeoutBlockErr {
+	if err != ErrTimeoutBlock {
 		t.Error("ProcessBeforeMiner error", "err", err)
 	}
 }
