@@ -123,7 +123,7 @@ func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) 
 	if height <= 0 {
 		return nil, ErrHeightTooLow
 	}
-	block, err := s.ledger.QueryBlockByHeight(height)
+	block, err := s.ledger.QueryBlockHeaderByHeight(height)
 	if err != nil {
 		s.log.Debug("tdpos::getSnapshotKey::QueryBlockByHeight err.", "err", err)
 		return nil, err
@@ -150,7 +150,7 @@ func (s *tdposSchedule) getSnapshotKey(height int64, bucket string, key []byte) 
 // ATTENTION: tipBlock是一个隐式依赖状态
 func (s *tdposSchedule) GetLeader(round int64) string {
 	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
-	if b, err := s.ledger.QueryBlockByHeight(round); err == nil {
+	if b, err := s.ledger.QueryBlockHeaderByHeight(round); err == nil {
 		return string(b.GetProposer())
 	}
 	proposers := s.GetValidators(round)
@@ -186,7 +186,7 @@ func (s *tdposSchedule) GetValidators(round int64) []string {
 	}
 	var calErr error
 	var proposers []string
-	block, err := s.ledger.QueryBlockByHeight(round)
+	block, err := s.ledger.QueryBlockHeaderByHeight(round)
 	if err != nil {
 		proposers, calErr = s.CalculateProposers(round)
 	} else {
@@ -344,7 +344,7 @@ func (s *tdposSchedule) CalOldProposers(height int64, timestamp int64, storage [
 func (s *tdposSchedule) calHisValidators(height int64) ([]string, error) {
 	// 设最近一次bucket vote变更的高度为H，所在term为T，候选人仅会在term+1的第一个高度H+M，试图变更候选人(不一定vote会引起变更)
 	// 因此在输入一个height时，拿到当前term，查询当前term的第一个区块高度height-Z，通过height-Z获取TopK即可
-	block, err := s.ledger.QueryBlockByHeight(height)
+	block, err := s.ledger.QueryBlockHeaderByHeight(height)
 	if err != nil {
 		s.log.Error("tdpos::CalculateProposers::QueryBlockByHeight err.", "err", err)
 		return nil, err
@@ -390,7 +390,7 @@ func (s *tdposSchedule) binarySearch(begin int64, end int64, term int64) (int64,
 }
 
 func (s *tdposSchedule) getTerm(pos int64) (int64, error) {
-	b, err := s.ledger.QueryBlockByHeight(pos)
+	b, err := s.ledger.QueryBlockHeaderByHeight(pos)
 	if err != nil {
 		return -1, err
 	}

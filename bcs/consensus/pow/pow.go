@@ -239,7 +239,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 // ProcessBeforeMiner 更新下一次pow挖矿时的targetBits
 func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
 	tipHeight := pow.Ledger.GetTipBlock().GetHeight()
-	preBlock, err := pow.Ledger.QueryBlockByHeight(tipHeight)
+	preBlock, err := pow.Ledger.QueryBlockHeaderByHeight(tipHeight)
 	if err != nil {
 		pow.XLog.Error("PoW::ProcessBeforeMiner::cannnot find preBlock", "logid", pow.XLog.GetLogId())
 		return nil, nil, InternalErr

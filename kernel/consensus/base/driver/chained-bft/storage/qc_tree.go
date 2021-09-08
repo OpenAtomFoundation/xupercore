@@ -19,11 +19,11 @@ type ProposalNode struct {
 }
 
 func NewTreeNode(ledger cctx.LedgerRely, height int64) *ProposalNode {
-	b, err := ledger.QueryBlockByHeight(height)
+	b, err := ledger.QueryBlockHeaderByHeight(height)
 	if err != nil {
 		return nil
 	}
-	pre, err := ledger.QueryBlockByHeight(height - 1)
+	pre, err := ledger.QueryBlockHeaderByHeight(height - 1)
 	vote := VoteInfo{
 		ProposalId:   b.GetBlockid(),
 		ProposalView: b.GetHeight(),
@@ -81,7 +81,7 @@ func MockTree(genesis *ProposalNode, root *ProposalNode, highQC *ProposalNode,
 // initQCTree 创建了smr需要的QC树存储，该Tree存储了目前待commit的QC信息
 func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *QCPendingTree {
 	// 初始状态应该是start高度的前一个区块为genesisQC，即tipBlock
-	g, err := ledger.QueryBlockByHeight(startHeight - 1)
+	g, err := ledger.QueryBlockHeaderByHeight(startHeight - 1)
 	if err != nil {
 		return nil
 	}

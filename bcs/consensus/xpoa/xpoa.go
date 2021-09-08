@@ -138,7 +138,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 	// 重启状态检查2，重做tipBlock，此时需重装载justify签名
 	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		for i := int64(0); i < 3; i++ {
-			b, err := cCtx.Ledger.QueryBlockByHeight(tipHeight - i)
+			b, err := cCtx.Ledger.QueryBlockHeaderByHeight(tipHeight - i)
 			if err != nil {
 				break
 			}

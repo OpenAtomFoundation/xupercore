@@ -19,7 +19,7 @@ type P2pCtxInConsensus network.Network
 type LedgerRely interface {
 	GetConsensusConf() ([]byte, error)
 	QueryBlockHeader(blkId []byte) (ledger.BlockHandle, error)
-	QueryBlockByHeight(int64) (ledger.BlockHandle, error)
+	QueryBlockHeaderByHeight(int64) (ledger.BlockHandle, error)
 	GetTipBlock() ledger.BlockHandle
 	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)
 	CreateSnapshot(blkId []byte) (ledger.XMReader, error)

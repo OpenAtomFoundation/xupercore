@@ -206,7 +206,7 @@ func (l *FakeLedger) QueryBlockHeader(blockId []byte) (ledger.BlockHandle, error
 	return l.ledgerMap[id], nil
 }
 
-func (l *FakeLedger) QueryBlockByHeight(height int64) (ledger.BlockHandle, error) {
+func (l *FakeLedger) QueryBlockHeaderByHeight(height int64) (ledger.BlockHandle, error) {
 	if height < 0 {
 		return nil, blockSetItemErr
 	}

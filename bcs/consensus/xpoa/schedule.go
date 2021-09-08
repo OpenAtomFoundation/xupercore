@@ -90,7 +90,7 @@ func (s *xpoaSchedule) minerScheduling(timestamp int64, length int) (term int64,
 // ATTENTION: tipBlock是一个隐式依赖状态
 func (s *xpoaSchedule) GetLeader(round int64) string {
 	// 若该round已经落盘，则直接返回历史信息，eg. 矿工在当前round的情况
-	if b, err := s.ledger.QueryBlockByHeight(round); err == nil {
+	if b, err := s.ledger.QueryBlockHeaderByHeight(round); err == nil {
 		return string(b.GetProposer())
 	}
 	v := s.GetValidators(round)
@@ -111,7 +111,7 @@ func (s *xpoaSchedule) GetValidators(round int64) []string {
 	if round-1 <= 3 {
 		return s.initValidators
 	}
-	block, err := s.ledger.QueryBlockByHeight(round)
+	block, err := s.ledger.QueryBlockHeaderByHeight(round)
 	var validators []string
 	var calErr error
 	if err != nil {
@@ -196,7 +196,7 @@ func (s *xpoaSchedule) getValidates(height int64) ([]string, error) {
 		return s.initValidators, nil
 	}
 	// xpoa的validators变更在包含变更tx的block的后3个块后生效, 即当B0包含了变更tx，在B3时validators才正式统一变更
-	b, err := s.ledger.QueryBlockByHeight(height - 3)
+	b, err := s.ledger.QueryBlockHeaderByHeight(height - 3)
 	if err != nil {
 		s.log.Error("Xpoa::getValidates::QueryBlockByHeight error.", "err", err, "height", height-3)
 		return nil, err

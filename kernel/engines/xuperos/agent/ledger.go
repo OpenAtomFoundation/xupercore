@@ -110,6 +110,15 @@ func (t *LedgerAgent) QueryBlockHeader(blkId []byte) (kledger.BlockHandle, error
 	return state.NewBlockAgent(block), nil
 }
 
+func (t *LedgerAgent) QueryBlockHeaderByHeight(height int64) (kledger.BlockHandle, error) {
+	block, err := t.chainCtx.Ledger.QueryBlockHeaderByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	return state.NewBlockAgent(block), nil
+}
+
 func (t *LedgerAgent) GetTipBlock() kledger.BlockHandle {
 	meta := t.chainCtx.Ledger.GetMeta()
 	blkAgent, _ := t.QueryBlock(meta.TipBlockid)
