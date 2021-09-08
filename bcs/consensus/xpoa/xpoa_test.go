@@ -164,7 +164,7 @@ func TestGetJustifySigns(t *testing.T) {
 	l, _ := xpoa.election.ledger.(*kmock.FakeLedger)
 	l.Put(kmock.NewBlock(3))
 	l.SetConsensusStorage(1, SetXpoaStorage(1, nil))
-	b, err := l.QueryBlockByHeight(3)
+	b, err := l.QueryBlockHeaderByHeight(3)
 	xpoa.GetJustifySigns(b)
 }
 
@@ -210,7 +210,7 @@ func TestBFT(t *testing.T) {
 	b3.SetTimestamp(1616481092 * int64(time.Millisecond))
 	l.Put(b3)
 	l.SetConsensusStorage(3, SetXpoaStorage(3, justify(3)))
-	b33, _ := l.QueryBlockByHeight(3)
+	b33, _ := l.QueryBlockHeaderByHeight(3)
 	xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
 	xpoa.ProcessBeforeMiner(1616481107 * int64(time.Millisecond))
 	err = xpoa.ProcessConfirmBlock(b33)

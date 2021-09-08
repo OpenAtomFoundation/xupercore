@@ -216,7 +216,7 @@ func TestBFT(t *testing.T) {
 	b3.SetProposer("TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY")
 	l.Put(b3)
 	l.SetConsensusStorage(3, SetTdposStorage(3, justify(3)))
-	b33, _ := l.QueryBlockByHeight(3)
+	b33, _ := l.QueryBlockHeaderByHeight(3)
 	tdpos.CheckMinerMatch(&cCtx.BaseCtx, b33)
 	tdpos.ProcessBeforeMiner(1616481107 * int64(time.Millisecond))
 	err = tdpos.ProcessConfirmBlock(b33)
