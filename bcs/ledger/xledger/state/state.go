@@ -453,10 +453,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 		return err
 	}
 	//写盘成功再清理unconfirm内存镜像
-	for _, tx := range block.Transactions {
-		// t.tx.UnconfirmTxInMem.Delete(string(tx.Txid)) // TT!! 交易已经写入账户和状态机，此时删除 mempool 中的交易（confirm tx?）。
-		t.tx.Mempool.ConfirmTx(tx)
-	}
+	t.tx.Mempool.BatchConfirmTx(block.Transactions)
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
 	newMeta := proto.Clone(t.meta.MetaTmp).(*pb.UtxoMeta)
@@ -534,9 +531,11 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 		return persistErr
 	}
 	//写盘成功再删除unconfirm的内存镜像
+	ids := make([]string, 0, len(unconfirmToConfirm))
 	for txid := range unconfirmToConfirm {
-		t.tx.Mempool.ConfirmTxID(txid)
+		ids = append(ids, txid)
 	}
+	t.tx.Mempool.BatchConfirmTxID(ids)
 	t.log.Debug("write to state succ")
 
 	// 内存级别更新UtxoMeta信息
@@ -762,8 +761,8 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		return pbErr
 	}
 	recvTime := time.Now()
-	t.utxo.Mutex.Lock()
-	defer t.utxo.Mutex.Unlock() //lock guard
+	t.utxo.Mutex.RLock()
+	defer t.utxo.Mutex.RUnlock() //lock guard
 	spLockKeys := t.utxo.SpLock.ExtractLockKeys(tx)
 	succLockKeys, lockOK := t.utxo.SpLock.TryLock(spLockKeys)
 	defer t.utxo.SpLock.Unlock(succLockKeys)

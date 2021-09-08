@@ -349,6 +349,51 @@ func (m *Mempool) deleteTx(txid string) []*pb.Transaction {
 	return nil
 }
 
+// BatchConfirmTx 批量确认交易
+func (m *Mempool) BatchConfirmTx(txs []*pb.Transaction) {
+	m.m.Lock()
+	defer m.m.Unlock()
+	for _, tx := range txs {
+		txid := string(tx.GetTxid())
+		if _, ok := m.confirmed[txid]; ok {
+			// 已经在确认交易表
+			continue
+		}
+
+		if n, ok := m.unconfirmed[txid]; ok {
+			m.moveToConfirmed(n)
+		} else if n, ok := m.orphans[txid]; ok {
+			if n.tx != nil {
+				m.moveToConfirmed(n)
+			}
+		}
+	}
+
+	m.cleanConfirmedTxs()
+}
+
+// BatchConfirmTxID 批量确认交易ID
+func (m *Mempool) BatchConfirmTxID(txids []string) {
+	m.m.Lock()
+	defer m.m.Unlock()
+	for _, txid := range txids {
+		if _, ok := m.confirmed[txid]; ok {
+			// 已经在确认交易表
+			continue
+		}
+
+		if n, ok := m.unconfirmed[txid]; ok {
+			m.moveToConfirmed(n)
+		} else if n, ok := m.orphans[txid]; ok {
+			if n.tx != nil {
+				m.moveToConfirmed(n)
+			}
+		}
+	}
+
+	m.cleanConfirmedTxs()
+}
+
 // ConfirmTxID txid
 func (m *Mempool) ConfirmTxID(txid string) {
 	m.m.Lock()
@@ -368,6 +413,8 @@ func (m *Mempool) ConfirmTxID(txid string) {
 			m.moveToConfirmed(n)
 		}
 	}
+
+	m.cleanConfirmedTxs()
 }
 
 // ConfirmTx confirm tx.
@@ -396,6 +443,8 @@ func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 		// mempool 中所有交易与此交易没有联系，但是可能有冲突交易。
 		return m.processConflict(tx)
 	}
+
+	m.cleanConfirmedTxs()
 	return nil
 }
 
@@ -1002,8 +1051,6 @@ func (m *Mempool) moveToConfirmed(node *Node) {
 		m.checkAndMoveOrphan(n)
 		m.deleteBucketKey(n)
 	}
-
-	m.cleanConfirmedTxs()
 }
 
 // 确认交易表中，如果有出度为0的交易，删除此交易。

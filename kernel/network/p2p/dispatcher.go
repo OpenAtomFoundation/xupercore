@@ -125,10 +125,6 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 		return ErrStreamNil
 	}
 
-	if _, ok := d.mc[msg.GetHeader().GetType()]; !ok {
-		return ErrNotRegister
-	}
-
 	d.mu.RLock()
 	ctx.GetTimer().Mark("lock")
 	if _, ok := d.mc[msg.GetHeader().GetType()]; !ok {
