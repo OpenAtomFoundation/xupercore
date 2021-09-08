@@ -403,7 +403,7 @@ func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 					block.Transactions = []*lpb.Transaction{coinbaseTx.GetTx()}
 				}
 			}
-			ctx.GetLog().Debug("query block header", "size", proto.Size(&block))
+			ctx.GetLog().Debug("query block header", "height", height, "size", proto.Size(&block))
 			mutex.Lock()
 			blocks[i] = &block
 			if int(i) > maxIdx {
@@ -454,27 +454,24 @@ func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 		return response(common.ErrChainNotExist)
 	}
 
-	ledgerReader := reader.NewLedgerReader(chain.Context(), ctx)
+	ledger := chain.Context().Ledger
 
 	if input.Blockid != nil && len(input.Txs) > 0 {
-		header, err := ledgerReader.QueryBlockHeader(input.Blockid)
+		header, err := ledger.QueryBlockHeader(input.Blockid)
 		if err != nil {
 			return response(err)
 		}
-		if header.Status == lpb.BlockStatus_BLOCK_NOEXIST {
-			return response(fmt.Errorf("block %x not found", input.Blockid))
-		}
-		blockTxids := header.Block.GetMerkleTree()[:header.Block.GetTxCount()]
+		blockTxids := header.GetMerkleTree()[:header.GetTxCount()]
 		for _, idx := range input.Txs {
 			if int(idx) >= len(blockTxids) {
-				return response(fmt.Errorf("bad tx index, got:%d, max:%d, count:%d", idx, len(blockTxids)-1, header.Block.TxCount))
+				return response(fmt.Errorf("bad tx index, got:%d, max:%d, count:%d", idx, len(blockTxids)-1, header.TxCount))
 			}
 			txid := blockTxids[idx]
-			tx, err := ledgerReader.QueryTx(txid)
+			tx, err := ledger.QueryTransaction(txid)
 			if err != nil {
 				return response(err)
 			}
-			output.Txs = append(output.Txs, tx.Tx)
+			output.Txs = append(output.Txs, tx)
 		}
 	}
 

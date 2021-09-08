@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/patrickmn/go-cache"
-	"github.com/xuperchain/xupercore/lib/metrics"
 	"sync"
 	"time"
+
+	"github.com/patrickmn/go-cache"
+	"github.com/xuperchain/xupercore/lib/metrics"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
@@ -33,7 +34,7 @@ func (p *P2PServerV2) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage,
 		size := proto.Size(msg)
 		if p.ctx.EnvCfg.MetricSwitch {
 			labels := prom.Labels{
-				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelBCName:      msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgSendCounter.With(labels).Inc()
@@ -115,7 +116,7 @@ func (p *P2PServerV2) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 	defer func() {
 		if p.ctx.EnvCfg.MetricSwitch {
 			labels := prom.Labels{
-				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelBCName:      msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgSendCounter.With(labels).Inc()
@@ -160,6 +161,7 @@ func (p *P2PServerV2) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 
 	respCh := make(chan *pb.XuperMessage, len(peerIDs))
 	var wg sync.WaitGroup
+	ctx.GetLog().Debug("sendMessageWithResponse peers", "peers", peerIDs)
 	for _, peerID := range peerIDs {
 		wg.Add(1)
 		go func(peerID peer.ID) {
