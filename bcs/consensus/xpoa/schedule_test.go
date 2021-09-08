@@ -62,7 +62,7 @@ func TestGetLeader(t *testing.T) {
 	}
 	// fake ledger的前2个block都是 dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN 生成
 	term, pos, blockPos := s.minerScheduling(time.Now().UnixNano()+s.period*int64(time.Millisecond), len(s.validators))
-	if _, err := s.ledger.QueryBlockByHeight(2); err != nil {
+	if _, err := s.ledger.QueryBlockHeaderByHeight(2); err != nil {
 		t.Error("QueryBlockByHeight error.")
 		return
 	}
