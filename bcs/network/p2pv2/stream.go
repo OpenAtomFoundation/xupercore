@@ -117,6 +117,12 @@ func (s *Stream) Send(msg *pb.XuperMessage) error {
 	}
 	s.streamMu.Lock()
 	defer s.streamMu.Unlock()
+	if !s.Valid() {
+		return ErrStreamNotValid
+	}
+
+	deadline := time.Now().Add(time.Duration(s.config.Timeout) * time.Second)
+	s.stream.SetWriteDeadline(deadline)
 	msg.Header.From = s.srv.PeerID()
 	if err := s.wc.WriteMsg(msg); err != nil {
 		s.resetLockFree()
@@ -155,7 +161,6 @@ func (s *Stream) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 	err := s.Send(msg)
 	ctx.GetTimer().Mark("write")
 	if err != nil {
-		s.Close()
 		s.log.Error("Stream SendMessage error", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "error", err)
 		return err
@@ -197,7 +202,6 @@ func (s *Stream) SendMessageWithResponse(ctx xctx.XContext,
 	err = s.Send(msg)
 	ctx.GetTimer().Mark("write")
 	if err != nil {
-		s.Close()
 		s.log.Warn("SendMessageWithResponse Send error", "log_id", msg.GetHeader().GetLogid(),
 			"msgType", msg.GetHeader().GetType(), "err", err)
 		return nil, err
