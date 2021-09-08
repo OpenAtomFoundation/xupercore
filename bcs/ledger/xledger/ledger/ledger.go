@@ -345,8 +345,8 @@ func (l *Ledger) formatBlock(txList []*pb.Transaction,
 // 注：只是打包到一个leveldb batch write对象中
 func (l *Ledger) saveBlock(block *pb.InternalBlock, batchWrite kvdb.Batch) error {
 	header := *block
-	blockBuf, pbErr := proto.Marshal(block)
 	l.blkHeaderCache.Add(string(block.Blockid), &header)
+	blockBuf, pbErr := proto.Marshal(block)
 	if pbErr != nil {
 		l.xlog.Warn("marshal block fail", "pbErr", pbErr)
 		return pbErr
@@ -379,6 +379,7 @@ func (l *Ledger) fetchBlock(blockid []byte) (*pb.InternalBlock, error) {
 		l.xlog.Warn("block may corrupt", "pbErr", pbErr)
 		return nil, pbErr
 	}
+	l.blkHeaderCache.Add(string(blockid), block)
 	return block, nil
 }
 

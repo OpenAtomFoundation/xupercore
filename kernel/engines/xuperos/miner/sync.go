@@ -160,6 +160,7 @@ func (t *Miner) syncWithNeighbors(ctx xctx.XContext) error {
 }
 
 func (t *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (int, error) {
+	ctx.GetLog().Debug("getBlocksByHeight", "height", height, "size", size)
 	trace := traceSync()
 	blocks, err := t.getBlocksByHeight(ctx, height, size)
 	if err == ErrNoNewBlock {
@@ -274,7 +275,6 @@ func (t *Miner) fillBlockTxs(ctx xctx.XContext, block *lpb.InternalBlock) error 
 		if !bytes.Equal(txids[idx], missingTxs[i].Txid) {
 			return fmt.Errorf("download tx for %x error, got:%x", txids[idx], missingTxs[i].Txid)
 		}
-		ctx.GetLog().Debug("download missing tx", "txid", utils.F(missingTxs[i].Txid), "blockid", utils.F(block.Blockid))
 		blockTxs[idx] = missingTxs[i]
 	}
 	block.Transactions = blockTxs
@@ -391,7 +391,6 @@ func (t *Miner) batchConfirmBlocks(ctx xctx.XContext, blocks []*lpb.InternalBloc
 		err = t.ctx.State.PlayAndRepost(block.Blockid, false, false)
 		if err != nil {
 			ctx.GetLog().Warn("state play error", "error", err, "height", block.Height, "blockId", utils.F(block.Blockid))
-			return err
 		}
 		trace("PlayAndRepost")
 		timer.Mark("PlayAndRepost")

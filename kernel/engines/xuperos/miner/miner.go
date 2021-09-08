@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,6 +115,13 @@ func (t *Miner) step() error {
 	ctx := &xctx.BaseCtx{
 		XLog:  log,
 		Timer: timer.NewXTimer(),
+	}
+
+	if !bytes.Equal(ledgerTipId, stateTipId) {
+		err := t.ctx.State.Walk(ledgerTipId, false)
+		if err != nil {
+			return err
+		}
 	}
 
 	trace := traceMiner()
@@ -429,6 +437,13 @@ func (t *Miner) calculateBlock(block *state.BlockAgent) error {
 }
 
 func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock) error {
+	tip := t.ctx.Ledger.GetMeta().TipBlockid
+	if !bytes.Equal(block.PreHash, tip) {
+		ctx.GetLog().Warn("confirmBlockForMiner error", "tip", utils.F(tip),
+			"prehash", utils.F(block.PreHash))
+		return errors.New("confirm block prehash mismatch")
+	}
+
 	// 账本确认区块
 	confirmStatus := t.ctx.Ledger.ConfirmBlock(block, false)
 	ctx.GetTimer().Mark("ConfirmBlock")
@@ -451,7 +466,6 @@ func (t *Miner) confirmBlockForMiner(ctx xctx.XContext, block *lpb.InternalBlock
 	ctx.GetTimer().Mark("PlayForMiner")
 	if err != nil {
 		ctx.GetLog().Warn("state play error ", "error", err, "blockId", utils.F(block.Blockid))
-		return err
 	}
 
 	// 共识确认区块
