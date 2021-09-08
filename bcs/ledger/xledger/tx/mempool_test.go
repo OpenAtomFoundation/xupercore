@@ -12,7 +12,7 @@ import (
 	"github.com/xuperchain/xupercore/protos"
 )
 
-var sum = 100
+var sum = 1000
 
 func TestPutOrphanTx(t *testing.T) {
 	econf, err := mock.NewEnvConfForTest()
@@ -135,11 +135,16 @@ func run(b *testing.B, t *testing.T) {
 	result := batchTx(m)
 	printMempool(m)
 	fmt.Println("确认一笔交易")
-	e := m.ConfirmTx(result[80]) //
-	if e != nil {
-		panic(e)
-	}
-	fmt.Println("confirm tx:", string(result[40].Txid))
+	cb := time.Now()
+	// for i := 0; i < 10000; i++ {
+	// 	e := m.ConfirmTx(result[i]) //
+	// 	if e != nil {
+	// 		panic(e)
+	// 	}
+	// }
+	m.BatchConfirmTx(result[:10000])
+
+	fmt.Println("confirm tx:", string(result[40].Txid), "耗时=", time.Since(cb))
 
 	// deleteID := string(result[80].Txid) //"8001"
 	// fmt.Println("delete tx:", deleteID)

@@ -211,7 +211,7 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 	}
 
 	t.Mempool.Range(f)
-	t.UnconfirmTxAmount = int64(len(result))
+	t.UnconfirmTxAmount = int64(t.Mempool.GetTxCounnt())
 	t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount)
 	return result, nil
 }
@@ -283,7 +283,7 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 		t.log.Info("average unconfirm delay", "micro-senconds", microSec, "count", txMapSize)
 		t.AvgDelay = microSec
 	}
-	t.UnconfirmTxAmount = txMapSize
+	t.UnconfirmTxAmount = int64(t.Mempool.GetTxCounnt())
 	return result, delayedTxs, nil
 }
 
