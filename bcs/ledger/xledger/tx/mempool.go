@@ -557,10 +557,6 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 
 	if isOrphan {
 		m.orphans[node.txid] = node
-		m.log.Error("Mempool put orphan", "txid", tx.HexTxid())
-		for _, in := range tx.TxInputs {
-			m.log.Error("Mempool put orphan", "txid", tx.HexTxid(), "refTxid", hex.EncodeToString(in.RefTxid), "offset", in.RefOffset, "addr", string(in.FromAddr))
-		}
 	} else {
 		m.unconfirmed[node.txid] = node
 		if _, ok := m.orphans[node.txid]; ok {
