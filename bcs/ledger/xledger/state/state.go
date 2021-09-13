@@ -154,7 +154,7 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 
 	obj.heightNotifier = NewBlockHeightNotifier()
 
-	go obj.collectDelayedTxs(defaultUndoDelayedTxsInterval)
+	// go obj.collectDelayedTxs(defaultUndoDelayedTxsInterval)
 
 	return obj, nil
 }

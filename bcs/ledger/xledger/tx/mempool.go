@@ -321,10 +321,6 @@ func (m *Mempool) DeleteTxAndChildren(txid string) []*pb.Transaction { // DeletT
 
 	m.log.Debug("Mempool DeleteTxAndChildren", "txid", hex.EncodeToString([]byte(txid)))
 
-	if _, ok := m.confirmed[txid]; ok {
-		// TODO 是否删除确认交易表中的交易。不应该删除，confirmed 中应该是已经共识确认过的，回滚区块应该调用 retrieveTx 接口。
-		// 本次先按照删除处理。
-	}
 	return m.deleteTx(txid)
 }
 
@@ -337,6 +333,8 @@ func (m *Mempool) deleteTx(txid string) []*pb.Transaction {
 		delete(m.unconfirmed, txid)
 	} else if node, ok = m.orphans[txid]; ok {
 		delete(m.orphans, txid)
+	} else if node, ok = m.confirmed[txid]; ok {
+		delete(m.confirmed, txid)
 	} else {
 		return nil
 	}
@@ -559,6 +557,10 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 
 	if isOrphan {
 		m.orphans[node.txid] = node
+		m.log.Error("Mempool put orphan", "txid", tx.HexTxid())
+		for _, in := range tx.TxInputs {
+			m.log.Error("Mempool put orphan", "txid", tx.HexTxid(), "refTxid", hex.EncodeToString(in.RefTxid), "offset", in.RefOffset, "addr", string(in.FromAddr))
+		}
 	} else {
 		m.unconfirmed[node.txid] = node
 		if _, ok := m.orphans[node.txid]; ok {
@@ -798,6 +800,8 @@ func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 			delete(m.orphans, n.txid)
 		} else if _, ok := m.unconfirmed[n.txid]; ok {
 			delete(m.unconfirmed, n.txid)
+		} else if _, ok := m.confirmed[n.txid]; ok {
+			delete(m.confirmed, n.txid)
 		} else {
 			continue // 按道理不应出现此情况。
 		}
