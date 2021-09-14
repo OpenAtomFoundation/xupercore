@@ -1062,6 +1062,7 @@ func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
 				if err != nil {
 					return fmt.Errorf("undo tx fail.txid:%s,err:%v", showTxId, err)
 				}
+				t.tx.Mempool.DeleteTxAndChildren(string(tx.Txid)) // mempool 可能存在 confirmed 交易，回滚后也需要删除。
 			}
 
 			// 回滚小费，undoTxInternal不会滚小费
