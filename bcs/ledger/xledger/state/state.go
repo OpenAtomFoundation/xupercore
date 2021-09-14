@@ -1379,6 +1379,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		if undoDone[string(undoTxs[i].Txid)] {
 			continue
 		}
+		batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), undoTxs[i].Txid...)) // mempool 中删除后，db 的未确认交易中也要删除。
 		undoErr := t.undoUnconfirmedTx(undoTxs[i], batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)
