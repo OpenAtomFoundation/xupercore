@@ -774,10 +774,16 @@ func (m *Mempool) inConfirmedOrUnconfirmed(id string) bool {
 func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 	index := len(res) - maxLen
 	if index > 0 { // 说明有孤儿交易依赖于无效的引用。
-		for _, n := range res[index:] {
+		for _, n := range res[maxLen:] {
 			m.deleteTx(n.txid)
 		}
-		res = res[:index]
+		res = res[:maxLen]
+		return res
+	}
+
+	if index < 0 {
+		res = append(res, make([]*Node, maxLen-len(res))...)
+		return res
 	}
 	return res
 }
