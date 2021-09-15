@@ -304,11 +304,12 @@ func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 		}
 		err := t.Mempool.PutTx(tx)
 		if err != nil {
+			fmt.Println("mempool put tx failed:", err)
 			return err
 		}
 		count++
 	}
-	t.UnconfirmTxAmount = int64(count)
+	t.UnconfirmTxAmount = int64(t.Mempool.GetTxCounnt())
 	return nil
 }
 

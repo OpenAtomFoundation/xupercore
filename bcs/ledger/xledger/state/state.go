@@ -154,7 +154,7 @@ func NewState(sctx *context.StateCtx) (*State, error) {
 
 	obj.heightNotifier = NewBlockHeightNotifier()
 
-	go obj.collectDelayedTxs(defaultUndoDelayedTxsInterval)
+	// go obj.collectDelayedTxs(defaultUndoDelayedTxsInterval)
 
 	return obj, nil
 }
@@ -1062,6 +1062,7 @@ func (t *State) procUndoBlkForWalk(undoBlocks []*pb.InternalBlock,
 				if err != nil {
 					return fmt.Errorf("undo tx fail.txid:%s,err:%v", showTxId, err)
 				}
+				t.tx.Mempool.DeleteTxAndChildren(string(tx.Txid)) // mempool 可能存在 confirmed 交易，回滚后也需要删除。
 			}
 
 			// 回滚小费，undoTxInternal不会滚小费
@@ -1378,6 +1379,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		if undoDone[string(undoTxs[i].Txid)] {
 			continue
 		}
+		batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), undoTxs[i].Txid...)) // mempool 中删除后，db 的未确认交易中也要删除。
 		undoErr := t.undoUnconfirmedTx(undoTxs[i], batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)
