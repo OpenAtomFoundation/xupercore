@@ -183,11 +183,8 @@ func (n *Node) breakOutputs() {
 		if fn == nil {
 			continue
 		}
-		for ii, v := range fn.txOutputs {
-			if v != nil && v.txid == n.txid {
-				fn.txOutputs[ii] = nil
-			}
-		}
+		offset := n.tx.TxInputs[i].RefOffset
+		fn.txOutputs[offset] = nil // 转账交易不会有空的 refTxid，不需要判断是否越界。
 		n.txInputs[i] = nil
 	}
 
@@ -195,10 +192,9 @@ func (n *Node) breakOutputs() {
 		if fn == nil {
 			continue
 		}
-		for i, v := range fn.txOutputsExt {
-			if v != nil && v.txid == n.txid {
-				fn.txOutputsExt[i] = nil
-			}
+		offset := int(n.tx.TxInputsExt[i].RefOffset)
+		if len(fn.txOutputsExt) > offset { // 对于第一次写某个 key，父节点为 emptyTxIDNode，txOutputsExt 为空。
+			fn.txOutputsExt[offset] = nil
 		}
 
 		bucket := n.tx.TxInputsExt[i].GetBucket()
