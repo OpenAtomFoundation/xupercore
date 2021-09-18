@@ -201,9 +201,12 @@ func (n *Node) breakOutputs() {
 			}
 		}
 
-		for k, nn := range fn.bucketKeyToNode {
+		bucket := n.tx.TxInputsExt[i].GetBucket()
+		key := n.tx.TxInputsExt[i].GetKey()
+		bk := bucket + string(key)
+		if nn, ok := fn.bucketKeyToNode[bk]; ok {
 			if nn.txid == n.txid {
-				delete(fn.bucketKeyToNode, k)
+				delete(fn.bucketKeyToNode, bk)
 			}
 		}
 
@@ -213,11 +216,6 @@ func (n *Node) breakOutputs() {
 	for k, fn := range n.readonlyInputs {
 		if fn == nil {
 			continue
-		}
-		for k, nn := range fn.bucketKeyToNode {
-			if nn.txid == n.txid {
-				delete(fn.bucketKeyToNode, k)
-			}
 		}
 
 		delete(fn.readonlyOutputs, n.txid)
