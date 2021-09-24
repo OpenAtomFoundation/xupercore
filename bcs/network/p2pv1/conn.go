@@ -1,9 +1,11 @@
 package p2pv1
 
 import (
+	"context"
 	"errors"
 	"io"
 	"sync"
+	"time"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 
@@ -58,7 +60,6 @@ func (c *Conn) newClient() (pb.P2PServiceClient, error) {
 }
 
 func (c *Conn) newConn() error {
-	conn := &grpc.ClientConn{}
 	options := append([]grpc.DialOption{}, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.config.MaxMessageSize)<<20)))
 	if c.config.IsTls {
 		creds, err := p2p.NewTLS(c.config.KeyPath, c.config.ServiceName)
@@ -88,7 +89,9 @@ func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 		return err
 	}
 
-	stream, err := client.SendP2PMessage(ctx)
+	sctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.Timeout)*time.Second)
+	defer cancel()
+	stream, err := client.SendP2PMessage(sctx)
 	if err != nil {
 		c.log.Error("SendMessage new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return err
@@ -108,6 +111,9 @@ func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 		return nil
 	}
 
+	// client等待server收到消息再退出，防止提前退出导致信息发送失败
+	stream.Recv()
+
 	return err
 }
 
@@ -119,7 +125,9 @@ func (c *Conn) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage) 
 		return nil, err
 	}
 
-	stream, err := client.SendP2PMessage(ctx)
+	sctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.Timeout)*time.Second)
+	defer cancel()
+	stream, err := client.SendP2PMessage(sctx)
 	if err != nil {
 		c.log.Error("SendMessageWithResponse new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return nil, err
