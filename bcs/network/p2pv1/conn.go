@@ -101,6 +101,7 @@ func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 	c.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
 		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", c.id)
 
+	msg.Header.From = c.config.Address
 	err = stream.Send(msg)
 	if err != nil {
 		c.log.Error("SendMessage Send error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
