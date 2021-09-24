@@ -56,6 +56,7 @@ func (p *P2PServerV1) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage, optFu
 func (p *P2PServerV1) sendMessage(ctx xctx.XContext, msg *pb.XuperMessage, peerIDs []string) error {
 	wg := sync.WaitGroup{}
 	for _, peerID := range peerIDs {
+		peerID := peerID
 		conn, err := p.pool.Get(peerID)
 		if err != nil {
 			p.log.Warn("p2p: get conn error",
@@ -118,6 +119,7 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 	wg := sync.WaitGroup{}
 	respCh := make(chan *pb.XuperMessage, len(peerIDs))
 	for _, peerID := range peerIDs {
+		peerID := peerID
 		conn, err := p.pool.Get(peerID)
 		if err != nil {
 			p.log.Warn("p2p: get conn error", "log_id", msg.GetHeader().GetLogid(),
@@ -133,6 +135,7 @@ func (p *P2PServerV1) sendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMe
 			if err != nil {
 				return
 			}
+			resp.Header.From = peerID
 			respCh <- resp
 		}(conn)
 	}
@@ -168,9 +171,8 @@ func (p *P2PServerV1) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 	}
 
 	bcname := msg.GetHeader().GetBcname()
-	filters := opt.Filters
 	peerFilters := make([]PeerFilter, 0)
-	for _, f := range filters {
+	for _, f := range opt.Filters {
 		var filter PeerFilter
 		switch f {
 		default:
@@ -180,6 +182,10 @@ func (p *P2PServerV1) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 	}
 
 	peerIDs := make([]string, 0)
+	if len(opt.PeerIDs) > 0 {
+		peerIDs = append(peerIDs, opt.PeerIDs...)
+	}
+
 	if len(opt.Addresses) > 0 {
 		peerIDs = append(peerIDs, opt.Addresses...)
 	}
