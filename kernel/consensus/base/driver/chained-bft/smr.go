@@ -97,6 +97,7 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 	}
 	// smr初始值装载
 	s.localProposal.Store(utils.F(qcTree.GetRootQC().In.GetProposalId()), 0)
+	s.ledgerState = qcTree.GetHighQC().In.GetProposalView()
 	return s
 }
 
