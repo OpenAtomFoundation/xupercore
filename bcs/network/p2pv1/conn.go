@@ -19,8 +19,6 @@ import (
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
-var clientSleepDuration = 3 * time.Second
-
 type Conn struct {
 	ctx    *nctx.NetCtx
 	log    logs.Logger
@@ -91,7 +89,7 @@ func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 		return err
 	}
 
-	sctx, cancel := context.WithTimeout(ctx, clientSleepDuration)
+	sctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.Timeout)*time.Second)
 	defer cancel()
 	stream, err := client.SendP2PMessage(sctx)
 	if err != nil {
@@ -126,7 +124,7 @@ func (c *Conn) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage) 
 		return nil, err
 	}
 
-	sctx, cancel := context.WithCancel(ctx)
+	sctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.Timeout)*time.Second)
 	defer cancel()
 	stream, err := client.SendP2PMessage(sctx)
 	if err != nil {
@@ -138,6 +136,7 @@ func (c *Conn) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage) 
 	c.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
 		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", c.id)
 
+	msg.Header.From = c.config.Address
 	err = stream.Send(msg)
 	if err != nil {
 		c.log.Error("SendMessageWithResponse error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
