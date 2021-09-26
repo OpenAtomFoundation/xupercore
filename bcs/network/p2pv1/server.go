@@ -141,7 +141,20 @@ func (p *P2PServerV1) serve() {
 	if err != nil {
 		panic(fmt.Sprintf("address error: address=%s", err))
 	}
-
+	
+	
+	//Compatible container runtime, listening port
+	portIndex := strings.LastIndex(ip, ":")
+	if portIndex > 0 {
+		port := ip[portIndex:]
+		if network == "ip4" {
+			ip = "0.0.0.0" + port
+		} else if network == "ip6" {
+			ip = "[::]" + port
+		}
+	}
+	
+	
 	l, err := net.Listen(network, ip)
 	if err != nil {
 		panic(err)
