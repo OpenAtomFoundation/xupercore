@@ -58,7 +58,7 @@ func (c *Conn) newClient() (pb.P2PServiceClient, error) {
 }
 
 func (c *Conn) newConn() error {
-	conn := &grpc.ClientConn{}
+	//conn := &grpc.ClientConn{}
 	options := append([]grpc.DialOption{}, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(int(c.config.MaxMessageSize)<<20)))
 	if c.config.IsTls {
 		creds, err := p2p.NewTLS(c.config.KeyPath, c.config.ServiceName)
