@@ -170,24 +170,98 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	return m.putTx(tx, false)
 }
 
-// DeleteConflictByTx 删除所有与 tx 冲突的交易以及子交易。返回所有删除的交易。
-func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) ([]*pb.Transaction, []*pb.Transaction) {
+// FindConflictByTx 找多所有与 tx 冲突的交易。
+func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	if m.HasTx(string(tx.GetTxid())) {
 		// 如果 mempool 中有此交易，说明没有冲突交易，在 PutTx 时会保证冲突。
-		return nil, nil
+		return nil
 	}
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid())
+	m.log.Debug("Mempool FindConflictByTx", "txid", tx.HexTxid())
 
-	utxoDeletedTxs := make([]*pb.Transaction, 0, 0)
+	conflictTxs := make([]*pb.Transaction, 0, 0)
+	exlude := make(map[*Node]bool, 0)
 	for _, txInput := range tx.TxInputs {
-		utxoDeletedTxs = append(utxoDeletedTxs, m.deleteByUtxo(string(txInput.RefTxid), int(txInput.RefOffset))...)
+		conflictTxs = append(conflictTxs, m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), exlude)...)
 	}
-	utxoExtDeletedTxs := make([]*pb.Transaction, 0, 0)
-	utxoExtDeletedTxs = append(utxoExtDeletedTxs, m.deleteBucketKeyByTx(tx)...)
-	return utxoDeletedTxs, utxoExtDeletedTxs
+	conflictTxs = append(conflictTxs, m.findBucketKeyByTx(tx, exlude)...)
+	return conflictTxs
+}
+
+func (m *Mempool) getLeaf(n *Node, ranged map[*Node]bool) *Node {
+	for _, v := range n.txOutputs {
+		if v != nil && !ranged[v] {
+			ranged[v] = true
+			return m.getLeaf(v, ranged)
+		}
+	}
+
+	for _, v := range n.txOutputsExt {
+		if v != nil && !ranged[v] {
+			ranged[v] = true
+			return m.getLeaf(v, ranged)
+		}
+	}
+
+	for _, v := range n.readonlyOutputs {
+		if v != nil && !ranged[v] {
+			ranged[v] = true
+			return m.getLeaf(v, ranged)
+		}
+	}
+	return n
+}
+
+func (m *Mempool) findChildrenFromNode(node *Node, exclude map[*Node]bool) ([]*pb.Transaction, map[*Node]bool) {
+	deletedTxs := make([]*pb.Transaction, 0, 10)
+	var q deque.Deque
+	findMap := make(map[*Node]bool, 10)
+	ranged := make(map[*Node]bool, 10)
+	findMap[node] = true
+	ranged[node] = true
+	q.PushBack(node)
+
+	for q.Len() > 0 {
+		node := q.Front().(*Node)                                 // 获取第一个 node，但是不 pop。
+		if child := m.getFirstChild(node, ranged); child != nil { // 获取第一个子节点，如果没有子节点返回 nil。
+			q.PushFront(child) // 入栈
+		} else { // 当前 node 没有子节点。
+			q.PopFront() // 出栈
+			if findMap[node] || exclude[node] {
+				continue
+			}
+
+			findMap[node] = true
+			deletedTxs = append([]*pb.Transaction{node.tx}, deletedTxs...)
+		}
+	}
+	return deletedTxs, findMap
+}
+
+func (m *Mempool) getFirstChild(n *Node, ranged map[*Node]bool) *Node {
+	for _, v := range n.txOutputs {
+		if v != nil && !ranged[v] {
+			ranged[v] = true
+			return v
+		}
+	}
+
+	for _, v := range n.txOutputsExt {
+		if v != nil && !ranged[v] {
+			ranged[v] = true
+			return v
+		}
+	}
+
+	for _, v := range n.readonlyOutputs {
+		if v != nil && !ranged[v] {
+			ranged[v] = true
+			return v
+		}
+	}
+	return nil
 }
 
 // GetTx 从 mempool 中查询一笔交易，先查未确认交易表，然后是孤儿交易表。
@@ -205,8 +279,8 @@ func (m *Mempool) GetTx(txid string) (*pb.Transaction, bool) {
 	return nil, false
 }
 
-// deleteByUtxo delete txs by utxo(addr & txid & offset) 暂时 addr 没用到，根据 txid 和 offset 就可以锁定一个 utxo。
-func (m *Mempool) deleteByUtxo(txid string, offset int) []*pb.Transaction {
+// findByUtxo delete txs by utxo(addr & txid & offset) 暂时 addr 没用到，根据 txid 和 offset 就可以锁定一个 utxo。
+func (m *Mempool) findByUtxo(txid string, offset int, exclude map[*Node]bool) []*pb.Transaction {
 
 	node := m.getNode(txid)
 	if node == nil {
@@ -223,11 +297,17 @@ func (m *Mempool) deleteByUtxo(txid string, offset int) []*pb.Transaction {
 	result := make([]*pb.Transaction, 0, 100)
 
 	result = append(result, n.tx)
-	result = append(result, m.deleteTx(n.txid)...)
+	children, childrenMap := m.findChildrenFromNode(n, exclude)
+	if len(exclude) == 0 {
+		exclude = childrenMap
+	}
+
+	result = append(result, children...)
+
 	return result
 }
 
-func (m *Mempool) deleteBucketKeyByTx(tx *pb.Transaction) []*pb.Transaction {
+func (m *Mempool) findBucketKeyByTx(tx *pb.Transaction, exclude map[*Node]bool) []*pb.Transaction {
 	usedKeyVersion := getTxUsedKeyVersion(tx)
 	result := make([]*pb.Transaction, 0, 0)
 	for k := range usedKeyVersion {
@@ -237,13 +317,13 @@ func (m *Mempool) deleteBucketKeyByTx(tx *pb.Transaction) []*pb.Transaction {
 		}
 
 		for _, n := range nodes {
-			result = append(result, m.deleteUsedKeyVersion(n, usedKeyVersion)...)
+			result = append(result, m.findUsedKeyVersion(n, usedKeyVersion, exclude)...)
 		}
 	}
 	return result
 }
 
-func (m *Mempool) deleteUsedKeyVersion(node *Node, usedKeyVersion map[string]string) []*pb.Transaction {
+func (m *Mempool) findUsedKeyVersion(node *Node, usedKeyVersion map[string]string, exclude map[*Node]bool) []*pb.Transaction {
 	result := make([]*pb.Transaction, 0, 0)
 	outKeys := make(map[string]struct{})
 	tx := node.tx
@@ -256,8 +336,12 @@ func (m *Mempool) deleteUsedKeyVersion(node *Node, usedKeyVersion map[string]str
 		if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
 			if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
 				if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
+					if exclude[node] {
+						continue
+					}
 					result = append(result, node.tx)
-					result = append(result, m.deleteTx(node.txid)...)
+					txs, _ := m.findChildrenFromNode(node, exclude)
+					result = append(result, txs...)
 				}
 			}
 		}
@@ -312,6 +396,17 @@ func (m *Mempool) getNode(txid string) *Node {
 		return n
 	}
 	return nil
+}
+
+// BatchDeleteTx 从 mempool 删除所有 txs。
+func (m *Mempool) BatchDeleteTx(txs []*pb.Transaction) {
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	m.log.Debug("Mempool BatchDeletx", "txsLen", len(txs))
+	for _, tx := range txs {
+		m.deleteTx(string(tx.Txid))
+	}
 }
 
 // DeleteTxAndChildren delete tx from mempool.
