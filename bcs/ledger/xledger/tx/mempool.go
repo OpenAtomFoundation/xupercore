@@ -171,23 +171,23 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 }
 
 // DeleteConflictByTx 删除所有与 tx 冲突的交易以及子交易。返回所有删除的交易。
-func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) []*pb.Transaction {
+func (m *Mempool) DeleteConflictByTx(tx *pb.Transaction) ([]*pb.Transaction, []*pb.Transaction) {
 	if m.HasTx(string(tx.GetTxid())) {
 		// 如果 mempool 中有此交易，说明没有冲突交易，在 PutTx 时会保证冲突。
-		return nil
+		return nil, nil
 	}
 	m.m.Lock()
 	defer m.m.Unlock()
 
 	m.log.Debug("Mempool DeleteConflictByTx", "txid", tx.HexTxid())
 
-	deletedTxs := make([]*pb.Transaction, 0, 0)
+	utxoDeletedTxs := make([]*pb.Transaction, 0, 0)
 	for _, txInput := range tx.TxInputs {
-		deletedTxs = append(deletedTxs, m.deleteByUtxo(string(txInput.RefTxid), int(txInput.RefOffset))...)
+		utxoDeletedTxs = append(utxoDeletedTxs, m.deleteByUtxo(string(txInput.RefTxid), int(txInput.RefOffset))...)
 	}
-
-	deletedTxs = append(deletedTxs, m.deleteBucketKeyByTx(tx)...)
-	return deletedTxs
+	utxoExtDeletedTxs := make([]*pb.Transaction, 0, 0)
+	utxoExtDeletedTxs = append(utxoExtDeletedTxs, m.deleteBucketKeyByTx(tx)...)
+	return utxoDeletedTxs, utxoExtDeletedTxs
 }
 
 // GetTx 从 mempool 中查询一笔交易，先查未确认交易表，然后是孤儿交易表。
@@ -540,8 +540,7 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 	}
 
 	// 存证交易。
-	if len(tx.GetTxInputs()) == 0 && len(tx.GetTxInputs()) == 0 &&
-		len(tx.GetTxInputs()) == 0 && len(tx.GetTxInputs()) == 0 {
+	if len(tx.GetTxInputs()) == 0 && len(tx.GetTxInputsExt()) == 0 {
 		m.processEvidenceNode(node)
 	}
 
@@ -788,37 +787,69 @@ func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 	return res
 }
 
-// 删除 node 的所有子交易，先从 orphans 中查找。
+func (m *Mempool) getAndRemoveFirstChild(n *Node) *Node {
+	for i, v := range n.txOutputs {
+		if v != nil {
+			n.txOutputs[i] = nil
+			for i, inode := range v.txInputs {
+				if inode != nil && inode.txid == n.txid {
+					v.txInputs[i] = nil
+					break
+				}
+			}
+			return v
+		}
+	}
+
+	for i, v := range n.txOutputsExt {
+		if v != nil {
+			n.txOutputsExt[i] = nil
+			for i, inode := range v.txInputsExt {
+				if inode != nil && inode.txid == n.txid {
+					v.txInputsExt[i] = nil
+					break
+				}
+			}
+			return v
+		}
+	}
+
+	for _, v := range n.readonlyOutputs {
+		if v != nil {
+			delete(n.readonlyOutputs, v.txid)
+			delete(v.readonlyInputs, n.txid)
+			return v
+		}
+	}
+	return nil
+}
+
 func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 	deletedTxs := make([]*pb.Transaction, 0, 10)
 	var q deque.Deque
-	for _, n := range node.getAllChildren() {
-		q.PushBack(n)
-	}
+	delMap := make(map[*Node]bool, 10)
+	delMap[node] = true
+	q.PushBack(node)
 
 	for q.Len() > 0 {
-		n := q.PopFront().(*Node)
-		if _, ok := m.orphans[n.txid]; ok {
-			delete(m.orphans, n.txid)
-		} else if _, ok := m.unconfirmed[n.txid]; ok {
-			delete(m.unconfirmed, n.txid)
-		} else if _, ok := m.confirmed[n.txid]; ok {
-			delete(m.confirmed, n.txid)
-		} else {
-			continue // 按道理不应出现此情况。
-		}
-
-		deletedTxs = append(deletedTxs, n.tx) // 当前 n 已经从 mempool 删除。
-		for _, v := range n.getAllChildren() {
-			if m.inMempool(v.txid) {
-				q.PushBack(v) // 将 n 的所有子节点加入队列，等到从 mempool 中删除。
+		node := q.Front().(*Node)
+		if child := m.getAndRemoveFirstChild(node); child != nil { // 获取第一个子节点，如果没有子节点返回 nil。
+			q.PushFront(child) // 入栈
+		} else { // 当前 node 没有子节点。
+			q.PopFront() // 出栈
+			if delMap[node] {
+				continue
 			}
+
+			delMap[node] = true
+			deletedTxs = append([]*pb.Transaction{node.tx}, deletedTxs...)
+			delete(m.confirmed, node.txid)
+			delete(m.unconfirmed, node.txid)
+			delete(m.orphans, node.txid)
+			m.deleteBucketKey(node)
+			node.breakOutputs()
 		}
-
-		n.breakOutputs()     // 断绝 n 的所有父关系。
-		m.deleteBucketKey(n) // 删除和 bucket key 相关。
 	}
-
 	return deletedTxs
 }
 
@@ -962,7 +993,7 @@ func (m *Mempool) processTxInputsExt(node *Node, retrieve bool) (bool, error) {
 				// 孤儿交易
 				orphanNode := NewNode(id, nil)
 				offset := int(input.RefOffset)
-				if forDeleteNode, err := node.updateInputExt(index, offset, n, retrieve); err != nil {
+				if forDeleteNode, err := node.updateInputExt(index, offset, orphanNode, retrieve); err != nil {
 					return isOrphan, err
 				} else if forDeleteNode != nil {
 					m.deleteTx(forDeleteNode.txid)

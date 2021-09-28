@@ -1368,19 +1368,26 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 			unconfirmToConfirm[txid] = true
 		} else { // 如果区块中的交易不在 mempool 中再去检查冲突交易。
 			// 删除 mempool 中与此交易有冲突的交易，比如 utxo 双花、某个 key 的版本冲突。
-			undoTxs = append(undoTxs, t.tx.Mempool.DeleteConflictByTx(tx)...)
+			utxoDelTxs, extDelTxs := t.tx.Mempool.DeleteConflictByTx(tx)
+			t.log.Error("Mempool.DeleteConflictByTx", "time", time.Since(a))
+			for i := len(utxoDelTxs) - 1; i >= 0; i-- {
+				undoTxs = append(undoTxs, utxoDelTxs[i])
+			}
+			for i := len(extDelTxs) - 1; i >= 0; i-- {
+				undoTxs = append(undoTxs, extDelTxs[i])
+			}
 		}
 	}
 
 	t.log.Trace("  undoTxs", "undoTxCount", len(undoTxs))
 
 	undoDone := map[string]bool{}
-	for i := len(undoTxs) - 1; i >= 0; i-- {
-		if undoDone[string(undoTxs[i].Txid)] {
+	for _, undoTx := range undoTxs {
+		if undoDone[string(undoTx.Txid)] {
 			continue
 		}
-		batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), undoTxs[i].Txid...)) // mempool 中删除后，db 的未确认交易中也要删除。
-		undoErr := t.undoUnconfirmedTx(undoTxs[i], batch, undoDone, nil)
+		batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), undoTx.Txid...)) // mempool 中删除后，db 的未确认交易中也要删除。
+		undoErr := t.undoUnconfirmedTx(undoTx, batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)
 			return nil, undoErr
