@@ -182,36 +182,12 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	m.log.Debug("Mempool FindConflictByTx", "txid", tx.HexTxid())
 
 	conflictTxs := make([]*pb.Transaction, 0, 0)
-	exlude := make(map[*Node]bool, 0)
+	exclude := make(map[*Node]bool, 0)
 	for _, txInput := range tx.TxInputs {
-		conflictTxs = append(conflictTxs, m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), exlude)...)
+		conflictTxs = append(conflictTxs, m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), exclude)...)
 	}
-	conflictTxs = append(conflictTxs, m.findBucketKeyByTx(tx, exlude)...)
+	conflictTxs = append(conflictTxs, m.findBucketKeyByTx(tx, exclude)...)
 	return conflictTxs
-}
-
-func (m *Mempool) getLeaf(n *Node, ranged map[*Node]bool) *Node {
-	for _, v := range n.txOutputs {
-		if v != nil && !ranged[v] {
-			ranged[v] = true
-			return m.getLeaf(v, ranged)
-		}
-	}
-
-	for _, v := range n.txOutputsExt {
-		if v != nil && !ranged[v] {
-			ranged[v] = true
-			return m.getLeaf(v, ranged)
-		}
-	}
-
-	for _, v := range n.readonlyOutputs {
-		if v != nil && !ranged[v] {
-			ranged[v] = true
-			return m.getLeaf(v, ranged)
-		}
-	}
-	return n
 }
 
 func (m *Mempool) findChildrenFromNode(node *Node, exclude map[*Node]bool) ([]*pb.Transaction, map[*Node]bool) {
