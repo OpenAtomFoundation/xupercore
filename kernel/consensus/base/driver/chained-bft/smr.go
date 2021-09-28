@@ -16,6 +16,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	xuperp2p "github.com/xuperchain/xupercore/protos"
@@ -260,6 +261,10 @@ func (s *Smr) ResetProposerStatus(tipBlock cctx.BlockInterface,
 	if qc == nil {
 		return false, nil, ErrEmptyHighQC
 	}
+	// metrics
+	diff := tipBlock.GetHeight() - qc.GetProposalView()
+	metrics.GeneralSumGauge.WithLabelValues(s.bcName, "consensus-rollback").Set(float64(diff))
+
 	ok, err := s.enforceUpdateHighQC(qc.GetProposalId())
 	if err != nil {
 		s.log.Error("consensus:smr:ResetProposerStatus: EnforceUpdateHighQC error.", "error", err)
@@ -625,6 +630,12 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	// 更新本地pacemaker AdvanceRound
 	s.pacemaker.AdvanceView(voteQC)
 	s.log.Debug("smr::handleReceivedVoteMsg::FULL VOTES!", "pacemaker view", s.pacemaker.GetCurrentView())
+	if t, ok := s.localProposal.Load(utils.F(voteQC.GetProposalId())); ok {
+		if proposalGetT, ok := t.(int64); ok && proposalGetT != 0 {
+			time := (time.Now().UnixNano() - proposalGetT) / int64(time.Millisecond)
+			metrics.ConsensusMsgSummary.WithLabelValues(s.bcName, "proposalToFullvotes").Observe(float64(time))
+		}
+	}
 	// 更新HighQC
 	s.qcTree.UpdateHighQC(voteQC.GetProposalId())
 	return nil
