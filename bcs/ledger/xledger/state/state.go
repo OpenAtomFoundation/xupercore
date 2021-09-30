@@ -1377,12 +1377,12 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	t.log.Trace("  undoTxs", "undoTxCount", len(undoTxs))
 
 	undoDone := map[string]bool{}
-	for i := len(undoTxs) - 1; i >= 0; i-- {
-		if undoDone[string(undoTxs[i].Txid)] {
+	for _, undoTx := range undoTxs {
+		if undoDone[string(undoTx.Txid)] {
 			continue
 		}
-		batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), undoTxs[i].Txid...)) // mempool 中删除后，db 的未确认交易中也要删除。
-		undoErr := t.undoUnconfirmedTx(undoTxs[i], batch, undoDone, nil)
+		batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), undoTx.Txid...)) // mempool 中删除后，db 的未确认交易中也要删除。
+		undoErr := t.undoUnconfirmedTx(undoTx, batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)
 			return nil, nil, undoErr

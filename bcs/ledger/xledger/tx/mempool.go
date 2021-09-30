@@ -170,7 +170,8 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	return m.putTx(tx, false)
 }
 
-// FindConflictByTx 找多所有与 tx 冲突的交易。
+// FindConflictByTx 找多所有与 tx 冲突的交易。返回数组中，前面是子交易，后面是父交易。
+// 保证事物原子性，此接口不删除交易，只返回交易列表，如果需要删除需要调用删除交易相关接口。
 func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	if m.HasTx(string(tx.GetTxid())) {
 		// 如果 mempool 中有此交易，说明没有冲突交易，在 PutTx 时会保证冲突。
@@ -182,62 +183,72 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	m.log.Debug("Mempool FindConflictByTx", "txid", tx.HexTxid())
 
 	conflictTxs := make([]*pb.Transaction, 0, 0)
-	exclude := make(map[*Node]bool, 0)
+	ranged := make(map[*Node]bool, 0)
 	for _, txInput := range tx.TxInputs {
-		conflictTxs = append(conflictTxs, m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), exclude)...)
+		// 根据 utxo 找到冲突的所有交易以及子交易。
+		utxoConflictTxs := m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), ranged)
+		conflictTxs = append(conflictTxs, utxoConflictTxs...)
 	}
-	conflictTxs = append(conflictTxs, m.findBucketKeyByTx(tx, exclude)...)
+
+	// 根据 tx 找到所有 key 版本冲突的交易以及子交易。
+	usedKeyVersion := getTxUsedKeyVersion(tx) // 找到当前交易所有用掉的 key 的 verison。
+	for k := range usedKeyVersion {
+		nodes, ok := m.bucketKeyNodes[k] // 找到某个 key 的所有相关 node。
+		if !ok {
+			continue
+		}
+
+		for _, n := range nodes {
+			// 判断当前 node 是否和区块中的交易有 key 的冲突，如果冲突找到其所以子交易。
+			// ranged 参数为之前已经遍历过的所有交易，因此再找到新的交易只能是之前的所有交易的父交易或者完全无关交易，因此可以 append 到最终冲突交易列表中。
+			keyConflictTxs := m.findKeyConflictTxs(n, usedKeyVersion, ranged)
+			conflictTxs = append(conflictTxs, keyConflictTxs...)
+		}
+	}
+
 	return conflictTxs
 }
 
-func (m *Mempool) findChildrenFromNode(node *Node, exclude map[*Node]bool) ([]*pb.Transaction, map[*Node]bool) {
-	deletedTxs := make([]*pb.Transaction, 0, 10)
-	var q deque.Deque
-	findMap := make(map[*Node]bool, 10)
-	ranged := make(map[*Node]bool, 10)
-	findMap[node] = true
-	ranged[node] = true
-	q.PushBack(node)
-
-	for q.Len() > 0 {
-		node := q.Front().(*Node)                                 // 获取第一个 node，但是不 pop。
-		if child := m.getFirstChild(node, ranged); child != nil { // 获取第一个子节点，如果没有子节点返回 nil。
-			q.PushFront(child) // 入栈
-		} else { // 当前 node 没有子节点。
-			q.PopFront() // 出栈
-			if findMap[node] || exclude[node] {
-				continue
-			}
-
-			findMap[node] = true
-			deletedTxs = append([]*pb.Transaction{node.tx}, deletedTxs...)
-		}
-	}
-	return deletedTxs, findMap
+func (m *Mempool) doDelNode(node *Node) {
+	node.breakOutputs() // 断开 node 与所有父节点的关系。
+	m.deleteBucketKey(node)
+	delete(m.confirmed, node.txid)
+	delete(m.unconfirmed, node.txid)
+	delete(m.orphans, node.txid)
 }
 
-func (m *Mempool) getFirstChild(n *Node, ranged map[*Node]bool) *Node {
-	for _, v := range n.txOutputs {
-		if v != nil && !ranged[v] {
-			ranged[v] = true
-			return v
+func (m *Mempool) dfs(node *Node, ranged map[*Node]bool, txs *[]*pb.Transaction, deleteNode bool) {
+	if ranged[node] {
+		return
+	}
+	for _, v := range node.txOutputs {
+		if v != nil && !ranged[node] {
+			m.dfs(v, ranged, txs, deleteNode)
 		}
 	}
 
-	for _, v := range n.txOutputsExt {
-		if v != nil && !ranged[v] {
-			ranged[v] = true
-			return v
+	for _, v := range node.txOutputsExt {
+		if v != nil && !ranged[node] {
+			m.dfs(v, ranged, txs, deleteNode)
 		}
 	}
 
-	for _, v := range n.readonlyOutputs {
-		if v != nil && !ranged[v] {
-			ranged[v] = true
-			return v
+	for _, v := range node.readonlyOutputs {
+		if v != nil && !ranged[node] {
+			m.dfs(v, ranged, txs, deleteNode)
 		}
 	}
-	return nil
+	*txs = append(*txs, node.tx)
+	ranged[node] = true
+	if deleteNode {
+		m.doDelNode(node)
+	}
+}
+
+func (m *Mempool) findChildrenFromNode(node *Node, ranged map[*Node]bool) []*pb.Transaction {
+	foundTxs := make([]*pb.Transaction, 0, 10)
+	m.dfs(node, ranged, &foundTxs, false)
+	return foundTxs
 }
 
 // GetTx 从 mempool 中查询一笔交易，先查未确认交易表，然后是孤儿交易表。
@@ -256,8 +267,7 @@ func (m *Mempool) GetTx(txid string) (*pb.Transaction, bool) {
 }
 
 // findByUtxo delete txs by utxo(addr & txid & offset) 暂时 addr 没用到，根据 txid 和 offset 就可以锁定一个 utxo。
-func (m *Mempool) findByUtxo(txid string, offset int, exclude map[*Node]bool) []*pb.Transaction {
-
+func (m *Mempool) findByUtxo(txid string, offset int, ranged map[*Node]bool) []*pb.Transaction {
 	node := m.getNode(txid)
 	if node == nil {
 		return nil
@@ -270,40 +280,18 @@ func (m *Mempool) findByUtxo(txid string, offset int, exclude map[*Node]bool) []
 	if n == nil {
 		return nil
 	}
+
 	result := make([]*pb.Transaction, 0, 100)
-
-	result = append(result, n.tx)
-	children, childrenMap := m.findChildrenFromNode(n, exclude)
-	if len(exclude) == 0 {
-		exclude = childrenMap
-	}
-
+	children := m.findChildrenFromNode(n, ranged)
 	result = append(result, children...)
-
 	return result
 }
 
-func (m *Mempool) findBucketKeyByTx(tx *pb.Transaction, exclude map[*Node]bool) []*pb.Transaction {
-	usedKeyVersion := getTxUsedKeyVersion(tx)
-	result := make([]*pb.Transaction, 0, 0)
-	for k := range usedKeyVersion {
-		nodes, ok := m.bucketKeyNodes[k]
-		if !ok {
-			continue
-		}
-
-		for _, n := range nodes {
-			result = append(result, m.findUsedKeyVersion(n, usedKeyVersion, exclude)...)
-		}
-	}
-	return result
-}
-
-func (m *Mempool) findUsedKeyVersion(node *Node, usedKeyVersion map[string]string, exclude map[*Node]bool) []*pb.Transaction {
-	result := make([]*pb.Transaction, 0, 0)
+func (m *Mempool) findKeyConflictTxs(node *Node, usedKeyVersion map[string]string, ranged map[*Node]bool) []*pb.Transaction {
+	result := make([]*pb.Transaction, 0, 10)
 	outKeys := make(map[string]struct{})
 	tx := node.tx
-	for _, output := range tx.GetTxOutputsExt() {
+	for _, output := range tx.GetTxOutputsExt() { // 找到所有写 key。
 		outKeys[output.GetBucket()+string(output.GetKey())] = struct{}{}
 	}
 
@@ -312,11 +300,10 @@ func (m *Mempool) findUsedKeyVersion(node *Node, usedKeyVersion map[string]strin
 		if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
 			if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
 				if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
-					if exclude[node] {
+					if ranged[node] { // 说明此冲突节点已经在之前找到过了。
 						continue
 					}
-					result = append(result, node.tx)
-					txs, _ := m.findChildrenFromNode(node, exclude)
+					txs := m.findChildrenFromNode(node, ranged)
 					result = append(result, txs...)
 				}
 			}
@@ -385,7 +372,7 @@ func (m *Mempool) BatchDeleteTx(txs []*pb.Transaction) {
 	}
 }
 
-// DeleteTxAndChildren delete tx from mempool.
+// DeleteTxAndChildren delete tx from mempool. 返回交易是从子交易到父交易顺序。
 func (m *Mempool) DeleteTxAndChildren(txid string) []*pb.Transaction { // DeletTeTxAndChildren
 	m.m.Lock()
 	defer m.m.Unlock()
@@ -858,69 +845,10 @@ func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 	return res
 }
 
-func (m *Mempool) getAndRemoveFirstChild(n *Node) *Node {
-	for i, v := range n.txOutputs {
-		if v != nil {
-			n.txOutputs[i] = nil
-			for i, inode := range v.txInputs {
-				if inode != nil && inode.txid == n.txid {
-					v.txInputs[i] = nil
-					break
-				}
-			}
-			return v
-		}
-	}
-
-	for i, v := range n.txOutputsExt {
-		if v != nil {
-			n.txOutputsExt[i] = nil
-			for i, inode := range v.txInputsExt {
-				if inode != nil && inode.txid == n.txid {
-					v.txInputsExt[i] = nil
-					break
-				}
-			}
-			return v
-		}
-	}
-
-	for _, v := range n.readonlyOutputs {
-		if v != nil {
-			delete(n.readonlyOutputs, v.txid)
-			delete(v.readonlyInputs, n.txid)
-			return v
-		}
-	}
-	return nil
-}
-
 func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 	deletedTxs := make([]*pb.Transaction, 0, 10)
-	var q deque.Deque
-	delMap := make(map[*Node]bool, 10)
-	delMap[node] = true
-	q.PushBack(node)
-
-	for q.Len() > 0 {
-		node := q.Front().(*Node)
-		if child := m.getAndRemoveFirstChild(node); child != nil { // 获取第一个子节点，如果没有子节点返回 nil。
-			q.PushFront(child) // 入栈
-		} else { // 当前 node 没有子节点。
-			q.PopFront() // 出栈
-			if delMap[node] {
-				continue
-			}
-
-			delMap[node] = true
-			deletedTxs = append([]*pb.Transaction{node.tx}, deletedTxs...)
-			delete(m.confirmed, node.txid)
-			delete(m.unconfirmed, node.txid)
-			delete(m.orphans, node.txid)
-			m.deleteBucketKey(node)
-			node.breakOutputs()
-		}
-	}
+	ranged := make(map[*Node]bool, 10)
+	m.dfs(node, ranged, &deletedTxs, true)
 	return deletedTxs
 }
 
