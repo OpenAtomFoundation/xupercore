@@ -20,6 +20,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
+	txpkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
@@ -794,7 +795,9 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	}
 
 	err := t.tx.Mempool.PutTx(tx)
-	if err != nil {
+	if err != nil && err != txpkg.ErrTxExist {
+		// 如果交易已经存在 mempool 中，不需要返回 error。
+		// 即使上面已经判断了当前 mempool 中不存在此交易，但是 desc 类存证交易（没有交易输入输出），可能在多个协程调用 doTxSync 方法时，产生冲突。
 		t.log.Error("Mempool put tx failed, when DoTx", "err", err)
 		if e := t.undoTxInternal(tx, batch); e != nil {
 			t.log.Error("Mempool put tx failed and undo failed", "undoError", e)

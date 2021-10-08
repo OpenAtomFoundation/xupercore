@@ -23,6 +23,9 @@ var (
 	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
 
 	stoneNodeID string = "stoneNodeID" // 暂定
+
+	// ErrTxExist tx already in mempool when put tx.
+	ErrTxExist = errors.New("tx already in mempool")
 )
 
 // Mempool tx mempool.
@@ -155,15 +158,18 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
 	txid := string(tx.Txid)
 	if _, ok := m.confirmed[txid]; ok {
-		return errors.New("tx already in mempool confirmd, txid:" + tx.HexTxid())
+		m.log.Warn("tx already in mempool confirmd", "txid:", tx.HexTxid())
+		return ErrTxExist
 	}
 	if _, ok := m.unconfirmed[txid]; ok {
-		return errors.New("tx already in mempool unconfirmd, txid:" + tx.HexTxid())
+		m.log.Warn("tx already in mempool unconfirmd", "txid:", tx.HexTxid())
+		return ErrTxExist
 	}
 
 	if n, ok := m.orphans[txid]; ok {
 		if n.tx != nil {
-			return errors.New("tx already in mempool orphans, txid:" + tx.HexTxid())
+			m.log.Warn("tx already in mempool orphans", "txid:", tx.HexTxid())
+			return ErrTxExist
 		}
 	}
 
