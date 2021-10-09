@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	batchBlockNumber    = 4
+	batchBlockNumber    = 2
 	maxBatchBlockNumber = 10
 
 	peersKey = "peers"
@@ -151,12 +151,20 @@ func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
 	return realSize, nil
 }
 
-// syncWithNeighbors 向p2p邻居节点进行一次区块同步
+// syncWithNeighbors 向p2p邻居节点进行区块同步
 func (t *Miner) syncWithNeighbors(ctx xctx.XContext) error {
-	currentHeight := t.ctx.Ledger.GetMeta().TrunkHeight
-	height := currentHeight + 1
-	_, err := t.syncBlockWithHeight(ctx, height, batchBlockNumber)
-	return err
+	for {
+		currentHeight := t.ctx.Ledger.GetMeta().TrunkHeight
+		height := currentHeight + 1
+		size, err := t.syncBlockWithHeight(ctx, height, batchBlockNumber)
+		if err != nil {
+			return err
+		}
+		if size <= 0 {
+			break
+		}
+	}
+	return nil
 }
 
 func (t *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (int, error) {
