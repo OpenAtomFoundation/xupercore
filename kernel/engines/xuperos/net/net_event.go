@@ -198,6 +198,11 @@ func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transac
 		return common.CastError(err)
 	}
 
+	// chain已经Stop
+	if chain.Context() == nil {
+		return nil
+	}
+
 	if len(tx.TxInputs) == 0 && !chain.Context().Ledger.GetNoFee() {
 		ctx.GetLog().Warn("TxInputs can not be null while need utxo")
 		return common.ErrTxNotEnough
@@ -275,6 +280,11 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 
 		ctx.GetLog().Warn("process block error", "error", err)
 		return err
+	}
+
+	// chain已经Stop
+	if chain.Context() == nil {
+		return nil
 	}
 
 	ledgerMeta := chain.Context().Ledger.GetMeta()
