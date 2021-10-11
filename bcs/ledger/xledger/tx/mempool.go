@@ -223,37 +223,38 @@ func (m *Mempool) doDelNode(node *Node) {
 	delete(m.orphans, node.txid)
 }
 
-func (m *Mempool) dfs(node *Node, ranged map[*Node]bool, txs *[]*pb.Transaction, deleteNode bool) {
+func (m *Mempool) dfs(node *Node, ranged map[*Node]bool, f func(n *Node)) {
 	if ranged[node] {
 		return
 	}
 	for _, v := range node.txOutputs {
 		if v != nil && !ranged[node] {
-			m.dfs(v, ranged, txs, deleteNode)
+			m.dfs(v, ranged, f)
 		}
 	}
 
 	for _, v := range node.txOutputsExt {
 		if v != nil && !ranged[node] {
-			m.dfs(v, ranged, txs, deleteNode)
+			m.dfs(v, ranged, f)
 		}
 	}
 
 	for _, v := range node.readonlyOutputs {
 		if v != nil && !ranged[node] {
-			m.dfs(v, ranged, txs, deleteNode)
+			m.dfs(v, ranged, f)
 		}
 	}
-	*txs = append(*txs, node.tx)
+
 	ranged[node] = true
-	if deleteNode {
-		m.doDelNode(node)
-	}
+	f(node)
 }
 
 func (m *Mempool) findChildrenFromNode(node *Node, ranged map[*Node]bool) []*pb.Transaction {
 	foundTxs := make([]*pb.Transaction, 0, 10)
-	m.dfs(node, ranged, &foundTxs, false)
+	f := func(n *Node) {
+		foundTxs = append(foundTxs, n.tx)
+	}
+	m.dfs(node, ranged, f)
 	return foundTxs
 }
 
@@ -854,7 +855,11 @@ func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 	deletedTxs := make([]*pb.Transaction, 0, 10)
 	ranged := make(map[*Node]bool, 10)
-	m.dfs(node, ranged, &deletedTxs, true)
+	f := func(n *Node) {
+		deletedTxs = append(deletedTxs, n.tx)
+		m.doDelNode(n)
+	}
+	m.dfs(node, ranged, f)
 	return deletedTxs
 }
 
