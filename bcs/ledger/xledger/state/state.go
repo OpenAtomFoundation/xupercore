@@ -1262,7 +1262,11 @@ func (t *State) recoverUnconfirmedTx(undoList []*pb.Transaction) {
 
 		// 检查交易是否已经被确认（被其他节点打包倒区块并广播了过来）
 		isConfirm, err := t.sctx.Ledger.HasTransaction(tx.Txid)
-		if err != nil && isConfirm {
+		if err != nil {
+			t.log.Error("recoverUnconfirmedTx fail", "checkLedgerHasTxError", err)
+			return
+		}
+		if isConfirm {
 			confirmCnt++
 			t.log.Info("this tx has been confirmed,ignore recover", "txid", hex.EncodeToString(tx.Txid))
 			continue
