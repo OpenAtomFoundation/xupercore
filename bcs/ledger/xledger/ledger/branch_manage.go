@@ -66,7 +66,7 @@ func (l *Ledger) HandleFork(oldTip []byte, newTip []byte, batchWrite kvdb.Batch)
 	}
 	// 将老分支剪一下
 	for !bytes.Equal(oldTip, commonParentBlockid) {
-		oldBlock, oldBlockErr := l.fetchBlock(oldTip)
+		oldBlock, oldBlockErr := l.fetchBlockForModify(oldTip)
 		if oldBlockErr != nil {
 			return nil, oldBlockErr
 		}
@@ -79,14 +79,14 @@ func (l *Ledger) HandleFork(oldTip []byte, newTip []byte, batchWrite kvdb.Batch)
 		}
 	}
 	// 将新分支修一下
-	newBlock, newBlockErr := l.fetchBlock(newTip)
+	newBlock, newBlockErr := l.fetchBlockForModify(newTip)
 	if newBlockErr != nil {
 		return nil, newBlockErr
 	}
 	newPreBlockid := newBlock.PreHash
 	nextHash := []byte{}
 	for !bytes.Equal(newTip, commonParentBlockid) {
-		newBlock, newBlockErr := l.fetchBlock(newTip)
+		newBlock, newBlockErr := l.fetchBlockForModify(newTip)
 		if newBlockErr != nil {
 			return nil, newBlockErr
 		}
