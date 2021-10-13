@@ -47,7 +47,7 @@ var (
 const (
 	UTXOLockExpiredSecond = 60
 	LatestBlockKey        = "pointer"
-	UTXOCacheSize         = 1000
+	UTXOCacheSize         = 100000
 	OfflineTxChanBuffer   = 100000
 
 	// TxVersion 为所有交易使用的版本

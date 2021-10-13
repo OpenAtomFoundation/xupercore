@@ -37,7 +37,7 @@ func GetDefLedgerConf() *XLedgerConf {
 		OtherPaths:   nil,
 		StorageType:  "",
 		Utxo: UtxoConfig{
-			CacheSize:      1000,
+			CacheSize:      100000,
 			TmpLockSeconds: 60,
 		},
 	}
