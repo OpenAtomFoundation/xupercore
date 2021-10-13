@@ -1,6 +1,8 @@
 package chained_bft
 
 import (
+	"errors"
+
 	"github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/storage"
 )
 
@@ -15,6 +17,10 @@ type PacemakerInterface interface {
 	AdvanceView(qc storage.QuorumCertInterface) (bool, error)
 }
 
+var (
+	ErrNilQC = errors.New("pacemaker meets a nil qc")
+)
+
 // DefaultPaceMaker 是一个PacemakerInterface的默认实现，我们与PacemakerInterface放置在一起，方便查看
 // PacemakerInterface的新实现直接直接替代DefaultPaceMaker即可
 // The Pacemaker keeps track of votes and of time.
@@ -25,6 +31,9 @@ type DefaultPaceMaker struct {
 }
 
 func (p *DefaultPaceMaker) AdvanceView(qc storage.QuorumCertInterface) (bool, error) {
+	if qc == nil {
+		return false, ErrNilQC
+	}
 	r := qc.GetProposalView()
 	if r+1 > p.CurrentView {
 		p.CurrentView = r + 1
