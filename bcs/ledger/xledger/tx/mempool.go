@@ -811,12 +811,8 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 			delete(m.orphans, n.txid)
 			m.unconfirmed[n.txid] = n
 			for _, cn := range n.getAllChildren() {
-				q.PushBack(cn)
-			}
-		} else {
-			for _, fn := range n.getAllParent() {
-				if _, ok := m.orphans[fn.txid]; ok {
-					q.PushBack(fn)
+				if _, ok := m.orphans[cn.txid]; ok {
+					q.PushBack(cn)
 				}
 			}
 		}
