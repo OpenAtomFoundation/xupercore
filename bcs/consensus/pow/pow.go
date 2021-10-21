@@ -229,7 +229,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 	if err != nil {
 		ctx.GetLog().Warn("PoW::CheckMinerMatch::verifyECDSA error", "error", err, "miner", string(block.GetProposer()))
 	}
-	if valid && pow.Ledger.GetTipBlock().GetHeight() < block.GetHeight() {
+	if valid && pow.Ledger.QueryTipBlockHeader().GetHeight() < block.GetHeight() {
 		pow.status.newHeight = block.GetHeight()
 		pow.newblock <- block.GetHeight()
 	}
@@ -238,7 +238,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 
 // ProcessBeforeMiner 更新下一次pow挖矿时的targetBits
 func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
-	tipHeight := pow.Ledger.GetTipBlock().GetHeight()
+	tipHeight := pow.Ledger.QueryTipBlockHeader().GetHeight()
 	preBlock, err := pow.Ledger.QueryBlockHeaderByHeight(tipHeight)
 	if err != nil {
 		pow.XLog.Error("PoW::ProcessBeforeMiner::cannnot find preBlock", "logid", pow.XLog.GetLogId())
@@ -261,7 +261,7 @@ func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, er
 
 // ProcessConfirmBlock 此处更新最新的block高度
 func (pow *PoWConsensus) ProcessConfirmBlock(block context.BlockInterface) error {
-	if pow.Ledger.GetTipBlock().GetHeight() < block.GetHeight() {
+	if pow.Ledger.QueryTipBlockHeader().GetHeight() < block.GetHeight() {
 		pow.status.newHeight = block.GetHeight()
 	}
 	return nil
