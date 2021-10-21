@@ -38,8 +38,8 @@ func (m *ChainManagerImpl) Stop(chainName string) error {
 	if err != nil {
 		return err
 	}
-	c.Stop()
 	m.chains.Delete(chainName)
+	c.Stop()
 	return nil
 }
 
