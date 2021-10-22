@@ -397,8 +397,14 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 			return common.NewContractErrResponse(common.StatusErr, "Internal error."), err
 		}
 	}
-	r := `{"nominate":` + fmt.Sprintf("%v", nominateValue) + `,"vote":` + fmt.Sprintf("%v", voteMap) + `,"revoke":` + fmt.Sprintf("%v", revokeValue) + `}`
-	return common.NewContractOKResponse([]byte(r)), nil
+
+	return_map := map[string]interface{}{
+		"nominate": nominateValue,
+		"vote":     voteMap,
+		"revoke":   revokeValue,
+	}
+	return_bytes, _ := json.Marshal(return_map)
+	return common.NewContractOKResponse(return_bytes), nil
 }
 
 func (tp *tdposConsensus) checkArgs(txArgs map[string][]byte) (string, error) {
