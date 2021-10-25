@@ -203,6 +203,9 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 			size := proto.Size(tx)
 			if size > sizeLimit {
 				return false
+			} else if size == sizeLimit {
+				result = append(result, tx)
+				return false
 			}
 			sizeLimit -= size
 		}
@@ -266,6 +269,9 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 		if sizeLimit > 0 {
 			size := proto.Size(tx)
 			if size > sizeLimit {
+				return false
+			} else if size == sizeLimit {
+				result = append(result, tx)
 				return false
 			}
 			sizeLimit -= size
