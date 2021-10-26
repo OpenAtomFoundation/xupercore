@@ -121,7 +121,7 @@ func (s *DefaultSaftyRules) CalVotesThreshold(input, sum int) bool {
 // 需要注意的是，在上层bcs的实现中，由于共识操纵了账本回滚。因此实际上safetyrules需要proposalRound和parentRound严格相邻的
 // 因此在此proposal和parent的QC稍微宽松检查
 func (s *DefaultSaftyRules) CheckProposal(proposal, parent storage.QuorumCertInterface, justifyValidators []string) error {
-	if proposal.GetProposalView() < s.lastVoteRound-StrictInternal {
+	if proposal.GetProposalView() < s.lastVoteRound-PermissiveInternal {
 		return TooLowProposalView
 	}
 	if justifyValidators == nil {
