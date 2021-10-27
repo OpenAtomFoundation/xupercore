@@ -16,6 +16,7 @@ type XLedgerConf struct {
 	Utxo           UtxoConfig `yaml:"utxo,omitempty"`
 	BlockCacheSize int        `yaml:"blockCacheSize,omitempty"`
 	TxCacheSize    int        `yaml:"txCacheSize,omitempty"`
+	MempoolTxSize  int        `yaml:"mempoolTxSize,omitempty"`
 }
 
 type UtxoConfig struct {

@@ -17,7 +17,7 @@ const (
 	defaultMempoolConfirmedLen   = defaultMempoolUnconfirmedLen / 2 // 默认确认交易表大小为2500。
 	defaultMempoolOrphansLen     = defaultMempoolUnconfirmedLen / 5 // 默认孤儿交易表大小为1000。
 
-	defaultMaxTxCount = 100000 // 默认 mempool 中最多10w个未确认交易。
+	defaultMaxTxSize = 100000 // 默认 mempool 中最多10w个未确认交易。
 )
 
 var (
@@ -48,9 +48,13 @@ type Mempool struct {
 }
 
 // NewMempool new mempool.
-func NewMempool(tx *Tx, log logs.Logger) *Mempool {
+func NewMempool(tx *Tx, log logs.Logger, txSize int) *Mempool {
+	if txSize <= 0 {
+		txSize = defaultMaxTxSize
+	}
 	m := &Mempool{
 		log:            log,
+		txSize:         txSize,
 		Tx:             tx,
 		confirmed:      make(map[string]*Node, defaultMempoolConfirmedLen),
 		unconfirmed:    make(map[string]*Node, defaultMempoolUnconfirmedLen),
@@ -149,6 +153,13 @@ func (m *Mempool) GetTxCounnt() int {
 	return len(m.unconfirmed) + len(m.orphans)
 }
 
+// Full 交易池满了返回 true
+func (m *Mempool) Full() bool {
+	m.m.Lock()
+	defer m.m.Unlock()
+	return len(m.unconfirmed) >= m.txSize
+}
+
 // PutTx put tx. TODO：后续判断新增的交易是否会导致循环依赖。
 func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	if tx == nil {
@@ -157,8 +168,8 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	m.m.Lock()
 	defer m.m.Unlock()
 
-	if len(m.unconfirmed) >= defaultMaxTxCount {
-		return errors.New("Mempool is full")
+	if len(m.unconfirmed) >= m.txSize {
+		return errors.New("The tx mempool is full")
 	}
 
 	m.log.Debug("Mempool PutTx", "txid", tx.HexTxid())
