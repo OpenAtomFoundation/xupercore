@@ -140,9 +140,19 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool, genesisCfg []byte) (*Ledge
 	ledger.heightTable = kvdb.NewTable(baseDB, pb.BlockHeightPrefix)
 	ledger.xlog = lctx.XLog
 	ledger.meta = &pb.LedgerMeta{}
-	ledger.blockCache = cache.NewLRUCache(BlockCacheSize)
-	ledger.blkHeaderCache = cache.NewLRUCache(BlockCacheSize)
-	ledger.txCache = cache.NewLRUCache(TxCacheSize)
+
+	blockCache := BlockCacheSize
+	if lctx.LedgerCfg.BlockCacheSize != 0 {
+		blockCache = lctx.LedgerCfg.BlockCacheSize
+	}
+	ledger.blockCache = cache.NewLRUCache(blockCache)
+	ledger.blkHeaderCache = cache.NewLRUCache(blockCache)
+
+	txCache := TxCacheSize
+	if lctx.LedgerCfg.TxCacheSize != 0 {
+		blockCache = lctx.LedgerCfg.TxCacheSize
+	}
+	ledger.txCache = cache.NewLRUCache(txCache)
 	ledger.confirmBatch = baseDB.NewBatch()
 	metaBuf, metaErr := ledger.metaTable.Get([]byte(""))
 	emptyLedger := false
