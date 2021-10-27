@@ -46,7 +46,9 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 		"stopChain":   t.stopChain,
 	}
 	for method, f := range kMethods {
-		register.RegisterKernMethod(ParaChainKernelContract, method, f)
+		if _, err := register.GetKernMethod(ParaChainKernelContract, method); err != nil {
+			register.RegisterKernMethod(ParaChainKernelContract, method, f)
+		}
 	}
 
 	// 仅主链绑定handleCreateChain 从链上下文中获取链绑定的异步任务worker
