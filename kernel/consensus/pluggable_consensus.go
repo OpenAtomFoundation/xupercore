@@ -228,10 +228,10 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 			return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
 		}
 	}
-	// 检查新共识，仅允许共识升级为老共识实例，不允许升级为同名新共识实例，如Tdpos升级成Xpos升级成Tdpos，两个Tdpos配置必须相同
-	if checkSameNameConsensus(c, cfg) {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::same name consensus.")
-		return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
+	// 检查新共识配置是否正确
+	if err := CheckConsensusVersion(c, cfg); err != nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::wrong version value, pls check your proposal file.", "error", err)
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
 	c[len(c)] = *cfg
 	newBytes, err := json.Marshal(c)
@@ -342,7 +342,7 @@ func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error)
 type stepConsensus struct {
 	cons []ConsensusInterface
 	// mutex保护StepConsensus数据结构cons的读写操作
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 // 向可插拔共识数组put item
@@ -356,8 +356,8 @@ func (sc *stepConsensus) put(con ConsensusInterface) error {
 // 获取最新的共识实例
 func (sc *stepConsensus) tail() ConsensusInterface {
 	//getCurrentConsensusComponent
-	sc.mutex.RLock()
-	sc.mutex.RUnlock()
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
 	if len(sc.cons) == 0 {
 		return nil
 	}
@@ -365,8 +365,8 @@ func (sc *stepConsensus) tail() ConsensusInterface {
 }
 
 func (sc *stepConsensus) len() int {
-	sc.mutex.RLock()
-	sc.mutex.RUnlock()
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
 	return len(sc.cons)
 }
 
@@ -400,34 +400,74 @@ func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) (base.
 	return nil, ConsensusNotRegister
 }
 
-// checkSameNameConsensus 不允许同名但配置文件不同的共识新组件
-func checkSameNameConsensus(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) bool {
-	for k, v := range hisMap {
-		if v.ConsensusName != cfg.ConsensusName {
-			continue
-		}
-		if v.Config == cfg.Config {
-			if k != len(hisMap)-1 { // 允许回到历史共识实例
-				return false
-			}
-			return true // 不允许相同共识配置的升级，无意义
-		}
-		// 比对Version和bft组件是否一致即可
-		type tempStruct struct {
-			EnableBFT map[string]bool `json:"bft_config,omitempty"`
-		}
-		var newConf tempStruct
-		if err := json.Unmarshal([]byte(cfg.Config), &newConf); err != nil {
-			return true
-		}
-		var oldConf tempStruct
-		if err := json.Unmarshal([]byte(v.Config), &oldConf); err != nil {
-			return true
-		}
-		// 共识名称相同，注意: xpos和tdpos在name上都称为tdpos，但xpos的enableBFT!=nil
-		if (newConf.EnableBFT != nil && oldConf.EnableBFT != nil) || (newConf.EnableBFT == nil && oldConf.EnableBFT == nil) {
-			return true // 不允许同一共识名称的升级，如Tdpos不可以做配置升级，只能做配置回滚，如升级到xpos再升级回原来的tdpos
+type configFilter struct {
+	Version int64 `json:"version,omitempty"`
+}
+
+type oldConfigFilter struct {
+	Version string `json:"version,omitempty"`
+}
+
+// CheckConsensusConfig 同名配置文件检查:
+// 1. 同名下Version若存在，需递增排列
+func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) error {
+	// 历史原因，tdpos和single的Version为字符串格式，后续xpoa使用int格式
+	stringVersionMap := map[string]bool{
+		"tdpos":  true,
+		"single": true,
+	}
+	intVersionMap := map[string]bool{
+		"xpoa": true,
+	}
+
+	// 检查新增共识item version是否符合要求
+	if _, ok := stringVersionMap[cfg.ConsensusName]; !ok {
+		if _, ok := intVersionMap[cfg.ConsensusName]; !ok {
+			return nil
 		}
 	}
-	return false
+	var err error
+	var newConf configFilter
+	if _, ok := stringVersionMap[cfg.ConsensusName]; ok {
+		var tmpItem oldConfigFilter
+		if err = json.Unmarshal([]byte(cfg.Config), &tmpItem); err != nil {
+			return errors.New("wrong parameter version, version type shoud be string")
+		}
+		if newConf.Version, err = strconv.ParseInt(tmpItem.Version, 10, 64); err != nil {
+			return err
+		}
+	}
+	if _, ok := intVersionMap[cfg.ConsensusName]; ok {
+		if err := json.Unmarshal([]byte(cfg.Config), &newConf); err != nil {
+			return errors.New("wrong parameter version, version type shoud be int")
+		}
+	}
+
+	// 获取历史最近共识实例，初始状态下历史共识没有version字段的，需手动添加
+	var configSlice []configFilter
+	for i := len(hisMap) - 1; i >= 0; i-- {
+		configItem := hisMap[i]
+		if configItem.ConsensusName != cfg.ConsensusName {
+			continue
+		}
+		if _, ok := stringVersionMap[configItem.ConsensusName]; ok {
+			var tmpItem oldConfigFilter
+			var version int64
+			if err := json.Unmarshal([]byte(configItem.Config), &tmpItem); err == nil {
+				version, _ = strconv.ParseInt(tmpItem.Version, 10, 64)
+			}
+			configSlice = append(configSlice, configFilter{Version: version})
+			break
+		}
+		if _, ok := intVersionMap[configItem.ConsensusName]; ok {
+			var filterItem configFilter
+			json.Unmarshal([]byte(configItem.Config), &filterItem)
+			configSlice = append(configSlice, filterItem)
+			break
+		}
+	}
+	if len(configSlice) == 0 || configSlice[len(configSlice)-1].Version < newConf.Version {
+		return nil
+	}
+	return errors.New("a same consensus with a lower version, pls check your version")
 }

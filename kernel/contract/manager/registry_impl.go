@@ -31,10 +31,12 @@ func (r *registryImpl) RegisterKernMethod(ctract, method string, handler contrac
 		contractMap = make(map[string]contract.KernMethod)
 		r.methods[ctract] = contractMap
 	}
-	_, ok = contractMap[method]
-	if ok {
-		panic(fmt.Sprintf("kernel method `%s' for `%s' exists", method, ctract))
-	}
+	/*
+		_, ok = contractMap[method]
+		if ok {
+			panic(fmt.Sprintf("kernel method `%s' for `%s' exists", method, ctract))
+		}
+	*/
 	contractMap[method] = handler
 }
 

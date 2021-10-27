@@ -100,9 +100,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		contractGetValidates: xpoa.methodGetValidates,
 	}
 	for method, f := range xpoaKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
 			cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
-		}
 	}
 
 	// 凡属于共识升级的逻辑，新建的Xpoa实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
