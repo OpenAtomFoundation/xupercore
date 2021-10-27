@@ -157,7 +157,7 @@ func (s *tdposSchedule) GetLeader(round int64) string {
 	if proposers == nil {
 		return ""
 	}
-	addTime := s.calAddTime(round, s.ledger.GetTipBlock().GetHeight())
+	addTime := s.calAddTime(round, s.ledger.QueryTipBlockHeader().GetHeight())
 	_, pos, _ := s.minerScheduling(time.Now().UnixNano() + addTime)
 	if pos >= s.proposerNum {
 		return ""
@@ -222,7 +222,7 @@ func (s *tdposSchedule) CalculateProposers(height int64) ([]string, error) {
 	if height < s.startHeight+3 {
 		return s.initValidators, nil
 	}
-	addTime := s.calAddTime(height, s.ledger.GetTipBlock().GetHeight())
+	addTime := s.calAddTime(height, s.ledger.QueryTipBlockHeader().GetHeight())
 	inputTerm, _, _ := s.minerScheduling(time.Now().UnixNano() + addTime)
 	if s.curTerm == inputTerm {
 		return s.validators, nil
@@ -303,7 +303,7 @@ func (s *tdposSchedule) CalOldProposers(height int64, timestamp int64, storage [
 	if height < s.startHeight+3 {
 		return s.initValidators, nil
 	}
-	tipHeight := s.ledger.GetTipBlock().GetHeight()
+	tipHeight := s.ledger.QueryTipBlockHeader().GetHeight()
 	if tipHeight > height {
 		// 情况一：读取历史值，height对应区块存在于账本中，此时分成历史Key读取和计算差值两部分
 		return s.calHisValidators(height)
