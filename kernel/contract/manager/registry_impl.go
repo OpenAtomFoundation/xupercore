@@ -31,13 +31,20 @@ func (r *registryImpl) RegisterKernMethod(ctract, method string, handler contrac
 		contractMap = make(map[string]contract.KernMethod)
 		r.methods[ctract] = contractMap
 	}
-	/*
-		_, ok = contractMap[method]
-		if ok {
-			panic(fmt.Sprintf("kernel method `%s' for `%s' exists", method, ctract))
-		}
-	*/
+	_, ok = contractMap[method]
+	if ok {
+		panic(fmt.Sprintf("kernel method `%s' for `%s' exists", method, ctract))
+	}
 	contractMap[method] = handler
+}
+
+func (r *registryImpl) UnregisterKernMethod(ctract, method string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if contractMap, ok := r.methods[ctract]; ok {
+		delete(contractMap, method)
+	}
 }
 
 func (r *registryImpl) RegisterShortcut(oldmethod, contract, method string) {

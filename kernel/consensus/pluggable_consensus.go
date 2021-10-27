@@ -191,23 +191,13 @@ func (pc *PluggableConsensus) proposalArgsUnmarshal(ctxArgs map[string][]byte) (
 
 // updateConsensus 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
 // 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
+// 若同名共识且version相同，则使用历史的配置，否则version需要递增序列
 func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*contract.Response, error) {
 	// 解析用户合约信息，包括待升级名称name、trigger高度height和待升级配置config
 	cfg, err := pc.proposalArgsUnmarshal(contractCtx.Args())
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	consensusItem, err := pc.makeConsensusItem(pc.ctx, *cfg)
-	if err != nil {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::make consensu item error! Use old one.", "error", err.Error())
-		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
-	}
-	transCon, ok := consensusItem.(ConsensusInterface)
-	if !ok {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
-		return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
-	}
-	pc.ctx.XLog.Debug("Pluggable Consensus::updateConsensus::make a new consensus item successfully during updating process.")
 
 	// 更新合约存储, 注意, 此次更新需要检查是否是初次升级情况，此时需要把genesisConf也写进map中
 	pluggableConfig, err := contractCtx.Get(contractBucket, []byte(consensusKey))
@@ -228,12 +218,26 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 			return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
 		}
 	}
+
 	// 检查新共识配置是否正确
 	if err := CheckConsensusVersion(c, cfg); err != nil {
 		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::wrong version value, pls check your proposal file.", "error", err)
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	c[len(c)] = *cfg
+
+	// 生成新的共识实例
+	consensusItem, err := pc.makeConsensusItem(pc.ctx, c[len(c)-1])
+	if err != nil {
+		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::make consensu item error! Use old one.", "error", err.Error())
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
+	}
+	transCon, ok := consensusItem.(ConsensusInterface)
+	if !ok {
+		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
+		return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
+	}
+	pc.ctx.XLog.Debug("Pluggable Consensus::updateConsensus::make a new consensus item successfully during updating process.")
+
 	newBytes, err := json.Marshal(c)
 	if err != nil {
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::marshal error", "error", err)
@@ -402,6 +406,7 @@ func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) (base.
 
 type configFilter struct {
 	Version int64 `json:"version,omitempty"`
+	index   int   `json:"-"`
 }
 
 type oldConfigFilter struct {
@@ -409,7 +414,9 @@ type oldConfigFilter struct {
 }
 
 // CheckConsensusConfig 同名配置文件检查:
-// 1. 同名下Version若存在，需递增排列
+// 1. 若历史相同version，则直接返回历史cfg
+// 2. 若不存在，需要比历史最大值大
+// 3. 将合法的配置写到map中
 func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) error {
 	// 历史原因，tdpos和single的Version为字符串格式，后续xpoa使用int格式
 	stringVersionMap := map[string]bool{
@@ -423,6 +430,7 @@ func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.Consensu
 	// 检查新增共识item version是否符合要求
 	if _, ok := stringVersionMap[cfg.ConsensusName]; !ok {
 		if _, ok := intVersionMap[cfg.ConsensusName]; !ok {
+			hisMap[len(hisMap)] = *cfg
 			return nil
 		}
 	}
@@ -456,17 +464,39 @@ func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.Consensu
 			if err := json.Unmarshal([]byte(configItem.Config), &tmpItem); err == nil {
 				version, _ = strconv.ParseInt(tmpItem.Version, 10, 64)
 			}
-			configSlice = append(configSlice, configFilter{Version: version})
-			break
+			configSlice = append(configSlice, configFilter{
+				Version: version,
+				index:   i,
+			})
+			continue
 		}
 		if _, ok := intVersionMap[configItem.ConsensusName]; ok {
 			var filterItem configFilter
 			json.Unmarshal([]byte(configItem.Config), &filterItem)
+			filterItem.index = i
 			configSlice = append(configSlice, filterItem)
-			break
+			continue
 		}
 	}
-	if len(configSlice) == 0 || configSlice[len(configSlice)-1].Version < newConf.Version {
+	if len(configSlice) == 0 {
+		hisMap[len(hisMap)] = *cfg
+		return nil
+	}
+	// 若为历史version，则直接返回
+	var maxVersion int64
+	for _, v := range configSlice {
+		if v.Version == newConf.Version {
+			hisConfig := hisMap[v.index]
+			hisMap[len(hisMap)] = hisConfig
+			return nil
+		}
+		if maxVersion < v.Version {
+			maxVersion = v.Version
+		}
+	}
+	// 否则需要比之前的version都大
+	if maxVersion < newConf.Version {
+		hisMap[len(hisMap)] = *cfg
 		return nil
 	}
 	return errors.New("a same consensus with a lower version, pls check your version")

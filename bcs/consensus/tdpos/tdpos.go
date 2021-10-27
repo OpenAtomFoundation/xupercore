@@ -92,6 +92,8 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		contractGetTdposInfos:     tdpos.runGetTdposInfos,
 	}
 	for method, f := range tdposKMethods {
+		// 若有历史句柄，删除老句柄
+		cCtx.Contract.GetKernRegistry().UnregisterKernMethod(schedule.bindContractBucket, method)
 		cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
 	}
 

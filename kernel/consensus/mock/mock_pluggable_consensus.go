@@ -388,6 +388,10 @@ func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contr
 	r.M[method] = handler
 }
 
+func (r *FakeRegistry) UnregisterKernMethod(ctract, method string) {
+	return
+}
+
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {
 	return nil, nil
 }
