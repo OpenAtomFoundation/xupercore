@@ -194,6 +194,7 @@ func (t *Tx) QueryTx(txid []byte) (*pb.Transaction, error) {
 func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, error) {
 	result := make([]*pb.Transaction, 0, 100)
 
+	txSizeSum := 0
 	f := func(tx *pb.Transaction) bool {
 		if dedup && t.ledger.IsTxInTrunk([]byte(tx.Txid)) {
 			return true
@@ -201,10 +202,10 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 
 		if sizeLimit > 0 {
 			size := proto.Size(tx)
-			if size > sizeLimit {
+			txSizeSum += size
+			if txSizeSum > sizeLimit {
 				return false
 			}
-			sizeLimit -= size
 		}
 		result = append(result, tx)
 		return true
@@ -257,6 +258,7 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 	var totalDelay int64
 	now := time.Now().UnixNano()
 
+	txSizeSum := 0
 	f := func(tx *pb.Transaction) bool {
 		txDelay := (now - tx.ReceivedTimestamp)
 		totalDelay += txDelay
@@ -265,10 +267,10 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 		}
 		if sizeLimit > 0 {
 			size := proto.Size(tx)
-			if size > sizeLimit {
+			txSizeSum += size
+			if txSizeSum > sizeLimit {
 				return false
 			}
-			sizeLimit -= size
 		}
 
 		result = append(result, tx)
