@@ -10,10 +10,12 @@ import (
 
 type XLedgerConf struct {
 	// kv storage type
-	KVEngineType string     `yaml:"kvEngineType,omitempty"`
-	OtherPaths   []string   `yaml:"otherPaths,omitempty"`
-	StorageType  string     `yaml:"storageType,omitempty"`
-	Utxo         UtxoConfig `yaml:"utxo,omitempty"`
+	KVEngineType   string     `yaml:"kvEngineType,omitempty"`
+	OtherPaths     []string   `yaml:"otherPaths,omitempty"`
+	StorageType    string     `yaml:"storageType,omitempty"`
+	Utxo           UtxoConfig `yaml:"utxo,omitempty"`
+	BlockCacheSize int        `yaml:"blockCacheSize,omitempty"`
+	TxCacheSize    int        `yaml:"txCacheSize,omitempty"`
 }
 
 type UtxoConfig struct {
@@ -37,7 +39,7 @@ func GetDefLedgerConf() *XLedgerConf {
 		OtherPaths:   nil,
 		StorageType:  "",
 		Utxo: UtxoConfig{
-			CacheSize:      1000,
+			CacheSize:      100000,
 			TmpLockSeconds: 60,
 		},
 	}
