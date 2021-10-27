@@ -16,6 +16,8 @@ const (
 	defaultMempoolUnconfirmedLen = 5000                             // 默认未确认交易表大小为5000。
 	defaultMempoolConfirmedLen   = defaultMempoolUnconfirmedLen / 2 // 默认确认交易表大小为2500。
 	defaultMempoolOrphansLen     = defaultMempoolUnconfirmedLen / 5 // 默认孤儿交易表大小为1000。
+
+	defaultMaxTxCount = 100000 // 默认 mempool 中最多10w个未确认交易。
 )
 
 var (
@@ -31,6 +33,8 @@ var (
 // Mempool tx mempool.
 type Mempool struct {
 	log logs.Logger
+
+	txSize int
 
 	Tx *Tx
 	// 所有的交易都在下面的三个集合中。三个集合中的元素不会重复。
@@ -152,6 +156,10 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	}
 	m.m.Lock()
 	defer m.m.Unlock()
+
+	if len(m.unconfirmed) >= defaultMaxTxCount {
+		return errors.New("Mempool is full")
+	}
 
 	m.log.Debug("Mempool PutTx", "txid", tx.HexTxid())
 
