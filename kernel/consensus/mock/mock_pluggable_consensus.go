@@ -367,6 +367,9 @@ func (c *FakeKContext) QueryBlock(blockid []byte) (*xldgpb.InternalBlock, error)
 func (c *FakeKContext) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 	return &pb.Transaction{}, nil
 }
+func (c *FakeKContext) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
+	return nil, nil
+}
 
 type FakeManager struct {
 	R *FakeRegistry
@@ -382,6 +385,10 @@ func (m *FakeManager) NewStateSandbox(cfg *contract.SandboxConfig) (contract.Sta
 
 func (m *FakeManager) GetKernRegistry() contract.KernRegistry {
 	return m.R
+}
+
+func (m *FakeManager) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
+	return nil, nil
 }
 
 type FakeRegistry struct {

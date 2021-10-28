@@ -1,9 +1,11 @@
 package contract
 
 import (
+	"math/big"
+
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
-	"math/big"
 )
 
 type SandboxConfig struct {
@@ -41,6 +43,7 @@ type UTXOState interface {
 
 // CrossQueryState 对XuperBridge暴露对跨链只读合约的操作能力
 type CrossQueryState interface {
+	CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error)
 }
 
 type ContractEventState interface {

@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"math/big"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
 )
@@ -47,9 +49,9 @@ type XMCache struct {
 
 	model ledger.XMReader
 
-	utxoSandbox *utxo.UTXOSandbox
-	// crossQueryCache *CrossQueryCache
-	events []*protos.ContractEvent
+	utxoSandbox     *utxo.UTXOSandbox
+	crossQueryCache *CrossQueryCache
+	events          []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
@@ -60,7 +62,7 @@ func NewXModelCache(cfg *contract.SandboxConfig) *XMCache {
 		outputsCache: NewMemXModel(),
 		utxoSandbox:  utxo.NewUTXOSandbox(cfg),
 
-		// crossQueryCache: NewCrossQueryCache(),
+		crossQueryCache: NewCrossQueryCache(),
 	}
 }
 
@@ -371,9 +373,9 @@ func (xc *XMCache) flushUTXORWSet() error {
 //}
 
 // CrossQuery will query contract from other chain
-//func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
-//	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
-//}
+func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
+	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
+}
 
 // ParseCrossQuery parse cross query from tx
 //func ParseCrossQuery(tx *pb.Transaction) ([]*pb.CrossQueryInfo, error) {
