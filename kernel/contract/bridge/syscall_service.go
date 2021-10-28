@@ -198,39 +198,39 @@ func (c *SyscallService) ContractCall(ctx context.Context, in *pb.ContractCallRe
 
 // CrossContractQuery implements Syscall interface
 func (c *SyscallService) CrossContractQuery(ctx context.Context, in *pb.CrossContractQueryRequest) (*pb.CrossContractQueryResponse, error) {
-	return nil, ErrNotImplementation
-	// nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
-	// if !ok {
-	// 	return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
-	// }
+	// return nil, ErrNotImplementation
+	nctx, ok := c.ctxmgr.Context(in.GetHeader().Ctxid)
+	if !ok {
+		return nil, fmt.Errorf("bad ctx id:%d", in.Header.Ctxid)
+	}
 
-	// crossChainURI, err := ParseCrossChainURI(in.GetUri())
-	// if err != nil {
-	// 	return nil, fmt.Errorf("ParseCrossChainURI error, err:%s ctx id:%d", err.Error(), in.Header.Ctxid)
-	// }
+	crossChainURI, err := ParseCrossChainURI(in.GetUri())
+	if err != nil {
+		return nil, fmt.Errorf("ParseCrossChainURI error, err:%s ctx id:%d", err.Error(), in.Header.Ctxid)
+	}
 
-	// crossQueryMeta, err := nctx.Core.ResolveChain(crossChainURI.GetChainName())
-	// if err != nil {
-	// 	return nil, fmt.Errorf("ResolveChain error, err:%s ctx id:%d", err.Error(), in.Header.Ctxid)
-	// }
+	crossQueryMeta, err := nctx.Core.ResolveChain(crossChainURI.GetChainName())
+	if err != nil {
+		return nil, fmt.Errorf("ResolveChain error, err:%s ctx id:%d", err.Error(), in.Header.Ctxid)
+	}
 
-	// // Assemble crossQueryRequest
-	// crossQueryRequest := &xchainpb.CrossQueryRequest{}
-	// crossScheme := GetChainScheme(crossChainURI.GetScheme())
-	// crossQueryRequest, err = crossScheme.GetCrossQueryRequest(crossChainURI, in.GetArgs(), nctx.GetInitiator(), nctx.GetAuthRequire())
-	// if err != nil {
-	// 	return nil, fmt.Errorf("GetCrossQueryRequest error, err:%s ctx id: %d", err.Error(), in.Header.Ctxid)
-	// }
+	// Assemble crossQueryRequest
+	crossQueryRequest := &pb.CrossQueryRequest{}
+	crossScheme := GetChainScheme(crossChainURI.GetScheme())
+	crossQueryRequest, err = crossScheme.GetCrossQueryRequest(crossChainURI, in.GetArgs(), nctx.GetInitiator(), nctx.GetAuthRequire())
+	if err != nil {
+		return nil, fmt.Errorf("GetCrossQueryRequest error, err:%s ctx id: %d", err.Error(), in.Header.Ctxid)
+	}
 
-	// // CrossQuery cross query from other chain
-	// contractResponse, err := nctx.Store.CrossQuery(crossQueryRequest, crossQueryMeta)
-	// return &pb.CrossContractQueryResponse{
-	// 	Response: &pb.Response{
-	// 		Status:  contractResponse.GetStatus(),
-	// 		Message: contractResponse.GetMessage(),
-	// 		Body:    contractResponse.GetBody(),
-	// 	},
-	// }, err
+	// CrossQuery cross query from other chain
+	contractResponse, err := nctx.State.CrossQuery(crossQueryRequest, crossQueryMeta)
+	return &pb.CrossContractQueryResponse{
+		Response: &pb.Response{
+			Status:  contractResponse.GetStatus(),
+			Message: contractResponse.GetMessage(),
+			Body:    contractResponse.GetBody(),
+		},
+	}, err
 }
 
 // PutObject implements Syscall interface

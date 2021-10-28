@@ -43,3 +43,8 @@ func (t *ChainCoreAgent) QueryTransaction(txid []byte) (*pb.Transaction, error) 
 func (t *ChainCoreAgent) QueryBlock(blockid []byte) (ledger.BlockHandle, error) {
 	return t.chainCtx.State.QueryBlock(blockid)
 }
+
+// CrossQuery query contract from otherchain
+func (t *ChainCoreAgent) ResolveChain(chainName string) (*pb.CrossQueryMeta, error) {
+	return t.chainCtx.State.ResolveChain(chainName)
+}

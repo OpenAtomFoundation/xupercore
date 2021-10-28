@@ -1,5 +1,7 @@
 package contract
 
+import "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
+
 type KernRegistry interface {
 	RegisterKernMethod(contract, method string, handler KernMethod)
 	// RegisterShortcut 用于contractName缺失的时候选择哪个合约名字和合约方法来执行对应的kernel合约
@@ -26,4 +28,6 @@ type KContext interface {
 
 	// 合约异步事件调用
 	EmitAsyncTask(event string, args interface{}) error
+
+	CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error)
 }
