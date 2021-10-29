@@ -24,6 +24,7 @@ type LedgerRely interface {
 	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)
 	CreateSnapshot(blkId []byte) (ledger.XMReader, error)
 	GetTipSnapshot() (ledger.XMReader, error)
+	QueryTipBlockHeader() ledger.BlockHandle
 }
 
 // ConsensusCtx共识运行环境上下文

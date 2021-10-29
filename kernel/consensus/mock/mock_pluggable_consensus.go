@@ -227,6 +227,10 @@ func (l *FakeLedger) GetTipBlock() ledger.BlockHandle {
 	return l.ledgerSlice[len(l.ledgerSlice)-1]
 }
 
+func (l *FakeLedger) QueryTipBlockHeader() ledger.BlockHandle {
+	return l.GetTipBlock()
+}
+
 func (l *FakeLedger) GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) {
 	return l.sandbox, nil
 }
