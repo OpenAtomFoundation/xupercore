@@ -90,6 +90,8 @@ func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 	if target > 256 {
 		pow.bitcoinFlag = true
 	}
+	pow.targetBits = target
+	pow.maxDifficulty = big.NewInt(int64(config.MaxTarget))
 	// 重启时需要重新更新目标target
 	tipBlock := cCtx.Ledger.GetTipBlock()
 	if tipBlock.GetHeight() > cCfg.StartHeight {
@@ -101,8 +103,6 @@ func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.C
 		target = bits
 		cCtx.XLog.Debug("PoW::NewPoWConsensus::refreshDifficulty after restart.")
 	}
-	pow.targetBits = target
-	pow.maxDifficulty = big.NewInt(int64(config.MaxTarget))
 	if pow.bitcoinFlag {
 		// 通过MaxTarget和DefaultTarget解析maxDifficulty和DefaultDifficulty
 		md, fNegative, fOverflow := SetCompact(config.MaxTarget)
