@@ -67,7 +67,7 @@ func NewTx(sctx *context.StateCtx, stateDB kvdb.Database) (*Tx, error) {
 		ledger:            sctx.Ledger,
 		maxConfirmedDelay: DefaultMaxConfirmedDelay,
 	}
-	m := NewMempool(tx, tx.log, sctx.LedgerCfg.MempoolTxSize)
+	m := NewMempool(tx, tx.log, sctx.LedgerCfg.MempoolTxLimit)
 	tx.Mempool = m
 	return tx, nil
 }
