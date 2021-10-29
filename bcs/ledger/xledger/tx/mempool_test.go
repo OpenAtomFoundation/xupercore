@@ -22,7 +22,7 @@ func TestPutOrphanTx(t *testing.T) {
 	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
 	l, _ := logs.NewLogger("1111", "test")
 	isTest = true
-	m := NewMempool(nil, l)
+	m := NewMempool(nil, l, 0)
 	id := "orphanTest"
 	input := []*protos.TxInput{{RefTxid: []byte("orphanTest1")}}
 	output := []*protos.TxOutput{{Amount: []byte("1")}}
@@ -73,7 +73,7 @@ func TestConfirmTx(t *testing.T) {
 	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
 	l, _ := logs.NewLogger("1111", "test")
 	isTest = true
-	m := NewMempool(nil, l)
+	m := NewMempool(nil, l, 0)
 	id := "orphanTest"
 	input := []*protos.TxInput{{RefTxid: []byte("orphanTest1")}}
 	output := []*protos.TxOutput{{Amount: []byte("1")}}
@@ -122,7 +122,7 @@ func run(b *testing.B, t *testing.T) {
 	}
 	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
 	l, _ := logs.NewLogger("1111", "test")
-	m := NewMempool(nil, l)
+	m := NewMempool(nil, l, 0)
 	setup(m)
 	// printMempool(m)
 	// return
