@@ -134,7 +134,7 @@ func (m *FakeMeta) GetTipBlockid() []byte {
 }
 
 func GetGenesisConsensusConf() []byte {
-	return []byte("{\"name\":\"fake\",\"config\":\"\"}")
+	return []byte("{\"name\":\"fake\",\"config\":\"{}\"}")
 }
 
 type FakeLedger struct {
