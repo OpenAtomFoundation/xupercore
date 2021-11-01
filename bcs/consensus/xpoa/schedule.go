@@ -105,7 +105,7 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 	}
 	// 计算round对应的timestamp大致区间
 	nTime := time.Now().UnixNano()
-	if round > s.ledger.GetTipBlock().GetHeight() {
+	if round > s.ledger.QueryTipBlockHeader().GetHeight() {
 		nTime += s.period * int64(time.Millisecond)
 	}
 	_, pos, _ := s.minerScheduling(nTime, len(v))

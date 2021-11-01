@@ -130,7 +130,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		CurrentView: cCfg.StartHeight,
 	}
 	// 重启状态检查1，pacemaker需要重置
-	tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
+	tipHeight := cCtx.Ledger.QueryTipBlockHeader().GetHeight()
 	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		pacemaker.CurrentView = tipHeight - 1
 	}
