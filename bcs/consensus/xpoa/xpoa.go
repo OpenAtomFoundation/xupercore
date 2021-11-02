@@ -3,6 +3,7 @@ package xpoa
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -64,7 +65,11 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		cCtx.XLog.Error("Xpoa::NewXpoaConsensus::xpoa struct unmarshal error", "error", err)
 		return nil
 	}
-
+	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
+	if err != nil {
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
+		return nil
+	}
 	// create xpoaSchedule
 	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight)
 	if schedule == nil {
@@ -74,7 +79,7 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 	// 创建status实例
 	status := &XpoaStatus{
 		Name:        "poa",
-		Version:     xconfig.Version,
+		Version:     version,
 		StartHeight: cCfg.StartHeight,
 		Index:       cCfg.Index,
 		election:    schedule,
@@ -98,9 +103,9 @@ func NewXpoaConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.
 		contractGetValidates: xpoa.methodGetValidates,
 	}
 	for method, f := range xpoaKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
-			cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
-		}
+		// 若有历史句柄，删除老句柄
+		cCtx.Contract.GetKernRegistry().UnregisterKernMethod(schedule.bindContractBucket, method)
+		cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
 	}
 
 	// 凡属于共识升级的逻辑，新建的Xpoa实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边

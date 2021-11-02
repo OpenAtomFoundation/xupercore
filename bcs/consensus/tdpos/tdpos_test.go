@@ -16,6 +16,7 @@ import (
 
 func getTdposConsensusConf() string {
 	return `{
+		"version": "2",
         "timestamp": "1559021720000000000",
         "proposer_num": "2",
         "period": "3000",
@@ -34,6 +35,7 @@ func getTdposConsensusConf() string {
 
 func getBFTTdposConsensusConf() string {
 	return `{
+		"version": "2",
         "timestamp": "1559021720000000000",
         "proposer_num": "2",
         "period": "3000",

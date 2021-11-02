@@ -134,7 +134,7 @@ func (m *FakeMeta) GetTipBlockid() []byte {
 }
 
 func GetGenesisConsensusConf() []byte {
-	return []byte("{\"name\":\"fake\",\"config\":\"\"}")
+	return []byte("{\"name\":\"fake\",\"config\":\"{}\"}")
 }
 
 type FakeLedger struct {
@@ -383,6 +383,10 @@ type FakeRegistry struct {
 
 func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contract.KernMethod) {
 	r.M[method] = handler
+}
+
+func (r *FakeRegistry) UnregisterKernMethod(ctract, method string) {
+	return
 }
 
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {
