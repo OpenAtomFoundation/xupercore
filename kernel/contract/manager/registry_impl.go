@@ -38,6 +38,15 @@ func (r *registryImpl) RegisterKernMethod(ctract, method string, handler contrac
 	contractMap[method] = handler
 }
 
+func (r *registryImpl) UnregisterKernMethod(ctract, method string) {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if contractMap, ok := r.methods[ctract]; ok {
+		delete(contractMap, method)
+	}
+}
+
 func (r *registryImpl) RegisterShortcut(oldmethod, contract, method string) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
