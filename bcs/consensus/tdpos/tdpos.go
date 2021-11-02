@@ -92,9 +92,9 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		contractGetTdposInfos:     tdpos.runGetTdposInfos,
 	}
 	for method, f := range tdposKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
-			cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
-		}
+		// 若有历史句柄，删除老句柄
+		cCtx.Contract.GetKernRegistry().UnregisterKernMethod(schedule.bindContractBucket, method)
+		cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
 	}
 
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
