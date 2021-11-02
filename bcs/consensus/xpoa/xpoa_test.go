@@ -15,6 +15,7 @@ import (
 
 func TestUnmarshalConfig(t *testing.T) {
 	cStr := `{
+		"version": "2",
 		"period": 3000,
 		"block_num": 10,
 		"init_proposer": {
@@ -33,6 +34,7 @@ func TestUnmarshalConfig(t *testing.T) {
 
 func getXpoaConsensusConf() string {
 	return `{
+		"version": "2",
         "period":3000,
         "block_num":10,
         "init_proposer": {
@@ -43,6 +45,7 @@ func getXpoaConsensusConf() string {
 
 func getBFTXpoaConsensusConf() string {
 	return `{
+		"version": "2",
         "period":3000,
         "block_num":10,
         "init_proposer": {

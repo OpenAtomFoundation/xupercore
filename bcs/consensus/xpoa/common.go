@@ -30,7 +30,7 @@ const (
 )
 
 type xpoaConfig struct {
-	Version int64 `json:"version,omitempty"`
+	Version string `json:"version,omitempty"`
 	// 每个候选人每轮出块个数
 	BlockNum int64 `json:"block_num"`
 	// 单位为毫秒
