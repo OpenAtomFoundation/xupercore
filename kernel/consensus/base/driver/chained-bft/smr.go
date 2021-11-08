@@ -725,7 +725,6 @@ func (s *Smr) validNewHighQC(inProposalId []byte, validators []string) bool {
 	if !ok {
 		return false
 	}
-	s.log.Warn("!!!!!smr:validNewHighQC", "sign", signs, "QC", utils.F(inProposalId))
 	if len(validators) == 1 {
 		return len(signs) == len(validators)
 	}
