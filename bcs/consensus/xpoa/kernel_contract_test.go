@@ -7,29 +7,6 @@ import (
 	"github.com/xuperchain/xupercore/kernel/consensus/mock"
 )
 
-var (
-	aks = map[string]float64{
-		"dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN": 0.5,
-		"WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT": 0.5,
-	}
-)
-
-func TestIsAuthAddress(t *testing.T) {
-	cCtx, err := prepare(getXpoaConsensusConf())
-	if err != nil {
-		t.Error("prepare error", "error", err)
-		return
-	}
-	i := NewXpoaConsensus(*cCtx, getConfig(getXpoaConsensusConf()))
-	xpoa, ok := i.(*xpoaConsensus)
-	if !ok {
-		t.Error("transfer err.")
-	}
-	if !xpoa.isAuthAddress(aks, 0.6) {
-		t.Error("isAuthAddress err.")
-	}
-}
-
 func NewEditArgs() map[string][]byte {
 	a := make(map[string][]byte)
 	a["validates"] = []byte(`{

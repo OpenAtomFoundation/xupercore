@@ -66,10 +66,9 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
-	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
-	if err != nil {
-		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
-		return nil
+	var version int64
+	if version, err = strconv.ParseInt(xconfig.Version, 10, 64); err != nil {
+		cCtx.XLog.Warn("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
 	}
 	// create xpoaSchedule
 	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight)

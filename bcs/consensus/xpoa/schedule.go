@@ -36,11 +36,8 @@ type xpoaSchedule struct {
 }
 
 func NewXpoaSchedule(xconfig *xpoaConfig, cCtx context.ConsensusCtx, startHeight int64) *xpoaSchedule {
-	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
-	if err != nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaSchedule::Parse version error.", "err", err)
-		return nil
-	}
+	var version int64
+	version, _ = strconv.ParseInt(xconfig.Version, 10, 64)
 	s := xpoaSchedule{
 		address:            cCtx.Network.PeerInfo().Account,
 		period:             xconfig.Period,
