@@ -253,7 +253,7 @@ func isEndorsorSignValid(signsValid []*pb.SignatureInfo, queryInfo *pb.CrossQuer
 	cryptoType := crypto_client.CryptoTypeDefault
 	argsMap := queryInfo.GetRequest().Request.GetArgs()
 	if argsMap != nil {
-		if crypto, ok := argsMap["cryptotype"]; ok {
+		if crypto, ok := argsMap["crypto"]; ok {
 			if string(crypto) == "gm" {
 				cryptoType = "gm"
 			}
