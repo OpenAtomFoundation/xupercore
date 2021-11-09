@@ -134,7 +134,7 @@ func (m *FakeMeta) GetTipBlockid() []byte {
 }
 
 func GetGenesisConsensusConf() []byte {
-	return []byte("{\"name\":\"fake\",\"config\":\"\"}")
+	return []byte("{\"name\":\"fake\",\"config\":\"{}\"}")
 }
 
 type FakeLedger struct {
@@ -225,6 +225,10 @@ func (l *FakeLedger) GetTipBlock() ledger.BlockHandle {
 		return nil
 	}
 	return l.ledgerSlice[len(l.ledgerSlice)-1]
+}
+
+func (l *FakeLedger) QueryTipBlockHeader() ledger.BlockHandle {
+	return l.GetTipBlock()
 }
 
 func (l *FakeLedger) GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error) {
@@ -386,6 +390,10 @@ type FakeRegistry struct {
 
 func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contract.KernMethod) {
 	r.M[method] = handler
+}
+
+func (r *FakeRegistry) UnregisterKernMethod(ctract, method string) {
+	return
 }
 
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {

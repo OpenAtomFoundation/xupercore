@@ -17,7 +17,7 @@ const (
 	DefaultNetIsHidden       = false
 	DefaultMaxStreamLimits   = 1024
 	DefaultMaxMessageSize    = 128
-	DefaultTimeout           = 3
+	DefaultTimeout           = 30
 	DefaultStreamIPLimitSize = 10
 	DefaultMaxBroadcastPeers = 20
 	DefaultServiceName       = "localhost"

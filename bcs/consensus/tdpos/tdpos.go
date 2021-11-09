@@ -92,9 +92,9 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		contractGetTdposInfos:     tdpos.runGetTdposInfos,
 	}
 	for method, f := range tdposKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
-			cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
-		}
+		// 若有历史句柄，删除老句柄
+		cCtx.Contract.GetKernRegistry().UnregisterKernMethod(schedule.bindContractBucket, method)
+		cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
 	}
 
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
@@ -116,7 +116,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		CurrentView: cCfg.StartHeight,
 	}
 	// 重启状态检查1，pacemaker需要重置
-	tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
+	tipHeight := cCtx.Ledger.QueryTipBlockHeader().GetHeight()
 	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		pacemaker.CurrentView = tipHeight - 1
 	}
@@ -169,18 +169,18 @@ Again:
 	}
 	// 即现在有可能发生候选人变更，此时需要拿tipHeight-3=H高度的稳定高度当作快照，故input时的高度一定是TipHeight
 	if term > tp.election.curTerm {
-		tp.election.UpdateProposers(tp.election.ledger.GetTipBlock().GetHeight())
+		tp.election.UpdateProposers(tp.election.ledger.QueryTipBlockHeader().GetHeight())
 	}
 	// 查当前term 和 pos是否是自己
 	tp.election.curTerm = term
 	tp.election.miner = tp.election.validators[pos]
 	// master check
 	if tp.election.validators[pos] == tp.election.address {
-		tp.log.Debug("consensus:tdpos:CompeteMaster: now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.GetTipBlock().GetHeight())
+		tp.log.Debug("consensus:tdpos:CompeteMaster: now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", true, "height", tp.election.ledger.QueryTipBlockHeader().GetHeight())
 		s := tp.needSync()
 		return true, s, nil
 	}
-	tp.log.Debug("consensus:tdpos:CompeteMaster: now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", false, "height", tp.election.ledger.GetTipBlock().GetHeight())
+	tp.log.Debug("consensus:tdpos:CompeteMaster: now xterm infos", "term", term, "pos", pos, "blockPos", blockPos, "master", false, "height", tp.election.ledger.QueryTipBlockHeader().GetHeight())
 	return false, false, nil
 }
 

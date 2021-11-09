@@ -104,7 +104,6 @@ func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *QCP
 			genesis:    gNode,
 			root:       gNode,
 			highQC:     gNode,
-			commitQC:   gNode,
 			log:        log,
 			orphanList: list.New(),
 			orphanMap:  make(map[string]bool),

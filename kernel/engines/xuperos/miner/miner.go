@@ -24,7 +24,7 @@ import (
 
 const (
 	tickOnCalcBlock           = time.Second
-	syncOnstatusChangeTimeout = 10 * time.Second
+	syncOnstatusChangeTimeout = 1 * time.Minute
 
 	statusFollowing = 0
 	statusMining    = 1
@@ -74,6 +74,13 @@ func (t *Miner) Start() {
 
 	var err error
 	t.status = statusFollowing
+
+	ctx := &xctx.BaseCtx{
+		XLog:  t.log,
+		Timer: timer.NewXTimer(),
+	}
+	t.syncWithNeighbors(ctx)
+
 	// 启动矿工循环
 	for !t.IsExit() {
 		err = t.step()

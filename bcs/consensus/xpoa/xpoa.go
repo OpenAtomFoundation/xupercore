@@ -3,6 +3,7 @@ package xpoa
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -65,7 +66,11 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
-
+	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
+	if err != nil {
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
+		return nil
+	}
 	// create xpoaSchedule
 	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight)
 	if schedule == nil {
@@ -75,7 +80,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 	// 创建status实例
 	status := &XpoaStatus{
 		Name:        "poa",
-		Version:     xconfig.Version,
+		Version:     version,
 		StartHeight: cCfg.StartHeight,
 		Index:       cCfg.Index,
 		election:    schedule,
@@ -100,9 +105,9 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		contractGetValidates: xpoa.methodGetValidates,
 	}
 	for method, f := range xpoaKMethods {
-		if _, err := cCtx.Contract.GetKernRegistry().GetKernMethod(schedule.bindContractBucket, method); err != nil {
-			cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
-		}
+		// 若有历史句柄，删除老句柄
+		cCtx.Contract.GetKernRegistry().UnregisterKernMethod(schedule.bindContractBucket, method)
+		cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
 	}
 
 	// 凡属于共识升级的逻辑，新建的Xpoa实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
@@ -125,7 +130,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		CurrentView: cCfg.StartHeight,
 	}
 	// 重启状态检查1，pacemaker需要重置
-	tipHeight := cCtx.Ledger.GetTipBlock().GetHeight()
+	tipHeight := cCtx.Ledger.QueryTipBlockHeader().GetHeight()
 	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		pacemaker.CurrentView = tipHeight - 1
 	}

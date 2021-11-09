@@ -140,9 +140,19 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool, genesisCfg []byte) (*Ledge
 	ledger.heightTable = kvdb.NewTable(baseDB, pb.BlockHeightPrefix)
 	ledger.xlog = lctx.XLog
 	ledger.meta = &pb.LedgerMeta{}
-	ledger.blockCache = cache.NewLRUCache(BlockCacheSize)
-	ledger.blkHeaderCache = cache.NewLRUCache(BlockCacheSize)
-	ledger.txCache = cache.NewLRUCache(TxCacheSize)
+
+	blockCache := BlockCacheSize
+	if lctx.LedgerCfg.BlockCacheSize != 0 {
+		blockCache = lctx.LedgerCfg.BlockCacheSize
+	}
+	ledger.blockCache = cache.NewLRUCache(blockCache)
+	ledger.blkHeaderCache = cache.NewLRUCache(blockCache)
+
+	txCache := TxCacheSize
+	if lctx.LedgerCfg.TxCacheSize != 0 {
+		blockCache = lctx.LedgerCfg.TxCacheSize
+	}
+	ledger.txCache = cache.NewLRUCache(txCache)
 	ledger.confirmBatch = baseDB.NewBatch()
 	metaBuf, metaErr := ledger.metaTable.Get([]byte(""))
 	emptyLedger := false
@@ -359,6 +369,16 @@ func (l *Ledger) saveBlock(block *pb.InternalBlock, batchWrite kvdb.Batch) error
 	return nil
 }
 
+// fetchBlockForModify 类似 fetchBlock，但返回的是block结构的副本，避免修改原缓存
+func (l *Ledger) fetchBlockForModify(blockid []byte) (*pb.InternalBlock, error) {
+	blkp, err := l.fetchBlock(blockid)
+	if err != nil {
+		return nil, err
+	}
+	blk := *blkp
+	return &blk, nil
+}
+
 //根据blockid获取一个Block, 只包含区块头
 func (l *Ledger) fetchBlock(blockid []byte) (*pb.InternalBlock, error) {
 	blkInCache, cacheHit := l.blkHeaderCache.Get(string(blockid))
@@ -415,13 +435,13 @@ func (l *Ledger) handleFork(oldTip []byte, newTipPre []byte, nextHash []byte, ba
 	p := oldTip
 	q := newTipPre
 	for !bytes.Equal(p, q) {
-		pBlock, pErr := l.fetchBlock(p)
+		pBlock, pErr := l.fetchBlockForModify(p)
 		if pErr != nil {
 			return nil, pErr
 		}
 		pBlock.InTrunk = false
 		pBlock.NextHash = []byte{} //next_hash表示是主干上的下一个blockid，所以分支上的这个属性清空
-		qBlock, qErr := l.fetchBlock(q)
+		qBlock, qErr := l.fetchBlockForModify(q)
 		if qErr != nil {
 			return nil, qErr
 		}
@@ -443,7 +463,7 @@ func (l *Ledger) handleFork(oldTip []byte, newTipPre []byte, nextHash []byte, ba
 			return nil, saveErr
 		}
 	}
-	splitBlock, qErr := l.fetchBlock(q)
+	splitBlock, qErr := l.fetchBlockForModify(q)
 	if qErr != nil {
 		return nil, qErr
 	}
@@ -619,7 +639,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		block.Height = 0 // 创世纪块是第0块
 	} else { //非创世块,需要判断是在主干还是分支
 		preHash := block.PreHash
-		preBlock, findErr := l.fetchBlock(preHash)
+		preBlock, findErr := l.fetchBlockForModify(preHash)
 		if findErr != nil {
 			l.xlog.Warn("find pre block fail", "findErr", findErr)
 			confirmStatus.Succ = false

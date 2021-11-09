@@ -100,6 +100,21 @@ func (t *LedgerAgent) QueryBlockByHeight(height int64) (kledger.BlockHandle, err
 	return state.NewBlockAgent(block), nil
 }
 
+func (t *LedgerAgent) QueryTipBlockHeight() (int64, error) {
+	meta := t.chainCtx.Ledger.GetMeta()
+	bh, err := t.QueryBlockHeader(meta.TipBlockid)
+	if err != nil {
+		return 0, err
+	}
+	return bh.GetHeight(), nil
+}
+
+func (t *LedgerAgent) QueryTipBlockHeader() kledger.BlockHandle {
+	meta := t.chainCtx.Ledger.GetMeta()
+	blkAgent, _ := t.QueryBlockHeader(meta.TipBlockid)
+	return blkAgent
+}
+
 // 仅查询区块头
 func (t *LedgerAgent) QueryBlockHeader(blkId []byte) (kledger.BlockHandle, error) {
 	block, err := t.chainCtx.Ledger.QueryBlockHeader(blkId)

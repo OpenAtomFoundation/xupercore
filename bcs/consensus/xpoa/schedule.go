@@ -2,6 +2,7 @@ package xpoa
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -35,13 +36,18 @@ type xpoaSchedule struct {
 }
 
 func NewXpoaSchedule(xconfig *xpoaConfig, cCtx context.ConsensusCtx, startHeight int64) *xpoaSchedule {
+	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
+	if err != nil {
+		cCtx.XLog.Error("Xpoa::NewXpoaSchedule::Parse version error.", "err", err)
+		return nil
+	}
 	s := xpoaSchedule{
 		address:            cCtx.Network.PeerInfo().Account,
 		period:             xconfig.Period,
 		blockNum:           xconfig.BlockNum,
 		startHeight:        startHeight,
 		consensusName:      "poa",
-		consensusVersion:   xconfig.Version,
+		consensusVersion:   version,
 		bindContractBucket: poaBucket,
 		ledger:             cCtx.Ledger,
 		log:                cCtx.XLog,
@@ -99,7 +105,7 @@ func (s *xpoaSchedule) GetLeader(round int64) string {
 	}
 	// 计算round对应的timestamp大致区间
 	nTime := time.Now().UnixNano()
-	if round > s.ledger.GetTipBlock().GetHeight() {
+	if round > s.ledger.QueryTipBlockHeader().GetHeight() {
 		nTime += s.period * int64(time.Millisecond)
 	}
 	_, pos, _ := s.minerScheduling(nTime, len(v))
