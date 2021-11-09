@@ -3,11 +3,9 @@ module github.com/xuperchain/xupercore
 go 1.14
 
 require (
-	github.com/ChainSafe/go-schnorrkel v0.0.0-20200626160457-b38283118816 // indirect
 	github.com/aws/aws-sdk-go v1.32.4
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/dgraph-io/badger/v3 v3.2103.1
-	github.com/docker/go-connections v0.4.1-0.20180821093606-97c2040d34df // indirect
 	github.com/docker/go-units v0.4.0
 	github.com/emirpasic/gods v1.12.1-0.20201118132343-79df803e554c
 	github.com/fsouza/go-dockerclient v1.6.0
@@ -15,7 +13,6 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.3
-	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0
 	github.com/hashicorp/golang-lru v0.5.4
@@ -34,10 +31,11 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/viper v1.6.2
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
+	github.com/tjfoc/gmsm v1.4.1
 	github.com/xuperchain/crypto v0.0.0-20201028025054-4d560674bcd6
 	github.com/xuperchain/log15 v0.0.0-20190620081506-bc88a9198230
 	github.com/xuperchain/xvm v0.0.0-20210126142521-68fd016c56d7
-	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de
+	golang.org/x/crypto v0.0.0-20201012173705-84dcc777aaee
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
 	google.golang.org/grpc v1.35.0

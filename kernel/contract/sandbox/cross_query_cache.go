@@ -248,7 +248,18 @@ func isEndorsorSignValid(signsValid []*pb.SignatureInfo, queryInfo *pb.CrossQuer
 		//log.Info("Marshal Response failed", "err", err)
 		return false
 	}
-	cryptoClient, err := crypto_client.CreateCryptoClient(crypto_client.CryptoTypeDefault)
+
+	//bug(springrain) 需要定义一个参数,用于标示目标链的的加密方式,默认非国密
+	cryptoType := crypto_client.CryptoTypeDefault
+	argsMap := queryInfo.GetRequest().Request.GetArgs()
+	if argsMap != nil {
+		if crypto, ok := argsMap["cryptotype"]; ok {
+			if string(crypto) == "gm" {
+				cryptoType = "gm"
+			}
+		}
+	}
+	cryptoClient, err := crypto_client.CreateCryptoClient(cryptoType)
 	data := append(reqData[:], resData[:]...)
 	digest := hash.UsingSha256(data)
 	for idx := range signsValid {
