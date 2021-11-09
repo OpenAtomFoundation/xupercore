@@ -4,6 +4,7 @@ import "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 
 type KernRegistry interface {
 	RegisterKernMethod(contract, method string, handler KernMethod)
+	UnregisterKernMethod(ctract, method string)
 	// RegisterShortcut 用于contractName缺失的时候选择哪个合约名字和合约方法来执行对应的kernel合约
 	RegisterShortcut(oldmethod, contract, method string)
 	GetKernMethod(contract, method string) (KernMethod, error)

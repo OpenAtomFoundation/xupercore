@@ -60,6 +60,8 @@ var (
 	ErrParseContractUtxos   = errors.New("Parse contract utxos error")
 	ErrContractTxAmout      = errors.New("Contract transfer amount error")
 	ErrGetReservedContracts = errors.New("Get reserved contracts error")
+
+	ErrMempoolIsFull = errors.New("Mempool is full")
 )
 
 const (
@@ -784,6 +786,11 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 	if exist {
 		t.log.Debug("this tx already in unconfirm table, when DoTx", "txid", utils.F(tx.Txid))
 		return ErrAlreadyInUnconfirmed
+	}
+
+	if t.tx.Mempool.Full() {
+		t.log.Warn("The tx mempool if full", "txid", utils.F(tx.Txid))
+		return ErrMempoolIsFull
 	}
 	batch := t.ldb.NewBatch()
 	cacheFiller := &utxo.CacheFiller{}

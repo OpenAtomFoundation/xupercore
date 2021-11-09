@@ -229,19 +229,20 @@ func TestNewPluggableConsensus(t *testing.T) {
 }
 
 func GetNewConsensusConf() []byte {
-	return []byte("{\"name\":\"another\",\"config\":\"\"}")
+	return []byte("{\"name\":\"another\",\"config\":\"{}\"}")
 }
 
 func GetWrongConsensusConf() []byte {
-	return []byte("{\"name\":\"\",\"config\":\"\"}")
+	return []byte("{\"name\":\"\",\"config\":\"{}\"}")
 }
 
 func NewUpdateArgs() map[string][]byte {
 	a := make(map[string]interface{})
 	a["name"] = "another"
 	a["config"] = map[string]interface{}{
-		"miner":  "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
-		"period": "3000",
+		"version": "1",
+		"miner":   "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+		"period":  "3000",
 	}
 	ab, _ := json.Marshal(&a)
 	r := map[string][]byte{
