@@ -66,9 +66,9 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
-	//兼容老的配置文件
+	//兼容老版本配置文件
 	if len(xconfig.Version) < 1 {
-		xconfig.Version = "2"
+		xconfig.Version = "0"
 	}
 	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
 	if err != nil {
