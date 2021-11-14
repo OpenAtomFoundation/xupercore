@@ -3,6 +3,7 @@ package xpoa
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
 )
 
 var (
@@ -30,7 +31,6 @@ const (
 )
 
 type xpoaConfig struct {
-	Version string `json:"version,omitempty"`
 	// 每个候选人每轮出块个数
 	BlockNum int64 `json:"block_num"`
 	// 单位为毫秒
@@ -102,4 +102,34 @@ func (a aksSlice) Less(i, j int) bool {
 		return a[j].Address < a[i].Address
 	}
 	return a[j].Weight < a[i].Weight
+}
+
+type xpoaStringConfig struct {
+	Version string `json:"version,omitempty"`
+}
+
+type xpoaIntConfig struct {
+	Version int64 `json:"version,omitempty"`
+}
+
+// ParseVersion 支持string格式和int格式的version type
+func ParseVersion(cfg string) (int64, error) {
+	strVersion := xpoaStringConfig{}
+	strErr := json.Unmarshal([]byte(cfg), &strVersion)
+	intVersion := xpoaIntConfig{}
+	intErr := json.Unmarshal([]byte(cfg), &intVersion)
+	if strErr != nil && intErr != nil {
+		return 0, strErr
+	}
+	if strErr != nil && intErr == nil {
+		return intVersion.Version, nil
+	}
+	if strErr == nil && intErr != nil {
+		version, err := strconv.ParseInt(strVersion.Version, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		return version, nil
+	}
+	return intVersion.Version, nil
 }
