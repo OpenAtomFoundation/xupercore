@@ -3,7 +3,6 @@ package xpoa
 import (
 	"encoding/json"
 	"errors"
-	"sort"
 )
 
 var (
@@ -80,47 +79,6 @@ func CalFault(input, sum int64) bool {
 		return input >= sum/2+1
 	}
 	return input >= (sum-f)/2+1
-}
-
-// isAuthAddress 判断输入aks是否能在贪心下仍能满足签名数量>33%(Chained-BFT装载) or 50%(一般情况)
-func IsAuthAddress(aks map[string]float64, threshold float64, validators []string, enableBFT bool) bool {
-	// 0. 是否是单个候选人
-	if len(validators) == 1 {
-		weight, ok := aks[validators[0]]
-		if !ok {
-			return false
-		}
-		return weight >= threshold
-	}
-	// 1. 判断aks中的地址是否是当前集合地址
-	for addr, _ := range aks {
-		if !Find(addr, validators) {
-			return false
-		}
-	}
-	// 2. 判断贪心下签名集合数目仍满足要求
-	var s aksSlice
-	for k, v := range aks {
-		s = append(s, aksItem{
-			Address: k,
-			Weight:  v,
-		})
-	}
-	sort.Stable(s)
-	greedyCount := 0
-	sum := threshold
-	for i := 0; i < len(aks); i++ {
-		if sum > 0 {
-			sum -= s[i].Weight
-			greedyCount++
-			continue
-		}
-		break
-	}
-	if !enableBFT {
-		return greedyCount >= len(validators)/2+1
-	}
-	return CalFault(int64(greedyCount), int64(len(validators)))
 }
 
 // 每个地址每一轮的总票数
