@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strconv"
-	"strings"
 	"sync"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -43,7 +42,7 @@ var (
 	ContractMngErr        = errors.New("Contract manager is empty.")
 
 	ErrInvalidConfig  = errors.New("config should be an empty JSON when rolling back an old one, or try an upper version")
-	ErrInvalidVersion = errors.New("version should be an upper one when upgrading a new one, or try an empty config JSON when you need rollback")
+	ErrInvalidVersion = errors.New("version should be an upper one when upgrading a new one")
 )
 
 // PluggableConsensus 实现了consensus_interface接口
@@ -195,7 +194,7 @@ func (pc *PluggableConsensus) proposalArgsUnmarshal(ctxArgs map[string][]byte) (
 
 // updateConsensus 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
 // 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
-// 若同名共识且version相同，则使用历史的配置，否则version需要递增序列
+// 共识version需要递增序列
 func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*contract.Response, error) {
 	// 解析用户合约信息，包括待升级名称name、trigger高度height和待升级配置config
 	cfg, err := pc.proposalArgsUnmarshal(contractCtx.Args())
@@ -410,13 +409,11 @@ func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) (base.
 
 type configFilter struct {
 	Version string `json:"version,omitempty"`
-	index   int    `json:"-"`
 }
 
 // CheckConsensusConfig 同名配置文件检查:
-// 1. 若历史相同version，则直接返回历史cfg
-// 2. 若不存在，需要比历史最大值大
-// 3. 将合法的配置写到map中
+// 1. 同一个链的共识版本只能增加，不能升级到旧版本
+// 2. 将合法的配置写到map中
 func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) error {
 	var err error
 	var newConf configFilter
@@ -431,41 +428,21 @@ func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.Consensu
 		return errors.New("wrong parameter version, version should an integer in string")
 	}
 	// 获取历史最近共识实例，初始状态下历史共识没有version字段的，需手动添加
-	var configSlice []configFilter
 	var maxVersion int64
 	for i := len(hisMap) - 1; i >= 0; i-- {
 		configItem := hisMap[i]
-		if configItem.ConsensusName != cfg.ConsensusName {
-			continue
-		}
 		var tmpItem configFilter
-		json.Unmarshal([]byte(configItem.Config), &tmpItem)
-		tmpItem.index = i
+		err := json.Unmarshal([]byte(configItem.Config), &tmpItem)
+		if err != nil {
+			return errors.New("unmarshal config error")
+		}
 		if tmpItem.Version == "" {
 			tmpItem.Version = "0"
 		}
-		if tmpItem.Version == newConf.Version {
-			dec := json.NewDecoder(strings.NewReader(cfg.Config))
-			dec.DisallowUnknownFields()
-			var checkCfg configFilter
-			err := dec.Decode(&checkCfg)
-			if err != nil {
-				return ErrInvalidConfig
-			}
-			hisConfig := hisMap[i]
-			hisMap[len(hisMap)] = hisConfig
-			return nil
-		}
-		configSlice = append(configSlice, tmpItem)
 		v, _ := strconv.ParseInt(tmpItem.Version, 10, 64)
 		if maxVersion < v {
 			maxVersion = v
 		}
-		continue
-	}
-	if len(configSlice) == 0 {
-		hisMap[len(hisMap)] = *cfg
-		return nil
 	}
 	if maxVersion < newConfVersion {
 		hisMap[len(hisMap)] = *cfg
