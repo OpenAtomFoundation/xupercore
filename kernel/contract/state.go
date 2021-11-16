@@ -44,6 +44,7 @@ type UTXOState interface {
 // CrossQueryState 对XuperBridge暴露对跨链只读合约的操作能力
 type CrossQueryState interface {
 	CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error)
+	CrossQueryCache(crossQueries []*pb.CrossQueryInfo)
 }
 
 type ContractEventState interface {

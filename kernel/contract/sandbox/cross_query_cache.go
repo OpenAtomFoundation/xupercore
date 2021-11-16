@@ -38,19 +38,22 @@ func NewCrossQueryCache() *CrossQueryCache {
 }
 
 // NewCrossQueryCacheWithData return CrossQuery instance while posttx
-func NewCrossQueryCacheWithData(crossQueries []*pb.CrossQueryInfo) *CrossQueryCache {
-	return &CrossQueryCache{
-		crossQueryCaches: crossQueries,
-		isPenetrate:      false,
-	}
+// func NewCrossQueryCacheWithData(crossQueries []*pb.CrossQueryInfo) *CrossQueryCache {
+// 	return &CrossQueryCache{
+// 		crossQueryCaches: crossQueries,
+// 		isPenetrate:      false,
+// 	}
+// }
+
+func (cqc *CrossQueryCache) CrossQueryCache(crossQueries []*pb.CrossQueryInfo) {
+	cqc.crossQueryCaches = crossQueries
+	cqc.isPenetrate = false
 }
 
 // CrossQuery query contract from otherchain
 func (cqc *CrossQueryCache) CrossQuery(
 	crossQueryRequest *pb.CrossQueryRequest,
 	queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
-
-	//log.Info("Receive CrossQuery", "crossQueryRequest", crossQueryRequest, "queryMeta", queryMeta)
 
 	if !isQueryMetaValid(queryMeta) {
 		return nil, fmt.Errorf("isQueryParamValid check failed")
@@ -59,13 +62,11 @@ func (cqc *CrossQueryCache) CrossQuery(
 	if cqc.isPenetrate {
 		queryInfo, err := crossQueryFromEndorsor(crossQueryRequest, queryMeta)
 		if err != nil {
-			//log.Info("crossQueryFromEndorsor error", "error", err.Error())
 			return nil, err
 		}
 		cqc.crossQueryCaches = append(cqc.crossQueryCaches, queryInfo)
 		return queryInfo.GetResponse().GetResponse(), nil
 	}
-
 	// 验证背书规则、参数有效性、时间戳有效性
 	if cqc.crossQueryIdx > len(cqc.crossQueryCaches)-1 {
 		return nil, fmt.Errorf("len of crossQueryCaches not match the contract")
