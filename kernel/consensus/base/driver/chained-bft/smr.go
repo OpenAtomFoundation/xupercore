@@ -219,13 +219,10 @@ func (s *Smr) ResetProposerStatus(tipBlock cctx.BlockInterface,
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if bytes.Equal(s.getHighQC().GetProposalId(), tipBlock.GetBlockid()) {
+	if bytes.Equal(s.getHighQC().GetProposalId(), tipBlock.GetBlockid()) &&
+		s.validNewHighQC(tipBlock.GetBlockid(), validators) {
 		// 此处需要获取带签名的完整Justify
 		return false, s.getCompleteHighQC(), nil
-	}
-	// 单个节点不存在投票验证的hotstuff流程，因此返回true
-	if len(validators) == 1 {
-		return false, nil, nil
 	}
 
 	// 从当前TipBlock开始往前追溯，交给smr根据状态进行回滚。
@@ -384,8 +381,41 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 	}
 	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(s.removeLocalValidator(validatesIpInfo)))
 	s.localProposal.Store(utils.F(proposalID), proposal.Timestamp)
-	s.log.Debug("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID))
+	// 若为单候选人情况，则此处需要特殊处理，矿工需要给自己提前签名
+	if len(validatesIpInfo) == 1 {
+		s.voteToSelf(viewNumber, proposalID, parentQuorumCert)
+	}
+	s.log.Debug("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID), "target", validatesIpInfo)
 	return nil
+}
+
+func (s *Smr) voteToSelf(viewNumber int64, proposalID []byte, parent storage.QuorumCertInterface) {
+	selfVote := &storage.VoteInfo{
+		ProposalId:   proposalID,
+		ProposalView: viewNumber,
+		ParentId:     parent.GetProposalId(),
+	}
+	selfLedgerInfo := &storage.LedgerCommitInfo{
+		VoteInfoHash: proposalID,
+	}
+	selfQC := storage.NewQuorumCert(selfVote, selfLedgerInfo, nil)
+	selfSign, err := s.cryptoClient.SignVoteMsg(proposalID)
+	if err != nil {
+		s.log.Error("smr::voteProposal::voteToSelf error", "err", err)
+		return
+	}
+	s.qcVoteMsgs.LoadOrStore(utils.F(proposalID), []*chainedBftPb.QuorumCertSign{selfSign})
+	selfNode := &storage.ProposalNode{
+		In: selfQC,
+	}
+	if err := s.qcTree.UpdateQcStatus(selfNode); err != nil {
+		s.log.Error("smr::voteProposal::updateQcStatus error", "err", err)
+		return
+	}
+	// 更新本地smr状态机
+	s.pacemaker.AdvanceView(selfQC)
+	s.qcTree.UpdateHighQC(proposalID)
+	s.log.Debug("smr:voteProposal::done local voting", "address", s.address, "proposalID", utils.F(proposalID))
 }
 
 // reloadJustifyQC 与LibraBFT不同，返回一个指定的parentQC
@@ -694,6 +724,9 @@ func (s *Smr) validNewHighQC(inProposalId []byte, validators []string) bool {
 	signs, ok := signInfo.([]*chainedBftPb.QuorumCertSign)
 	if !ok {
 		return false
+	}
+	if len(validators) == 1 {
+		return len(signs) == len(validators)
 	}
 	return s.saftyrules.CalVotesThreshold(len(signs), len(validators))
 }
