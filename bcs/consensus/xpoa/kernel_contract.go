@@ -33,7 +33,25 @@ func (x *xpoaConsensus) methodEditValidates(contractCtx contract.KContext) (*con
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusBadRequest, "invalid acl: pls check accept value."), err
 	}
-	if !x.isAuthAddress(aks, acceptValue) {
+
+	curValiBytes, err := contractCtx.Get(x.election.bindContractBucket,
+		[]byte(fmt.Sprintf("%d_%s", x.election.consensusVersion, validateKeys)))
+	curVali, err := func() ([]string, error) {
+		if err != nil || curValiBytes == nil {
+			return x.election.initValidators, nil
+		}
+		var curValiKey ProposerInfo
+		err = json.Unmarshal(curValiBytes, &curValiKey)
+		if err != nil {
+			x.log.Error("Unmarshal error")
+			return nil, err
+		}
+		return curValiKey.Address, nil
+	}()
+	if err != nil {
+		return common.NewContractErrResponse(common.StatusBadRequest, err.Error()), err
+	}
+	if !x.isAuthAddress(curVali, aks, acceptValue, x.election.enableBFT) {
 		return common.NewContractErrResponse(common.StatusBadRequest, aclErr.Error()), aclErr
 	}
 
@@ -87,10 +105,18 @@ func (x *xpoaConsensus) methodGetValidates(contractCtx contract.KContext) (*cont
 }
 
 // isAuthAddress 判断输入aks是否能在贪心下仍能满足签名数量>33%(Chained-BFT装载) or 50%(一般情况)
-func (x *xpoaConsensus) isAuthAddress(aks map[string]float64, threshold float64) bool {
+func (x *xpoaConsensus) isAuthAddress(validators []string, aks map[string]float64, threshold float64, enableBFT bool) bool {
+	// 0. 是否是单个候选人
+	if len(validators) == 1 {
+		weight, ok := aks[validators[0]]
+		if !ok {
+			return false
+		}
+		return weight >= threshold
+	}
 	// 1. 判断aks中的地址是否是当前集合地址
 	for addr, _ := range aks {
-		if !Find(addr, x.election.validators) {
+		if !Find(addr, validators) {
 			return false
 		}
 	}
@@ -106,15 +132,14 @@ func (x *xpoaConsensus) isAuthAddress(aks map[string]float64, threshold float64)
 	greedyCount := 0
 	sum := threshold
 	for i := 0; i < len(aks); i++ {
-		if sum > 0 {
-			sum -= s[i].Weight
-			greedyCount++
-			continue
+		if sum <= 0 {
+			break
 		}
-		break
+		sum -= s[i].Weight
+		greedyCount++
 	}
-	if !x.election.enableBFT {
-		return greedyCount >= len(x.election.validators)/2+1
+	if !enableBFT {
+		return greedyCount >= len(validators)/2+1
 	}
-	return CalFault(int64(greedyCount), int64(len(x.election.validators)))
+	return CalFault(int64(greedyCount), int64(len(validators)))
 }
