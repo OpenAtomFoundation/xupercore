@@ -2,7 +2,6 @@ package xpoa
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -35,12 +34,7 @@ type xpoaSchedule struct {
 	ledger cctx.LedgerRely
 }
 
-func NewXpoaSchedule(xconfig *xpoaConfig, cCtx context.ConsensusCtx, startHeight int64) *xpoaSchedule {
-	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
-	if err != nil {
-		cCtx.XLog.Error("Xpoa::NewXpoaSchedule::Parse version error.", "err", err)
-		return nil
-	}
+func NewXpoaSchedule(xconfig *xpoaConfig, cCtx context.ConsensusCtx, startHeight, version int64) *xpoaSchedule {
 	s := xpoaSchedule{
 		address:            cCtx.Network.PeerInfo().Account,
 		period:             xconfig.Period,

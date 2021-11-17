@@ -42,3 +42,40 @@ func TestLoadValidatorsMultiInfo(t *testing.T) {
 		t.Error("TestLoadValidatorsMultiInfo error 2.")
 	}
 }
+
+func TestParseVersion(t *testing.T) {
+	strVersion := `{
+		"version": "2"
+	}`
+	v, err := ParseVersion(strVersion)
+	if err != nil {
+		t.Error("ParseVersion err, err: ", err)
+		return
+	}
+	if v != 2 {
+		t.Error("ParseVersion err, v: ", v)
+		return
+	}
+	intVersion := `{
+		"version": 3
+	}`
+	v, err = ParseVersion(intVersion)
+	if err != nil {
+		t.Error("ParseVersion err, err: ", err)
+		return
+	}
+	if v != 3 {
+		t.Error("ParseVersion err, v: ", v)
+		return
+	}
+	empryVersion := `{}`
+	v, err = ParseVersion(empryVersion)
+	if err != nil {
+		t.Error("ParseVersion err, err: ", err)
+		return
+	}
+	if v != 0 {
+		t.Error("ParseVersion err, v: ", v)
+		return
+	}
+}
