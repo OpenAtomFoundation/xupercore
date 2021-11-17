@@ -137,7 +137,6 @@ func (x *xpoaConsensus) isAuthAddress(validators []string, aks map[string]float6
 		}
 		sum -= s[i].Weight
 		greedyCount++
-		continue
 	}
 	if !enableBFT {
 		return greedyCount >= len(validators)/2+1
