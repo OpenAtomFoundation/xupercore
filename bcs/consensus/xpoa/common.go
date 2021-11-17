@@ -114,22 +114,17 @@ type xpoaIntConfig struct {
 
 // ParseVersion 支持string格式和int格式的version type
 func ParseVersion(cfg string) (int64, error) {
-	strVersion := xpoaStringConfig{}
-	strErr := json.Unmarshal([]byte(cfg), &strVersion)
 	intVersion := xpoaIntConfig{}
-	intErr := json.Unmarshal([]byte(cfg), &intVersion)
-	if strErr != nil && intErr != nil {
-		return 0, strErr
-	}
-	if strErr != nil && intErr == nil {
+	if err := json.Unmarshal([]byte(cfg), &intVersion); err == nil {
 		return intVersion.Version, nil
 	}
-	if strErr == nil && intErr != nil {
-		version, err := strconv.ParseInt(strVersion.Version, 10, 64)
-		if err != nil {
-			return 0, err
-		}
-		return version, nil
+	strVersion := xpoaStringConfig{}
+	if err := json.Unmarshal([]byte(cfg), &strVersion); err != nil {
+		return 0, err
 	}
-	return intVersion.Version, nil
+	version, err := strconv.ParseInt(strVersion.Version, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return version, nil
 }
