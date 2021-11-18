@@ -3,7 +3,6 @@ package xpoa
 import (
 	"bytes"
 	"encoding/json"
-	"strconv"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -66,17 +65,13 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
-	//兼容老版本配置文件
-	if len(xconfig.Version) < 1 {
-		xconfig.Version = "0"
-	}
-	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
+	version, err := ParseVersion(cCfg.Config)
 	if err != nil {
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
 		return nil
 	}
 	// create xpoaSchedule
-	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight)
+	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight, version)
 	if schedule == nil {
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaSchedule error")
 		return nil
