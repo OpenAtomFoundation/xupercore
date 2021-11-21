@@ -57,6 +57,13 @@ func (s *syscallResolver) ResolveFunc(module, name string) (interface{}, bool) {
 		return s.cCallMethodv2, true
 	case "env._fetch_response":
 		return s.cFetchResponse, true
+	// 	for 1.39.0
+	case "env.call_method":
+		return s.cCallMethod, true
+	case "env.call_method_v2":
+		return s.cCallMethodv2, true
+	case "env.fetch_response":
+		return s.cFetchResponse, true
 	default:
 		return nil, false
 	}

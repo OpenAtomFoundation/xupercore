@@ -112,7 +112,8 @@ func (x *xvmInstance) guessEntry() (string, error) {
 	case "go":
 		return "run", nil
 	case "c":
-		return "_" + x.bridgeCtx.Method, nil
+		return x.bridgeCtx.Method, nil
+//		 return "_" + x.bridgeCtx.Method, nil
 	default:
 		return "", errors.New("bad runtime")
 	}
