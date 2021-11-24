@@ -40,6 +40,9 @@ var (
 	BuildConsensusError   = errors.New("Build consensus Error")
 	ConsensusNotRegister  = errors.New("Consensus hasn't been register. Please use consensus.Register({NAME},{FUNCTION_POINTER}) to register in consensusMap")
 	ContractMngErr        = errors.New("Contract manager is empty.")
+
+	ErrInvalidConfig  = errors.New("config should be an empty JSON when rolling back an old one, or try an upper version")
+	ErrInvalidVersion = errors.New("version should be an upper one when upgrading a new one")
 )
 
 // PluggableConsensus 实现了consensus_interface接口
@@ -191,23 +194,13 @@ func (pc *PluggableConsensus) proposalArgsUnmarshal(ctxArgs map[string][]byte) (
 
 // updateConsensus 共识升级，更新原有共识列表，向PluggableConsensus共识列表插入新共识，并暂停原共识实例
 // 该方法注册到kernel的延时调用合约中，在trigger高度时被调用，此时直接按照共识cfg新建新的共识实例
+// 共识version需要递增序列
 func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*contract.Response, error) {
 	// 解析用户合约信息，包括待升级名称name、trigger高度height和待升级配置config
 	cfg, err := pc.proposalArgsUnmarshal(contractCtx.Args())
 	if err != nil {
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	consensusItem, err := pc.makeConsensusItem(pc.ctx, *cfg)
-	if err != nil {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::make consensu item error! Use old one.", "error", err.Error())
-		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
-	}
-	transCon, ok := consensusItem.(ConsensusInterface)
-	if !ok {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
-		return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
-	}
-	pc.ctx.XLog.Debug("Pluggable Consensus::updateConsensus::make a new consensus item successfully during updating process.")
 
 	// 更新合约存储, 注意, 此次更新需要检查是否是初次升级情况，此时需要把genesisConf也写进map中
 	pluggableConfig, err := contractCtx.Get(contractBucket, []byte(consensusKey))
@@ -228,12 +221,26 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 			return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
 		}
 	}
-	// 检查新共识，仅允许共识升级为老共识实例，不允许升级为同名新共识实例，如Tdpos升级成Xpos升级成Tdpos，两个Tdpos配置必须相同
-	if checkSameNameConsensus(c, cfg) {
-		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::same name consensus.")
+
+	// 检查新共识配置是否正确
+	if err := CheckConsensusVersion(c, cfg); err != nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::wrong value, pls check your proposal file.", "error", err)
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
+	}
+
+	// 生成新的共识实例
+	consensusItem, err := pc.makeConsensusItem(pc.ctx, c[len(c)-1])
+	if err != nil {
+		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::make consensu item error! Use old one.", "error", err.Error())
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
+	}
+	transCon, ok := consensusItem.(ConsensusInterface)
+	if !ok {
+		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::consensus transfer error! Use old one.")
 		return common.NewContractErrResponse(common.StatusErr, BuildConsensusError.Error()), BuildConsensusError
 	}
-	c[len(c)] = *cfg
+	pc.ctx.XLog.Debug("Pluggable Consensus::updateConsensus::make a new consensus item successfully during updating process.")
+
 	newBytes, err := json.Marshal(c)
 	if err != nil {
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::marshal error", "error", err)
@@ -342,7 +349,7 @@ func (pc *PluggableConsensus) GetConsensusStatus() (base.ConsensusStatus, error)
 type stepConsensus struct {
 	cons []ConsensusInterface
 	// mutex保护StepConsensus数据结构cons的读写操作
-	mutex sync.RWMutex
+	mutex sync.Mutex
 }
 
 // 向可插拔共识数组put item
@@ -356,8 +363,8 @@ func (sc *stepConsensus) put(con ConsensusInterface) error {
 // 获取最新的共识实例
 func (sc *stepConsensus) tail() ConsensusInterface {
 	//getCurrentConsensusComponent
-	sc.mutex.RLock()
-	sc.mutex.RUnlock()
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
 	if len(sc.cons) == 0 {
 		return nil
 	}
@@ -365,8 +372,8 @@ func (sc *stepConsensus) tail() ConsensusInterface {
 }
 
 func (sc *stepConsensus) len() int {
-	sc.mutex.RLock()
-	sc.mutex.RUnlock()
+	sc.mutex.Lock()
+	defer sc.mutex.Unlock()
 	return len(sc.cons)
 }
 
@@ -400,34 +407,46 @@ func NewPluginConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) (base.
 	return nil, ConsensusNotRegister
 }
 
-// checkSameNameConsensus 不允许同名但配置文件不同的共识新组件
-func checkSameNameConsensus(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) bool {
-	for k, v := range hisMap {
-		if v.ConsensusName != cfg.ConsensusName {
-			continue
+type configFilter struct {
+	Version string `json:"version,omitempty"`
+}
+
+// CheckConsensusConfig 同名配置文件检查:
+// 1. 同一个链的共识版本只能增加，不能升级到旧版本
+// 2. 将合法的配置写到map中
+func CheckConsensusVersion(hisMap map[int]def.ConsensusConfig, cfg *def.ConsensusConfig) error {
+	var err error
+	var newConf configFilter
+	if cfg.ConsensusName == "pow" {
+		return nil
+	}
+	if err = json.Unmarshal([]byte(cfg.Config), &newConf); err != nil {
+		return errors.New("wrong parameter config")
+	}
+	newConfVersion, err := strconv.ParseInt(newConf.Version, 10, 64)
+	if err != nil {
+		return errors.New("wrong parameter version, version should an integer in string")
+	}
+	// 获取历史最近共识实例，初始状态下历史共识没有version字段的，需手动添加
+	var maxVersion int64
+	for i := len(hisMap) - 1; i >= 0; i-- {
+		configItem := hisMap[i]
+		var tmpItem configFilter
+		err := json.Unmarshal([]byte(configItem.Config), &tmpItem)
+		if err != nil {
+			return errors.New("unmarshal config error")
 		}
-		if v.Config == cfg.Config {
-			if k != len(hisMap)-1 { // 允许回到历史共识实例
-				return false
-			}
-			return true // 不允许相同共识配置的升级，无意义
+		if tmpItem.Version == "" {
+			tmpItem.Version = "0"
 		}
-		// 比对Version和bft组件是否一致即可
-		type tempStruct struct {
-			EnableBFT map[string]bool `json:"bft_config,omitempty"`
-		}
-		var newConf tempStruct
-		if err := json.Unmarshal([]byte(cfg.Config), &newConf); err != nil {
-			return true
-		}
-		var oldConf tempStruct
-		if err := json.Unmarshal([]byte(v.Config), &oldConf); err != nil {
-			return true
-		}
-		// 共识名称相同，注意: xpos和tdpos在name上都称为tdpos，但xpos的enableBFT!=nil
-		if (newConf.EnableBFT != nil && oldConf.EnableBFT != nil) || (newConf.EnableBFT == nil && oldConf.EnableBFT == nil) {
-			return true // 不允许同一共识名称的升级，如Tdpos不可以做配置升级，只能做配置回滚，如升级到xpos再升级回原来的tdpos
+		v, _ := strconv.ParseInt(tmpItem.Version, 10, 64)
+		if maxVersion < v {
+			maxVersion = v
 		}
 	}
-	return false
+	if maxVersion < newConfVersion {
+		hisMap[len(hisMap)] = *cfg
+		return nil
+	}
+	return ErrInvalidVersion
 }

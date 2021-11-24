@@ -97,6 +97,13 @@ func NewSmr(bcName, address string, log logs.Logger, p2p cctx.P2pCtxInConsensus,
 	}
 	// smr初始值装载
 	s.localProposal.Store(utils.F(qcTree.GetRootQC().In.GetProposalId()), 0)
+	if qcTree.GetHighQC() != nil {
+		s.ledgerState = int64(qcTree.GetHighQC().In.GetProposalView())
+	} else if qcTree.GetGenericQC() != nil {
+		s.ledgerState = int64(qcTree.GetGenericQC().In.GetProposalView())
+	} else {
+		s.ledgerState = int64(qcTree.GetRootQC().In.GetProposalView())
+	}
 	return s
 }
 
@@ -186,12 +193,10 @@ func (s *Smr) KeepUpWithBlock(block cctx.BlockInterface, justify storage.QuorumC
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if justify != nil {
-		s.updateJustifyQcStatus(justify)
-	}
+	s.updateJustifyQcStatus(justify)
 	if validators != nil {
 		err := s.ProcessProposal(block.GetHeight(), block.GetBlockid(), block.GetPreHash(), validators)
-		if err != nil && err != ErrSameProposalNotify {
+		if err != nil && err != ErrSameProposalNotify && err != ErrTooLowNewProposal {
 			return err
 		}
 	}
@@ -201,7 +206,10 @@ func (s *Smr) KeepUpWithBlock(block cctx.BlockInterface, justify storage.QuorumC
 	if err != nil {
 		return err
 	}
-	s.log.Debug("consensus:smr:KeepUpWithBlock: Now HighQC", "highQC", utils.F(s.getHighQC().GetProposalId()), "err", err, "blockId", utils.F(block.GetBlockid()))
+	s.qcTree.UpdateCommit(block.GetPreHash())
+	s.pacemaker.AdvanceView(justify)
+	s.log.Debug("consensus:smr:KeepUpWithBlock: current parameters: ", "highQC", utils.F(s.getHighQC().GetProposalId()), "blockId", utils.F(block.GetBlockid()),
+		"pacemaker view", s.pacemaker.GetCurrentView(), "QCTree Root", utils.F(s.qcTree.GetRootQC().In.GetProposalId()))
 	return nil
 }
 
@@ -211,13 +219,10 @@ func (s *Smr) ResetProposerStatus(tipBlock cctx.BlockInterface,
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if bytes.Equal(s.getHighQC().GetProposalId(), tipBlock.GetBlockid()) {
+	if bytes.Equal(s.getHighQC().GetProposalId(), tipBlock.GetBlockid()) &&
+		s.validNewHighQC(tipBlock.GetBlockid(), validators) {
 		// 此处需要获取带签名的完整Justify
 		return false, s.getCompleteHighQC(), nil
-	}
-	// 单个节点不存在投票验证的hotstuff流程，因此返回true
-	if len(validators) == 1 {
-		return false, nil, nil
 	}
 
 	// 从当前TipBlock开始往前追溯，交给smr根据状态进行回滚。
@@ -335,7 +340,7 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 	}
 	if s.pacemaker.GetCurrentView() != s.qcTree.GetGenesisQC().In.GetProposalView()+1 &&
 		s.qcTree.GetLockedQC() != nil && s.pacemaker.GetCurrentView() < s.qcTree.GetLockedQC().In.GetProposalView() {
-		s.log.Debug("smr::ProcessProposal error", "error", ErrTooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
+		s.log.Error("smr::ProcessProposal error", "error", ErrTooLowNewProposal, "pacemaker view", s.pacemaker.GetCurrentView(), "lockQC view",
 			s.qcTree.GetLockedQC().In.GetProposalView())
 		return ErrTooLowNewProposal
 	}
@@ -374,10 +379,43 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return ErrP2PInternalErr
 	}
-	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(validatesIpInfo))
+	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(s.removeLocalValidator(validatesIpInfo)))
 	s.localProposal.Store(utils.F(proposalID), proposal.Timestamp)
-	s.log.Debug("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID))
+	// 若为单候选人情况，则此处需要特殊处理，矿工需要给自己提前签名
+	if len(validatesIpInfo) == 1 {
+		s.voteToSelf(viewNumber, proposalID, parentQuorumCert)
+	}
+	s.log.Debug("smr:ProcessProposal::new proposal has been made", "address", s.address, "proposalID", utils.F(proposalID), "target", validatesIpInfo)
 	return nil
+}
+
+func (s *Smr) voteToSelf(viewNumber int64, proposalID []byte, parent storage.QuorumCertInterface) {
+	selfVote := &storage.VoteInfo{
+		ProposalId:   proposalID,
+		ProposalView: viewNumber,
+		ParentId:     parent.GetProposalId(),
+	}
+	selfLedgerInfo := &storage.LedgerCommitInfo{
+		VoteInfoHash: proposalID,
+	}
+	selfQC := storage.NewQuorumCert(selfVote, selfLedgerInfo, nil)
+	selfSign, err := s.cryptoClient.SignVoteMsg(proposalID)
+	if err != nil {
+		s.log.Error("smr::voteProposal::voteToSelf error", "err", err)
+		return
+	}
+	s.qcVoteMsgs.LoadOrStore(utils.F(proposalID), []*chainedBftPb.QuorumCertSign{selfSign})
+	selfNode := &storage.ProposalNode{
+		In: selfQC,
+	}
+	if err := s.qcTree.UpdateQcStatus(selfNode); err != nil {
+		s.log.Error("smr::voteProposal::updateQcStatus error", "err", err)
+		return
+	}
+	// 更新本地smr状态机
+	s.pacemaker.AdvanceView(selfQC)
+	s.qcTree.UpdateHighQC(proposalID)
+	s.log.Debug("smr:voteProposal::done local voting", "address", s.address, "proposalID", utils.F(proposalID))
 }
 
 // reloadJustifyQC 与LibraBFT不同，返回一个指定的parentQC
@@ -687,6 +725,9 @@ func (s *Smr) validNewHighQC(inProposalId []byte, validators []string) bool {
 	if !ok {
 		return false
 	}
+	if len(validators) == 1 {
+		return len(signs) == len(validators)
+	}
 	return s.saftyrules.CalVotesThreshold(len(signs), len(validators))
 }
 
@@ -695,6 +736,16 @@ func (s *Smr) enforceUpdateHighQC(inProposalId []byte) (bool, error) {
 		return false, nil
 	}
 	return true, s.qcTree.EnforceUpdateHighQC(inProposalId)
+}
+
+func (s *Smr) removeLocalValidator(in []string) []string {
+	var out []string
+	for _, addr := range in {
+		if addr != s.address {
+			out = append(out, addr)
+		}
+	}
+	return out
 }
 
 func createNewBCtx() *xctx.BaseCtx {
