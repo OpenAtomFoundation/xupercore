@@ -431,24 +431,25 @@ func (l *Ledger) correctTxsBlockid(blockID []byte, batchWrite kvdb.Batch) error 
 //       |
 //       +---->Q---->Q--->NewTip
 // 处理完后，会返回分叉点的block
-func (l *Ledger) handleFork(oldTip []byte, newTipPre []byte, nextHash []byte, batchWrite kvdb.Batch) (*pb.InternalBlock, error) {
+func (l *Ledger) handleFork(oldTip []byte, newTipPre []byte, nextHash []byte, batchWrite kvdb.Batch) (*pb.InternalBlock, int64, error) {
+	var sum int64
 	p := oldTip
 	q := newTipPre
 	for !bytes.Equal(p, q) {
 		pBlock, pErr := l.fetchBlockForModify(p)
 		if pErr != nil {
-			return nil, pErr
+			return nil, 0, pErr
 		}
 		pBlock.InTrunk = false
 		pBlock.NextHash = []byte{} //next_hash表示是主干上的下一个blockid，所以分支上的这个属性清空
 		qBlock, qErr := l.fetchBlockForModify(q)
 		if qErr != nil {
-			return nil, qErr
+			return nil, 0, qErr
 		}
 		qBlock.InTrunk = true
 		cerr := l.correctTxsBlockid(qBlock.Blockid, batchWrite)
 		if cerr != nil {
-			return nil, cerr
+			return nil, 0, cerr
 		}
 		qBlock.NextHash = nextHash
 		nextHash = q
@@ -456,24 +457,26 @@ func (l *Ledger) handleFork(oldTip []byte, newTipPre []byte, nextHash []byte, ba
 		q = qBlock.PreHash
 		saveErr := l.saveBlock(pBlock, batchWrite)
 		if saveErr != nil {
-			return nil, saveErr
+			return nil, 0, saveErr
 		}
 		saveErr = l.saveBlock(qBlock, batchWrite)
 		if saveErr != nil {
-			return nil, saveErr
+			return nil, 0, saveErr
 		}
+		sum -= int64(pBlock.TxCount)
+		sum += int64(qBlock.TxCount)
 	}
 	splitBlock, qErr := l.fetchBlockForModify(q)
 	if qErr != nil {
-		return nil, qErr
+		return nil, 0, qErr
 	}
 	splitBlock.InTrunk = true
 	splitBlock.NextHash = nextHash
 	saveErr := l.saveBlock(splitBlock, batchWrite)
 	if saveErr != nil {
-		return nil, saveErr
+		return nil, 0, saveErr
 	}
-	return splitBlock, nil
+	return splitBlock, sum, nil
 }
 
 // IsValidTx valid transactions of coinbase in block
@@ -596,6 +599,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 	l.mutex.Lock()
 	beginTime := time.Now()
 	var confirmStatus ConfirmStatus
+	var txSum int64
 	defer func() {
 		l.mutex.Unlock()
 		bcName := l.ctx.BCName
@@ -608,6 +612,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		if confirmStatus.TrunkSwitch {
 			metrics.LedgerSwitchBranchCounter.WithLabelValues(bcName).Inc()
 		}
+		metrics.GeneralSumGauge.WithLabelValues(l.ctx.BCName, "intrunk-tx-nums").Add(float64(txSum))
 	}()
 
 	blkTimer := timer.NewXTimer()
@@ -662,6 +667,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 					return confirmStatus
 				}
 			}
+			txSum = int64(block.TxCount)
 		} else {
 			//在分支上
 			if preBlock.Height+1 > newMeta.TrunkHeight {
@@ -670,12 +676,13 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 				newMeta.TrunkHeight = preBlock.Height + 1
 				newMeta.TipBlockid = block.Blockid
 				block.InTrunk = true
-				splitBlock, splitErr := l.handleFork(oldTip, preBlock.Blockid, block.Blockid, batchWrite) //处理分叉
+				splitBlock, sum, splitErr := l.handleFork(oldTip, preBlock.Blockid, block.Blockid, batchWrite) //处理分叉
 				if splitErr != nil {
 					l.xlog.Warn("handle split failed", "splitErr", splitErr)
 					confirmStatus.Succ = false
 					return confirmStatus
 				}
+				txSum = sum
 				splitHeight = splitBlock.Height
 				confirmStatus.Split = true
 				confirmStatus.TrunkSwitch = true
@@ -1164,6 +1171,7 @@ func (l *Ledger) removeBlocks(fromBlockid []byte, toBlockid []byte, batch kvdb.B
 		if fromBlock.InTrunk {
 			sHeight := []byte(fmt.Sprintf("%020d", fromBlock.Height))
 			batch.Delete(append([]byte(pb.BlockHeightPrefix), sHeight...))
+			metrics.GeneralSumGauge.WithLabelValues(l.ctx.BCName, "intrunk-tx-nums").Sub(float64(fromBlock.TxCount))
 		}
 		//iter to prev block
 		fromBlock, findErr = l.fetchBlock(fromBlock.PreHash)
