@@ -231,7 +231,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	// 包装成统一入口访问smr
 	err = x.smr.CheckProposal(block, justify, validators)
 	if err != nil {
-		x.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
+		x.log.Error("consensus:xpoa:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
 			"proposalQC:[id]", utils.F(block.GetBlockid()), "justifyQC:[height]", justify.GetProposalView(),
 			"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
 		return false, err
@@ -263,7 +263,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncate {
-		x.log.Warn("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block",
+		x.log.Warn("consensus:xpoa:ProcessBeforeMiner: last block not confirmed, walk to previous block",
 			"target", utils.F(qc.GetProposalId()), "ledger", tipBlock.GetHeight())
 		storage.TargetBits = int32(tipBlock.GetHeight())
 		bytes, _ := json.Marshal(storage)
