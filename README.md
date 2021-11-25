@@ -60,9 +60,9 @@ cd ../node3
 sh ./control.sh start
 
 // 观察每个节点状态
-./bin/xchain-cli status -H :36301
-./bin/xchain-cli status -H :36302
-./bin/xchain-cli status -H :36303
+./bin/xchain-cli chain status -H 127.0.0.1:36101
+./bin/xchain-cli chain status -H 127.0.0.1:36102
+./bin/xchain-cli chain status -H 127.0.0.1:36103
 
 ```
 
