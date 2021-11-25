@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	//ldbp = pprof.NewProfile("ldb")
-	//pcounter int64
+//ldbp = pprof.NewProfile("ldb")
+//pcounter int64
 )
 
 // LDBDatabase define data structure of storage

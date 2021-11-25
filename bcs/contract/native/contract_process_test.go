@@ -48,7 +48,7 @@ func TestCommandNotFound(t *testing.T) {
 		if resp, err := exec.Command("docker", "info").CombinedOutput(); err != nil {
 			t.Skip(string(resp))
 		}
-		if resp,err:=exec.Command("docker",[]string{"image","inspect","openjdk:8u292-slim-buster"}...).CombinedOutput();err!=nil{
+		if resp, err := exec.Command("docker", []string{"image", "inspect", "openjdk:8u292-slim-buster"}...).CombinedOutput(); err != nil {
 			t.Skip((string(resp)))
 		}
 		cp, err := newContractProcess(&contract.NativeConfig{
