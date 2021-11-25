@@ -30,6 +30,7 @@ message CallArgs {
   string initiator = 3;
   repeated string auth_require = 4;
   string transfer_amount = 5;
+  string caller = 6;
 }
 
 message SyscallHeader {
