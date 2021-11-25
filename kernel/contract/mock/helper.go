@@ -31,7 +31,7 @@ type TestHelper struct {
 }
 
 func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
-	basedir, err := ioutil.TempDir("/tmp", "contract-test")
+	basedir, err := ioutil.TempDir("", "contract-test")
 	if err != nil {
 		panic(err)
 	}
