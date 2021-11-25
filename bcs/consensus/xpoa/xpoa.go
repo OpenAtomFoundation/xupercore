@@ -3,7 +3,6 @@ package xpoa
 import (
 	"bytes"
 	"encoding/json"
-	"strconv"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -66,13 +65,13 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
-	version, err := strconv.ParseInt(xconfig.Version, 10, 64)
+	version, err := ParseVersion(cCfg.Config)
 	if err != nil {
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
 		return nil
 	}
 	// create xpoaSchedule
-	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight)
+	schedule := NewXpoaSchedule(xconfig, cCtx, cCfg.StartHeight, version)
 	if schedule == nil {
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaSchedule error")
 		return nil
@@ -232,7 +231,7 @@ func (x *xpoaConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.BlockI
 	// 包装成统一入口访问smr
 	err = x.smr.CheckProposal(block, justify, validators)
 	if err != nil {
-		x.log.Error("consensus:tdpos:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
+		x.log.Error("consensus:xpoa:CheckMinerMatch: bft IsQuorumCertValidate failed", "proposalQC:[height]", block.GetHeight(),
 			"proposalQC:[id]", utils.F(block.GetBlockid()), "justifyQC:[height]", justify.GetProposalView(),
 			"justifyQC:[id]", utils.F(justify.GetProposalId()), "error", err)
 		return false, err
@@ -264,7 +263,7 @@ func (x *xpoaConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, err
 	}
 	// 重做时还需要装载标定节点TipHeight，复用TargetBits作为回滚记录，便于追块时获取准确快照高度
 	if truncate {
-		x.log.Warn("consensus:tdpos:ProcessBeforeMiner: last block not confirmed, walk to previous block",
+		x.log.Warn("consensus:xpoa:ProcessBeforeMiner: last block not confirmed, walk to previous block",
 			"target", utils.F(qc.GetProposalId()), "ledger", tipBlock.GetHeight())
 		storage.TargetBits = int32(tipBlock.GetHeight())
 		bytes, _ := json.Marshal(storage)

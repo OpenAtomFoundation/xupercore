@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -140,6 +141,12 @@ func (p *P2PServerV1) serve() {
 	network, ip, err := manet.DialArgs(p.address)
 	if err != nil {
 		panic(fmt.Sprintf("address error: address=%s", err))
+	}
+
+	//Compatible container runtime, listening ":port"
+	portIndex := strings.LastIndex(ip, ":")
+	if portIndex > 0 {
+		ip = ip[portIndex:]
 	}
 
 	l, err := net.Listen(network, ip)
