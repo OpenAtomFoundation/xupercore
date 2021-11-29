@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	tls "github.com/tjfoc/gmsm/gmtls"
@@ -39,7 +40,11 @@ func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) 
 	if creds, ok := serverNameMap[serviceName]; ok {
 		return creds, nil
 	}
-
+	//修改全局变量 serverNameMap 加锁
+	mu := &sync.Mutex{}
+	mu.Lock()
+	defer mu.Unlock()
+	//读取 cacert.pem 证书
 	bs, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
 	if err != nil {
 		return nil, err
