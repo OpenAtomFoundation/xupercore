@@ -30,6 +30,9 @@ import (
 // serverName  为key,缓存 creds
 var serverNameMap = make(map[string]credentials.TransportCredentials)
 
+//修改全局变量 serverNameMap 加锁
+var mu = &sync.Mutex{}
+
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {
 
 	if len(serviceName) < 1 {
@@ -40,8 +43,7 @@ func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) 
 	if creds, ok := serverNameMap[serviceName]; ok {
 		return creds, nil
 	}
-	//修改全局变量 serverNameMap 加锁
-	mu := &sync.Mutex{}
+
 	mu.Lock()
 	defer mu.Unlock()
 	//读取 cacert.pem 证书
