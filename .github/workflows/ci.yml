@@ -16,7 +16,9 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v2
     - name: Test
-      run: make && make test
+      run: |
+        diff -u <(echo -n) <(gofmt -d $(find . -type f -name '*.go'))
+        make && make test
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v1

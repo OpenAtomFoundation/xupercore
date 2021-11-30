@@ -38,8 +38,8 @@ func (c *features) Logging(ctx code.Context) code.Response {
 func (c *features) Transfer(ctx code.Context) code.Response {
 	to := ctx.Args()["to"]
 	amountBytes := ctx.Args()["amount"]
-	amount,ok:= new(big.Int).SetString(string(amountBytes),10)
-	if !ok{
+	amount, ok := new(big.Int).SetString(string(amountBytes), 10)
+	if !ok {
 		return code.Error(errors.New("bad amount format"))
 	}
 	err := ctx.Transfer(string(to), amount)

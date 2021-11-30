@@ -43,7 +43,7 @@ import (
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
 	beginTime := time.Now()
 	code := "InvalidTx"
-	defer func(){
+	defer func() {
 		metrics.CallMethodCounter.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx", code).Inc()
 		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(beginTime).Seconds())
 	}()
