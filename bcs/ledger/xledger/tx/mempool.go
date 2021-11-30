@@ -18,14 +18,11 @@ const (
 	defaultMempoolOrphansLen     = defaultMempoolUnconfirmedLen / 5 // 默认孤儿交易表大小为1000。
 
 	defaultMaxtxLimit = 100000 // 默认 mempool 中最多10w个未确认交易。
+
+	stoneNodeID = "stoneNodeID"
 )
 
 var (
-	emptyTxIDNode *Node
-	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
-
-	stoneNodeID string = "stoneNodeID" // 暂定
-
 	// ErrTxExist tx already in mempool when put tx.
 	ErrTxExist = errors.New("tx already in mempool")
 )
@@ -43,6 +40,9 @@ type Mempool struct {
 	orphans     map[string]*Node // txID => *Node，所有的孤儿交易。
 
 	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。
+
+	emptyTxIDNode *Node
+	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
 
 	m *sync.Mutex
 }
@@ -707,12 +707,12 @@ func (m *Mempool) putBucketKey(node *Node) {
 
 // 处理存证交易（没有任何输入和输出）。
 func (m *Mempool) processEvidenceNode(node *Node) {
-	if stoneNode == nil {
-		stoneNode = NewNode(stoneNodeID, nil)
+	if m.stoneNode == nil {
+		m.stoneNode = NewNode(stoneNodeID, nil)
 	}
-	m.confirmed[stoneNode.txid] = stoneNode
-	stoneNode.readonlyOutputs[node.txid] = node
-	node.readonlyInputs[stoneNode.txid] = stoneNode
+	m.confirmed[m.stoneNode.txid] = m.stoneNode
+	m.stoneNode.readonlyOutputs[node.txid] = node
+	node.readonlyInputs[m.stoneNode.txid] = m.stoneNode
 	m.unconfirmed[node.txid] = node
 }
 
@@ -951,20 +951,20 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 	bucket := node.tx.TxInputsExt[index].GetBucket()
 	key := node.tx.TxInputsExt[index].GetKey()
 	bk := bucket + string(key)
-	if emptyTxIDNode == nil {
-		emptyTxIDNode = NewNode("", nil)
+	if m.emptyTxIDNode == nil {
+		m.emptyTxIDNode = NewNode("", nil)
 	}
 
-	m.confirmed[""] = emptyTxIDNode
+	m.confirmed[""] = m.emptyTxIDNode
 	if node.isReadonlyKey(index) {
-		emptyTxIDNode.readonlyOutputs[node.txid] = node
-		node.readonlyInputs[emptyTxIDNode.txid] = emptyTxIDNode
+		m.emptyTxIDNode.readonlyOutputs[node.txid] = node
+		node.readonlyInputs[m.emptyTxIDNode.txid] = m.emptyTxIDNode
 	} else {
-		if _, ok := emptyTxIDNode.bucketKeyToNode[bk]; ok {
+		if _, ok := m.emptyTxIDNode.bucketKeyToNode[bk]; ok {
 			return errors.New("bucket and key invalid:" + bucket + "_" + string(key))
 		}
-		emptyTxIDNode.bucketKeyToNode[bk] = node
-		node.txInputsExt[index] = emptyTxIDNode
+		m.emptyTxIDNode.bucketKeyToNode[bk] = node
+		node.txInputsExt[index] = m.emptyTxIDNode
 	}
 	return nil
 }
