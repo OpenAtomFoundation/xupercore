@@ -31,7 +31,7 @@ import (
 var serverNameMap = make(map[string]credentials.TransportCredentials)
 
 //修改全局变量 serverNameMap 加锁
-var mu = &sync.Mutex{}
+var mu sync.Mutex
 
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {
 
