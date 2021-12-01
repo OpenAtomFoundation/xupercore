@@ -84,6 +84,8 @@ type UtxoVM struct {
 	unconfirmTxInMem  *sync.Map                //未确认Tx表的内存镜像
 	unconfirmTxAmount int64                    // 未确认的Tx数目，用于监控
 	bcname            string
+	batchCache        *sync.Map  // 同一个 batch 的 utxo 缓存，play block 时缓存同一个区块内的交易的 utxo。
+	lastBatch         kvdb.Batch // 上一个交易对应的 batch，postTx 时每个交易的 batch 不同，但是执行区块时（walk 或者 play）batch 相同。
 }
 
 // InboundTx is tx wrapper
@@ -107,8 +109,26 @@ func GenUtxoKeyWithPrefix(addr []byte, txid []byte, offset int32) string {
 	return pb.UTXOTablePrefix + baseUtxoKey
 }
 
-// checkInputEqualOutput 校验交易的输入输出是否相等
-func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
+// CleanBatchCache clean batch cache when new batch.
+func (uv *UtxoVM) CleanBatchCache(newBatch kvdb.Batch) {
+	if uv.lastBatch != newBatch {
+		uv.batchCache = &sync.Map{}
+		uv.lastBatch = newBatch
+	}
+}
+
+// InsertBatchCache inser key value to batch cache.
+func (uv *UtxoVM) InsertBatchCache(key, value interface{}) {
+	uv.batchCache.Store(key, value)
+}
+
+// RemoveBatchCache remove key from batch cache.
+func (uv *UtxoVM) RemoveBatchCache(key interface{}) {
+	uv.batchCache.Delete(key)
+}
+
+// CheckInputEqualOutput 校验交易的输入输出是否相等
+func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction, batch kvdb.Batch) error {
 	// first check outputs
 	outputSum := big.NewInt(0)
 	for _, txOutput := range tx.TxOutputs {
@@ -144,6 +164,19 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction) error {
 			}
 		}
 		uv.UtxoCache.Unlock()
+
+		if amountBytes == nil && batch != nil && batch == uv.lastBatch {
+			// 如果 utxo cache 查找不到，从 batch cache 查找，如果此处查不到再去数据库查。
+			// 目的是解决同步一个区块时，utxo cache 不能缓存所有的 utxo 导致区块执行失败。
+			// 此处缓存为同一个区块内交易的 utxo 缓存。
+			value, ok := uv.batchCache.Load(GenUtxoKeyWithPrefix(addr, txid, offset))
+			if ok {
+				uItem := value.(*UtxoItem)
+				amountBytes = uItem.Amount.Bytes()
+				frozenHeight = uItem.FrozenHeight
+			}
+		}
+
 		if amountBytes == nil {
 			uBinary, findErr := uv.utxoTable.Get([]byte(utxoKey))
 			if findErr != nil {
