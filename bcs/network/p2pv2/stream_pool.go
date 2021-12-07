@@ -77,7 +77,7 @@ func (sp *StreamPool) Get(ctx xctx.XContext, peerId peer.ID) (*Stream, error) {
 	netStream, err := sp.srv.host.NewStream(sp.ctx, peerId, protocol.ID(protocolID))
 	if err != nil {
 		if errors.Is(err, swarm.ErrDialToSelf) {
-			ctx.GetLog().Trace("new net stream error", "peerId", peerId, "error", err)
+			ctx.GetLog().Info("new net stream error", "peerId", peerId, "error", err)
 			return nil, ErrNewStream
 		}
 		ctx.GetLog().Warn("new net stream error", "peerId", peerId, "error", err)
