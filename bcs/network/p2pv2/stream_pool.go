@@ -7,6 +7,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
+	swarm "github.com/libp2p/go-libp2p-swarm"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
@@ -75,6 +76,10 @@ func (sp *StreamPool) Get(ctx xctx.XContext, peerId peer.ID) (*Stream, error) {
 
 	netStream, err := sp.srv.host.NewStream(sp.ctx, peerId, protocol.ID(protocolID))
 	if err != nil {
+		if errors.Is(err, swarm.ErrDialToSelf) {
+			ctx.GetLog().Info("new net stream error", "peerId", peerId, "error", err)
+			return nil, ErrNewStream
+		}
 		ctx.GetLog().Warn("new net stream error", "peerId", peerId, "error", err)
 		return nil, ErrNewStream
 	}
