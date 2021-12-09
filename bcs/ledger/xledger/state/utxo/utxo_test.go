@@ -189,7 +189,7 @@ func TestBasicFunc(t *testing.T) {
 		txOutput.Amount = delta.Bytes()
 		tx1.TxOutputs = append(tx1.TxOutputs, txOutput)
 	}
-	err = utxoHandle.CheckInputEqualOutput(tx1)
+	err = utxoHandle.CheckInputEqualOutput(tx1, nil)
 	if err != nil {
 		t.Log(err)
 	}
