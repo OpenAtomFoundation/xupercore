@@ -513,7 +513,14 @@ func setup(m *Mempool) {
 					},
 				},
 			}
-			m.PutTx(tx1)
+			if string(tx1.Txid) == "500000" {
+				b := time.Now()
+				m.PutTx(tx1)
+				fmt.Println("PutTx 500000: ", time.Since(b))
+			} else {
+				m.PutTx(tx1)
+			}
+
 		}
 	}
 }

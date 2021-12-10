@@ -480,7 +480,7 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.utxo.Mutex.Lock()
 	defer func() {
 		t.utxo.Mutex.Unlock()
-		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
+		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.Mempool.GetTxCounnt()))
 		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "PlayAndRepost").Observe(time.Since(beginTime).Seconds())
 	}()
 	timer.Mark("get_utxo_lock")

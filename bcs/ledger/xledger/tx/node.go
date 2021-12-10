@@ -21,6 +21,9 @@ type Node struct {
 	txInputsExt  []*Node
 	txOutputs    []*Node
 	txOutputsExt []*Node
+
+	preNodes  map[string]bool // 当前交易的前置打包交易，当打包到当前交易时，需要保证前置交易全部打包进去了。
+	backNodes map[string]bool // 当前交易的后置交易。
 }
 
 // NewNode new node.
@@ -35,7 +38,102 @@ func NewNode(txid string, tx *pb.Transaction) *Node {
 		txInputsExt:     make([]*Node, len(tx.GetTxInputsExt())),
 		txOutputs:       make([]*Node, len(tx.GetTxOutputs())),
 		txOutputsExt:    make([]*Node, len(tx.GetTxOutputsExt())),
+		preNodes:        make(map[string]bool),
+		backNodes:       make(map[string]bool),
 	}
+}
+
+func (n *Node) hasPreNodes(ranged map[string]bool) bool {
+	for id := range n.preNodes {
+		if !ranged[id] {
+			return true
+		}
+	}
+	return false
+}
+
+func (n *Node) hasBackNodes(waitRange map[string]*Node) []*Node {
+	result := make([]*Node, 0, 100)
+	for id := range n.backNodes {
+		if wn, ok := waitRange[id]; ok {
+			result = append(result, wn)
+		}
+	}
+	return result
+}
+
+// 更新节点的前置和后置交易。
+func (n *Node) updatePreAndBackNodes() {
+	if n.tx == nil {
+		return
+	}
+	for i, inputExt := range n.tx.GetTxInputsExt() {
+		readonly := true
+		bucket := inputExt.GetBucket()
+		key := string(inputExt.GetKey())
+		refTxid := string(inputExt.GetRefTxid())
+		for _, ext := range n.tx.GetTxOutputsExt() {
+			if ext.GetBucket() == bucket && string(ext.GetKey()) == string(key) && len(ext.GetValue()) > 0 {
+				readonly = false
+				break
+			}
+		}
+
+		if readonly { // 只读交易，更新此交易的后置交易。
+			fn := n.readonlyInputs[refTxid]
+			wn := fn.hasWriteKey(bucket, key)
+			if wn != nil {
+				wn.preNodes[n.txid] = true
+				n.backNodes[wn.txid] = true
+			}
+		} else { // 读写交易，更新此交易的前置交易。
+			fn := n.txInputsExt[i]
+			for _, on := range fn.hasReadonlyKey(bucket, key) {
+				on.backNodes[n.txid] = true
+				n.preNodes[on.txid] = true
+			}
+		}
+	}
+}
+
+func (n *Node) hasWriteKey(bucket, key string) *Node {
+	for _, on := range n.txOutputsExt {
+		if on == nil {
+			continue
+		}
+		for _, ext := range on.tx.GetTxOutputsExt() {
+			if ext.GetBucket() == bucket && string(ext.GetKey()) == string(key) && len(ext.GetValue()) > 0 {
+				return on
+			}
+		}
+	}
+	return nil
+}
+
+func (n *Node) hasReadonlyKey(bucket, key string) []*Node {
+	result := []*Node{}
+	for _, rn := range n.readonlyOutputs {
+		read := false
+		for _, inExt := range rn.tx.GetTxInputsExt() {
+			if inExt.GetBucket() == bucket && string(inExt.GetKey()) == string(key) {
+				read = true
+				break
+			}
+		}
+		if read {
+			write := false
+			for _, ext := range rn.tx.GetTxOutputsExt() {
+				if ext.GetBucket() == bucket && string(ext.GetKey()) == string(key) && len(ext.GetValue()) > 0 {
+					write = true
+					break
+				}
+			}
+			if !write {
+				result = append(result, rn)
+			}
+		}
+	}
+	return result
 }
 
 // 已经去重。
