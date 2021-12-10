@@ -65,6 +65,13 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Con
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: xpoa struct unmarshal error", "error", err)
 		return nil
 	}
+
+	// 校验初始候选人节点列表
+	if len(xconfig.InitProposer.Address) <= 0 {
+		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: config init_proposer.address is required")
+		return nil
+	}
+
 	version, err := ParseVersion(cCfg.Config)
 	if err != nil {
 		cCtx.XLog.Error("consensus:xpoa:NewXpoaConsensus: version error", "error", err)
