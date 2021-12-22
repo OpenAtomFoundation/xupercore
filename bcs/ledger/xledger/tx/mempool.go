@@ -102,64 +102,85 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	var q deque.Deque
 	nodeInputSumMap := make(map[*Node]int, len(m.confirmed))
-	waitRange := make(map[string]*Node, defaultMempoolUnconfirmedLen/2) // 已经可以打包的交易，但是由于还有前置的交易还未打包，先把此交易暂存到此处。
-	ranged := make(map[string]bool, len(m.unconfirmed))
 	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
 		q.PushBack(n)
-		ranged[n.txid] = true
 	}
 
+	writeToRangedReadNodes := make(map[*Node]map[*Node]bool, 0)
+	WaitRangeNodes := make(map[*Node]bool, 0)
 	for q.Len() > 0 {
 		node := q.PopFront().(*Node)
-		for _, n := range node.readonlyOutputs {
-			if m.rangeNode(n, ranged, nodeInputSumMap, waitRange, &q, f) {
-				return
+		for i, children := range node.readonlyOutputs {
+			for _, n := range children {
+				if m.isNextNode(n, false, nodeInputSumMap) {
+					if !f(n.tx) {
+						return
+					}
+					q.PushBack(n)
+					if len(node.txOutputsExt) == 0 {
+						continue
+					}
+					if node.txOutputsExt[i] != nil {
+						writeNode := node.txOutputsExt[i]
+						if WaitRangeNodes[writeNode] {
+							delete(WaitRangeNodes, writeNode)
+							q.PushBack(writeNode)
+							if !f(writeNode.tx) {
+								return
+							}
+						} else {
+							if rangedRead, ok := writeToRangedReadNodes[writeNode]; ok {
+								if len(rangedRead) == 0 {
+									writeToRangedReadNodes[writeNode] = map[*Node]bool{n: true}
+								} else {
+									rangedRead[n] = true
+									writeToRangedReadNodes[writeNode] = rangedRead
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 
 		for _, n := range node.txOutputs {
-			if m.rangeNode(n, ranged, nodeInputSumMap, waitRange, &q, f) {
-				return
+			if m.isNextNode(n, false, nodeInputSumMap) {
+				if !f(n.tx) {
+					return
+				}
+				q.PushBack(n)
 			}
 		}
 
-		for _, n := range node.txOutputsExt {
-			if m.rangeNode(n, ranged, nodeInputSumMap, waitRange, &q, f) {
-				return
+		for i, n := range node.txOutputsExt {
+			if m.isNextNode(n, false, nodeInputSumMap) {
+				if len(node.readonlyOutputs[i]) == 0 {
+					if !f(n.tx) {
+						return
+					}
+					q.PushBack(n)
+				} else {
+					if len(writeToRangedReadNodes[n]) == len(node.readonlyOutputs[i]) {
+						if !f(n.tx) {
+							return
+						}
+						q.PushBack(n)
+					} else {
+						WaitRangeNodes[n] = true
+					}
+				}
 			}
 		}
 
 		for _, n := range node.bucketKeyToNode {
-			if m.rangeNode(n, ranged, nodeInputSumMap, waitRange, &q, f) {
-				return
+			if m.isNextNode(n, false, nodeInputSumMap) {
+				if !f(n.tx) {
+					return
+				}
+				q.PushBack(n)
 			}
 		}
 	}
-}
-
-func (m *Mempool) rangeNode(n *Node, ranged map[string]bool, nodeInputSumMap map[*Node]int,
-	waitRange map[string]*Node, q *deque.Deque, f func(tx *pb.Transaction) bool) bool {
-	if n != nil && !ranged[n.txid] && m.isNextNode(n, false, nodeInputSumMap) {
-		if n.hasPreNodes(ranged) { // 有前置交易说明前置交易存在并且还未打包，如果打包了说明不存在，返回false。
-			waitRange[n.txid] = n // 等待前置交易打包后再打包此交易。
-			return false
-		}
-		if !f(n.tx) {
-			return true
-		}
-		q.PushBack(n)
-		ranged[n.txid] = true
-		for _, nextNode := range n.hasBackNodes(waitRange) {
-			// 从 waitRange 中获取后置交易。
-			if !f(nextNode.tx) {
-				return true
-			}
-			q.PushBack(nextNode)
-			ranged[nextNode.txid] = true
-			delete(waitRange, nextNode.txid)
-		}
-	}
-	return false
 }
 
 // GetTxCounnt get 获取未确认交易与孤儿交易总数
@@ -250,34 +271,9 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	return conflictTxs
 }
 
-func (m *Mempool) deletePreAndBackNodes(node *Node) {
-	for id := range node.preNodes {
-		if n, ok := m.unconfirmed[id]; ok {
-			delete(n.backNodes, n.txid)
-		} else if n, ok := m.orphans[id]; ok {
-			delete(n.backNodes, n.txid)
-		} else if n, ok := m.confirmed[id]; ok {
-			delete(n.backNodes, n.txid)
-		}
-	}
-	node.preNodes = map[string]bool{}
-
-	for id := range node.backNodes {
-		if n, ok := m.unconfirmed[id]; ok {
-			delete(n.preNodes, n.txid)
-		} else if n, ok := m.orphans[id]; ok {
-			delete(n.preNodes, n.txid)
-		} else if n, ok := m.confirmed[id]; ok {
-			delete(n.preNodes, n.txid)
-		}
-	}
-	node.preNodes = map[string]bool{}
-}
-
 func (m *Mempool) doDelNode(node *Node) {
 	node.breakOutputs() // 断开 node 与所有父节点的关系。
 	m.deleteBucketKey(node)
-	m.deletePreAndBackNodes(node)
 	delete(m.confirmed, node.txid)
 	delete(m.unconfirmed, node.txid)
 	delete(m.orphans, node.txid)
@@ -300,8 +296,10 @@ func (m *Mempool) dfs(node *Node, ranged map[*Node]bool, f func(n *Node)) {
 	}
 
 	for _, v := range node.readonlyOutputs {
-		if v != nil && !ranged[node] {
-			m.dfs(v, ranged, f)
+		for _, n := range v {
+			if n != nil && !ranged[node] {
+				m.dfs(n, ranged, f)
+			}
 		}
 	}
 
@@ -654,13 +652,10 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 		node = n
 		if node.tx == nil {
 			node.tx = tx
-			node.readonlyInputs = make(map[string]*Node)
-			node.readonlyOutputs = make(map[string]*Node)
+			node.readonlyInputs = make([]*Node, len(tx.GetTxInputsExt()))
 			node.bucketKeyToNode = make(map[string]*Node)
 			node.txInputs = make([]*Node, len(tx.GetTxInputs()))
 			node.txInputsExt = make([]*Node, len(tx.GetTxInputsExt()))
-			node.preNodes = map[string]bool{}
-			node.backNodes = map[string]bool{}
 		}
 	} else {
 		node = NewNode(string(tx.Txid), tx)
@@ -695,7 +690,6 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 	m.processNodeOutputs(node, isOrphan)
 
 	m.putBucketKey(node)
-	node.updatePreAndBackNodes()
 	return nil
 }
 
@@ -753,10 +747,11 @@ func (m *Mempool) putBucketKey(node *Node) {
 func (m *Mempool) processEvidenceNode(node *Node) {
 	if stoneNode == nil {
 		stoneNode = NewNode(stoneNodeID, nil)
+		stoneNode.readonlyOutputs = append(stoneNode.readonlyOutputs, map[string]*Node{node.txid: node})
 	}
 	m.confirmed[stoneNode.txid] = stoneNode
-	stoneNode.readonlyOutputs[node.txid] = node
-	node.readonlyInputs[stoneNode.txid] = stoneNode
+	stoneNode.readonlyOutputs[0][node.txid] = node
+	node.readonlyInputs = append(node.readonlyInputs, stoneNode)
 	m.unconfirmed[node.txid] = node
 }
 
@@ -814,8 +809,10 @@ func (m *Mempool) checkAndMoveOrphan(node *Node) {
 		if n == nil {
 			continue
 		}
-		if _, ok := m.orphans[n.txid]; ok {
-			orphans = append(orphans, n)
+		for id, v := range n {
+			if _, ok := m.orphans[id]; ok {
+				orphans = append(orphans, v)
+			}
 		}
 	}
 
@@ -995,14 +992,16 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 	bucket := node.tx.TxInputsExt[index].GetBucket()
 	key := node.tx.TxInputsExt[index].GetKey()
 	bk := bucket + string(key)
+	offset := node.tx.TxInputsExt[index].GetRefOffset()
 	if emptyTxIDNode == nil {
 		emptyTxIDNode = NewNode("", nil)
+		emptyTxIDNode.readonlyOutputs = append(emptyTxIDNode.readonlyOutputs, make([]map[string]*Node, offset+1)...)
 	}
 
 	m.confirmed[""] = emptyTxIDNode
 	if node.isReadonlyKey(index) {
-		emptyTxIDNode.readonlyOutputs[node.txid] = node
-		node.readonlyInputs[emptyTxIDNode.txid] = emptyTxIDNode
+		emptyTxIDNode.readonlyOutputs[offset][node.txid] = node
+		node.readonlyInputs[index] = emptyTxIDNode
 	} else {
 		if _, ok := emptyTxIDNode.bucketKeyToNode[bk]; ok {
 			return errors.New("bucket and key invalid:" + bucket + "_" + string(key))
@@ -1148,7 +1147,6 @@ func (m *Mempool) moveToConfirmed(node *Node) {
 		}
 
 		n.breakOutputs() // 断绝父子关系
-		m.deletePreAndBackNodes(n)
 		m.confirmed[n.txid] = n
 
 		delete(m.unconfirmed, n.txid)
@@ -1167,10 +1165,6 @@ func (m *Mempool) cleanConfirmedTxs() {
 			continue
 		}
 		if len(node.bucketKeyToNode) != 0 {
-			continue
-		}
-
-		if len(node.readonlyOutputs) != 0 {
 			continue
 		}
 
@@ -1195,7 +1189,16 @@ func (m *Mempool) cleanConfirmedTxs() {
 			continue
 		}
 
-		m.deletePreAndBackNodes(node)
+		for _, n := range node.readonlyOutputs {
+			if len(n) > 0 {
+				hasChild = true
+				break
+			}
+		}
+		if hasChild {
+			continue
+		}
+
 		delete(m.confirmed, id)
 	}
 }

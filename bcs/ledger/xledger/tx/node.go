@@ -12,8 +12,10 @@ type Node struct {
 
 	tx *pb.Transaction
 
-	readonlyInputs  map[string]*Node // 当前交易对某些key为只读，将只读父交易加入此列表，rang 时使用。
-	readonlyOutputs map[string]*Node
+	// 读写的 txInputsExt 和 readonlyInputs 互斥，其中的 node 不重复.
+	// 如果在 txInputsExt 和 readonlyInputs 的同一个位置都存在交易，那么就是这两个交易对同一个 key 只读和读写了.
+	readonlyOutputs []map[string]*Node // 只读子交易，数组的index为当前交易输出的index，此处数组的长度与txOutputsExt长度一致。
+	readonlyInputs  []*Node
 
 	bucketKeyToNode map[string]*Node // txid 为空时，构造 mock node，所有子节点。key 为 bucket+key。
 
@@ -21,9 +23,6 @@ type Node struct {
 	txInputsExt  []*Node
 	txOutputs    []*Node
 	txOutputsExt []*Node
-
-	preNodes  map[string]bool // 当前交易的前置打包交易，当打包到当前交易时，需要保证前置交易全部打包进去了。
-	backNodes map[string]bool // 当前交易的后置交易。
 }
 
 // NewNode new node.
@@ -31,109 +30,14 @@ func NewNode(txid string, tx *pb.Transaction) *Node {
 	return &Node{
 		txid:            txid,
 		tx:              tx,
-		readonlyInputs:  make(map[string]*Node),
-		readonlyOutputs: make(map[string]*Node),
+		readonlyOutputs: make([]map[string]*Node, len(tx.GetTxOutputsExt())),
+		readonlyInputs:  make([]*Node, len(tx.GetTxInputsExt())),
 		bucketKeyToNode: make(map[string]*Node),
 		txInputs:        make([]*Node, len(tx.GetTxInputs())),
 		txInputsExt:     make([]*Node, len(tx.GetTxInputsExt())),
 		txOutputs:       make([]*Node, len(tx.GetTxOutputs())),
 		txOutputsExt:    make([]*Node, len(tx.GetTxOutputsExt())),
-		preNodes:        make(map[string]bool),
-		backNodes:       make(map[string]bool),
 	}
-}
-
-func (n *Node) hasPreNodes(ranged map[string]bool) bool {
-	for id := range n.preNodes {
-		if !ranged[id] {
-			return true
-		}
-	}
-	return false
-}
-
-func (n *Node) hasBackNodes(waitRange map[string]*Node) []*Node {
-	result := make([]*Node, 0, 100)
-	for id := range n.backNodes {
-		if wn, ok := waitRange[id]; ok {
-			result = append(result, wn)
-		}
-	}
-	return result
-}
-
-// 更新节点的前置和后置交易。
-func (n *Node) updatePreAndBackNodes() {
-	if n.tx == nil {
-		return
-	}
-	for i, inputExt := range n.tx.GetTxInputsExt() {
-		readonly := true
-		bucket := inputExt.GetBucket()
-		key := string(inputExt.GetKey())
-		refTxid := string(inputExt.GetRefTxid())
-		for _, ext := range n.tx.GetTxOutputsExt() {
-			if ext.GetBucket() == bucket && string(ext.GetKey()) == string(key) && len(ext.GetValue()) > 0 {
-				readonly = false
-				break
-			}
-		}
-
-		if readonly { // 只读交易，更新此交易的后置交易。
-			fn := n.readonlyInputs[refTxid]
-			wn := fn.hasWriteKey(bucket, key)
-			if wn != nil {
-				wn.preNodes[n.txid] = true
-				n.backNodes[wn.txid] = true
-			}
-		} else { // 读写交易，更新此交易的前置交易。
-			fn := n.txInputsExt[i]
-			for _, on := range fn.hasReadonlyKey(bucket, key) {
-				on.backNodes[n.txid] = true
-				n.preNodes[on.txid] = true
-			}
-		}
-	}
-}
-
-func (n *Node) hasWriteKey(bucket, key string) *Node {
-	for _, on := range n.txOutputsExt {
-		if on == nil {
-			continue
-		}
-		for _, ext := range on.tx.GetTxOutputsExt() {
-			if ext.GetBucket() == bucket && string(ext.GetKey()) == string(key) && len(ext.GetValue()) > 0 {
-				return on
-			}
-		}
-	}
-	return nil
-}
-
-func (n *Node) hasReadonlyKey(bucket, key string) []*Node {
-	result := []*Node{}
-	for _, rn := range n.readonlyOutputs {
-		read := false
-		for _, inExt := range rn.tx.GetTxInputsExt() {
-			if inExt.GetBucket() == bucket && string(inExt.GetKey()) == string(key) {
-				read = true
-				break
-			}
-		}
-		if read {
-			write := false
-			for _, ext := range rn.tx.GetTxOutputsExt() {
-				if ext.GetBucket() == bucket && string(ext.GetKey()) == string(key) && len(ext.GetValue()) > 0 {
-					write = true
-					break
-				}
-			}
-			if !write {
-				result = append(result, rn)
-			}
-		}
-	}
-	return result
 }
 
 // 已经去重。
@@ -142,7 +46,7 @@ func (n *Node) getAllChildren() []*Node {
 		return nil
 	}
 
-	result := make([]*Node, 0, len(n.txOutputs)+len(n.txOutputsExt)+len(n.readonlyOutputs))
+	result := make([]*Node, 0, len(n.txOutputs)+len(n.txOutputsExt))
 	nodesDuplicate := make(map[string]bool, cap(result))
 
 	for _, v := range n.txOutputs {
@@ -159,11 +63,14 @@ func (n *Node) getAllChildren() []*Node {
 		}
 	}
 
-	for _, v := range n.readonlyOutputs {
-		if v != nil && !nodesDuplicate[v.txid] {
-			result = append(result, v)
-			nodesDuplicate[v.txid] = true
+	for _, vv := range n.readonlyOutputs {
+		for _, v := range vv {
+			if v != nil && !nodesDuplicate[v.txid] {
+				result = append(result, v)
+				nodesDuplicate[v.txid] = true
+			}
 		}
+
 	}
 	return result
 }
@@ -174,7 +81,7 @@ func (n *Node) getAllParent() []*Node {
 		return nil
 	}
 
-	result := make([]*Node, 0, len(n.txInputs)+len(n.txInputsExt)+len(n.readonlyInputs))
+	result := make([]*Node, 0, len(n.txInputs)+len(n.txInputsExt))
 	nodesDuplicate := make(map[string]bool, cap(result))
 
 	for _, v := range n.txInputs {
@@ -265,8 +172,13 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 	}
 
 	if readonly {
-		node.readonlyOutputs[n.txid] = n
-		n.readonlyInputs[node.txid] = node
+		if node.readonlyOutputs[offset] == nil {
+			node.readonlyOutputs[offset] = map[string]*Node{n.txid: n}
+		} else {
+			node.readonlyOutputs[offset][n.txid] = n
+		}
+
+		n.readonlyInputs[index] = node
 	} else {
 		node.txOutputsExt[offset] = n
 		n.txInputsExt[index] = node
@@ -307,13 +219,16 @@ func (n *Node) breakOutputs() {
 		n.txInputsExt[i] = nil
 	}
 
-	for k, fn := range n.readonlyInputs {
+	for i, fn := range n.readonlyInputs {
 		if fn == nil {
 			continue
 		}
+		offset := 0
+		if len(n.tx.TxInputsExt) > 0 {
+			offset = int(n.tx.TxInputsExt[i].RefOffset)
+		}
 
-		delete(fn.readonlyOutputs, n.txid)
-		delete(n.readonlyInputs, k)
+		delete(fn.readonlyOutputs[offset], n.txid)
 	}
 }
 
@@ -331,7 +246,13 @@ func (n *Node) getInputSum() int {
 		}
 	}
 
-	return sum + len(n.readonlyInputs)
+	for _, n := range n.readonlyInputs {
+		if n != nil {
+			sum++
+		}
+	}
+
+	return sum
 }
 
 func (n *Node) removeAllInputs() {
