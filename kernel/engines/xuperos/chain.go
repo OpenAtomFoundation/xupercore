@@ -429,6 +429,12 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
 	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
 	t.log.Trace("create chain succ", "bcName", t.ctx.BCName)
+	// 11. EVM Proxy
+	_, err = t.relyAgent.CreateEVManager()
+	if err != nil {
+		t.log.Error("create evm proxy failed", "bcname", t.ctx.BCName, "err", err)
+		return fmt.Errorf("create evm proxy error")
+	}
 	return nil
 }
 

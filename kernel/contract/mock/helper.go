@@ -3,13 +3,14 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"io/ioutil"
 	"math/big"
 	"os"
 
 	"github.com/golang/protobuf/proto"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
@@ -75,8 +76,7 @@ func (t *TestHelper) UTXOState() *contract.UTXORWSet {
 
 func (t *TestHelper) initAccount() {
 	t.state.Put(utils.GetAccountBucket(), []byte(ContractAccount), &ledger.VersionedData{
-		RefTxid:  []byte("txid"),
-		PureData: nil,
+		RefTxid: []byte("txid"),
 	})
 
 	utxoReader := sandbox.NewUTXOReaderFromInput([]*protos.TxInput{
@@ -90,6 +90,9 @@ func (t *TestHelper) initAccount() {
 	})
 
 	t.utxoReader = utxoReader
+}
+func (t *TestHelper) SetUtxoReader(reader contract.UtxoReader) {
+	t.utxoReader = reader
 }
 
 func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args map[string][]byte) (*contract.Response, error) {
@@ -192,8 +195,8 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 		return nil, err
 	}
 	defer ctx.Release()
-
 	resp, err := ctx.Invoke(method, args)
+
 	if err != nil {
 		return nil, err
 	}

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/evm"
 	"path/filepath"
 
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -205,6 +206,12 @@ func (t *ChainRelyAgentImpl) CreateProposal() (propose.ProposeManager, error) {
 	}
 
 	return proposalObj, nil
+}
+
+func (t *ChainRelyAgentImpl) CreateEVManager() (evm.EVMProxy, error) {
+	ctx := t.chain.Context()
+	proxy, err := evm.NewEVMProxy(ctx.Contract)
+	return proxy, err
 }
 
 // 创建定时器任务实例
