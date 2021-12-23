@@ -18,6 +18,10 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
 
+const (
+	callerContractName = "caller"
+)
+
 func compile(th *mock.TestHelper) ([]byte, error) {
 	target := filepath.Join(th.Basedir(), "counter.bin")
 	cmd := exec.Command("go", "build", "-o", target)
@@ -115,5 +119,82 @@ func TestBridgeFeatures(t *testing.T) {
 			t.Fatal(err)
 		}
 		fmt.Println(string(resp.Body))
+	})
+}
+
+func TestContractCall(t *testing.T) {
+	var logger = log15.New()
+	var contractConfig = &contract.ContractConfig{
+		EnableUpgrade: true,
+		Xkernel: contract.XkernelConfig{
+			Enable: true,
+			Driver: "default",
+		},
+		Native: contract.NativeConfig{
+			Enable: true,
+			Driver: "native",
+		},
+		LogDriver: &mock.MockLogger{
+			logger,
+		},
+	}
+	buffer := bytes.NewBuffer([]byte{})
+	logger.SetHandler(log15.StreamHandler(buffer, log15.LogfmtFormat()))
+
+	th := mock.NewTestHelper(contractConfig)
+	defer th.Close()
+
+	bin, err := compile(th)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = th.Deploy("native", "go", mock.FeaturesContractName, bin, map[string][]byte{
+		"creator": []byte("xchain"),
+	})
+
+	_, err = th.Deploy("native", "go", callerContractName, bin, map[string][]byte{})
+	if err != nil {
+		t.Error(err)
+	}
+
+	t.Run("DirectCall", func(t *testing.T) {
+		resp, err := th.Invoke("native", mock.FeaturesContractName, "Caller", map[string][]byte{})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if string(resp.Body) != mock.ContractAccount {
+			t.Errorf("want %s, got %s", mock.ContractAccount, string(resp.Body))
+			return
+		}
+	})
+
+	t.Run("ContractCall", func(t *testing.T) {
+		resp, err := th.Invoke("native", mock.FeaturesContractName, "Invoke", map[string][]byte{
+			"contract": []byte(callerContractName),
+			"method":   []byte("Caller"),
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+
+		if string(resp.Body) != mock.FeaturesContractName {
+			t.Errorf("want %s,got %s\n", mock.FeaturesContractName, string(resp.Body))
+		}
+	})
+	t.Run("RecursiongCall", func(t *testing.T) {
+		resp, err := th.Invoke("native", mock.FeaturesContractName, "Invoke", map[string][]byte{
+			"contract": []byte(mock.FeaturesContractName),
+			"method":   []byte("Caller"),
+		})
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if resp.Status < contract.StatusErrorThreshold {
+			t.Error("recursive contract call not permitted")
+		}
 	})
 }
