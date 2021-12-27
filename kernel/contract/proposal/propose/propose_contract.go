@@ -191,13 +191,13 @@ func (t *KernMethod) Thaw(ctx contract.KContext) (*contract.Response, error) {
 	args := ctx.Args()
 	proposalIDBuf := args["proposal_id"]
 	if proposalIDBuf == nil {
-		return nil, fmt.Errorf("vote failed, proposal_id or amount is nil")
+		return nil, fmt.Errorf("thaw failed, proposal_id or amount is nil")
 	}
 
 	// 获取提案
 	proposal, err := t.getProposal(ctx, string(proposalIDBuf))
 	if err != nil {
-		return nil, fmt.Errorf("vote failed, no proposal found, err: %v", err.Error())
+		return nil, fmt.Errorf("thaw failed, no proposal found, err: %v", err.Error())
 	}
 
 	// 校验提案者身份
