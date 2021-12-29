@@ -6,13 +6,11 @@ import (
 	defaultx509 "crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"errors"
 	"io/ioutil"
 	math_rand "math/rand"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	tls "github.com/tjfoc/gmsm/gmtls"
@@ -27,35 +25,15 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/config"
 )
 
-// serverName  为key,缓存 creds
-var serverNameMap = make(map[string]credentials.TransportCredentials)
-
-//修改全局变量 serverNameMap 加锁
-var mu sync.Mutex
-
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {
 
-	if len(serviceName) < 1 {
-		return nil, errors.New("serviceName is empty")
-	}
-
-	//如果缓存中有值
-	if creds, ok := serverNameMap[serviceName]; ok {
-		return creds, nil
-	}
-
-	mu.Lock()
-	defer mu.Unlock()
 	//读取 cacert.pem 证书
 	bs, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
 	if err != nil {
 		return nil, err
 	}
-	cacert, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
-	if err != nil {
-		return nil, err
-	}
-	pb, _ := pem.Decode(cacert)
+
+	pb, _ := pem.Decode(bs)
 	x509cert, err := x509.ParseCertificate(pb.Bytes)
 	if err != nil {
 		return nil, err
@@ -80,7 +58,7 @@ func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) 
 				ClientCAs:    certPool,
 				ClientAuth:   tls.RequireAndVerifyClientCert,
 			})
-		serverNameMap[serviceName] = creds
+
 		return creds, nil
 	} else { //非国密
 		certPool := defaultx509.NewCertPool()
@@ -102,7 +80,6 @@ func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) 
 				ClientCAs:    certPool,
 				ClientAuth:   defaulttls.RequireAndVerifyClientCert,
 			})
-		serverNameMap[serviceName] = creds
 		return creds, nil
 	}
 
