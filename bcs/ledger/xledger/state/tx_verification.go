@@ -160,9 +160,9 @@ func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isR
 		t.log.Warn("get timer tasks failed", "err", genErr)
 		return false, genErr
 	}
-	if len(autoTx.TxOutputsExt) == 0 {
-		return false, fmt.Errorf("get timer tasks failed, no tx outputs ext")
-	}
+	//if len(autoTx.TxOutputsExt) == 0 {
+	//	return false, fmt.Errorf("get timer tasks failed, no tx outputs ext")
+	//}
 
 	// Pre processing of tx data
 	if !isRootTx && tx.Version == RootTxVersion {
