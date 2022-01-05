@@ -83,6 +83,7 @@ func InitQCTree(startHeight int64, ledger cctx.LedgerRely, log logs.Logger) *QCP
 	// 初始状态应该是start高度的前一个区块为genesisQC，即tipBlock
 	g, err := ledger.QueryBlockHeaderByHeight(startHeight - 1)
 	if err != nil {
+		log.Warn("InitQCTree QueryBlockHeaderByHeight failed", "error", err.Error())
 		return nil
 	}
 	gQC := NewQuorumCert(

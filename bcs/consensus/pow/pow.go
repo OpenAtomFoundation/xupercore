@@ -9,7 +9,6 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 )
@@ -48,7 +47,7 @@ type PoWConsensus struct {
 }
 
 // NewPoWConsensus 初始化实例
-func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+func NewPoWConsensus(cCtx context.ConsensusCtx, cCfg def.ConsensusConfig) consensus.ConsensusImplInterface {
 	// 解析config中需要的字段
 	if cCtx.XLog == nil {
 		return nil
@@ -237,7 +236,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 }
 
 // ProcessBeforeMiner 更新下一次pow挖矿时的targetBits
-func (pow *PoWConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+func (pow *PoWConsensus) ProcessBeforeMiner(height, timestamp int64) ([]byte, []byte, error) {
 	tipHeight := pow.Ledger.QueryTipBlockHeader().GetHeight()
 	preBlock, err := pow.Ledger.QueryBlockHeaderByHeight(tipHeight)
 	if err != nil {
@@ -268,7 +267,7 @@ func (pow *PoWConsensus) ProcessConfirmBlock(block context.BlockInterface) error
 }
 
 // GetConsensusStatus 获取pow实例状态
-func (pow *PoWConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
+func (pow *PoWConsensus) GetConsensusStatus() (consensus.ConsensusStatus, error) {
 	return pow.status, nil
 }
 

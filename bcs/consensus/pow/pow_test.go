@@ -107,7 +107,7 @@ func TestProcessBeforeMiner(t *testing.T) {
 		return
 	}
 	i := NewPoWConsensus(*cCtx, getConsensusConf(getPoWConsensusConf()))
-	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
+	_, _, err = i.ProcessBeforeMiner(0, time.Now().UnixNano())
 	if err != nil {
 		t.Error("ProcessBeforeMiner error.")
 	}

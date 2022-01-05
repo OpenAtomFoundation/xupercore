@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	"github.com/xuperchain/xupercore/kernel/consensus/context"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
@@ -76,7 +75,7 @@ type FakeConsensusImp struct {
 	status *FakeConsensusStatus
 }
 
-func NewFakeConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+func NewFakeConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) ConsensusImplInterface {
 	status := &FakeConsensusStatus{
 		beginHeight:   cCfg.StartHeight,
 		consensusName: cCfg.ConsensusName,
@@ -95,7 +94,7 @@ func (con *FakeConsensusImp) CheckMinerMatch(ctx xcontext.XContext, block cctx.B
 	return true, nil
 }
 
-func (con *FakeConsensusImp) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+func (con *FakeConsensusImp) ProcessBeforeMiner(height, timestamp int64) ([]byte, []byte, error) {
 	return nil, nil, nil
 }
 
@@ -103,7 +102,7 @@ func (con *FakeConsensusImp) ProcessConfirmBlock(block cctx.BlockInterface) erro
 	return nil
 }
 
-func (con *FakeConsensusImp) GetConsensusStatus() (base.ConsensusStatus, error) {
+func (con *FakeConsensusImp) GetConsensusStatus() (ConsensusStatus, error) {
 	return con.status, nil
 }
 
@@ -128,7 +127,7 @@ type AnotherConsensusImp struct {
 	status *FakeConsensusStatus
 }
 
-func NewAnotherConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+func NewAnotherConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) ConsensusImplInterface {
 	status := &FakeConsensusStatus{
 		beginHeight:   cCfg.StartHeight,
 		consensusName: cCfg.ConsensusName,
@@ -147,7 +146,7 @@ func (con *AnotherConsensusImp) CheckMinerMatch(ctx xcontext.XContext, block cct
 	return true, nil
 }
 
-func (con *AnotherConsensusImp) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+func (con *AnotherConsensusImp) ProcessBeforeMiner(height, timestamp int64) ([]byte, []byte, error) {
 	return nil, nil, nil
 }
 
@@ -159,7 +158,7 @@ func (con *AnotherConsensusImp) ProcessConfirmBlock(block cctx.BlockInterface) e
 	return nil
 }
 
-func (con *AnotherConsensusImp) GetConsensusStatus() (base.ConsensusStatus, error) {
+func (con *AnotherConsensusImp) GetConsensusStatus() (ConsensusStatus, error) {
 	return con.status, nil
 }
 
@@ -345,7 +344,8 @@ func TestProcessBeforeMiner(t *testing.T) {
 	l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
 	ctx := GetConsensusCtx(l)
 	pc, _ := NewPluggableConsensus(ctx)
-	_, _, err := pc.ProcessBeforeMiner(time.Now().UnixNano())
+	newHeight := l.GetTipBlock().GetHeight() + 1
+	_, _, err := pc.ProcessBeforeMiner(newHeight, time.Now().UnixNano())
 	if err != nil {
 		t.Error("ProcessBeforeMiner error")
 	}
