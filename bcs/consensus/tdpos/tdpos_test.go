@@ -207,6 +207,7 @@ func TestBFT(t *testing.T) {
 		return
 	}
 	tdpos, _ := i.(*tdposConsensus)
+	tdpos.initBFT()
 	l, _ := tdpos.election.ledger.(*kmock.FakeLedger)
 	tdpos.election.address = "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
 	// 1, 2区块storage修复

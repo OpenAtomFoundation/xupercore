@@ -203,6 +203,7 @@ func TestBFT(t *testing.T) {
 		return
 	}
 	xpoa, _ := i.(*xpoaConsensus)
+	xpoa.initBFT()
 	l, _ := xpoa.election.ledger.(*kmock.FakeLedger)
 	xpoa.election.address = "now=dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
 	// 1, 2区块storage修复
