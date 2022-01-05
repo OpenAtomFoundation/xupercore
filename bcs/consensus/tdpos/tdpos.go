@@ -26,7 +26,7 @@ func init() {
 }
 
 type tdposConsensus struct {
-	cCtx cctx.ConsensusCtx
+	cCtx      cctx.ConsensusCtx
 	bcName    string
 	config    *tdposConfig
 	isProduce map[int64]bool
@@ -85,7 +85,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consens
 		status:    status,
 		contract:  cCtx.Contract,
 		log:       cCtx.XLog,
-		cCtx:	   cCtx,
+		cCtx:      cCtx,
 	}
 
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
@@ -330,14 +330,14 @@ func (tp *tdposConsensus) initBFT() error {
 		CurrentView: tp.status.StartHeight,
 	}
 	// 重启状态检查1，pacemaker需要重置
-	tipHeight :=  tp.cCtx.Ledger.QueryTipBlockHeader().GetHeight()
+	tipHeight := tp.cCtx.Ledger.QueryTipBlockHeader().GetHeight()
 	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
 		pacemaker.CurrentView = tipHeight - 1
 	}
 	saftyrules := &chainedBft.DefaultSaftyRules{
 		Crypto: cryptoClient,
 		QcTree: qcTree,
-		Log:     tp.cCtx.XLog,
+		Log:    tp.cCtx.XLog,
 	}
 	smr := chainedBft.NewSmr(tp.bcName, tp.election.address, tp.log, tp.cCtx.Network, cryptoClient, pacemaker, saftyrules, tp.election, qcTree)
 	// 重启状态检查2，重做tipBlock，此时需重装载justify签名

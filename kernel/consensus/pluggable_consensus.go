@@ -57,7 +57,7 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (PluggableConsensusInterface,
 	pc := &PluggableConsensus{
 		ctx: cCtx,
 		stepConsensus: &stepConsensus{
-			cons:            []ConsensusImplInterface{},
+			cons: []ConsensusImplInterface{},
 		},
 	}
 	if cCtx.Contract.GetKernRegistry() == nil {
@@ -205,7 +205,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 	if cfg.ConsensusName == "pow" {
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus can not be pow")
 		return common.NewContractErrResponse(common.StatusErr,
-			"Pluggable Consensus::updateConsensus can not be pow"),
+				"Pluggable Consensus::updateConsensus can not be pow"),
 			errors.New("updateConsensus can not be pow")
 	}
 
@@ -381,7 +381,7 @@ func (pc *PluggableConsensus) ProcessConfirmBlock(block cctx.BlockInterface) err
 // GetConsensusStatus 调用具体实例的GetConsensusStatus()，返回接口
 func (pc *PluggableConsensus) GetConsensusStatus() (ConsensusStatus, error) {
 	block := pc.ctx.Ledger.GetTipBlock()
-	con, _ := pc.getCurrentConsensusItem(block.GetHeight()+1)
+	con, _ := pc.getCurrentConsensusItem(block.GetHeight() + 1)
 	if con == nil {
 		pc.ctx.XLog.Error("Pluggable Consensus::GetConsensusStatus::tail consensus item is empty", "err", EmptyConsensusListErr)
 		return nil, EmptyConsensusListErr
@@ -405,7 +405,7 @@ func (pc *PluggableConsensus) SwitchConsensus(height int64) error {
 		return errors.New("pluggable consensus SwitchConsensus GetConsensusStatus failed")
 	}
 	pc.ctx.XLog.Debug("pluggable consensus SwitchConsensus", "block height", height,
-		"current consensus start height", consensusStatus.GetConsensusBeginInfo(),"pc.stepConsensus.getSwitch()", pc.stepConsensus.getSwitch())
+		"current consensus start height", consensusStatus.GetConsensusBeginInfo(), "pc.stepConsensus.getSwitch()", pc.stepConsensus.getSwitch())
 
 	if height >= consensusStatus.GetConsensusBeginInfo()-1 && pc.stepConsensus.getSwitch() {
 		pc.ctx.XLog.Debug("pluggable consensus SwitchConsensus switch consensus is true")

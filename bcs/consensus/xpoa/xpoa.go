@@ -24,7 +24,7 @@ func init() {
 }
 
 type xpoaConsensus struct {
-	cCtx cctx.ConsensusCtx
+	cCtx          cctx.ConsensusCtx
 	bcName        string
 	election      *xpoaSchedule
 	smr           *chainedBft.Smr
@@ -95,7 +95,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consensu
 	}
 	// create xpoaConsensus实例
 	xpoa := &xpoaConsensus{
-		cCtx:     	   cCtx,
+		cCtx:          cCtx,
 		bcName:        cCtx.BcName,
 		election:      schedule,
 		isProduce:     make(map[int64]bool),
