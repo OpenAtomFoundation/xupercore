@@ -47,7 +47,7 @@ type ChainCtx struct {
 	// 合约
 	Contract contract.Manager
 	// 共识
-	Consensus consensus.ConsensusInterface
+	Consensus consensus.PluggableConsensusInterface
 	// 加密
 	Crypto cryptoBase.CryptoClient
 	// 权限

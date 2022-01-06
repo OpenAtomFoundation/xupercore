@@ -10,7 +10,6 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
 	"github.com/xuperchain/xupercore/kernel/consensus/def"
 )
@@ -32,7 +31,7 @@ type SingleConsensus struct {
 }
 
 // NewSingleConsensus 初始化实例
-func NewSingleConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+func NewSingleConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consensus.ConsensusImplInterface {
 	// 解析config中需要的字段
 	if cCtx.XLog == nil {
 		return nil
@@ -133,7 +132,7 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 }
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
-func (s *SingleConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+func (s *SingleConsensus) ProcessBeforeMiner(height, timestamp int64) ([]byte, []byte, error) {
 	return nil, nil, nil
 }
 
@@ -148,7 +147,7 @@ func (s *SingleConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 }
 
 // GetStatus 获取区块链共识信息
-func (s *SingleConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
+func (s *SingleConsensus) GetConsensusStatus() (consensus.ConsensusStatus, error) {
 	return s.status, nil
 }
 
