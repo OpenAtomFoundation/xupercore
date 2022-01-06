@@ -34,6 +34,7 @@ type tdposConsensus struct {
 	status    *TdposStatus
 	smr       *chainedBft.Smr
 	contract  contract.Manager
+	kMethod   map[string]contract.KernMethod
 	log       logs.Logger
 }
 
@@ -77,6 +78,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consens
 	if schedule.enableChainedBFT {
 		status.Name = "xpos"
 	}
+
 	tdpos := &tdposConsensus{
 		bcName:    cCtx.BcName,
 		config:    xconfig,
@@ -87,6 +89,16 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consens
 		log:       cCtx.XLog,
 		cCtx:      cCtx,
 	}
+
+	tdposKMethods := map[string]contract.KernMethod{
+		contractNominateCandidate: tdpos.runNominateCandidate,
+		contractRevokeCandidate:   tdpos.runRevokeCandidate,
+		contractVote:              tdpos.runVote,
+		contractRevokeVote:        tdpos.runRevokeVote,
+		contractGetTdposInfos:     tdpos.runGetTdposInfos,
+	}
+
+	tdpos.kMethod = tdposKMethods
 
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
 	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
@@ -296,14 +308,7 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 // 共识实例的启动逻辑
 func (tp *tdposConsensus) Start() error {
 	// 注册合约方法
-	tdposKMethods := map[string]contract.KernMethod{
-		contractNominateCandidate: tp.runNominateCandidate,
-		contractRevokeCandidate:   tp.runRevokeCandidate,
-		contractVote:              tp.runVote,
-		contractRevokeVote:        tp.runRevokeVote,
-		contractGetTdposInfos:     tp.runGetTdposInfos,
-	}
-	for method, f := range tdposKMethods {
+	for method, f := range tp.kMethod {
 		// 若有历史句柄，删除老句柄
 		tp.contract.GetKernRegistry().UnregisterKernMethod(tp.election.bindContractBucket, method)
 		tp.contract.GetKernRegistry().RegisterKernMethod(tp.election.bindContractBucket, method, f)
@@ -358,14 +363,7 @@ func (tp *tdposConsensus) initBFT() error {
 // 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 func (tp *tdposConsensus) Stop() error {
 	// 注销合约方法
-	tdposKMethods := map[string]contract.KernMethod{
-		contractNominateCandidate: tp.runNominateCandidate,
-		contractRevokeCandidate:   tp.runRevokeCandidate,
-		contractVote:              tp.runVote,
-		contractRevokeVote:        tp.runRevokeVote,
-		contractGetTdposInfos:     tp.runGetTdposInfos,
-	}
-	for method, _ := range tdposKMethods {
+	for method, _ := range tp.kMethod {
 		// 若有历史句柄，删除老句柄
 		tp.contract.GetKernRegistry().UnregisterKernMethod(tp.election.bindContractBucket, method)
 	}

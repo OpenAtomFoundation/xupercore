@@ -33,6 +33,7 @@ type xpoaConsensus struct {
 	initTimestamp int64
 	status        *XpoaStatus
 	contract      contract.Manager
+	kMethod       map[string]contract.KernMethod
 	log           logs.Logger
 }
 
@@ -105,6 +106,13 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consensu
 		contract:      cCtx.Contract,
 		log:           cCtx.XLog,
 	}
+
+	xpoaKMethods := map[string]contract.KernMethod{
+		contractEditValidate: xpoa.methodEditValidates,
+		contractGetValidates: xpoa.methodGetValidates,
+	}
+
+	xpoa.kMethod = xpoaKMethods
 
 	// 凡属于共识升级的逻辑，新建的Xpoa实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
 	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / xpoa.config.Period
@@ -314,11 +322,7 @@ func (x *xpoaConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 // 共识实例的启动逻辑
 func (x *xpoaConsensus) Start() error {
 	// 注册合约方法
-	xpoaKMethods := map[string]contract.KernMethod{
-		contractEditValidate: x.methodEditValidates,
-		contractGetValidates: x.methodGetValidates,
-	}
-	for method, f := range xpoaKMethods {
+	for method, f := range x.kMethod {
 		// 若有历史句柄，删除老句柄
 		x.contract.GetKernRegistry().UnregisterKernMethod(x.election.bindContractBucket, method)
 		x.contract.GetKernRegistry().RegisterKernMethod(x.election.bindContractBucket, method, f)
@@ -336,11 +340,7 @@ func (x *xpoaConsensus) Start() error {
 // 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 func (x *xpoaConsensus) Stop() error {
 	// 注销合约方法
-	xpoaKMethods := map[string]contract.KernMethod{
-		contractEditValidate: x.methodEditValidates,
-		contractGetValidates: x.methodGetValidates,
-	}
-	for method := range xpoaKMethods {
+	for method := range x.kMethod {
 		// 若有历史句柄，删除老句柄
 		x.contract.GetKernRegistry().UnregisterKernMethod(x.election.bindContractBucket, method)
 	}

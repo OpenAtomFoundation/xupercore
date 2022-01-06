@@ -229,15 +229,15 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		}
 	}
 
-	// 检查新共识配置是否正确
-	if err := checkConsensusVersion(c, cfg); err != nil {
-		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::wrong value, pls check your proposal file.", "error", err)
-		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
-	}
-
 	// 检查生效高度
 	if err := pc.checkConsensusHeight(cfg); err != nil {
 		pc.ctx.GetLog().Error("Pluggable Consensus::updateConsensus::check consensus height error")
+		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
+	}
+
+	// 检查新共识配置是否正确
+	if err := checkConsensusVersion(c, cfg); err != nil {
+		pc.ctx.XLog.Error("Pluggable Consensus::updateConsensus::wrong value, pls check your proposal file.", "error", err)
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
 
