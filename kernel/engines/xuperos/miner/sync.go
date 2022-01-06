@@ -410,7 +410,12 @@ func (t *Miner) batchConfirmBlocks(ctx xctx.XContext, blocks []*lpb.InternalBloc
 			return errors.New("consensus process confirm block failed")
 		}
 		trace("ConProcessConfirmBlock")
-
+		err = t.ctx.Consensus.SwitchConsensus(block.Height)
+		if err != nil {
+			ctx.GetLog().Warn("SwitchConsensus failed", "bcname", t.ctx.BCName,
+				"err", err, "blockId", utils.F(block.GetBlockid()))
+			// todo 这里暂时不返回错误
+		}
 		ctx.GetLog().Info("confirm block finish", "blockId", utils.F(block.Blockid), "height", block.Height, "txCount", block.TxCount, "size", proto.Size(block), "costs", timer.Print())
 	}
 

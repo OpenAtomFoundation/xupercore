@@ -199,7 +199,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 	// 1.共识挖矿前处理
 	height := t.ctx.Ledger.GetMeta().TrunkHeight + 1
 	now := time.Now()
-	truncateTarget, extData, err := t.ctx.Consensus.ProcessBeforeMiner(now.UnixNano())
+	truncateTarget, extData, err := t.ctx.Consensus.ProcessBeforeMiner(height, now.UnixNano())
 	ctx.GetTimer().Mark("ProcessBeforeMiner")
 	if err != nil {
 		ctx.GetLog().Warn("consensus process before miner failed", "err", err)
@@ -248,6 +248,12 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 		ctx.GetLog().Warn("confirm block for miner failed", "err", err,
 			"blockId", utils.F(block.GetBlockid()))
 		return err
+	}
+	err = t.ctx.Consensus.SwitchConsensus(block.Height)
+	if err != nil {
+		ctx.GetLog().Warn("SwitchConsensus failed", "bcname", t.ctx.BCName,
+			"err", err, "blockId", utils.F(block.GetBlockid()))
+		// todo 这里暂时不返回错误
 	}
 
 	ctx.GetLog().Info("finish new block generation", "blockId", utils.F(block.GetBlockid()),

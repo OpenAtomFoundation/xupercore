@@ -146,7 +146,7 @@ func (t *ChainRelyAgentImpl) CreateContract(xmreader kledger.XMReader) (contract
 }
 
 // 创建共识实例
-func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.ConsensusInterface, error) {
+func (t *ChainRelyAgentImpl) CreateConsensus() (consensus.PluggableConsensusInterface, error) {
 	ctx := t.chain.Context()
 	legAgent := NewLedgerAgent(ctx)
 	consCtx := cctx.ConsensusCtx{
