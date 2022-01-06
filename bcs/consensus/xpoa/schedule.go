@@ -165,6 +165,8 @@ func (s *xpoaSchedule) GetLocalLeader(timestamp int64, round int64, storage []by
 	if blockPos < 0 || blockPos > s.blockNum || pos >= int64(len(localValidators)) {
 		return ""
 	}
+	s.log.Debug("xpoa schedule miner Scheduling", "pos", pos, "blockPos",
+		blockPos, "timestamp", timestamp, "validators", localValidators, "leader", localValidators[pos])
 	return localValidators[pos]
 }
 
@@ -188,6 +190,7 @@ func (s *xpoaSchedule) getValidatesByBlockId(blockId []byte) ([]string, error) {
 		s.log.Error("Xpoa::getValidatesByBlockId::loadValidatorsMultiInfo error.", "err", err)
 		return nil, err
 	}
+	s.log.Debug("xpoaSchedule getValidatesByBlockId result", "validators", validators)
 	return validators, nil
 }
 
