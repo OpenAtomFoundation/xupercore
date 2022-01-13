@@ -201,12 +201,23 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus::proposalArgsUnmarshal error", "error", err)
 		return common.NewContractErrResponse(common.StatusErr, err.Error()), err
 	}
-	// pow 类共识不允许升级
+
+	// 不允许升级为 pow 类共识
 	if cfg.ConsensusName == "pow" {
 		pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus can not be pow")
 		return common.NewContractErrResponse(common.StatusErr,
-				"Pluggable Consensus::updateConsensus can not be pow"),
-			errors.New("updateConsensus can not be pow")
+				"Pluggable Consensus::updateConsensus target can not be pow"),
+			errors.New("updateConsensus target can not be pow")
+	}
+
+	// 当前共识如果是pow类共识，不允许升级
+	if cur := pc.stepConsensus.tail(); cur != nil {
+		if curStatus, err := cur.GetConsensusStatus(); err != nil || curStatus.GetConsensusName() == "pow" {
+			pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus current consensus is pow, can not upgrade from pow", "err", err)
+			return common.NewContractErrResponse(common.StatusErr,
+					"Pluggable Consensus::updateConsensus current consensus is pow"),
+				errors.New("updateConsensus can not upgrade from pow")
+		}
 	}
 
 	// 更新合约存储, 注意, 此次更新需要检查是否是初次升级情况，此时需要把genesisConf也写进map中
