@@ -213,6 +213,7 @@ func (pc *PluggableConsensus) updateConsensus(contractCtx contract.KContext) (*c
 	// 当前共识如果是pow类共识，不允许升级
 	if cur := pc.stepConsensus.tail(); cur != nil {
 		if curStatus, err := cur.GetConsensusStatus(); err != nil || curStatus.GetConsensusName() == "pow" {
+			pc.ctx.XLog.Warn("Pluggable Consensus::updateConsensus current consensus is pow, can not upgrade from pow", "err", err)
 			return common.NewContractErrResponse(common.StatusErr,
 					"Pluggable Consensus::updateConsensus current consensus is pow"),
 				errors.New("updateConsensus can not upgrade from pow")
