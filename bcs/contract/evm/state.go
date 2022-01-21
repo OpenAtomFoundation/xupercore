@@ -105,10 +105,7 @@ func (s *stateManager) Transfer(from, to crypto.Address, amount *big.Int) error 
 		return err
 	}
 
-	_, _ = fromAddr, toAddr
-	return nil
-	//TODO
-	// return s.ctx.Cache.Transfer(fromAddr, toAddr, amount)
+	return s.ctx.State.Transfer(fromAddr, toAddr, amount)
 }
 
 type blockStateManager struct {
