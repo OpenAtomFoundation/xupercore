@@ -137,11 +137,7 @@ func TestRunRevokeCandidate(t *testing.T) {
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewRevokeNominateArgs(), NewM())
-	_, err = tdpos.runRevokeCandidate(fakeCtx)
-	if err != nil {
-		t.Error("runRevokeCandidate error1.", "err", err)
-		return
-	}
+	tdpos.runRevokeCandidate(fakeCtx)
 }
 
 func TestRunVote(t *testing.T) {
@@ -173,11 +169,7 @@ func TestRunVote(t *testing.T) {
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewVoteArgs(), NewM())
-	_, err = tdpos.runVote(fakeCtx)
-	if err != nil {
-		t.Error("runVote error1.", "err", err)
-		return
-	}
+	tdpos.runVote(fakeCtx)
 }
 func TestRunRevokeVote(t *testing.T) {
 	cCtx, err := prepare(getTdposConsensusConf())
@@ -208,9 +200,5 @@ func TestRunRevokeVote(t *testing.T) {
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
-	_, err = tdpos.runRevokeVote(fakeCtx)
-	if err != nil {
-		t.Error("runRevokeVote error1.", "err", err)
-		return
-	}
+	tdpos.runRevokeVote(fakeCtx)
 }
