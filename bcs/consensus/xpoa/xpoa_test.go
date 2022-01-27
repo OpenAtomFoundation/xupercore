@@ -132,7 +132,7 @@ func TestProcessBeforeMiner(t *testing.T) {
 		t.Error("NewXpoaConsensus error", "conf", getConfig(getXpoaConsensusConf()))
 		return
 	}
-	i.ProcessBeforeMiner(time.Now().UnixNano())
+	i.ProcessBeforeMiner(0, time.Now().UnixNano())
 }
 
 func TestProcessConfirmBlock(t *testing.T) {
@@ -203,6 +203,7 @@ func TestBFT(t *testing.T) {
 		return
 	}
 	xpoa, _ := i.(*xpoaConsensus)
+	xpoa.initBFT()
 	l, _ := xpoa.election.ledger.(*kmock.FakeLedger)
 	xpoa.election.address = "now=dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
 	// 1, 2区块storage修复
@@ -215,7 +216,7 @@ func TestBFT(t *testing.T) {
 	l.SetConsensusStorage(3, SetXpoaStorage(3, justify(3)))
 	b33, _ := l.QueryBlockHeaderByHeight(3)
 	xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
-	xpoa.ProcessBeforeMiner(1616481107 * int64(time.Millisecond))
+	xpoa.ProcessBeforeMiner(0, 1616481107*int64(time.Millisecond))
 	err = xpoa.ProcessConfirmBlock(b33)
 	if err != nil {
 		t.Error("ProcessConfirmBlock error", "err", err)

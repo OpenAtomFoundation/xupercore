@@ -3,11 +3,11 @@ package tdpos
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/consensus"
-	"github.com/xuperchain/xupercore/kernel/consensus/base"
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
 	chainedBft "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft"
 	cCrypto "github.com/xuperchain/xupercore/kernel/consensus/base/driver/chained-bft/crypto"
@@ -26,16 +26,19 @@ func init() {
 }
 
 type tdposConsensus struct {
+	cCtx      cctx.ConsensusCtx
 	bcName    string
 	config    *tdposConfig
 	isProduce map[int64]bool
 	election  *tdposSchedule
 	status    *TdposStatus
 	smr       *chainedBft.Smr
+	contract  contract.Manager
+	kMethod   map[string]contract.KernMethod
 	log       logs.Logger
 }
 
-func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.ConsensusImplInterface {
+func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consensus.ConsensusImplInterface {
 	// 解析config中需要的字段
 	if cCtx.XLog == nil {
 		return nil
@@ -75,15 +78,18 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 	if schedule.enableChainedBFT {
 		status.Name = "xpos"
 	}
+
 	tdpos := &tdposConsensus{
 		bcName:    cCtx.BcName,
 		config:    xconfig,
 		isProduce: make(map[int64]bool),
 		election:  schedule,
 		status:    status,
+		contract:  cCtx.Contract,
 		log:       cCtx.XLog,
+		cCtx:      cCtx,
 	}
-	// 注册合约方法
+
 	tdposKMethods := map[string]contract.KernMethod{
 		contractNominateCandidate: tdpos.runNominateCandidate,
 		contractRevokeCandidate:   tdpos.runRevokeCandidate,
@@ -91,54 +97,12 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) base.Co
 		contractRevokeVote:        tdpos.runRevokeVote,
 		contractGetTdposInfos:     tdpos.runGetTdposInfos,
 	}
-	for method, f := range tdposKMethods {
-		// 若有历史句柄，删除老句柄
-		cCtx.Contract.GetKernRegistry().UnregisterKernMethod(schedule.bindContractBucket, method)
-		cCtx.Contract.GetKernRegistry().RegisterKernMethod(schedule.bindContractBucket, method, f)
-	}
+
+	tdpos.kMethod = tdposKMethods
 
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
 	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
 	tdpos.isProduce[timeKey] = true
-	if !schedule.enableChainedBFT {
-		cCtx.XLog.Debug("consensus:tdpos:NewTdposConsensus: create a tdpos instance successfully.")
-		return tdpos
-	}
-
-	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
-	cryptoClient := cCrypto.NewCBFTCrypto(cCtx.Address, cCtx.Crypto)
-	qcTree := quorumcert.InitQCTree(cCfg.StartHeight, cCtx.Ledger, cCtx.XLog)
-	if qcTree == nil {
-		cCtx.XLog.Error("consensus:tdpos:NewTdposConsensus: init QCTree err", "startHeight", cCfg.StartHeight)
-		return nil
-	}
-	pacemaker := &chainedBft.DefaultPaceMaker{
-		CurrentView: cCfg.StartHeight,
-	}
-	// 重启状态检查1，pacemaker需要重置
-	tipHeight := cCtx.Ledger.QueryTipBlockHeader().GetHeight()
-	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-		pacemaker.CurrentView = tipHeight - 1
-	}
-	saftyrules := &chainedBft.DefaultSaftyRules{
-		Crypto: cryptoClient,
-		QcTree: qcTree,
-		Log:    cCtx.XLog,
-	}
-	smr := chainedBft.NewSmr(cCtx.BcName, schedule.address, cCtx.XLog, cCtx.Network, cryptoClient, pacemaker, saftyrules, schedule, qcTree)
-	// 重启状态检查2，重做tipBlock，此时需重装载justify签名
-	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
-		for i := int64(0); i < 3; i++ {
-			b, err := cCtx.Ledger.QueryBlockHeaderByHeight(tipHeight - i)
-			if err != nil {
-				break
-			}
-			smr.LoadVotes(b.GetPreHash(), tdpos.GetJustifySigns(b))
-		}
-	}
-	go smr.Start()
-	tdpos.smr = smr
-	cCtx.XLog.Debug("consensus:tdpos:NewTdposConsensus: load chained-bft successfully.")
 	return tdpos
 }
 
@@ -184,7 +148,7 @@ Again:
 	return false, false, nil
 }
 
-// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要完成存在性证明
+// CalculateBlock 矿工挖矿时共识需要做的工作, 如PoW时共识需要计算结果
 func (tp *tdposConsensus) CalculateBlock(block cctx.BlockInterface) error {
 	return nil
 }
@@ -250,7 +214,7 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 }
 
 // ProcessBeforeMiner 开始挖矿前进行相应的处理, 返回是否需要truncate, 返回写consensusStorage, 返回err
-func (tp *tdposConsensus) ProcessBeforeMiner(timestamp int64) ([]byte, []byte, error) {
+func (tp *tdposConsensus) ProcessBeforeMiner(height, timestamp int64) ([]byte, []byte, error) {
 	term, pos, blockPos := tp.election.minerScheduling(timestamp)
 	if blockPos < 0 || term != tp.election.curTerm || blockPos >= tp.election.blockNum || pos >= tp.election.proposerNum {
 		tp.log.Warn("consensus:tdpos:ProcessBeforeMiner: timeoutBlockErr", "term", term, "tp.election.curTerm", tp.election.curTerm,
@@ -341,18 +305,70 @@ func (tp *tdposConsensus) ProcessConfirmBlock(block cctx.BlockInterface) error {
 	return nil
 }
 
-// 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
-func (tp *tdposConsensus) Stop() error {
+// 共识实例的启动逻辑
+func (tp *tdposConsensus) Start() error {
+	// 注册合约方法
+	for method, f := range tp.kMethod {
+		// 若有历史句柄，删除老句柄
+		tp.contract.GetKernRegistry().UnregisterKernMethod(tp.election.bindContractBucket, method)
+		tp.contract.GetKernRegistry().RegisterKernMethod(tp.election.bindContractBucket, method, f)
+	}
 	if tp.election.enableChainedBFT {
-		tp.smr.Stop()
+		err := tp.initBFT()
+		if err != nil {
+			tp.log.Warn("tdposConsensus start init bft error", "err", err.Error())
+			return err
+		}
 	}
 	return nil
 }
 
-// 共识实例的启动逻辑
-func (tp *tdposConsensus) Start() error {
+func (tp *tdposConsensus) initBFT() error {
+	// create smr/ chained-bft实例, 需要新建CBFTCrypto、pacemaker和saftyrules实例
+	cryptoClient := cCrypto.NewCBFTCrypto(tp.cCtx.Address, tp.cCtx.Crypto)
+	qcTree := quorumcert.InitQCTree(tp.status.StartHeight, tp.cCtx.Ledger, tp.cCtx.XLog)
+	if qcTree == nil {
+		tp.log.Error("consensus:tdpos:NewTdposConsensus: init QCTree err", "startHeight", tp.status.StartHeight)
+		return errors.New("init bft init qcTree error")
+	}
+	pacemaker := &chainedBft.DefaultPaceMaker{
+		CurrentView: tp.status.StartHeight,
+	}
+	// 重启状态检查1，pacemaker需要重置
+	tipHeight := tp.cCtx.Ledger.QueryTipBlockHeader().GetHeight()
+	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+		pacemaker.CurrentView = tipHeight - 1
+	}
+	saftyrules := &chainedBft.DefaultSaftyRules{
+		Crypto: cryptoClient,
+		QcTree: qcTree,
+		Log:    tp.cCtx.XLog,
+	}
+	smr := chainedBft.NewSmr(tp.bcName, tp.election.address, tp.log, tp.cCtx.Network, cryptoClient, pacemaker, saftyrules, tp.election, qcTree)
+	// 重启状态检查2，重做tipBlock，此时需重装载justify签名
+	if !bytes.Equal(qcTree.GetGenesisQC().In.GetProposalId(), qcTree.GetRootQC().In.GetProposalId()) {
+		for i := int64(0); i < 3; i++ {
+			b, err := tp.cCtx.Ledger.QueryBlockHeaderByHeight(tipHeight - i)
+			if err != nil {
+				break
+			}
+			smr.LoadVotes(b.GetPreHash(), tp.GetJustifySigns(b))
+		}
+	}
+	tp.smr = smr
+	tp.smr.Start()
+	return nil
+}
+
+// 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
+func (tp *tdposConsensus) Stop() error {
+	// 注销合约方法
+	for method, _ := range tp.kMethod {
+		// 若有历史句柄，删除老句柄
+		tp.contract.GetKernRegistry().UnregisterKernMethod(tp.election.bindContractBucket, method)
+	}
 	if tp.election.enableChainedBFT {
-		tp.smr.Start()
+		tp.smr.Stop()
 	}
 	return nil
 }
@@ -362,7 +378,7 @@ func (tp *tdposConsensus) ParseConsensusStorage(block cctx.BlockInterface) (inte
 	return ParseConsensusStorage(block)
 }
 
-func (tp *tdposConsensus) GetConsensusStatus() (base.ConsensusStatus, error) {
+func (tp *tdposConsensus) GetConsensusStatus() (consensus.ConsensusStatus, error) {
 	return tp.status, nil
 }
 

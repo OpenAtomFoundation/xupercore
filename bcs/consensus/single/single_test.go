@@ -64,7 +64,7 @@ func TestNewSingleConsensus(t *testing.T) {
 	}
 	i.Stop()
 	i.Start()
-	i.ProcessBeforeMiner(time.Now().UnixNano())
+	i.ProcessBeforeMiner(0, time.Now().UnixNano())
 	cCtx.XLog = nil
 	i = NewSingleConsensus(*cCtx, conf)
 	if i != nil {
@@ -140,7 +140,7 @@ func TestCheckMinerMatch(t *testing.T) {
 	if !ok || err != nil {
 		t.Error("TestCheckMinerMatch error", "error", err, cCtx.Address.PrivateKey)
 	}
-	_, _, err = i.ProcessBeforeMiner(time.Now().UnixNano())
+	_, _, err = i.ProcessBeforeMiner(0, time.Now().UnixNano())
 	if err != nil {
 		t.Error("ProcessBeforeMiner error", "error", err)
 	}
