@@ -153,10 +153,14 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 	}
 
 	readonly := n.isReadonlyKey(index)
-	if node.tx == nil && !readonly {
+	if node.tx == nil {
 		index := offset - len(node.txOutputsExt) + 1
 		if index > 0 {
-			node.txOutputsExt = append(node.txOutputsExt, make([]*Node, index)...)
+			if readonly {
+				node.readonlyOutputs = append(node.readonlyOutputs, make([]map[string]*Node, index)...)
+			} else {
+				node.txOutputsExt = append(node.txOutputsExt, make([]*Node, index)...)
+			}
 		}
 	}
 
