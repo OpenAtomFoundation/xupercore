@@ -108,6 +108,7 @@ func NewSMR(node string, log logs.Logger, p2p network.Network, t *testing.T) *Sm
 	saftyrules := &DefaultSaftyRules{
 		Crypto: cryptoClient,
 		QcTree: q,
+		Log:    log,
 	}
 	election := &ElectionA{
 		addrs: []string{NodeA, NodeB, NodeC},
