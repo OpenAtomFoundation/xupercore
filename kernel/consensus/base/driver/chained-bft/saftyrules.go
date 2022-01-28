@@ -145,6 +145,7 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent storage.QuorumCertInt
 
 	// 检查justify的所有vote签名
 	justifySigns := parent.GetSignsInfo()
+	s.Log.Debug("DefaultSaftyRules::CheckProposal", "parent", parent, "justifyValidators", justifyValidators)
 	validCnt := 0
 	for _, v := range justifySigns {
 		if !isInSlice(v.GetAddress(), justifyValidators) {
