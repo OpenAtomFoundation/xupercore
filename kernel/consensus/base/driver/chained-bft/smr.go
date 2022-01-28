@@ -379,7 +379,12 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return ErrP2PInternalErr
 	}
+
 	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(s.removeLocalValidator(validatesIpInfo)))
+	s.log.Debug("smr::ProcessProposal::proposal", "localAddress", s.address, "validatesIpInfo", validatesIpInfo,
+		"ProposalView", proposal.ProposalView, "ProposalId", utils.F(proposal.ProposalId),
+		"Timestamp", proposal.Timestamp, "JustifyQC", proposal.JustifyQC)
+
 	s.localProposal.Store(utils.F(proposalID), proposal.Timestamp)
 	// 若为单候选人情况，则此处需要特殊处理，矿工需要给自己提前签名
 	if len(validatesIpInfo) == 1 {
@@ -518,6 +523,9 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		// 此处如果失败，仍会执行下层逻辑，因为是多个节点通知该轮Leader，因此若发不出去仍可继续运行
 		if leader != "" && netMsg != nil && leader != s.address {
 			go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{leader}))
+			s.log.Debug("smr::handleReceivedProposal::proposal", "localAddress", s.address, "leader", leader,
+				"ProposalView", newProposalMsg.ProposalView, "ProposalId", utils.F(newProposalMsg.ProposalId),
+				"Timestamp", newProposalMsg.Timestamp, "JustifyQC", newProposalMsg.JustifyQC)
 		}
 	}
 
@@ -556,7 +564,7 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 	// 6.发送一个vote消息给下一个Leader
 	nextLeader := s.election.GetLeader(s.pacemaker.GetCurrentView() + 1)
 	if nextLeader == "" {
-		s.log.Debug("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
+		s.log.Warn("smr::handleReceivedProposal::empty next leader", "next round", s.pacemaker.GetCurrentView()+1)
 		return
 	}
 	s.voteProposal(newProposalMsg.GetProposalId(), newVote, newLedgerInfo, nextLeader)
