@@ -177,7 +177,9 @@ func (tp *tdposConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		return false, err
 	}
 	if wantProposers[pos] != string(block.GetProposer()) {
-		tp.log.Error("consensus:tdpos:CheckMinerMatch: invalid proposer", "want", wantProposers[pos], "have", string(block.GetProposer()))
+		tp.log.Error("consensus:tdpos:CheckMinerMatch: invalid proposer",
+			"want", wantProposers[pos], "have", string(block.GetProposer()),
+			"wantProposers", wantProposers, "pos", pos)
 		return false, ErrInvalidProposer
 	}
 

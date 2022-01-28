@@ -178,12 +178,12 @@ func TestCalHisValidators(t *testing.T) {
 		return
 	}
 	target, _ = s.binarySearch(int64(1), int64(5), int64(2))
-	if target != 4 {
+	if target != 3 {
 		t.Error("binarySearch cal err2.", "target", target)
 		return
 	}
 	target, _ = s.binarySearch(int64(5), int64(6), int64(3))
-	if target != 6 {
+	if target != 5 {
 		t.Error("binarySearch cal err.", "target", target)
 		return
 	}
@@ -198,7 +198,7 @@ func TestCalHisValidators(t *testing.T) {
 		return
 	}
 	target, _ = s.binarySearch(int64(5), int64(11), int64(5))
-	if target != 8 {
+	if target != 7 {
 		t.Error("binarySearch cal err.", "target", target)
 		return
 	}

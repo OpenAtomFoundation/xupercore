@@ -24,7 +24,7 @@ import (
 
 const (
 	tickOnCalcBlock           = time.Second
-	syncOnstatusChangeTimeout = 1 * time.Minute
+	syncOnStatusChangeTimeout = 1 * time.Minute
 
 	statusFollowing = 0
 	statusMining    = 1
@@ -65,21 +65,26 @@ func (t *Miner) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	return nil
 }
 
+// Start
 // 启动矿工，周期检查矿工身份
-// 同一时间，矿工状态是唯一的。0:休眠中 1:同步区块中 2:打包区块中
+// 同一时间，矿工状态是唯一的
+// 0:休眠中 1:同步区块中 2:打包区块中
 func (t *Miner) Start() {
+	var err error
+
 	// 用于监测退出
 	t.exitWG.Add(1)
 	defer t.exitWG.Done()
 
-	var err error
+	// 节点初始状态为同步节点
 	t.status = statusFollowing
 
+	// 开启挖矿前先同步区块
 	ctx := &xctx.BaseCtx{
 		XLog:  t.log,
 		Timer: timer.NewXTimer(),
 	}
-	t.syncWithNeighbors(ctx)
+	_ = t.syncWithNeighbors(ctx)
 
 	// 启动矿工循环
 	for !t.IsExit() {
@@ -124,6 +129,7 @@ func (t *Miner) step() error {
 		Timer: timer.NewXTimer(),
 	}
 
+	// 账本和状态机最新区块id不一致，需要进行一次同步
 	if !bytes.Equal(ledgerTipId, stateTipId) {
 		err := t.ctx.State.Walk(ledgerTipId, false)
 		if err != nil {
@@ -136,6 +142,15 @@ func (t *Miner) step() error {
 	ctx.GetLog().Trace("miner step", "ledgerTipHeight", ledgerTipHeight, "ledgerTipId",
 		utils.F(ledgerTipId), "stateTipId", utils.F(stateTipId))
 
+	// 如果上次角色是非矿工，则尝试同步网络最新区块
+	// 注意：这里出现错误也要继续执行，防止恶意节点错误出块导致流程无法继续执行
+	if t.status == statusFollowing {
+		err := t.syncWithValidators(ctx, syncOnStatusChangeTimeout)
+		ctx.GetLog().Trace("miner syncWithValidators before CompeteMaster", "originTipHeight", ledgerTipHeight,
+			"currentLedgerHeight", t.ctx.Ledger.GetMeta().TrunkHeight, "err", err)
+		trace("syncUpValidators")
+	}
+
 	// 通过共识检查矿工身份
 	isMiner, isSync, err := t.ctx.Consensus.CompeteMaster(ledgerTipHeight + 1)
 	trace("competeMaster")
@@ -143,30 +158,35 @@ func (t *Miner) step() error {
 	if err != nil {
 		return err
 	}
-	// 如需要同步，尝试同步网络最新区块
-	if isMiner && isSync {
-		err = t.syncWithValidators(ctx, syncOnstatusChangeTimeout)
-		if err != nil {
-			return err
-		}
-	}
-	trace("syncUpValidators")
 
 	// 如果是矿工，出块
 	if isMiner {
-		if t.status == statusFollowing {
+		if t.status == statusFollowing || isSync {
 			ctx.GetLog().Info("miner change follow=>miner",
 				"miner", t.ctx.Address.Address,
 				"netAddr", t.ctx.EngCtx.Net.PeerInfo().Id,
 				"height", t.ctx.Ledger.GetMeta().GetTrunkHeight(),
 			)
+
 			// 在由非矿工向矿工切换的这次"边沿触发"，主动向所有的验证集合的最长链进行一次区块同步
-			err = t.syncWithValidators(ctx, syncOnstatusChangeTimeout)
+			err = t.syncWithValidators(ctx, syncOnStatusChangeTimeout)
 			if err != nil {
+				ctx.GetLog().Error("miner change follow=>miner syncWithValidators failed", "err", err)
 				return err
 			}
+
+			// 由于同步了最长链，所以这里需要检查链是否增长
+			// 由于pos和poa类共识依赖账本高度来判断状态，如果链发生变化则表明CompeteMaster的结果需要重新根据当前最新高度计算
+			if ledgerTipHeight != t.ctx.Ledger.GetMeta().TrunkHeight {
+				ctx.GetLog().Trace("miner change follow=>miner", "originTipHeight", ledgerTipHeight, "currentLedgerHeight",
+					t.ctx.Ledger.GetMeta().TrunkHeight, "isMiner", isMiner, "isSync", isSync)
+				return nil
+			}
+			trace("syncUpValidators")
 		}
 		t.status = statusMining
+
+		// 开始挖矿
 		err = t.mining(ctx)
 		if err != nil {
 			return err
@@ -192,7 +212,7 @@ func (t *Miner) step() error {
 	return nil
 }
 
-// 挖矿生产区块
+// mining 挖矿生产区块
 func (t *Miner) mining(ctx xctx.XContext) error {
 	ctx.GetLog().Debug("mining start.")
 
@@ -213,6 +233,7 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 		}
 		// 重置高度
 		height = t.ctx.Ledger.GetMeta().TrunkHeight + 1
+		ctx.GetLog().Debug("truncateTarget result", "newHeight", height)
 	}
 
 	// 2.打包区块
@@ -249,6 +270,8 @@ func (t *Miner) mining(ctx xctx.XContext) error {
 			"blockId", utils.F(block.GetBlockid()))
 		return err
 	}
+
+	// 5.可插拔共识，根据区块高度确认是否需要切换升级共识实例
 	err = t.ctx.Consensus.SwitchConsensus(block.Height)
 	if err != nil {
 		ctx.GetLog().Warn("SwitchConsensus failed", "bcname", t.ctx.BCName,
