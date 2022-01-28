@@ -1001,6 +1001,9 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 
 	m.confirmed[""] = m.emptyTxIDNode
 	if node.isReadonlyKey(index) {
+		if m.emptyTxIDNode.readonlyOutputs[offset] == nil {
+			m.emptyTxIDNode.readonlyOutputs[offset] = make(map[string]*Node, 1)
+		}
 		m.emptyTxIDNode.readonlyOutputs[offset][node.txid] = node
 		node.readonlyInputs[index] = m.emptyTxIDNode
 	} else {
