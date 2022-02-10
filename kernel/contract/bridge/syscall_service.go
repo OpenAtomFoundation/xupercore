@@ -333,6 +333,7 @@ func (c *SyscallService) GetCallArgs(ctx context.Context, in *pb.GetCallArgsRequ
 		Initiator:      nctx.Initiator,
 		AuthRequire:    nctx.AuthRequire,
 		TransferAmount: nctx.TransferAmount,
+		Caller:         nctx.Caller,
 	}, nil
 }
 

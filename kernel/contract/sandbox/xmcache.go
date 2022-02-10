@@ -3,7 +3,6 @@ package sandbox
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"math/big"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
@@ -237,10 +236,6 @@ func (xc *XMCache) flushUTXORWSet() error {
 		}
 	}
 	if len(outputs) != 0 {
-		for _, output := range outputs {
-			fmt.Printf("output:to %s,amount:%s\n", string(output.ToAddr), new(big.Int).SetBytes(output.Amount))
-		}
-		fmt.Println()
 		out, err = xmodel.MarshalMessages(outputs)
 		if err != nil {
 			return err

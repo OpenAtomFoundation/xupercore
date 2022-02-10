@@ -210,10 +210,11 @@ func (s *tdposSchedule) UpdateProposers(height int64) bool {
 		return false
 	}
 	if !common.AddressEqual(nextProposers, s.validators) {
-		s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "proposers", nextProposers)
+		s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "proposers", nextProposers, "height", height)
 		s.validators = nextProposers
 		return true
 	}
+	s.log.Debug("tdpos::UpdateProposers", "origin", s.validators, "height", height)
 	return false
 }
 
@@ -352,7 +353,7 @@ func (s *tdposSchedule) calHisValidators(height int64) ([]string, error) {
 	term, pos, blockPos := s.minerScheduling(block.GetTimestamp())
 	// 往前回溯的最远距离为internal，即该轮term之前最多生产过多少个区块
 	internal := pos*s.blockNum + blockPos
-	begin := block.GetHeight() - internal
+	begin := block.GetHeight() - internal - 1
 	if begin <= s.startHeight {
 		begin = s.startHeight
 	}
@@ -361,7 +362,9 @@ func (s *tdposSchedule) calHisValidators(height int64) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.log.Debug("tdpos::CalculateProposers::target height.", "height", height, "targetHeight", targetHeight, "term", term)
+	s.log.Debug("tdpos::CalculateProposers::target height.", "inputHeight", height, "targetHeight", targetHeight,
+		"begin", begin, "end", block.GetHeight(), "term", term, "pos", pos, "blockPos", blockPos, "internal", internal,
+		"blockNum", s.blockNum, "block.Timestamp", block.GetTimestamp())
 	return s.calTopKNominator(targetHeight)
 }
 
@@ -378,7 +381,7 @@ func (s *tdposSchedule) binarySearch(begin int64, end int64, term int64) (int64,
 			return -1, err
 		}
 		if midTerm < term && nextMidTerm == term {
-			return mid + 1, nil
+			return mid, nil
 		}
 		if midTerm < term {
 			begin = mid + 1

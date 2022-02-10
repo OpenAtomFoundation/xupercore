@@ -38,8 +38,8 @@ func (c *features) Logging(ctx code.Context) code.Response {
 func (c *features) Transfer(ctx code.Context) code.Response {
 	to := ctx.Args()["to"]
 	amountBytes := ctx.Args()["amount"]
-	amount,ok:= new(big.Int).SetString(string(amountBytes),10)
-	if !ok{
+	amount, ok := new(big.Int).SetString(string(amountBytes), 10)
+	if !ok {
 		return code.Error(errors.New("bad amount format"))
 	}
 	err := ctx.Transfer(string(to), amount)
@@ -47,6 +47,26 @@ func (c *features) Transfer(ctx code.Context) code.Response {
 		return code.Error(err)
 	}
 	return code.OK(nil)
+}
+func (c *features) Invoke(ctx code.Context) code.Response {
+	contract := string(ctx.Args()["contract"])
+	method := string(ctx.Args()["method"])
+	module := "native"
+	resp, err := ctx.Call(module, contract, method, ctx.Args())
+	if err != nil {
+		return code.Error(err)
+	}
+	if resp.Status > code.StatusErrorThreshold {
+		return code.Response{
+			Status:  resp.Status,
+			Message: resp.Message,
+			Body:    nil,
+		}
+	}
+	return code.OK(resp.Body)
+}
+func (c *features) Caller(ctx code.Context) code.Response {
+	return code.OK([]byte(ctx.Caller()))
 }
 func main() {
 	driver.Serve(new(features))
