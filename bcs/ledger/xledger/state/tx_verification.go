@@ -43,7 +43,7 @@ import (
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
 	beginTime := time.Now()
 	code := "InvalidTx"
-	defer func(){
+	defer func() {
 		metrics.CallMethodCounter.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx", code).Inc()
 		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "ImmediateVerifyTx").Observe(time.Since(beginTime).Seconds())
 	}()
@@ -160,9 +160,9 @@ func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isR
 		t.log.Warn("get timer tasks failed", "err", genErr)
 		return false, genErr
 	}
-	if len(autoTx.TxOutputsExt) == 0 {
-		return false, fmt.Errorf("get timer tasks failed, no tx outputs ext")
-	}
+	//if len(autoTx.TxOutputsExt) == 0 {
+	//	return false, fmt.Errorf("get timer tasks failed, no tx outputs ext")
+	//}
 
 	// Pre processing of tx data
 	if !isRootTx && tx.Version == RootTxVersion {
@@ -568,7 +568,8 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 
 	rset, wset, err := t.GenRWSetFromTx(tx)
 	if err != nil {
-		return false, nil
+		t.log.Error("verifyTxRWSets GenRWSetFromTx error", "err", err)
+		return false, err
 	}
 	rwSet := &contract.RWSet{
 		RSet: rset,
@@ -587,7 +588,8 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 	}
 	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxConfig)
 	if err != nil {
-		return false, nil
+		t.log.Error("NewStateSandbox error", "err", err)
+		return false, err
 	}
 
 	transContractName, transAmount, err := txn.ParseContractTransferRequest(req)

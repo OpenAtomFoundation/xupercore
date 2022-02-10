@@ -325,7 +325,7 @@ func (p *P2PServerV2) HandleMessage(stream p2p.Stream, msg *pb.XuperMessage) err
 		tm := time.Now()
 		defer func() {
 			labels := prom.Labels{
-				metrics.LabelBCName: msg.GetHeader().GetBcname(),
+				metrics.LabelBCName:      msg.GetHeader().GetBcname(),
 				metrics.LabelMessageType: msg.GetHeader().GetType().String(),
 			}
 			metrics.NetworkMsgReceivedCounter.With(labels).Inc()

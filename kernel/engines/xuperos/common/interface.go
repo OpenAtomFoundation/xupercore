@@ -55,7 +55,7 @@ type ChainRelyAgent interface {
 	CreateLedger() (*ledger.Ledger, error)
 	CreateState(*ledger.Ledger, cryptoBase.CryptoClient) (*state.State, error)
 	CreateContract(kledger.XMReader) (contract.Manager, error)
-	CreateConsensus() (consensus.ConsensusInterface, error)
+	CreateConsensus() (consensus.PluggableConsensusInterface, error)
 	CreateCrypto(cryptoType string) (cryptoBase.CryptoClient, error)
 	CreateAcl() (aclBase.AclManager, error)
 	CreateGovernToken() (governToken.GovManager, error)

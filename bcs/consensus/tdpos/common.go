@@ -152,6 +152,17 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal to temp struct failed.err:%v", err)
 	}
+
+	// 校验是否输入初始候选人节点列表
+	if temp.InitProposer != nil {
+		// 二次校验
+		if addrs, ok := temp.InitProposer["1"]; !ok || len(addrs) <= 0 {
+			return nil, fmt.Errorf("init_proposer[\"1\"] is required")
+		}
+	} else {
+		return nil, fmt.Errorf("init_proposer is required")
+	}
+
 	tdposCfg.InitProposer = temp.InitProposer
 	tdposCfg.EnableBFT = temp.EnableBFT
 
