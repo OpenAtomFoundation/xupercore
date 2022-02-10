@@ -131,7 +131,7 @@ func (p *P2PServerV1) serve() {
 	)
 
 	if p.config.IsTls {
-		creds, err := p2p.NewTLS(p.config.KeyPath, p.config.ServiceName)
+		creds, err := p2p.ServerNewTLS(p.config.KeyPath, p.config.CertKeyPath, p.config.GMCertKeyPath)
 		if err != nil {
 			panic(err)
 		}

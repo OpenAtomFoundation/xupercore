@@ -59,6 +59,10 @@ type NetConf struct {
 	IsTls bool `yaml:"isTls,omitempty"`
 	// ServiceName
 	ServiceName string `yaml:"serviceName,omitempty"`
+	// Server  not GM cert path
+	CertKeyPath string `yaml:"certKeyPath,omitempty"`
+	// Server GM cert path
+	GMCertKeyPath string `yaml:"gmCertKeyPath,omitempty"`
 }
 
 func LoadP2PConf(cfgFile string) (*NetConf, error) {

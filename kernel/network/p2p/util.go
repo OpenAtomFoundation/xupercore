@@ -2,15 +2,12 @@ package p2p
 
 import (
 	"crypto/rand"
-	defaulttls "crypto/tls"
-	defaultx509 "crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
 	"io/ioutil"
 	math_rand "math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	tls "github.com/tjfoc/gmsm/gmtls"
@@ -26,63 +23,109 @@ import (
 )
 
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {
-
 	//读取 cacert.pem 证书
 	bs, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
 	if err != nil {
 		return nil, err
 	}
+	certPool := x509.NewCertPool()
+	ok := certPool.AppendCertsFromPEM(bs)
+	if !ok {
+		return nil, err
+	}
+	certificate, err := tls.LoadX509KeyPair(filepath.Join(path, "cert.pem"), filepath.Join(path, "private.key"))
+	if err != nil {
+		return nil, err
+	}
+	var tlsGMSupport *tls.GMSupport
 
 	pb, _ := pem.Decode(bs)
 	x509cert, err := x509.ParseCertificate(pb.Bytes)
 	if err != nil {
 		return nil, err
 	}
+	if x509cert.SignatureAlgorithm == x509.SM2WithSM3 { //国密
+		tlsGMSupport = tls.NewGMSupport()
+	} else {
+		tlsGMSupport = nil
+	}
+	creds := gmcredentials.NewTLS(
+		&tls.Config{
+			GMSupport:    tlsGMSupport,
+			ServerName:   serviceName,
+			Certificates: []tls.Certificate{certificate},
+			RootCAs:      certPool,
+			ClientCAs:    certPool,
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+		})
+	return creds, nil
+}
 
-	if strings.Contains(strings.ToLower(x509cert.SignatureAlgorithm.String()), "sm") { //国密
-		certPool := x509.NewCertPool()
-		ok := certPool.AppendCertsFromPEM(bs)
-		if !ok {
-			return nil, err
-		}
-		certificate, err := tls.LoadX509KeyPair(filepath.Join(path, "cert.pem"), filepath.Join(path, "private.key"))
-		if err != nil {
-			return nil, err
-		}
-		creds := gmcredentials.NewTLS(
-			&tls.Config{
-				GMSupport:    tls.NewGMSupport(),
-				ServerName:   serviceName,
-				Certificates: []tls.Certificate{certificate, certificate},
-				RootCAs:      certPool,
-				ClientCAs:    certPool,
-				ClientAuth:   tls.RequireAndVerifyClientCert,
-			})
-
-		return creds, nil
-	} else { //非国密
-		certPool := defaultx509.NewCertPool()
-		ok := certPool.AppendCertsFromPEM(bs)
-		if !ok {
-			return nil, err
-		}
-
-		certificate, err := defaulttls.LoadX509KeyPair(filepath.Join(path, "cert.pem"), filepath.Join(path, "private.key"))
-		if err != nil {
-			return nil, err
-		}
-
-		creds := credentials.NewTLS(
-			&defaulttls.Config{
-				ServerName:   serviceName,
-				Certificates: []defaulttls.Certificate{certificate},
-				RootCAs:      certPool,
-				ClientCAs:    certPool,
-				ClientAuth:   defaulttls.RequireAndVerifyClientCert,
-			})
-		return creds, nil
+func ServerNewTLS(defaultCertPath string, commonCertPath string, gmCertPath string) (credentials.TransportCredentials, error) {
+	// 加载默认 netKeys 下的证书
+	certificate, err := tls.LoadX509KeyPair(filepath.Join(defaultCertPath, "cert.pem"), filepath.Join(defaultCertPath, "private.key"))
+	if err != nil {
+		return nil, err
+	}
+	defaultCaPem, err := ioutil.ReadFile(filepath.Join(defaultCertPath, "cacert.pem"))
+	if err != nil {
+		return nil, err
 	}
 
+	certPool := x509.NewCertPool()
+	certPool.AppendCertsFromPEM(defaultCaPem)
+
+	fncGetEncCertKeypair := func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return &certificate, nil
+	}
+
+	fncGetCertificate := func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		gmFlag := false
+		// 检查支持协议中是否包含GMSSL
+		for _, v := range info.SupportedVersions {
+			if v == tls.VersionGMSSL {
+				gmFlag = true
+				break
+			}
+		}
+		if gmFlag { // GM Cert
+			gmCert, err := tls.LoadX509KeyPair(filepath.Join(gmCertPath, "cert.pem"), filepath.Join(gmCertPath, "private.key"))
+			if err != nil {
+				return &certificate, nil
+			}
+			bs, err := ioutil.ReadFile(filepath.Join(gmCertPath, "cacert.pem"))
+			if err != nil {
+				return &certificate, nil
+			}
+			certPool.AppendCertsFromPEM(bs)
+			fncGetEncCertKeypair = func(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+				return &gmCert, nil
+			}
+			return &gmCert, nil
+		} else { // not GM cert
+			commonCert, err := tls.LoadX509KeyPair(filepath.Join(commonCertPath, "cert.pem"), filepath.Join(commonCertPath, "private.key"))
+			if err != nil {
+				return &certificate, nil
+			}
+			bs, err := ioutil.ReadFile(filepath.Join(commonCertPath, "cacert.pem"))
+			if err != nil {
+				return &certificate, nil
+			}
+			certPool.AppendCertsFromPEM(bs)
+			return &commonCert, nil
+		}
+	}
+	creds := gmcredentials.NewTLS(&tls.Config{
+		GMSupport: &tls.GMSupport{
+			WorkMode: tls.ModeAutoSwitch,
+		},
+		RootCAs:          certPool,
+		ClientCAs:        certPool,
+		GetKECertificate: fncGetEncCertKeypair,
+		GetCertificate:   fncGetCertificate,
+		ClientAuth:       tls.RequireAndVerifyClientCert,
+	})
+	return creds, nil
 }
 
 // GenerateKeyPairWithPath generate xuper net key pair
