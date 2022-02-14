@@ -362,17 +362,17 @@ func (m *Mempool) findKeyConflictTxs(node *Node, usedKeyVersion map[string]strin
 
 	for _, input := range tx.GetTxInputsExt() {
 		bk := input.GetBucket() + string(input.GetKey())
-		if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
-			if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
-				if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
-					if ranged[node] { // 说明此冲突节点已经在之前找到过了。
-						continue
-					}
-					txs := m.findChildrenFromNode(node, ranged)
-					result = append(result, txs...)
+		// if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
+		if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
+			if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
+				if ranged[node] { // 说明此冲突节点已经在之前找到过了。
+					continue
 				}
+				txs := m.findChildrenFromNode(node, ranged)
+				result = append(result, txs...)
 			}
 		}
+		// }
 	}
 
 	return result
