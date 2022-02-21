@@ -106,7 +106,9 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 		q.PushBack(n)
 	}
 
+	// 某个写交易遍历时，如果存在同个key的读交易，将写交易作为map的key，读交易作为value存储。
 	writeToRangedReadNodes := make(map[*Node]map[*Node]bool, 0)
+	// 如果某个写交易可以被打包，但是同个key的读交易还未打包，那么写交易放到此map，等到读交易全部打包完成再打包写交易
 	WaitRangeNodes := make(map[*Node]bool, 0)
 	for q.Len() > 0 {
 		node := q.PopFront().(*Node)
@@ -120,7 +122,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 					if len(node.txOutputsExt) == 0 {
 						continue
 					}
-					if node.txOutputsExt[i] != nil {
+					if len(node.txOutputsExt) > i && node.txOutputsExt[i] != nil {
 						writeNode := node.txOutputsExt[i]
 						if WaitRangeNodes[writeNode] {
 							delete(WaitRangeNodes, writeNode)
@@ -172,12 +174,24 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 		}
 
-		for _, n := range node.bucketKeyToNode {
+		// 此时 node 为 emptyTxIDNode
+		for bk, n := range node.bucketKeyToNode { // 读写，此处要判断只读交易是否都已经打包
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if !f(n.tx) {
-					return
+				if readonlyNodes, ok := node.bucketKeyToReadonlyNode[bk]; ok {
+					if len(writeToRangedReadNodes[n]) == len(readonlyNodes) {
+						if !f(n.tx) {
+							return
+						}
+						q.PushBack(n)
+					} else {
+						WaitRangeNodes[n] = true
+					}
+				} else {
+					if !f(n.tx) {
+						return
+					}
+					q.PushBack(n)
 				}
-				q.PushBack(n)
 			}
 		}
 	}
@@ -654,6 +668,7 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 			node.tx = tx
 			node.readonlyInputs = make([]*Node, len(tx.GetTxInputsExt()))
 			node.bucketKeyToNode = make(map[string]*Node)
+			node.bucketKeyToReadonlyNode = make(map[string]map[string]*Node)
 			node.txInputs = make([]*Node, len(tx.GetTxInputs()))
 			node.txInputsExt = make([]*Node, len(tx.GetTxInputsExt()))
 		}
@@ -996,17 +1011,23 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 	offset := node.tx.TxInputsExt[index].GetRefOffset()
 	if m.emptyTxIDNode == nil {
 		m.emptyTxIDNode = NewNode("", nil)
+		m.emptyTxIDNode.bucketKeyToReadonlyNode = map[string]map[string]*Node{}
 		m.emptyTxIDNode.readonlyOutputs = append(m.emptyTxIDNode.readonlyOutputs, make([]map[string]*Node, offset+1)...)
 	}
 
 	m.confirmed[""] = m.emptyTxIDNode
-	if node.isReadonlyKey(index) {
+	if node.isReadonlyKey(index) { // 只读的key，此时index一定为0。
 		if m.emptyTxIDNode.readonlyOutputs[offset] == nil {
 			m.emptyTxIDNode.readonlyOutputs[offset] = make(map[string]*Node, 1)
 		}
 		m.emptyTxIDNode.readonlyOutputs[offset][node.txid] = node
 		node.readonlyInputs[index] = m.emptyTxIDNode
-	} else {
+
+		if m.emptyTxIDNode.bucketKeyToReadonlyNode[bk] == nil {
+			m.emptyTxIDNode.bucketKeyToReadonlyNode[bk] = make(map[string]*Node, 1)
+		}
+		m.emptyTxIDNode.bucketKeyToReadonlyNode[bk][node.txid] = node
+	} else { // 修改了这个key，也就是 bucketKeyToNode 中全是修改了这个key的node。
 		if _, ok := m.emptyTxIDNode.bucketKeyToNode[bk]; ok {
 			return errors.New("bucket and key invalid:" + bucket + "_" + string(key))
 		}
@@ -1169,6 +1190,9 @@ func (m *Mempool) cleanConfirmedTxs() {
 			continue
 		}
 		if len(node.bucketKeyToNode) != 0 {
+			continue
+		}
+		if len(node.bucketKeyToReadonlyNode) != 0 {
 			continue
 		}
 

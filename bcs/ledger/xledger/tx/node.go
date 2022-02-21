@@ -17,7 +17,8 @@ type Node struct {
 	readonlyOutputs []map[string]*Node // 只读子交易，数组的index为当前交易输出的index，此处数组的长度与txOutputsExt长度一致。
 	readonlyInputs  []*Node
 
-	bucketKeyToNode map[string]*Node // txid 为空时，构造 mock node，所有子节点。key 为 bucket+key。
+	bucketKeyToNode         map[string]*Node            // txid 为空时，构造 mock node，写了某个 bucket+key 的节点，bucket+key => *Node。
+	bucketKeyToReadonlyNode map[string]map[string]*Node // txid 为空时，构造 mock node，只读某个 bucket+key 的节点列表，bucket+key => [bucket+key => *Node]。
 
 	txInputs     []*Node
 	txInputsExt  []*Node
@@ -28,15 +29,16 @@ type Node struct {
 // NewNode new node.
 func NewNode(txid string, tx *pb.Transaction) *Node {
 	return &Node{
-		txid:            txid,
-		tx:              tx,
-		readonlyOutputs: make([]map[string]*Node, len(tx.GetTxOutputsExt())),
-		readonlyInputs:  make([]*Node, len(tx.GetTxInputsExt())),
-		bucketKeyToNode: make(map[string]*Node),
-		txInputs:        make([]*Node, len(tx.GetTxInputs())),
-		txInputsExt:     make([]*Node, len(tx.GetTxInputsExt())),
-		txOutputs:       make([]*Node, len(tx.GetTxOutputs())),
-		txOutputsExt:    make([]*Node, len(tx.GetTxOutputsExt())),
+		txid:                    txid,
+		tx:                      tx,
+		readonlyOutputs:         make([]map[string]*Node, len(tx.GetTxOutputsExt())),
+		readonlyInputs:          make([]*Node, len(tx.GetTxInputsExt())),
+		bucketKeyToNode:         make(map[string]*Node),
+		bucketKeyToReadonlyNode: make(map[string]map[string]*Node),
+		txInputs:                make([]*Node, len(tx.GetTxInputs())),
+		txInputsExt:             make([]*Node, len(tx.GetTxInputsExt())),
+		txOutputs:               make([]*Node, len(tx.GetTxOutputs())),
+		txOutputsExt:            make([]*Node, len(tx.GetTxOutputsExt())),
 	}
 }
 
@@ -202,6 +204,7 @@ func (n *Node) breakOutputs() {
 		n.txInputs[i] = nil
 	}
 
+	inputKeys := make([]string, 0, len(n.tx.GetTxInputsExt()))
 	for i, fn := range n.txInputsExt {
 		if fn == nil {
 			continue
@@ -221,6 +224,7 @@ func (n *Node) breakOutputs() {
 		}
 
 		n.txInputsExt[i] = nil
+		inputKeys = append(inputKeys, bk)
 	}
 
 	for i, fn := range n.readonlyInputs {
@@ -233,6 +237,18 @@ func (n *Node) breakOutputs() {
 		}
 
 		delete(fn.readonlyOutputs[offset], n.txid)
+
+		if fn.txid == "" {
+			for _, bk := range inputKeys {
+				if _, ok := fn.bucketKeyToReadonlyNode[bk]; ok {
+					if len(fn.bucketKeyToReadonlyNode[bk]) == 1 {
+						delete(fn.bucketKeyToReadonlyNode, bk)
+					} else if _, ok := fn.bucketKeyToReadonlyNode[bk][n.txid]; ok {
+						delete(fn.bucketKeyToReadonlyNode[bk], n.txid)
+					}
+				}
+			}
+		}
 	}
 }
 
