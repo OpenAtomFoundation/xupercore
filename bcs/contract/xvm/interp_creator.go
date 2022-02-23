@@ -7,10 +7,11 @@ import (
 	"github.com/xuperchain/wagon/wasm"
 	"github.com/xuperchain/xvm/runtime/wasi"
 
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xvm/exec"
 	"github.com/xuperchain/xvm/runtime/emscripten"
 	gowasm "github.com/xuperchain/xvm/runtime/go"
+
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 )
 
 type xvmInterpCreator struct {
@@ -48,17 +49,9 @@ func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, bool, error
 		builtinResolver,
 	)
 	// not good to dependency wagon direct in xupercore,but no better solution
-	legacy := false
-	module, err := wasm.DecodeModule(bytes.NewBuffer(codebuf))
+	legacy, err := isLegacyInterp(codebuf)
 	if err != nil {
 		return nil, false, err
-	}
-	if module.Import != nil {
-		for _, entry := range module.Import.Entries {
-			if entry.FieldName == currentContractMethodInitialize {
-				legacy = true
-			}
-		}
 	}
 	code, err := exec.NewInterpCode(codebuf, resolver)
 	return code, legacy, err
@@ -76,6 +69,21 @@ func (x *xvmInterpCreator) RemoveCache(contractName string) {
 	x.cm.RemoveCode(contractName)
 }
 
+func isLegacyInterp(codebuf []byte) (bool, error) {
+	module, err := wasm.DecodeModule(bytes.NewBuffer(codebuf))
+	if err != nil {
+		return false, err
+	}
+
+	if module.Import != nil {
+		for _, entry := range module.Export.Entries {
+			if entry.FieldStr == currentContractMethodInitialize {
+				return false, nil
+			}
+		}
+	}
+	return true, nil
+}
 func init() {
 	bridge.Register(bridge.TypeWasm, "ixvm", newXVMInterpCreator)
 }

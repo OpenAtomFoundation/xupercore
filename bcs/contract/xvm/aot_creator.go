@@ -121,19 +121,17 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 	// }
 	// resolvers = append(resolvers, teeResolver)
 	// }
-	syms, err := resolveSymbols(libpath)
 
-	if err != nil {
-		return nil, false, err
-	}
-	legacy := false
-	if _, ok := syms[currentContractMethodInitialize]; ok {
-		legacy = true
-	}
 	resolver := exec.NewMultiResolver(
 		resolvers...,
 	)
+	// TODO @fengjin
+	// newAOTCode shoule accept []byte as arguement rather than string
 	code, err := exec.NewAOTCode(libpath, resolver)
+	if err != nil {
+		return nil, false, err
+	}
+	legacy, err := isLegacyAOT(libpath)
 	if err != nil {
 		return nil, false, err
 	}
@@ -155,6 +153,18 @@ func (x *xvmCreator) RemoveCache(contractName string) {
 	x.cm.RemoveCode(contractName)
 }
 
+func isLegacyAOT(filepath string) (bool, error) {
+	syms, err := resolveSymbols(filepath)
+
+	if err != nil {
+		return false, err
+	}
+	if _, ok := syms[currentContractMethodInitialize]; ok {
+		return false, nil
+	}
+	return true, nil
+
+}
 func init() {
 	bridge.Register(bridge.TypeWasm, "xvm", newXVMCreator)
 }
