@@ -55,7 +55,7 @@ func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, bool, error
 	}
 	if module.Import != nil {
 		for _, entry := range module.Import.Entries {
-			if entry.FieldName == legacyContractMethodInitialize {
+			if entry.FieldName == currentContractMethodInitialize {
 				legacy = true
 			}
 		}

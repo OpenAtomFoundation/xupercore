@@ -9,6 +9,10 @@ import (
 	"strings"
 )
 
+const (
+	exportSymbolPrefix = "_export_"
+)
+
 func resolveSymbols(filepath string) (map[string]struct{}, error) {
 	content, err := os.ReadFile(filepath)
 	if err != nil {
@@ -21,7 +25,7 @@ func resolveSymbols(filepath string) (map[string]struct{}, error) {
 	symbols := file.Symtab.Syms
 	ret := map[string]struct{}{}
 	for _, sym := range symbols {
-		if strings.HasPrefix(sym.Name, "_export") {
+		if strings.HasPrefix(sym.Name, exportSymbolPrefix) {
 			ret[sym.Name] = struct{}{}
 		}
 	}

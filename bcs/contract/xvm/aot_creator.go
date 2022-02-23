@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	legacyContractMethodInitialize = "_initialize"
+	currentContractMethodInitialize = "initialize"
 )
 
 type xvmCreator struct {
@@ -127,7 +127,7 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 		return nil, false, err
 	}
 	legacy := false
-	if _, ok := syms[legacyContractMethodInitialize]; ok {
+	if _, ok := syms[currentContractMethodInitialize]; ok {
 		legacy = true
 	}
 	resolver := exec.NewMultiResolver(

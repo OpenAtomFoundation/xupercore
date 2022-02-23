@@ -1,9 +1,12 @@
 package xvm
 
 import (
+	"bytes"
+	"fmt"
 	"os"
 	"testing"
 
+	"github.com/xuperchain/wagon/wasm"
 	"github.com/xuperchain/xvm/compile"
 )
 
@@ -64,9 +67,41 @@ func TestSymbol(t *testing.T) {
 			return
 		}
 		for symbol, shouldExist := range cases {
-			_, exist := symbols["_export_"+symbol]
+			_, exist := symbols[exportSymbolPrefix+symbol]
 			if exist != shouldExist {
 				t.Errorf("symbol %s not match,want %v,got %v\n", symbol, shouldExist, exist)
+			}
+		}
+	})
+
+	t.Run("Interp", func(t *testing.T) {
+		cases := map[string]bool{
+			"current": true,
+			"legacy":  false,
+		}
+		for testCase, want := range cases {
+			content, err := os.ReadFile(fmt.Sprintf("testdata/counter_%s.wasm", testCase))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			current := false
+
+			module, err := wasm.DecodeModule(bytes.NewBuffer(content))
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			if module.Import != nil {
+				for _, entry := range module.Export.Entries {
+					if entry.FieldStr == currentContractMethodInitialize {
+						current = true
+					}
+				}
+			}
+
+			if current != want {
+				t.Errorf("file %s not match,want %v,got %v\n", testCase, want, current)
 			}
 		}
 	})
