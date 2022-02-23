@@ -2,6 +2,7 @@ package xvm
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -45,7 +46,7 @@ func TestSymbol(t *testing.T) {
 			"legacy":  true,
 		}
 		for testCase, want := range cases {
-			codebuf, err := os.ReadFile(fmt.Sprintf("testdata/counter_%s.wasm", testCase))
+			codebuf, err := ioutil.ReadFile(fmt.Sprintf("testdata/counter_%s.wasm", testCase))
 			if err != nil {
 				t.Error(err)
 				return

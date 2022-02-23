@@ -5,7 +5,7 @@ package xvm
 import (
 	"bytes"
 	"debug/macho"
-	"os"
+	"io/ioutil"
 	"strings"
 )
 
@@ -14,7 +14,7 @@ const (
 )
 
 func resolveSymbols(filepath string) (map[string]struct{}, error) {
-	content, err := os.ReadFile(filepath)
+	content, err := ioutil.ReadFile(filepath)
 	if err != nil {
 		return nil, err
 	}
