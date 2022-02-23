@@ -33,12 +33,13 @@ func TestSymbol(t *testing.T) {
 			return
 		}
 		for symbol, shouldExist := range cases {
-			_, exist := symbols["_export_"+symbol]
+			_, exist := symbols[exportSymbolPrefix+symbol]
 			if exist != shouldExist {
 				t.Errorf("symbol %s not match,want %v,got %v\n", symbol, shouldExist, exist)
 			}
 		}
 	})
+
 	t.Run("Legacy", func(t *testing.T) {
 		cases := map[string]bool{
 			"initialize": false,

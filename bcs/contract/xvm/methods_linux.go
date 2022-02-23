@@ -1,26 +1,53 @@
-// +build linux
+// +build linux,amd64
 
 package xvm
 
 import (
+	"bytes"
 	"debug/elf"
-	"io"
+	"io/ioutil"
+	"os"
+	"strings"
+)
+
+const (
+	exportSymbolPrefix = "export_"
 )
 
 // return map as it is used to check whether initialize method exists
-func symbols(r io.ReaderAt) (map[string]struct{}, error) {
-	file, err := elf.NewFile(r)
+func resolveSymbols(filepath string) (map[string]struct{}, error) {
+	f, err := os.Open(filepath)
 	if err != nil {
 		return nil, err
 	}
-	ret := map[string]struct{}{}
-	symbols, err := file.Symbols()
+	content, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
-	for _, symbol := range symbols {
-		ret[symbol.Name] = struct{}{}
+	file, err := elf.NewFile(bytes.NewReader(content))
+	if err != nil {
+		return nil, err
+	}
 
+	ret := map[string]struct{}{}
+
+	var dynStr *elf.Section
+	for _, section := range file.Sections {
+		if section.Name == ".dynstr" {
+			dynStr = section
+		}
 	}
+
+	data, err := dynStr.Data()
+	if err != nil {
+		return nil, err
+	}
+	symbols := bytes.Split(data, []byte{0})
+	for _, symbol := range symbols {
+		if strings.HasPrefix(string(symbol), exportSymbolPrefix) {
+			ret[string(symbol)] = struct{}{}
+		}
+	}
+
 	return ret, nil
 }
