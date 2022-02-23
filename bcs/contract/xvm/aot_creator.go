@@ -2,11 +2,12 @@ package xvm
 
 import (
 	"fmt"
-	"github.com/xuperchain/xvm/runtime/wasi"
 	"io/ioutil"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+
+	"github.com/xuperchain/xvm/runtime/wasi"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
@@ -14,6 +15,10 @@ import (
 	"github.com/xuperchain/xvm/exec"
 	"github.com/xuperchain/xvm/runtime/emscripten"
 	gowasm "github.com/xuperchain/xvm/runtime/go"
+)
+
+const (
+	legacyContractMethodInitialize = "_initialize"
 )
 
 type xvmCreator struct {
@@ -99,7 +104,7 @@ func (x *xvmCreator) getContractCodeCache(name string, cp bridge.ContractCodePro
 	return x.cm.GetExecCode(name, cp)
 }
 
-func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, error) {
+func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 	resolvers := []exec.Resolver{
 		gowasm.NewResolver(),
 		emscripten.NewResolver(),
@@ -116,10 +121,24 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, error) {
 	// }
 	// resolvers = append(resolvers, teeResolver)
 	// }
+	syms, err := resolveSymbols(libpath)
+
+	if err != nil {
+		return nil, false, err
+	}
+	legacy := false
+	if _, ok := syms[legacyContractMethodInitialize]; ok {
+		legacy = true
+	}
 	resolver := exec.NewMultiResolver(
 		resolvers...,
 	)
-	return exec.NewAOTCode(libpath, resolver)
+	code, err := exec.NewAOTCode(libpath, resolver)
+	if err != nil {
+		return nil, false, err
+	}
+	return code, legacy, err
+	// return exec.NewAOTCode(libpath, resolver)
 }
 
 func (x *xvmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {

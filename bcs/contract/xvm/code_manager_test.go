@@ -46,8 +46,8 @@ func TestGetCacheExecCode(t *testing.T) {
 		return ioutil.WriteFile(output, code, 0700)
 	}
 
-	makeExecCodeFunc := func(libpath string) (exec.Code, error) {
-		return new(fakeCode), nil
+	makeExecCodeFunc := func(libpath string) (exec.Code, bool, error) {
+		return new(fakeCode), false, nil
 	}
 
 	cp := &memCodeProvider{
@@ -107,8 +107,8 @@ func TestMakeCacheBlocking(t *testing.T) {
 		return ioutil.WriteFile(output, code, 0700)
 	}
 
-	makeExecCodeFunc := func(libpath string) (exec.Code, error) {
-		return new(fakeCode), nil
+	makeExecCodeFunc := func(libpath string) (exec.Code, bool, error) {
+		return new(fakeCode), false, nil
 	}
 
 	cp := &memCodeProvider{

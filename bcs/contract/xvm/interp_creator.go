@@ -1,8 +1,11 @@
 package xvm
 
 import (
-	"github.com/xuperchain/xvm/runtime/wasi"
+	"bytes"
 	"io/ioutil"
+
+	"github.com/xuperchain/wagon/wasm"
+	"github.com/xuperchain/xvm/runtime/wasi"
 
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xvm/exec"
@@ -32,10 +35,10 @@ func (x *xvmInterpCreator) compileCode(buf []byte, outputPath string) error {
 	return ioutil.WriteFile(outputPath, buf, 0600)
 }
 
-func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, error) {
+func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, bool, error) {
 	codebuf, err := ioutil.ReadFile(codepath)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	resolver := exec.NewMultiResolver(
 		gowasm.NewResolver(),
@@ -44,7 +47,21 @@ func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, error) {
 		wasi.NewResolver(),
 		builtinResolver,
 	)
-	return exec.NewInterpCode(codebuf, resolver)
+	// not good to dependency wagon direct in xupercore,but no better solution
+	legacy := false
+	module, err := wasm.DecodeModule(bytes.NewBuffer(codebuf))
+	if err != nil {
+		return nil, false, err
+	}
+	if module.Import != nil {
+		for _, entry := range module.Import.Entries {
+			if entry.FieldName == legacyContractMethodInitialize {
+				legacy = true
+			}
+		}
+	}
+	code, err := exec.NewInterpCode(codebuf, resolver)
+	return code, legacy, err
 }
 
 func (x *xvmInterpCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {

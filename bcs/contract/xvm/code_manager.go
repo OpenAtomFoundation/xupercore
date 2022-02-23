@@ -22,12 +22,13 @@ import (
 )
 
 type compileFunc func([]byte, string) error
-type makeExecCodeFunc func(libpath string) (exec.Code, error)
+type makeExecCodeFunc func(libpath string) (exec.Code, bool, error)
 
 type contractCode struct {
 	ContractName string
 	ExecCode     exec.Code
 	Desc         protos.WasmCodeDesc
+	legacy       bool
 }
 
 type codeManager struct {
@@ -93,7 +94,7 @@ func (c *codeManager) makeMemCache(name, libpath string, desc *protos.WasmCodeDe
 		return nil, err
 	}
 
-	execCode, err := c.makeExecCode(libpathFull)
+	execCode, legacy,err := c.makeExecCode(libpathFull)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +102,7 @@ func (c *codeManager) makeMemCache(name, libpath string, desc *protos.WasmCodeDe
 		ContractName: name,
 		ExecCode:     execCode,
 		Desc:         *desc,
+		legacy:legacy,
 	}
 	runtime.SetFinalizer(code, func(c *contractCode) {
 		c.ExecCode.Release()
