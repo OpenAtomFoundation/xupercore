@@ -48,7 +48,7 @@ func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, bool, error
 		wasi.NewResolver(),
 		builtinResolver,
 	)
-	// not good to dependency wagon direct in xupercore,but no better solution
+	// not good to dependency wagon directly in xupercore,but no better solution
 	legacy, err := isLegacyInterp(codebuf)
 	if err != nil {
 		return nil, false, err
