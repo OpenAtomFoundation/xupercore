@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/tx"
@@ -30,6 +31,20 @@ const (
 	statusMining    = 1
 )
 
+const (
+	// 缓存故障节点peerId的有效期时间
+	faultPeerIdCacheExpired = 10 * time.Second
+
+	// 故障节点出错次数阈值
+	faultPeerIdCacheCount = 2
+
+	// 缓存错误区块blockId的有效期时间
+	faultBlockIdCacheExpired = 60 * time.Second
+
+	// 故障节点与错误区块cache GC 周期（s）
+	faultCacheGCInterval = 180 * time.Second
+)
+
 var (
 	errCalculateBlockInterrupt = errors.New("calculate block interrupted")
 )
@@ -44,6 +59,10 @@ type Miner struct {
 	// 即：如果是矿工则只出块，并且不会向其他节点同步新区块（pow除外），如果是非矿工则定时同步区块。
 	status int
 
+	// cache用于在同步到错误区块时缓存blockId和对应节点的peerId
+	faultPeerIdCache  *cache.Cache // key:peerId, val:count(累计出现错误次数)
+	faultBlockIdCache *cache.Cache // key:blockId, val:peerId
+
 	// 标记是否退出运行
 	isExit bool
 	// 用户等待退出
@@ -55,6 +74,9 @@ func NewMiner(ctx *common.ChainCtx) *Miner {
 		ctx: ctx,
 		log: ctx.GetLog(),
 	}
+
+	obj.faultPeerIdCache = cache.New(faultPeerIdCacheExpired, faultCacheGCInterval)
+	obj.faultBlockIdCache = cache.New(faultBlockIdCacheExpired, faultCacheGCInterval)
 
 	return obj
 }
