@@ -51,13 +51,14 @@ func (s *syscallResolver) ResolveFunc(module, name string) (interface{}, bool) {
 		return s.goCallMethod, true
 	case "go.github.com/xuperchain/xuperchain/core/contractsdk/go/driver/wasm.fetchResponse":
 		return s.goFetchResponse, true
+	// for legacy fastcomp backend
 	case "env._call_method":
 		return s.cCallMethod, true
 	case "env._call_method_v2":
 		return s.cCallMethodv2, true
 	case "env._fetch_response":
 		return s.cFetchResponse, true
-	// 	for 1.39.0
+	// for llvm backend
 	case "env.call_method":
 		return s.cCallMethod, true
 	case "env.call_method_v2":
