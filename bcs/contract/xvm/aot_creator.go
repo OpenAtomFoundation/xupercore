@@ -136,7 +136,6 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 		return nil, false, err
 	}
 	return code, legacy, err
-	// return exec.NewAOTCode(libpath, resolver)
 }
 
 func (x *xvmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {
