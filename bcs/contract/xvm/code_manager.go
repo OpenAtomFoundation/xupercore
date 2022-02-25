@@ -14,22 +14,20 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
+	"github.com/xuperchain/xupercore/protos"
 	"github.com/xuperchain/xvm/compile"
 	"github.com/xuperchain/xvm/exec"
 	"golang.org/x/sync/singleflight"
-
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
-	"github.com/xuperchain/xupercore/protos"
 )
 
 type compileFunc func([]byte, string) error
-type makeExecCodeFunc func(libpath string) (exec.Code, bool, error)
+type makeExecCodeFunc func(libpath string) (exec.Code, error)
 
 type contractCode struct {
 	ContractName string
 	ExecCode     exec.Code
 	Desc         protos.WasmCodeDesc
-	legacy       bool
 }
 
 type codeManager struct {
@@ -95,7 +93,7 @@ func (c *codeManager) makeMemCache(name, libpath string, desc *protos.WasmCodeDe
 		return nil, err
 	}
 
-	execCode, legacy, err := c.makeExecCode(libpathFull)
+	execCode, err := c.makeExecCode(libpathFull)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +101,6 @@ func (c *codeManager) makeMemCache(name, libpath string, desc *protos.WasmCodeDe
 		ContractName: name,
 		ExecCode:     execCode,
 		Desc:         *desc,
-		legacy:       legacy,
 	}
 	runtime.SetFinalizer(code, func(c *contractCode) {
 		c.ExecCode.Release()
