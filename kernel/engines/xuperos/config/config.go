@@ -25,6 +25,10 @@ type EngineConf struct {
 	TxIdCacheGCInterval time.Duration `yaml:"txIdCacheGCInterval,omitempty"`
 	// MaxBlockQueueSize the queue size of the processing block
 	MaxBlockQueueSize int64 `yaml:"maxBlockQueueSize,omitempty"`
+	// SyncBlockFilterMode is the mode for filter peerID list policies, 0-SyncWithNearestBucket, 1-SyncWithFactorBucket
+	SyncBlockFilterMode int `yaml:"syncBlockFilterMode,omitempty"`
+	// SyncFactorForFactorBucketMode only use for SyncWithFactorBucket mode of SyncBlockFilterMode configuration item
+	SyncFactorForFactorBucketMode float64 `yaml:"SyncFactorForFactorBucketMode,omitempty"`
 }
 
 func LoadEngineConf(cfgFile string) (*EngineConf, error) {
@@ -39,11 +43,13 @@ func LoadEngineConf(cfgFile string) (*EngineConf, error) {
 
 func GetDefEngineConf() *EngineConf {
 	return &EngineConf{
-		RootChain:            RootBlockChain,
-		BlockBroadcastMode:   0,
-		TxIdCacheExpiredTime: 180 * time.Second,
-		TxIdCacheGCInterval:  300 * time.Second,
-		MaxBlockQueueSize:    100,
+		RootChain:                     RootBlockChain,
+		BlockBroadcastMode:            0,
+		TxIdCacheExpiredTime:          180 * time.Second,
+		TxIdCacheGCInterval:           300 * time.Second,
+		MaxBlockQueueSize:             100,
+		SyncBlockFilterMode:           0,
+		SyncFactorForFactorBucketMode: 0.5,
 	}
 }
 

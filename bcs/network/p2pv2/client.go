@@ -237,7 +237,7 @@ func (p *P2PServerV2) getFilter(msg *pb.XuperMessage, opt *p2p.Option) PeerFilte
 		case p2p.NearestBucketStrategy:
 			filter = &NearestBucketFilter{srv: p}
 		case p2p.BucketsWithFactorStrategy:
-			filter = &BucketsFilterWithFactor{srv: p}
+			filter = &BucketsFilterWithFactor{srv: p, factor: opt.Factor}
 		default:
 			filter = &BucketsFilter{srv: p}
 		}
