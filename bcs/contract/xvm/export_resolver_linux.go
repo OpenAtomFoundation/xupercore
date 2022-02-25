@@ -5,6 +5,7 @@ package xvm
 import (
 	"bytes"
 	"debug/elf"
+	"errors"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -15,7 +16,7 @@ const (
 )
 
 var (
-	errSectionNotFound = errors.new("section dynstr not found")
+	errSectionNotFound = errors.New("section dynstr not found")
 )
 
 // return map as it is used to check whether initialize method exists
