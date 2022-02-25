@@ -9,6 +9,8 @@ type Option struct {
 	WhiteList map[string]bool
 
 	Percent float32 // percent wait for return
+
+	Factor float64
 }
 
 // OptionFunc define single Option function for send message
@@ -52,6 +54,12 @@ func WithPeerIDs(peerIDs []string) OptionFunc {
 func WithAccounts(accounts []string) OptionFunc {
 	return func(o *Option) {
 		o.Accounts = accounts
+	}
+}
+
+func WithFactor(factor float64) OptionFunc {
+	return func(o *Option) {
+		o.Factor = factor
 	}
 }
 
