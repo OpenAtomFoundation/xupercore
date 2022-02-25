@@ -4,10 +4,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"github.com/xuperchain/crypto/core/account"
-	"github.com/xuperchain/crypto/core/sign"
 	"hash"
 	"unsafe"
+
+	"github.com/xuperchain/crypto/core/account"
+	"github.com/xuperchain/crypto/core/sign"
 
 	"github.com/xuperchain/xvm/exec"
 	"github.com/xuperchain/xvm/runtime/emscripten"
@@ -199,10 +200,19 @@ func strdup(ctx exec.Context, s string) uint32 {
 }
 
 var builtinResolver = exec.MapResolver(map[string]interface{}{
+	// for legacy fastcomp backend
 	"env._xvm_hash":     xvmHash,
 	"env._xvm_encode":   xvmEncode,
 	"env._xvm_decode":   xvmDecode,
 	"env._xvm_ecverify": xvmECVerify,
 	// "env._xvm_make_tx":          xvmMakeTx,
 	"env._xvm_addr_from_pubkey": xvmAddressFromPubkey,
+
+	// for llvm backend
+	"env.xvm_hash":     xvmHash,
+	"env.xvm_encode":   xvmEncode,
+	"env.xvm_decode":   xvmDecode,
+	"env.xvm_ecverify": xvmECVerify,
+	// "env._xvm_make_tx":          xvmMakeTx,
+	"env.xvm_addr_from_pubkey": xvmAddressFromPubkey,
 })
