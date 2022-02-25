@@ -14,6 +14,10 @@ const (
 	exportSymbolPrefix = "export_"
 )
 
+var (
+	errSectionNotFound = errors.new("section dynstr not found")
+)
+
 // return map as it is used to check whether initialize method exists
 func resolveSymbols(filepath string) (map[string]struct{}, error) {
 	f, err := os.Open(filepath)
@@ -35,7 +39,11 @@ func resolveSymbols(filepath string) (map[string]struct{}, error) {
 	for _, section := range file.Sections {
 		if section.Name == ".dynstr" {
 			dynStr = section
+			break
 		}
+	}
+	if dynStr == nil {
+		return nil, errSectionNotFound
 	}
 
 	data, err := dynStr.Data()
