@@ -37,6 +37,7 @@ func createInstance(ctx *bridge.Context, code *contractCode, syscall *bridge.Sys
 		bridgeCtx: ctx,
 		execCtx:   execCtx,
 		desc:      code.Desc,
+		legacy:    code.legacy,
 	}
 	instance.InitDebugWriter(syscall)
 	return instance, nil
@@ -47,6 +48,7 @@ type xvmInstance struct {
 	execCtx   exec.Context
 	desc      protos.WasmCodeDesc
 	syscall   *bridge.SyscallService
+	legacy    bool
 }
 
 func (x *xvmInstance) Exec() error {
@@ -112,7 +114,11 @@ func (x *xvmInstance) guessEntry() (string, error) {
 	case "go":
 		return "run", nil
 	case "c":
-		return "_" + x.bridgeCtx.Method, nil
+		if x.legacy {
+			return "_" + x.bridgeCtx.Method, nil
+		} else {
+			return x.bridgeCtx.Method, nil
+		}
 	default:
 		return "", errors.New("bad runtime")
 	}

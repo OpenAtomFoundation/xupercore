@@ -7,12 +7,18 @@ import (
 	osexec "os/exec"
 	"path/filepath"
 
+	"github.com/xuperchain/xvm/runtime/wasi"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xvm/compile"
 	"github.com/xuperchain/xvm/exec"
 	"github.com/xuperchain/xvm/runtime/emscripten"
 	gowasm "github.com/xuperchain/xvm/runtime/go"
+)
+
+const (
+	currentContractMethodInitialize = "initialize"
 )
 
 type xvmCreator struct {
@@ -98,12 +104,13 @@ func (x *xvmCreator) getContractCodeCache(name string, cp bridge.ContractCodePro
 	return x.cm.GetExecCode(name, cp)
 }
 
-func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, error) {
+func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 	resolvers := []exec.Resolver{
 		gowasm.NewResolver(),
 		emscripten.NewResolver(),
 		newSyscallResolver(x.config.SyscallService),
 		builtinResolver,
+		wasi.NewResolver(),
 	}
 	//AOT only for experiment;
 	// if x.vmconfig.TEEConfig.Enable {
@@ -114,10 +121,21 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, error) {
 	// }
 	// resolvers = append(resolvers, teeResolver)
 	// }
+
 	resolver := exec.NewMultiResolver(
 		resolvers...,
 	)
-	return exec.NewAOTCode(libpath, resolver)
+	// TODO @fengjin
+	// newAOTCode shoule accept []byte as arguement rather than string
+	code, err := exec.NewAOTCode(libpath, resolver)
+	if err != nil {
+		return nil, false, err
+	}
+	legacy, err := isLegacyAOT(libpath)
+	if err != nil {
+		return nil, false, err
+	}
+	return code, legacy, err
 }
 
 func (x *xvmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {
@@ -134,6 +152,18 @@ func (x *xvmCreator) RemoveCache(contractName string) {
 	x.cm.RemoveCode(contractName)
 }
 
+func isLegacyAOT(filepath string) (bool, error) {
+	syms, err := resolveSymbols(filepath)
+
+	if err != nil {
+		return false, err
+	}
+	if _, ok := syms[currentContractMethodInitialize]; ok {
+		return false, nil
+	}
+	return true, nil
+
+}
 func init() {
 	bridge.Register(bridge.TypeWasm, "xvm", newXVMCreator)
 }
