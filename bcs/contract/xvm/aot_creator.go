@@ -158,7 +158,7 @@ func isLegacyAOT(filepath string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if _, ok := syms[currentContractMethodInitialize]; ok {
+	if _, ok := syms[exportSymbolPrefix+currentContractMethodInitialize]; ok {
 		return false, nil
 	}
 	return true, nil
