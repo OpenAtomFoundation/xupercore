@@ -12,7 +12,7 @@ import (
 func TestSymbol(t *testing.T) {
 	t.Run("AOT", func(t *testing.T) {
 		cases := map[string]bool{
-			"current": true,
+			"current": false,
 			"legacy":  true,
 		}
 		var err error
@@ -24,7 +24,7 @@ func TestSymbol(t *testing.T) {
 			cfg := &compile.Config{
 				Wasm2cPath: "wasm2c",
 			}
-			err = compile.CompileNativeLibrary(cfg, outpath, "testdata/counter_current.wasm")
+			err = compile.CompileNativeLibrary(cfg, outpath, fmt.Sprintf("testdata/counter_%s.wasm", testCase))
 			if err != nil {
 				t.Error(err)
 				return
