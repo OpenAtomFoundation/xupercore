@@ -18,7 +18,7 @@ type Node struct {
 	readonlyInputs  []*Node
 
 	bucketKeyToNode         map[string]*Node            // txid 为空时，构造 mock node，写了某个 bucket+key 的节点，bucket+key => *Node。
-	bucketKeyToReadonlyNode map[string]map[string]*Node // txid 为空时，构造 mock node，只读某个 bucket+key 的节点列表，bucket+key => [bucket+key => *Node]。
+	bucketKeyToReadonlyNode map[string]map[string]*Node // txid 为空时，构造 mock node，只读某个 bucket+key 的节点列表，bucket+key => [txid => *Node]。
 
 	txInputs     []*Node
 	txInputsExt  []*Node
@@ -73,6 +73,66 @@ func (n *Node) getAllChildren() []*Node {
 			}
 		}
 
+	}
+	return result
+}
+
+// 如果此交易包含写某个key，那么找到所有读这个key的交易，目的是在打包交易时保证读交易先打包。
+func (n *Node) getReadonlyBrotherNodes(confirmed map[*Node]bool) map[*Node]bool {
+	result := map[*Node]bool{}
+	for i, v := range n.txInputsExt {
+		if v == nil {
+			continue
+		}
+		ext := n.tx.GetTxInputsExt()[i]
+		bk := ext.Bucket + string(ext.Key) // 此 bk 为写
+		offset := ext.RefOffset
+		if v.txid == "" {
+			if rs, ok := v.bucketKeyToReadonlyNode[bk]; ok {
+				for _, r := range rs {
+					if !confirmed[r] {
+						result[r] = true
+					}
+				}
+			}
+		} else {
+			for _, r := range v.readonlyOutputs[offset] {
+				if r != nil {
+					if !confirmed[r] {
+						result[r] = true
+					}
+				}
+			}
+		}
+
+	}
+	return result
+}
+
+// 如果此交易包含读key，那么找到所有写的交易，目的是在打包交易时保证读交易先打包。
+func (n *Node) getWriteBrotherNodes(confirmed map[*Node]bool) map[*Node]bool {
+	result := map[*Node]bool{}
+	for i, v := range n.readonlyInputs {
+		if v == nil {
+			continue
+		}
+		ext := n.tx.GetTxInputsExt()[i]
+		bk := ext.Bucket + string(ext.Key) // 此 bk 为写
+		offset := ext.RefOffset
+		if v.txid == "" {
+			if w, ok := v.bucketKeyToNode[bk]; ok {
+				if !confirmed[w] {
+					result[w] = true
+				}
+			}
+		} else {
+			w := v.txOutputsExt[offset]
+			if w != nil {
+				if !confirmed[w] {
+					result[w] = true
+				}
+			}
+		}
 	}
 	return result
 }
@@ -240,11 +300,15 @@ func (n *Node) breakOutputs() {
 
 		if fn.txid == "" {
 			for _, bk := range inputKeys {
-				if _, ok := fn.bucketKeyToReadonlyNode[bk]; ok {
-					if len(fn.bucketKeyToReadonlyNode[bk]) == 1 {
-						delete(fn.bucketKeyToReadonlyNode, bk)
-					} else if _, ok := fn.bucketKeyToReadonlyNode[bk][n.txid]; ok {
+				if m, ok := fn.bucketKeyToReadonlyNode[bk]; ok {
+					if m == nil {
+						continue
+					}
+					if _, ok := fn.bucketKeyToReadonlyNode[bk][n.txid]; ok {
 						delete(fn.bucketKeyToReadonlyNode[bk], n.txid)
+						if len(fn.bucketKeyToReadonlyNode[bk]) == 0 {
+							delete(fn.bucketKeyToReadonlyNode, bk)
+						}
 					}
 				}
 			}

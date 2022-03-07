@@ -39,12 +39,27 @@ type Mempool struct {
 	unconfirmed map[string]*Node // txID => *Node，所有未确认交易的集合。
 	orphans     map[string]*Node // txID => *Node，所有的孤儿交易。
 
-	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。
+	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。// 只读交易在执行区块时是否有问题？
 
 	emptyTxIDNode *Node
 	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
 
 	m *sync.Mutex
+}
+
+// Debug Debug mempool.
+func (m *Mempool) Debug() {
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	if m.emptyTxIDNode != nil {
+		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen", len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes),
+			"len(m.emptyTxIDNode.readonlyOutputs)", len(m.emptyTxIDNode.readonlyOutputs), "len(m.emptyTxIDNode.bucketKeyToNode)", len(m.emptyTxIDNode.bucketKeyToNode),
+			"len(m.emptyTxIDNode.bucketKeyToReadonlyNode)", len(m.emptyTxIDNode.bucketKeyToReadonlyNode),
+			"len(m.emptyTxIDNode.txOutputsExt)", len(m.emptyTxIDNode.txOutputsExt))
+	} else {
+		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen", len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes))
+	}
 }
 
 // NewMempool new mempool.
@@ -102,99 +117,185 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	var q deque.Deque
 	nodeInputSumMap := make(map[*Node]int, len(m.confirmed))
+	confirmed := make(map[*Node]bool, len(m.confirmed))
 	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
 		q.PushBack(n)
+		confirmed[n] = true
 	}
 
-	// 某个写交易遍历时，如果存在同个key的读交易，将写交易作为map的key，读交易作为value存储。
+	// key为只读交易，value为读写交易，所有key。
+	readToWriteNodes := make(map[*Node]map[*Node]bool, 0)
+
+	// 写交易为key，所有只读交易为value，针对同一个bucket+key。
+	writeToReadonlyNodes := make(map[*Node]map[*Node]bool, 0)
+
+	// 写交易为key，所有遍历过的只读交易为value，针对同一个bucket+key。
 	writeToRangedReadNodes := make(map[*Node]map[*Node]bool, 0)
+
 	// 如果某个写交易可以被打包，但是同个key的读交易还未打包，那么写交易放到此map，等到读交易全部打包完成再打包写交易
-	WaitRangeNodes := make(map[*Node]bool, 0)
+	waitRangeNodes := make(map[*Node]bool, 0)
+
 	for q.Len() > 0 {
 		node := q.PopFront().(*Node)
-		for i, children := range node.readonlyOutputs {
+
+		for _, children := range node.readonlyOutputs {
 			for _, n := range children {
+				if n == nil {
+					continue
+				}
+				if _, ok := readToWriteNodes[n]; !ok {
+					rs := n.getWriteBrotherNodes(confirmed)
+					readToWriteNodes[n] = rs
+				}
+
+				if _, ok := writeToReadonlyNodes[n]; !ok {
+					ws := n.getReadonlyBrotherNodes(confirmed)
+					writeToReadonlyNodes[n] = ws
+				}
+
 				if m.isNextNode(n, false, nodeInputSumMap) {
-					if !f(n.tx) {
+					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 						return
-					}
-					q.PushBack(n)
-					if len(node.txOutputsExt) == 0 {
-						continue
-					}
-					if len(node.txOutputsExt) > i && node.txOutputsExt[i] != nil {
-						writeNode := node.txOutputsExt[i]
-						if WaitRangeNodes[writeNode] {
-							delete(WaitRangeNodes, writeNode)
-							q.PushBack(writeNode)
-							if !f(writeNode.tx) {
-								return
-							}
-						} else {
-							if rangedRead, ok := writeToRangedReadNodes[writeNode]; ok {
-								if len(rangedRead) == 0 {
-									writeToRangedReadNodes[writeNode] = map[*Node]bool{n: true}
-								} else {
-									rangedRead[n] = true
-									writeToRangedReadNodes[writeNode] = rangedRead
-								}
-							}
-						}
 					}
 				}
 			}
 		}
 
+		// 只读交易，引用的key的version为空，此时 node 为 emptyTxIDNode。
+		for _, nodeMap := range node.bucketKeyToReadonlyNode {
+			for _, n := range nodeMap {
+				if n == nil {
+					continue
+				}
+				if _, ok := readToWriteNodes[n]; !ok {
+					rs := n.getWriteBrotherNodes(confirmed)
+					readToWriteNodes[n] = rs
+				}
+
+				if _, ok := writeToReadonlyNodes[n]; !ok {
+					ws := n.getReadonlyBrotherNodes(confirmed)
+					writeToReadonlyNodes[n] = ws
+				}
+				if m.isNextNode(n, false, nodeInputSumMap) {
+					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
+						return
+					}
+				}
+			}
+		}
+
+		// utxo 子交易
 		for _, n := range node.txOutputs {
+			if n == nil {
+				continue
+			}
+			if _, ok := readToWriteNodes[n]; !ok {
+				rs := n.getWriteBrotherNodes(confirmed)
+				readToWriteNodes[n] = rs
+			}
+
+			if _, ok := writeToReadonlyNodes[n]; !ok {
+				ws := n.getReadonlyBrotherNodes(confirmed)
+				writeToReadonlyNodes[n] = ws
+			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if !f(n.tx) {
+				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 					return
 				}
-				q.PushBack(n)
 			}
 		}
 
-		for i, n := range node.txOutputsExt {
+		// 写子交易，当前n为写交易
+		for _, n := range node.txOutputsExt {
+			if n == nil {
+				continue
+			}
+			if _, ok := readToWriteNodes[n]; !ok {
+				rs := n.getWriteBrotherNodes(confirmed)
+				readToWriteNodes[n] = rs
+			}
+
+			if _, ok := writeToReadonlyNodes[n]; !ok {
+				ws := n.getReadonlyBrotherNodes(confirmed)
+				writeToReadonlyNodes[n] = ws
+			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if len(node.readonlyOutputs[i]) == 0 {
-					if !f(n.tx) {
-						return
-					}
-					q.PushBack(n)
-				} else {
-					if len(writeToRangedReadNodes[n]) == len(node.readonlyOutputs[i]) {
-						if !f(n.tx) {
-							return
-						}
-						q.PushBack(n)
-					} else {
-						WaitRangeNodes[n] = true
-					}
+				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
+					return
 				}
 			}
 		}
 
-		// 此时 node 为 emptyTxIDNode
-		for bk, n := range node.bucketKeyToNode { // 读写，此处要判断只读交易是否都已经打包
+		// 此时 node 为 emptyTxIDNode，此时n为写交易，refTxid为空。
+		for _, n := range node.bucketKeyToNode { // 读写，此处要判断只读交易是否都已经打包
+			if n == nil {
+				continue
+			}
+			if _, ok := readToWriteNodes[n]; !ok {
+				rs := n.getWriteBrotherNodes(confirmed)
+				readToWriteNodes[n] = rs
+			}
+
+			if _, ok := writeToReadonlyNodes[n]; !ok {
+				ws := n.getReadonlyBrotherNodes(confirmed)
+				writeToReadonlyNodes[n] = ws
+			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if readonlyNodes, ok := node.bucketKeyToReadonlyNode[bk]; ok {
-					if len(writeToRangedReadNodes[n]) == len(readonlyNodes) {
-						if !f(n.tx) {
-							return
-						}
-						q.PushBack(n)
-					} else {
-						WaitRangeNodes[n] = true
-					}
-				} else {
-					if !f(n.tx) {
-						return
-					}
-					q.PushBack(n)
+				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
+					return
 				}
 			}
 		}
 	}
+}
+
+// 当 n 的入度为0时，判断相关联的只读、读写交易。
+func (m *Mempool) processReadAndWriteNodes(n *Node, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes map[*Node]map[*Node]bool,
+	waitRangeNodes map[*Node]bool, f func(tx *pb.Transaction) bool, q *deque.Deque) bool {
+	ranged := false
+	if rs, ok := writeToReadonlyNodes[n]; ok { // 此时n作为一个写交易，存在需要先打包的读交易。
+		if len(rs) <= len(writeToRangedReadNodes[n]) { // 已经打包的依赖只读交易如果大于等于依赖的所有的只读交易，说明此交易可打包。
+			if !f(n.tx) {
+				return false
+			}
+			ranged = true
+			q.PushBack(n)
+			delete(waitRangeNodes, n)
+		} else {
+			waitRangeNodes[n] = true // 此时n作为写交易，有依赖的只读交易还未打包。
+		}
+	} else { // 没有依赖的只读交易，可以直接打包此交易。
+		if !f(n.tx) {
+			return false
+		}
+		ranged = true
+		q.PushBack(n)
+		delete(waitRangeNodes, n)
+	}
+
+	if ws, ok := readToWriteNodes[n]; ok { // 此时n作为一个只读交易，有依赖于n的读写交易。
+		for w := range ws { // 遍历所有依赖n的读写交易，检查是否有可以打包的读写交易。
+			if rs, ok := writeToReadonlyNodes[w]; ok {
+				if ranged { // 更新读写交易的依赖的已经打包的只读交易，
+					if _, ok := writeToRangedReadNodes[w]; ok {
+						writeToRangedReadNodes[w][n] = true
+					} else {
+						writeToRangedReadNodes[w] = map[*Node]bool{n: true}
+					}
+
+				}
+				// 如果写交易入度为0，判断依赖的只读交易是否已经全部打包。
+				if waitRangeNodes[w] && len(rs) <= len(writeToRangedReadNodes[w]) {
+					if !f(w.tx) {
+						return false
+					}
+					q.PushBack(w)
+					delete(waitRangeNodes, w)
+				}
+			}
+		}
+	}
+	return true
 }
 
 // GetTxCounnt get 获取未确认交易与孤儿交易总数
@@ -366,17 +467,14 @@ func (m *Mempool) findByUtxo(txid string, offset int, ranged map[*Node]bool) []*
 	return result
 }
 
+// TODO：此函数可以优化，可以优化成不使用 bucketKeyNodes，直接使用readonlyInput来判断冲突。
+// 理论上可以少占用内存，但是实际效果和目前应该差别不大，后续可优化。
 func (m *Mempool) findKeyConflictTxs(node *Node, usedKeyVersion map[string]string, ranged map[*Node]bool) []*pb.Transaction {
 	result := make([]*pb.Transaction, 0, 10)
-	outKeys := make(map[string]struct{})
 	tx := node.tx
-	for _, output := range tx.GetTxOutputsExt() { // 找到所有写 key。
-		outKeys[output.GetBucket()+string(output.GetKey())] = struct{}{}
-	}
 
 	for _, input := range tx.GetTxInputsExt() {
 		bk := input.GetBucket() + string(input.GetKey())
-		// if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
 		if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
 			if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
 				if ranged[node] { // 说明此冲突节点已经在之前找到过了。
@@ -386,7 +484,6 @@ func (m *Mempool) findKeyConflictTxs(node *Node, usedKeyVersion map[string]strin
 				result = append(result, txs...)
 			}
 		}
-		// }
 	}
 
 	return result
@@ -1017,10 +1114,6 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 
 	m.confirmed[""] = m.emptyTxIDNode
 	if node.isReadonlyKey(index) { // 只读的key，此时index一定为0。
-		if m.emptyTxIDNode.readonlyOutputs[offset] == nil {
-			m.emptyTxIDNode.readonlyOutputs[offset] = make(map[string]*Node, 1)
-		}
-		m.emptyTxIDNode.readonlyOutputs[offset][node.txid] = node
 		node.readonlyInputs[index] = m.emptyTxIDNode
 
 		if m.emptyTxIDNode.bucketKeyToReadonlyNode[bk] == nil {
