@@ -271,8 +271,19 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 		metrics.CallMethodCounter.WithLabelValues(t.ctx.BCName, "SubmitTx", code).Inc()
 	}()
 
+	// 判断此交易是否已经存在（账本和未确认交易表中）。
+	dbtx, confirmed, err := t.ctx.State.QueryTx(tx.GetTxid())
+	if err != nil { // 从数据库查询失败。
+		log.Error("check tx already exist failed", "txid", utils.F(tx.GetTxid()), "err", err)
+		return common.ErrTxVerifyFailed.More("err:%v", err)
+	}
+	if dbtx != nil { // 数据库存在此交易，重复提交。
+		log.Error("tx already exist in db", "txid", utils.F(tx.GetTxid()), "confirmed", confirmed)
+		return common.ErrTxAlreadyExist
+	}
+
 	// 验证交易
-	_, err := t.ctx.State.VerifyTx(tx)
+	_, err = t.ctx.State.VerifyTx(tx)
 	if err != nil {
 		log.Error("verify tx error", "txid", utils.F(tx.GetTxid()), "err", err)
 		code = "VerifyTxFailed"
