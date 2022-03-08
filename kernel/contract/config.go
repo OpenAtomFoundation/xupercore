@@ -39,6 +39,17 @@ type XVMConfig struct {
 	// The higher the number, the faster the program runs,
 	// but the compilation speed will be slower
 	OptLevel int `yaml:"optlevel"`
+	Memory   MemoryConfig
+}
+type MemoryConfig struct {
+	// populated and hugepage is not enabled for xuperchain
+	MemoryGrow MemoryGrowConfig
+}
+type MemoryGrowConfig struct {
+	//  only enabled config item is exposed to xupercore, which allows disabling memory grow in xuperchain config file
+	Enabled    bool `yaml:"enabled"`
+	Maxmium    int  `yaml:"-"`
+	Initialize int  `yaml:"-"`
 }
 
 // WasmConfig wasm config

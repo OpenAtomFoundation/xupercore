@@ -7,14 +7,25 @@ import (
 	osexec "os/exec"
 	"path/filepath"
 
-	"github.com/xuperchain/xvm/runtime/wasi"
-
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xvm/compile"
 	"github.com/xuperchain/xvm/exec"
 	"github.com/xuperchain/xvm/runtime/emscripten"
 	gowasm "github.com/xuperchain/xvm/runtime/go"
+	"github.com/xuperchain/xvm/runtime/wasi"
+)
+
+var (
+	defaultCodeConfig = exec.CodeConfig{
+		MemoryConfig: exec.MemoryConfig{
+			MemoryGrow: exec.MemoryGrowConfig{
+				Enabled:    false,
+				Initialize: 1,
+				Maximium:   32,
+			},
+		},
+	}
 )
 
 const (
@@ -125,9 +136,20 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 	resolver := exec.NewMultiResolver(
 		resolvers...,
 	)
+	config := defaultCodeConfig
+	config.MemoryConfig.MemoryGrow.Enabled = x.vmconfig.XVM.Memory.MemoryGrow.Enabled
+	//  set maxmium and initialize to zero is allowed in xvm but not allowed in xupercore
+	if x.vmconfig.XVM.Memory.MemoryGrow.Maxmium != 0 {
+		config.MemoryConfig.MemoryGrow.Maximium = x.vmconfig.XVM.Memory.MemoryGrow.Maxmium
+
+	}
+	if x.vmconfig.XVM.Memory.MemoryGrow.Initialize != 0 {
+		config.MemoryConfig.MemoryGrow.Initialize = x.vmconfig.XVM.Memory.MemoryGrow.Initialize
+	}
+
 	// TODO @fengjin
 	// newAOTCode shoule accept []byte as arguement rather than string
-	code, err := exec.NewAOTCode(libpath, resolver)
+	code, err := exec.NewAOTCode(libpath, resolver, &config)
 	if err != nil {
 		return nil, false, err
 	}
