@@ -137,9 +137,15 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 		resolvers...,
 	)
 	config := defaultCodeConfig
-	config.MemoryConfig.MemoryGrow.Enabled = x.vmconfig.XVM.MemoryConfig.MemoryGrowConfig.Enabled
-	config.MemoryConfig.MemoryGrow.Maximium = x.vmconfig.XVM.MemoryConfig.MemoryGrowConfig.Maxmium
-	config.MemoryConfig.MemoryGrow.Initialize = x.vmconfig.XVM.MemoryConfig.MemoryGrowConfig.Initialize
+	config.MemoryConfig.MemoryGrow.Enabled = x.vmconfig.XVM.Memory.MemoryGrow.Enabled
+	//  set maxmium and initialize to zero is allowed in xvm but not allowed in xupercore
+	if x.vmconfig.XVM.Memory.MemoryGrow.Maxmium != 0 {
+		config.MemoryConfig.MemoryGrow.Maximium = x.vmconfig.XVM.Memory.MemoryGrow.Maxmium
+
+	}
+	if x.vmconfig.XVM.Memory.MemoryGrow.Initialize != 0 {
+		config.MemoryConfig.MemoryGrow.Initialize = x.vmconfig.XVM.Memory.MemoryGrow.Initialize
+	}
 
 	// TODO @fengjin
 	// newAOTCode shoule accept []byte as arguement rather than string

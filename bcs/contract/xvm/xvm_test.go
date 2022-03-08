@@ -57,8 +57,8 @@ func TestXVMMemoryGrow(t *testing.T) {
 			Driver: "xvm",
 			XVM: contract.XVMConfig{
 				OptLevel: 0,
-				MemoryConfig: contract.MemoryConfig{
-					MemoryGrowConfig: contract.MemoryGrowConfig{
+				Memory: contract.MemoryConfig{
+					MemoryGrow: contract.MemoryGrowConfig{
 						Enabled: false,
 					},
 				},
@@ -69,8 +69,8 @@ func TestXVMMemoryGrow(t *testing.T) {
 
 	t.Run("DisableMemoryGrowWithoutMinimum", func(t *testing.T) {
 		config := defaultContractConfig
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Enabled = false
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Maxmium = 65535
+		config.Wasm.XVM.Memory.MemoryGrow.Enabled = false
+		config.Wasm.XVM.Memory.MemoryGrow.Maxmium = 65535
 		testcases := []testCase{
 			{
 				Count:     1,
@@ -87,9 +87,9 @@ func TestXVMMemoryGrow(t *testing.T) {
 
 	t.Run("DisableMemoryGrowWithMinimum", func(t *testing.T) {
 		config := defaultContractConfig
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Enabled = false
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Initialize = 16
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Maxmium = 65535
+		config.Wasm.XVM.Memory.MemoryGrow.Enabled = false
+		config.Wasm.XVM.Memory.MemoryGrow.Initialize = 16
+		config.Wasm.XVM.Memory.MemoryGrow.Maxmium = 65535
 		testcases := []testCase{
 			{
 				Count:     1,
@@ -109,8 +109,8 @@ func TestXVMMemoryGrow(t *testing.T) {
 
 	t.Run("MemoryGrowWithLimit", func(t *testing.T) {
 		config := defaultContractConfig
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Enabled = true
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Maxmium = 28
+		config.Wasm.XVM.Memory.MemoryGrow.Enabled = true
+		config.Wasm.XVM.Memory.MemoryGrow.Maxmium = 28
 		testcases := []testCase{
 			{
 				Count:     1,
@@ -146,8 +146,8 @@ func TestXVMMemoryGrow(t *testing.T) {
 	// this should not appear in production environment
 	t.Run("MemoryGrowWithoutLimit", func(t *testing.T) {
 		config := defaultContractConfig
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Enabled = true
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Maxmium = 65535
+		config.Wasm.XVM.Memory.MemoryGrow.Enabled = true
+		config.Wasm.XVM.Memory.MemoryGrow.Maxmium = 65535
 		testcases := []testCase{
 			{
 				Count:     1,
