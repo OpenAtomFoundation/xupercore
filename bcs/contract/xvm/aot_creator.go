@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	defaultCodeConfig = &exec.CodeConfig{
+	defaultCodeConfig = exec.CodeConfig{
 		MemoryConfig: exec.MemoryConfig{
 			MemoryGrow: exec.MemoryGrowConfig{
 				Enabled:    false,
@@ -136,9 +136,14 @@ func (x *xvmCreator) MakeExecCode(libpath string) (exec.Code, bool, error) {
 	resolver := exec.NewMultiResolver(
 		resolvers...,
 	)
+	config := defaultCodeConfig
+	config.MemoryConfig.MemoryGrow.Enabled = x.vmconfig.XVM.MemoryConfig.MemoryGrowConfig.Enabled
+	config.MemoryConfig.MemoryGrow.Maximium = x.vmconfig.XVM.MemoryConfig.MemoryGrowConfig.Maxmium
+	config.MemoryConfig.MemoryGrow.Initialize = x.vmconfig.XVM.MemoryConfig.MemoryGrowConfig.Initialize
+
 	// TODO @fengjin
 	// newAOTCode shoule accept []byte as arguement rather than string
-	code, err := exec.NewAOTCode(libpath, resolver, defaultCodeConfig)
+	code, err := exec.NewAOTCode(libpath, resolver, &config)
 	if err != nil {
 		return nil, false, err
 	}

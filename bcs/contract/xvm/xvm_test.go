@@ -110,8 +110,7 @@ func TestXVMMemoryGrow(t *testing.T) {
 	t.Run("MemoryGrowWithLimit", func(t *testing.T) {
 		config := defaultContractConfig
 		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Enabled = true
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Initialize = 5
-		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Maxmium = 16
+		config.Wasm.XVM.MemoryConfig.MemoryGrowConfig.Maxmium = 28
 		testcases := []testCase{
 			{
 				Count:     1,
@@ -131,6 +130,14 @@ func TestXVMMemoryGrow(t *testing.T) {
 			},
 			{
 				Count:     12,
+				wantError: false,
+			},
+			{
+				Count:     17,
+				wantError: false,
+			},
+			{
+				Count:     30,
 				wantError: true,
 			},
 		}
