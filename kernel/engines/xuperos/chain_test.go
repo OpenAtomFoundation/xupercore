@@ -223,3 +223,37 @@ func TestChain_PreExec(t *testing.T) {
 		return
 	}
 }
+
+func TestChain_SubmitTxDuplicate(t *testing.T) {
+	engine, err := MockEngine("../mock/p2pv2/node1/conf/env.yaml")
+	if err != nil {
+		t.Logf("%v", err)
+		return
+	}
+	// go engine.Run()
+	// defer engine.Exit()
+
+	chain, err := engine.Get("xuper")
+	if err != nil {
+		t.Errorf("get chain error: %v", err)
+		return
+	}
+
+	tx, err := mockContractTx(chain)
+	if err != nil {
+		t.Errorf("mock tx error: %v", err)
+		return
+	}
+
+	err = chain.SubmitTx(chain.Context(), tx)
+	if err != nil {
+		t.Errorf("submit tx error: %v", err)
+		return
+	}
+
+	err = chain.SubmitTx(chain.Context(), tx)
+	if err == nil {
+		t.Errorf("submit duplicate tx should fail but succ")
+		return
+	}
+}
