@@ -84,6 +84,9 @@ func (n *Node) getReadonlyBrotherNodes(confirmed map[*Node]bool) map[*Node]bool 
 		if v == nil {
 			continue
 		}
+		if len(n.tx.GetTxInputsExt()) <= i {
+			continue
+		}
 		ext := n.tx.GetTxInputsExt()[i]
 		bk := ext.Bucket + string(ext.Key) // 此 bk 为写
 		offset := ext.RefOffset
@@ -116,8 +119,11 @@ func (n *Node) getWriteBrotherNodes(confirmed map[*Node]bool) map[*Node]bool {
 		if v == nil {
 			continue
 		}
+		if len(n.tx.GetTxInputsExt()) <= i {
+			continue
+		}
 		ext := n.tx.GetTxInputsExt()[i]
-		bk := ext.Bucket + string(ext.Key) // 此 bk 为写
+		bk := ext.Bucket + string(ext.Key) // 此 bk 为读
 		offset := ext.RefOffset
 		if v.txid == "" {
 			if w, ok := v.bucketKeyToNode[bk]; ok {

@@ -95,6 +95,33 @@ func TestConfirmTx(t *testing.T) {
 	}
 }
 
+func TestDescEvidence(t *testing.T) {
+	isTest = true
+	tx1Read := &pb.Transaction{
+		Txid: []byte("1"),
+		Desc: []byte("test desc"),
+	}
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	l, _ := logs.NewLogger("1111", "test")
+	m := NewMempool(nil, l, 0)
+	err = m.PutTx(tx1Read)
+	if err != nil {
+		panic(err)
+	}
+
+	result := batchTx(m)
+
+	printMempool(m)
+	fmt.Println("打包的交易ID")
+	for _, v := range result {
+		fmt.Print(string(v.Txid), " ")
+	}
+}
+
 func TestPackTxReadonlyAndWrite(t *testing.T) {
 	isTest = true
 	type dbtxs struct {
