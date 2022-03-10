@@ -21,6 +21,7 @@ func (w *debugWriter) Write(p []byte) (int, error) {
 	idx := bytes.IndexByte(p, '\n')
 	if idx == -1 {
 		w.write(p)
+		w.flush()
 		return len(p), nil
 	}
 	w.write(p[:idx])
