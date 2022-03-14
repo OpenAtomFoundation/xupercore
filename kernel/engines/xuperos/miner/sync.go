@@ -16,6 +16,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/metrics"
@@ -72,14 +73,14 @@ func (t *Miner) getValidators(excludeAddr string) ([]string, error) {
 }
 
 // getMaxBlockHeight 从验证人列表里面获取当前最大的区块高度以及地址
-func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, error) {
+func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, error) {
 	validators, err := t.getValidators(t.ctx.Address.Address)
 	if err != nil {
-		return "", 0, err
+		return "", 0, nil, err
 	}
 
 	if len(validators) == 0 {
-		return "", 0, nil
+		return "", 0, nil, nil
 	}
 	opt := []p2p.MessageOption{
 		p2p.WithBCName(t.ctx.BCName),
@@ -90,11 +91,12 @@ func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, error) {
 	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg, p2p.WithAccounts(validators))
 	if err != nil {
 		ctx.GetLog().Warn("get block chain status error", "err", err)
-		return "", 0, err
+		return "", 0, nil, err
 	}
 
 	maxHeight := int64(0)
 	peer := ""
+	blockId := []byte("")
 	for _, response := range responses {
 		var status xpb.ChainStatus
 		err = p2p.Unmarshal(response, &status)
@@ -103,11 +105,51 @@ func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, error) {
 			continue
 		}
 		if status.LedgerMeta.TrunkHeight > maxHeight {
+			// 判断该TipBlockid是否曾经验证出错过
+			if curPeerId, has := t.faultBlockIdCache.Get(string(status.LedgerMeta.TipBlockid)); has {
+				ctx.GetLog().Debug("faultBlockIdCache blockId hit", "TipBlockid", status.LedgerMeta.TipBlockid, "curPeerId", curPeerId)
+				curPeerIdStr, okConvert := curPeerId.(string)
+				if !okConvert {
+					ctx.GetLog().Warn("faultBlockIdCache convert peerId failed", "TipBlockid", status.LedgerMeta.TipBlockid, "curPeerId", curPeerId)
+					continue
+				}
+				// peerId记录不一致则更新peerid信息
+				if curPeerIdStr != response.Header.From {
+					t.faultBlockIdCache.Set(string(status.LedgerMeta.TipBlockid), response.Header.From, faultBlockIdCacheExpired)
+				}
+				// 增加peerId记录错误次数
+				count, errInc := t.faultPeerIdCache.IncrementInt32(response.Header.From, int32(1))
+				if errInc != nil {
+					count = 1
+					t.faultPeerIdCache.Set(response.Header.From, count, faultPeerIdCacheExpired)
+				}
+				ctx.GetLog().Debug("faultPeerIdCache Increment count", "curPeerIdStr", curPeerIdStr, "count", count, "errInc", errInc)
+				continue
+			} else {
+				// 检查peerId是否超过故障次数
+				countInterface, hasPeer := t.faultPeerIdCache.Get(response.Header.From)
+				if hasPeer {
+					count, okConvert := countInterface.(int32)
+					if !okConvert {
+						ctx.GetLog().Warn("faultPeerIdCache convert countInterface failed", "TipBlockid", status.LedgerMeta.TipBlockid,
+							"from", response.Header.From, "countInterface", countInterface)
+					}
+
+					ctx.GetLog().Debug("faultPeerIdCache peerId hit and count >= 2", "count", count)
+					// 出错达到标准阈值，不采纳该节点的信息
+					if count >= faultPeerIdCacheCount {
+						ctx.GetLog().Info("faultPeerIdCache peerId hit and count >= 2", "TipBlockid", status.LedgerMeta.TipBlockid,
+							"TrunkHeight", status.LedgerMeta.TrunkHeight, "from", response.Header.From, "count", count)
+						continue
+					}
+				}
+			}
 			maxHeight = status.LedgerMeta.TrunkHeight
 			peer = response.Header.From
+			blockId = status.LedgerMeta.TipBlockid
 		}
 	}
-	return peer, maxHeight, nil
+	return peer, maxHeight, blockId, nil
 }
 
 // syncWithValidators 向拥有最长链的验证人节点进行区块同步，直到区块高度完全一致，timeout用于设置同步超时时间，超时之后无论是否同步完毕都停止。
@@ -129,7 +171,7 @@ func (t *Miner) syncWithValidators(ctx xctx.XContext, timeout time.Duration) err
 // syncWithLongestChain 向验证人结合进行一次区块同步，返回同步的区块个数
 func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
 	currentHeight := t.ctx.Ledger.GetMeta().TrunkHeight
-	peer, maxHeight, err := t.getMaxBlockHeight(ctx)
+	peer, maxHeight, blockId, err := t.getMaxBlockHeight(ctx)
 	if err != nil {
 		ctx.GetLog().Error("getMaxBlockHeight error", "error", err)
 		return 0, err
@@ -146,6 +188,18 @@ func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
 	ctx.GetLog().Info("syncWithLongestChain", "peer", peer, "beginHeight", height, "size", size)
 	realSize, err := t.syncBlockWithHeight(ctx, height, int(size))
 	if err != nil {
+		// 同步出错，记录blockId
+		t.faultBlockIdCache.Set(string(blockId), peer, faultBlockIdCacheExpired)
+		// 同步出错，记录对应的peerId，增加错误计数
+		count, errInc := t.faultPeerIdCache.IncrementInt32(peer, int32(1))
+		if errInc != nil {
+			count = 1
+			t.faultPeerIdCache.Set(peer, count, faultPeerIdCacheExpired)
+		}
+		ctx.GetLog().Warn("syncWithLongestChain syncBlockWithHeight failed", "peer", peer,
+			"beginHeight", height, "size", size, "blockId", blockId, "count", count,
+			"maxHeight", maxHeight, "currentHeight", currentHeight, "errInc", errInc, "err", err)
+
 		return 0, err
 	}
 	return realSize, nil
@@ -219,7 +273,15 @@ func (t *Miner) getBlocksByHeight(ctx xctx.XContext, height int64, size int) ([]
 		ctx.GetLog().Debug("sync with peer address", "address", ctx.Value(peersKey))
 		opts = append(opts, p2p.WithPeerIDs(ctx.Value(peersKey).([]string)))
 	} else {
-		opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.NearestBucketStrategy}))
+		switch t.ctx.EngCtx.EngCfg.SyncBlockFilterMode {
+		case common.SyncWithNearestBucket:
+			opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.NearestBucketStrategy}))
+		case common.SyncWithFactorBucket:
+			opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.BucketsWithFactorStrategy}),
+				p2p.WithFactor(t.ctx.EngCtx.EngCfg.SyncFactorForFactorBucketMode))
+		default:
+			opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.NearestBucketStrategy}))
+		}
 	}
 	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_HEADERS, input, p2p.WithBCName(t.ctx.BCName))
 	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)

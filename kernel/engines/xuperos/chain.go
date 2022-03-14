@@ -271,6 +271,13 @@ func (t *Chain) SubmitTx(ctx xctx.XContext, tx *lpb.Transaction) error {
 		metrics.CallMethodCounter.WithLabelValues(t.ctx.BCName, "SubmitTx", code).Inc()
 	}()
 
+	// 判断此交易是否已经存在（账本和未确认交易表中）。
+	dbtx, _, _ := t.ctx.State.QueryTx(tx.GetTxid())
+	if dbtx != nil { // 从数据库查询到了交易，返回错误。
+		log.Error("tx already exist", "txid", utils.F(tx.GetTxid()))
+		return common.ErrTxAlreadyExist
+	}
+
 	// 验证交易
 	_, err := t.ctx.State.VerifyTx(tx)
 	if err != nil {
