@@ -2,6 +2,14 @@ coverage:
   precision: 2
   round: down
   range: "30...80"
+  status:
+    project:
+      default:
+        target: 45%
+        threshold: 0%
+        branches: 
+          - master
+        if_ci_failed: error
 
 parsers:
   gcov:
