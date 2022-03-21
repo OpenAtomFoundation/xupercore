@@ -47,7 +47,7 @@ type MemoryConfig struct {
 }
 type MemoryGrowConfig struct {
 	//  only enabled config item is exposed to xupercore, which allows disabling memory grow in xuperchain config file
-	Enabled    bool `yaml:"enabled"`
+	Enabled    bool `yaml:"enable"`
 	Maxmium    int  `yaml:"-"`
 	Initialize int  `yaml:"-"`
 }
