@@ -3,6 +3,7 @@ package manager
 import (
 	"fmt"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 	"github.com/xuperchain/xupercore/kernel/contract"
 )
@@ -20,7 +21,9 @@ func loadConfig(fname string) (*contract.ContractConfig, error) {
 	}
 
 	cfg := contract.DefaultContractConfig()
-	if err = viperObj.Unmarshal(&cfg); err != nil {
+	if err = viperObj.Unmarshal(&cfg, func(config *mapstructure.DecoderConfig) {
+		config.TagName = "yaml"
+	}); err != nil {
 		return nil, fmt.Errorf("unmatshal config failed.path:%s,err:%v", fname, err)
 	}
 	return cfg, nil
