@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/spf13/viper"
@@ -65,7 +67,9 @@ func (t *EngineConf) loadConf(cfgFile string) error {
 		return fmt.Errorf("read config failed.path:%s,err:%v", cfgFile, err)
 	}
 
-	if err = viperObj.Unmarshal(t); err != nil {
+	if err = viperObj.Unmarshal(t, func(config *mapstructure.DecoderConfig) {
+		config.TagName = "yaml"
+	}); err != nil {
 		return fmt.Errorf("unmatshal config failed.path:%s,err:%v", cfgFile, err)
 	}
 
