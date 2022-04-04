@@ -39,7 +39,7 @@ type Mempool struct {
 	unconfirmed map[string]*Node // txID => *Node，所有未确认交易的集合。
 	orphans     map[string]*Node // txID => *Node，所有的孤儿交易。
 
-	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。// 只读交易在执行区块时是否有问题？
+	bucketKeyNodes map[string]map[string]*Node // 所有引用了某个 key 的交易作为一个键值对，无论只读或者读写。
 
 	emptyTxIDNode *Node
 	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
@@ -764,8 +764,13 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 		if node.tx == nil {
 			node.tx = tx
 			node.readonlyInputs = make([]*Node, len(tx.GetTxInputsExt()))
-			node.bucketKeyToNode = make(map[string]*Node)
-			node.bucketKeyToReadonlyNode = make(map[string]map[string]*Node)
+			if len(node.bucketKeyToNode) == 0 {
+				node.bucketKeyToNode = make(map[string]*Node)
+			}
+			if len(node.bucketKeyToReadonlyNode) == 0 {
+				node.bucketKeyToReadonlyNode = make(map[string]map[string]*Node)
+			}
+
 			node.txInputs = make([]*Node, len(tx.GetTxInputs()))
 			node.txInputsExt = make([]*Node, len(tx.GetTxInputsExt()))
 		}
@@ -891,10 +896,28 @@ func (m *Mempool) processNodeOutputs(node *Node, isOrphan bool) {
 	// 如果 node 为 mock orphan，发现孤儿交易引用的 offset 在父交易中不存在，那么此孤儿交易为无效交易，此无效交易的所有子交易也是无效交易
 	node.txOutputs = m.pruneSlice(node.txOutputs, len(node.tx.GetTxOutputs()))
 	node.txOutputsExt = m.pruneSlice(node.txOutputsExt, len(node.tx.GetTxOutputsExt()))
+	m.pruneReadonlyOutputs(node)
 	if isOrphan {
 		return
 	}
 	m.checkAndMoveOrphan(node)
+}
+
+func (m *Mempool) pruneReadonlyOutputs(node *Node) {
+	index := len(node.readonlyOutputs) - len(node.tx.GetTxOutputsExt())
+	maxLen := len(node.tx.GetTxOutputsExt())
+	if index > 0 { // 说明有孤儿交易依赖于无效的引用。
+		for _, txidMap := range node.readonlyOutputs[maxLen:] {
+			for txid := range txidMap {
+				m.deleteTx(txid)
+			}
+		}
+		node.readonlyOutputs = node.readonlyOutputs[:maxLen]
+	}
+
+	if index < 0 {
+		node.readonlyOutputs = append(node.readonlyOutputs, make([]map[string]*Node, maxLen-len(node.readonlyOutputs))...)
+	}
 }
 
 // 遍历子节点，如果是孤儿交易，遍历孤儿交易的所有父节点，如果所有父节点都在确认表或者未确认表时，此交易加入未确认表，否则此交易还是孤儿交易。
