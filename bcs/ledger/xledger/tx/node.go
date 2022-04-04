@@ -272,6 +272,11 @@ func (n *Node) breakOutputs() {
 
 	inputKeys := make([]string, 0, len(n.tx.GetTxInputsExt()))
 	for i, fn := range n.txInputsExt {
+		bucket := n.tx.TxInputsExt[i].GetBucket()
+		key := n.tx.TxInputsExt[i].GetKey()
+		bk := bucket + string(key)
+		inputKeys = append(inputKeys, bk)
+
 		if fn == nil {
 			continue
 		}
@@ -280,9 +285,6 @@ func (n *Node) breakOutputs() {
 			fn.txOutputsExt[offset] = nil
 		}
 
-		bucket := n.tx.TxInputsExt[i].GetBucket()
-		key := n.tx.TxInputsExt[i].GetKey()
-		bk := bucket + string(key)
 		if nn, ok := fn.bucketKeyToNode[bk]; ok {
 			if nn.txid == n.txid {
 				delete(fn.bucketKeyToNode, bk)
@@ -290,7 +292,6 @@ func (n *Node) breakOutputs() {
 		}
 
 		n.txInputsExt[i] = nil
-		inputKeys = append(inputKeys, bk)
 	}
 
 	for i, fn := range n.readonlyInputs {
