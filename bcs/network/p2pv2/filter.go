@@ -41,7 +41,8 @@ func (nf *NearestBucketFilter) Filter() ([]peer.ID, error) {
 
 // BucketsFilterWithFactor define filter that get a certain percentage peers in each bucket
 type BucketsFilterWithFactor struct {
-	srv *P2PServerV2
+	srv    *P2PServerV2
+	factor float64
 }
 
 // Filter 从每个Bucket中挑选占比Factor个peers进行广播
@@ -54,33 +55,40 @@ type BucketsFilterWithFactor struct {
  *       split1   split2    split3   split4 split5
  */
 func (nf *BucketsFilterWithFactor) Filter() ([]peer.ID, error) {
-	factor := 0.5
+	factor := nf.factor
+	if factor <= 0 || factor > 1 {
+		factor = DefaultBucketsFilterFactor
+	}
+
 	rt := nf.srv.kdht.RoutingTable()
-	filterPeers := []peer.ID{}
-	// TODO: 验证逻辑是否一致
-	for _, peerInfos := range rt.GetPeerInfos() {
-		peers := []peer.ID{}
-		peers = append(peers, peerInfos.Id)
-		peersSize := len(peers)
-		step := int(1.0 / factor)
-		splitSize := int(float64(peersSize) / (1.0 / factor))
-		if peersSize == 0 {
-			continue
+	if rt.Size() <= 0 {
+		return nil, nil
+	}
+
+	totalPeers := rt.ListPeers()
+	totalPeersSize := len(totalPeers)
+	if totalPeersSize <= 0 {
+		return nil, nil
+	}
+
+	var filterPeers []peer.ID
+	step := int(1.0 / factor)
+	splitSize := int(float64(totalPeersSize) / (1.0 / factor))
+	pos := 0
+
+	// 处理split1, split2, split3, split4
+	for pos = 0; pos < splitSize; pos++ {
+		lastPos := pos * step
+		// for each split
+		for b := lastPos; b < lastPos+step && b < totalPeersSize; b += step {
+			randPos := rand.Intn(step) + lastPos
+			filterPeers = append(filterPeers, totalPeers[randPos])
 		}
-		pos := 0
-		// 处理split1, split2, split3, split4
-		for pos = 0; pos < splitSize; pos++ {
-			lastPos := pos * step
-			// for each split
-			for b := lastPos; b < lastPos+step && b < peersSize; b += step {
-				randPos := rand.Intn(step) + lastPos
-				filterPeers = append(filterPeers, peers[randPos])
-			}
-		}
-		// 处理split5, 挑选一半出来
-		for a := pos * step; a < peersSize; a += 2 {
-			filterPeers = append(filterPeers, peers[a])
-		}
+	}
+
+	// 处理split5, 挑选一半出来
+	for a := pos * step; a < totalPeersSize; a += 2 {
+		filterPeers = append(filterPeers, totalPeers[a])
 	}
 
 	return filterPeers, nil

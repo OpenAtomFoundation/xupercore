@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
+
 	"github.com/xuperchain/xupercore/lib/utils"
 
 	"github.com/spf13/viper"
@@ -25,6 +27,10 @@ type EngineConf struct {
 	TxIdCacheGCInterval time.Duration `yaml:"txIdCacheGCInterval,omitempty"`
 	// MaxBlockQueueSize the queue size of the processing block
 	MaxBlockQueueSize int64 `yaml:"maxBlockQueueSize,omitempty"`
+	// SyncBlockFilterMode is the mode for filter peerID list policies, 0-SyncWithNearestBucket, 1-SyncWithFactorBucket
+	SyncBlockFilterMode int `yaml:"syncBlockFilterMode,omitempty"`
+	// SyncFactorForFactorBucketMode only use for SyncWithFactorBucket mode of SyncBlockFilterMode configuration item
+	SyncFactorForFactorBucketMode float64 `yaml:"SyncFactorForFactorBucketMode,omitempty"`
 }
 
 func LoadEngineConf(cfgFile string) (*EngineConf, error) {
@@ -39,11 +45,13 @@ func LoadEngineConf(cfgFile string) (*EngineConf, error) {
 
 func GetDefEngineConf() *EngineConf {
 	return &EngineConf{
-		RootChain:            RootBlockChain,
-		BlockBroadcastMode:   0,
-		TxIdCacheExpiredTime: 180 * time.Second,
-		TxIdCacheGCInterval:  300 * time.Second,
-		MaxBlockQueueSize:    100,
+		RootChain:                     RootBlockChain,
+		BlockBroadcastMode:            0,
+		TxIdCacheExpiredTime:          180 * time.Second,
+		TxIdCacheGCInterval:           300 * time.Second,
+		MaxBlockQueueSize:             100,
+		SyncBlockFilterMode:           0,
+		SyncFactorForFactorBucketMode: 0.5,
 	}
 }
 
@@ -59,7 +67,9 @@ func (t *EngineConf) loadConf(cfgFile string) error {
 		return fmt.Errorf("read config failed.path:%s,err:%v", cfgFile, err)
 	}
 
-	if err = viperObj.Unmarshal(t); err != nil {
+	if err = viperObj.Unmarshal(t, func(config *mapstructure.DecoderConfig) {
+		config.TagName = "yaml"
+	}); err != nil {
 		return fmt.Errorf("unmatshal config failed.path:%s,err:%v", cfgFile, err)
 	}
 

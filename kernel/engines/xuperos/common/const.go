@@ -17,3 +17,11 @@ const (
 	// 其他节点使用Interactive_BroadCast_Mode模式广播区块
 	MixedBroadCastMode
 )
+
+// 同步模式
+const (
+	// SyncWithNearestBucket 从邻近节点同步区块
+	SyncWithNearestBucket = iota
+	// SyncWithFactorBucket 从每个bucket中抽取节点同步区块
+	SyncWithFactorBucket
+)

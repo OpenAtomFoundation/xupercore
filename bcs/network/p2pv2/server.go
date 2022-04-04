@@ -51,6 +51,8 @@ var (
 
 	// MaxBroadCastPeers define the maximum number of common peers to broadcast messages
 	MaxBroadCastPeers = 20
+
+	DefaultBucketsFilterFactor = 0.5
 )
 
 // define errors
