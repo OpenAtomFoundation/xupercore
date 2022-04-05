@@ -135,6 +135,9 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	// 如果某个写交易可以被打包，但是同个key的读交易还未打包，那么写交易放到此map，等到读交易全部打包完成再打包写交易
 	waitRangeNodes := make(map[*Node]bool, 0)
 
+	// 记录处理过读写关系的节点。
+	processedRWRefNodes := make(map[*Node]bool, 0)
+
 	for q.Len() > 0 {
 		node := q.PopFront().(*Node)
 
@@ -143,16 +146,9 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 				if n == nil {
 					continue
 				}
-				if _, ok := readToWriteNodes[n]; !ok {
-					rs := n.getWriteBrotherNodes(confirmed)
-					readToWriteNodes[n] = rs
+				if !processedRWRefNodes[n] {
+					m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
 				}
-
-				if _, ok := writeToReadonlyNodes[n]; !ok {
-					ws := n.getReadonlyBrotherNodes(confirmed)
-					writeToReadonlyNodes[n] = ws
-				}
-
 				if m.isNextNode(n, false, nodeInputSumMap) {
 					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 						return
@@ -167,14 +163,8 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 				if n == nil {
 					continue
 				}
-				if _, ok := readToWriteNodes[n]; !ok {
-					rs := n.getWriteBrotherNodes(confirmed)
-					readToWriteNodes[n] = rs
-				}
-
-				if _, ok := writeToReadonlyNodes[n]; !ok {
-					ws := n.getReadonlyBrotherNodes(confirmed)
-					writeToReadonlyNodes[n] = ws
+				if !processedRWRefNodes[n] {
+					m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
 				}
 				if m.isNextNode(n, false, nodeInputSumMap) {
 					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -189,14 +179,8 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			if n == nil {
 				continue
 			}
-			if _, ok := readToWriteNodes[n]; !ok {
-				rs := n.getWriteBrotherNodes(confirmed)
-				readToWriteNodes[n] = rs
-			}
-
-			if _, ok := writeToReadonlyNodes[n]; !ok {
-				ws := n.getReadonlyBrotherNodes(confirmed)
-				writeToReadonlyNodes[n] = ws
+			if !processedRWRefNodes[n] {
+				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
 			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
 				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -210,14 +194,8 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			if n == nil {
 				continue
 			}
-			if _, ok := readToWriteNodes[n]; !ok {
-				rs := n.getWriteBrotherNodes(confirmed)
-				readToWriteNodes[n] = rs
-			}
-
-			if _, ok := writeToReadonlyNodes[n]; !ok {
-				ws := n.getReadonlyBrotherNodes(confirmed)
-				writeToReadonlyNodes[n] = ws
+			if !processedRWRefNodes[n] {
+				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
 			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
 				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -231,20 +209,33 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			if n == nil {
 				continue
 			}
-			if _, ok := readToWriteNodes[n]; !ok {
-				rs := n.getWriteBrotherNodes(confirmed)
-				readToWriteNodes[n] = rs
-			}
-
-			if _, ok := writeToReadonlyNodes[n]; !ok {
-				ws := n.getReadonlyBrotherNodes(confirmed)
-				writeToReadonlyNodes[n] = ws
+			if !processedRWRefNodes[n] {
+				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
 			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
 				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 					return
 				}
 			}
+		}
+	}
+}
+
+func (m *Mempool) processRWRefNodes(n *Node, readToWriteNodes, writeToReadonlyNodes map[*Node]map[*Node]bool, confirmed map[*Node]bool) {
+	ws := n.getWriteBrotherNodes(confirmed)
+	if _, ok := readToWriteNodes[n]; !ok {
+		readToWriteNodes[n] = ws
+	} else {
+		for w := range ws {
+			readToWriteNodes[n][w] = true
+		}
+	}
+	rs := n.getReadonlyBrotherNodes(confirmed)
+	if _, ok := writeToReadonlyNodes[n]; !ok {
+		writeToReadonlyNodes[n] = rs
+	} else {
+		for r := range rs {
+			writeToReadonlyNodes[n][r] = true
 		}
 	}
 }
@@ -275,15 +266,14 @@ func (m *Mempool) processReadAndWriteNodes(n *Node, readToWriteNodes, writeToRea
 
 	if ws, ok := readToWriteNodes[n]; ok { // 此时n作为一个只读交易，有依赖于n的读写交易。
 		for w := range ws { // 遍历所有依赖n的读写交易，检查是否有可以打包的读写交易。
-			if rs, ok := writeToReadonlyNodes[w]; ok {
-				if ranged { // 更新读写交易的依赖的已经打包的只读交易，
-					if _, ok := writeToRangedReadNodes[w]; ok {
-						writeToRangedReadNodes[w][n] = true
-					} else {
-						writeToRangedReadNodes[w] = map[*Node]bool{n: true}
-					}
-
+			if ranged { // 更新读写交易的依赖的已经打包的只读交易，
+				if _, ok := writeToRangedReadNodes[w]; ok {
+					writeToRangedReadNodes[w][n] = true
+				} else {
+					writeToRangedReadNodes[w] = map[*Node]bool{n: true}
 				}
+			}
+			if rs, ok := writeToReadonlyNodes[w]; ok {
 				// 如果写交易入度为0，判断依赖的只读交易是否已经全部打包。
 				if waitRangeNodes[w] && len(rs) <= len(writeToRangedReadNodes[w]) {
 					if !f(w.tx) {
@@ -292,6 +282,9 @@ func (m *Mempool) processReadAndWriteNodes(n *Node, readToWriteNodes, writeToRea
 					q.PushBack(w)
 					delete(waitRangeNodes, w)
 				}
+			} else {
+				// 这里不需要判断w是否需要打包，因为此时还没遍历到w，只需要记录w作为写交易，有n作为其读交易。
+				writeToReadonlyNodes[w] = map[*Node]bool{n: true}
 			}
 		}
 	}
