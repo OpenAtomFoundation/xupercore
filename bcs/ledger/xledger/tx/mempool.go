@@ -148,6 +148,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 				}
 				if !processedRWRefNodes[n] {
 					m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+					processedRWRefNodes[n] = true
 				}
 				if m.isNextNode(n, false, nodeInputSumMap) {
 					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -165,6 +166,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 				}
 				if !processedRWRefNodes[n] {
 					m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+					processedRWRefNodes[n] = true
 				}
 				if m.isNextNode(n, false, nodeInputSumMap) {
 					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -181,6 +183,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 			if !processedRWRefNodes[n] {
 				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+				processedRWRefNodes[n] = true
 			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
 				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -196,6 +199,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 			if !processedRWRefNodes[n] {
 				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+				processedRWRefNodes[n] = true
 			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
 				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
@@ -211,6 +215,7 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 			}
 			if !processedRWRefNodes[n] {
 				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+				processedRWRefNodes[n] = true
 			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
 				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
