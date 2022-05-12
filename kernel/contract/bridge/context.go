@@ -53,6 +53,9 @@ type Context struct {
 
 	// Write by contract
 	Output *pb.Response
+
+	// Read from cache
+	ReadFromCache bool
 }
 
 // DiskUsed returns the bytes written to xmodel

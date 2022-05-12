@@ -3,6 +3,7 @@ package sandbox
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
@@ -88,6 +89,10 @@ func (xc *XMCache) Get(bucket string, key []byte) ([]byte, error) {
 		return nil, ErrHasDel
 	}
 	return verData.GetPureData().GetValue(), nil
+}
+
+func (t *XMCache) GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error) {
+	return nil, fmt.Errorf("not support")
 }
 
 // Level1 读取，从outputsCache中读取

@@ -13,6 +13,7 @@ import (
 
 type stateReader interface {
 	Get(bucket string, key []byte) ([]byte, error)
+	GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error)
 }
 
 type xmStateReader struct {
@@ -36,6 +37,19 @@ func (x *xmStateReader) Get(bucket string, key []byte) ([]byte, error) {
 	}
 
 	return value.PureData.Value, nil
+}
+
+func (x *xmStateReader) GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error) {
+	value, err := x.r.GetUncommited(bucket, key)
+	if err != nil {
+		return nil, err
+	}
+	if sandbox.IsEmptyVersionedData(value) ||
+		sandbox.IsDelFlag(value.PureData.Value) {
+		return nil, errors.New("not found")
+	}
+
+	return value, nil
 }
 
 type codeProvider struct {
@@ -92,6 +106,30 @@ func (c *codeProvider) GetContractCodeDesc(name string) (*protos.WasmCodeDesc, e
 		return nil, err
 	}
 	return &desc, nil
+}
+
+func (c *codeProvider) GetContractCodeFromCache(name string) ([]byte, error) {
+	value, err := c.xstore.GetUncommited("contract", contractCodeKey(name))
+	if err != nil {
+		return nil, fmt.Errorf("from cache get contract code for '%s' error:%s", name, err)
+	}
+	codebuf := value.GetPureData().GetValue()
+	if len(codebuf) == 0 {
+		return nil, errors.New("from cache empty wasm code")
+	}
+	return codebuf, nil
+}
+
+func (c *codeProvider) GetContractAbiFromCache(name string) ([]byte, error) {
+	value, err := c.xstore.GetUncommited("contract", contractAbiKey(name))
+	if err != nil {
+		return nil, fmt.Errorf("from cache get contract abi for '%s' error:%s", name, err)
+	}
+	abiBuf := value.GetPureData().GetValue()
+	if len(abiBuf) == 0 {
+		return nil, errors.New("from cache empty abi")
+	}
+	return abiBuf, nil
 }
 
 type descProvider struct {

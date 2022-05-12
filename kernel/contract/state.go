@@ -63,6 +63,7 @@ type StateSandbox interface {
 	Flush() error
 	RWSet() *RWSet
 	UTXORWSet() *UTXORWSet
+	GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error)
 }
 
 type RWSet struct {
