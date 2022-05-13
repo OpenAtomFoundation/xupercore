@@ -103,7 +103,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		}
 	} else {
 		// test if contract exists
-		desc, err = newCodeProvider(ctxCfg.State).GetContractCodeDesc(ctxCfg.ContractName)
+		desc, err = newCodeProviderWithCache(ctxCfg.State).GetContractCodeDesc(ctxCfg.ContractName)
 		if err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 	ctx.ReadFromCache = ctxCfg.TxInBlock
 	if ctxCfg.ContractCodeFromCache {
 		ctx.ReadFromCache = false
-		cp = newCodeProvider(ctxCfg.State)
+		cp = newCodeProviderWithCache(ctxCfg.State)
 	} else {
 		cp = newDescProvider(v.codeProvider, desc)
 	}

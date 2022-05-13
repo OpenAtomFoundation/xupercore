@@ -77,7 +77,7 @@ func (c *contractManager) DeployContract(kctx contract.KContext) (*contract.Resp
 	if creator == nil {
 		return nil, contract.Limits{}, fmt.Errorf("contract type %s not found", contractType)
 	}
-	cp := newCodeProvider(state)
+	cp := newCodeProviderWithCache(state)
 	instance, err := creator.CreateInstance(&Context{
 		State:          state,
 		ContractName:   contractName,
@@ -155,7 +155,7 @@ func (c *contractManager) UpgradeContract(kctx contract.KContext) (*contract.Res
 	store.Put("contract", ContractCodeDescKey(contractName), descbuf)
 	store.Put("contract", contractCodeKey(contractName), code)
 
-	cp := newCodeProvider(store)
+	cp := newCodeProviderWithCache(store)
 
 	contractType, err := getContractType(desc)
 	if err != nil {

@@ -11,6 +11,10 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+type stateGetReader interface {
+	Get(bucket string, key []byte) ([]byte, error)
+}
+
 type stateReader interface {
 	Get(bucket string, key []byte) ([]byte, error)
 	GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error)
@@ -63,6 +67,22 @@ func newCodeProviderFromXMReader(r ledger.XMReader) ContractCodeProvider {
 func newCodeProvider(xstore stateReader) ContractCodeProvider {
 	return &codeProvider{
 		xstore: xstore,
+	}
+}
+
+type stateReaderWrapper struct {
+	stateGetReader
+}
+
+func (s *stateReaderWrapper) GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error) {
+	return nil, fmt.Errorf("not support")
+}
+
+func newCodeProviderWithCache(xstore stateGetReader) ContractCodeProvider {
+	return &codeProvider{
+		xstore: &stateReaderWrapper{
+			stateGetReader: xstore,
+		},
 	}
 }
 
