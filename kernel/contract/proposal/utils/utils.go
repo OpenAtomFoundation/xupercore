@@ -93,7 +93,7 @@ func MakeProposalLockPrefix(proposalID string) string {
 
 // MakeTimerBlockHeightPrefix generate timer and blockHeight prefix
 func MakeProposalLockPrefixSeparator(proposalID string) string {
-	return proposalLockKey + separator + proposalID + separator + separator
+	return proposalLockKey + separator + proposalID + separator + "~"
 }
 
 // PrefixRange returns key range that satisfy the given prefix
