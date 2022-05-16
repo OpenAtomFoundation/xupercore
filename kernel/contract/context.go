@@ -52,4 +52,6 @@ type ContextConfig struct {
 
 	// ContractCodeFromCache control whether fetch contract code from XMCache
 	ContractCodeFromCache bool
+
+	TxInBlock bool
 }

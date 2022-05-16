@@ -3,6 +3,7 @@ package sandbox
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/emirpasic/gods/trees/redblacktree"
 	"github.com/emirpasic/gods/utils"
@@ -43,6 +44,10 @@ func (m *MemXModel) Put(bucket string, key []byte, value *ledger.VersionedData) 
 	buKey := makeRawKey(bucket, key)
 	m.tree.Put(buKey, value)
 	return nil
+}
+
+func (t *MemXModel) GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error) {
+	return nil, fmt.Errorf("not support")
 }
 
 // Select 扫描一个bucket中所有的kv, 调用者可以设置key区间[startKey, endKey)
