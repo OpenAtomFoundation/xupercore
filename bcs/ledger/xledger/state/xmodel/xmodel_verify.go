@@ -9,11 +9,11 @@ import (
 
 func (s *XModel) verifyInputs(tx *pb.Transaction) error {
 	//确保tx.TxInputs里面声明的版本和本地model是match的
+	var (
+		verData = new(kledger.VersionedData)
+		err     error
+	)
 	for _, txIn := range tx.TxInputsExt {
-		var (
-			verData = new(kledger.VersionedData)
-			err     error
-		)
 		if len(tx.Blockid) > 0 {
 			// 此时说明是执行一个区块，需要从 batch cache 查询。
 			verData, err = s.GetUncommited(txIn.Bucket, txIn.Key) //because previous txs in the same block write into batch cache
