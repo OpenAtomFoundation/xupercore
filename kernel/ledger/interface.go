@@ -27,6 +27,8 @@ type XMReader interface {
 	Get(bucket string, key []byte) (*VersionedData, error)
 	//扫描一个bucket中所有的kv, 调用者可以设置key区间[startKey, endKey)
 	Select(bucket string, startKey []byte, endKey []byte) (XMIterator, error)
+	//从区块缓存中读取数据信息
+	GetUncommited(bucket string, key []byte) (*VersionedData, error)
 }
 
 // XMIterator iterates over key/value pairs in key order

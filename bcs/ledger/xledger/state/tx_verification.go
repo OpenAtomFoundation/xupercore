@@ -631,6 +631,9 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 			contextConfig.TransferAmount = ""
 		}
 
+		if len(tx.Blockid) != 0 {
+			contextConfig.TxInBlock = true
+		}
 		ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
 		if err != nil {
 			t.log.Error("verifyTxRWSets NewContext error", "err", err, "contractName", tmpReq.GetContractName())
