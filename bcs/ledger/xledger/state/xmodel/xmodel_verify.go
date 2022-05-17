@@ -4,15 +4,30 @@ import (
 	"fmt"
 
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 )
 
 func (s *XModel) verifyInputs(tx *pb.Transaction) error {
 	//确保tx.TxInputs里面声明的版本和本地model是match的
+	var (
+		verData = new(kledger.VersionedData)
+		err     error
+	)
 	for _, txIn := range tx.TxInputsExt {
-		verData, err := s.GetUncommited(txIn.Bucket, txIn.Key) //because previous txs in the same block write into batch cache
-		if err != nil {
-			return err
+		if len(tx.Blockid) > 0 {
+			// 此时说明是执行一个区块，需要从 batch cache 查询。
+			verData, err = s.GetUncommited(txIn.Bucket, txIn.Key) //because previous txs in the same block write into batch cache
+			if err != nil {
+				return err
+			}
+		} else {
+			// 此时执行Post tx，从状态机查询。
+			verData, err = s.Get(txIn.Bucket, txIn.Key)
+			if err != nil {
+				return err
+			}
 		}
+
 		localVer := GetVersion(verData)
 		remoteVer := GetVersionOfTxInput(txIn)
 		if localVer != remoteVer {

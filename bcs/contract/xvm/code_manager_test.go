@@ -26,6 +26,14 @@ func (m *memCodeProvider) GetContractAbi(name string) ([]byte, error) {
 	return m.abi, nil
 }
 
+func (c *memCodeProvider) GetContractCodeFromCache(name string) ([]byte, error) {
+	return c.code, nil
+}
+
+func (c *memCodeProvider) GetContractAbiFromCache(name string) ([]byte, error) {
+	return c.abi, nil
+}
+
 type fakeCode struct {
 }
 

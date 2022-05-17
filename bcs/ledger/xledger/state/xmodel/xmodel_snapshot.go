@@ -99,6 +99,10 @@ func (t *xModSnapshot) getBlockHeight(blockid []byte) (int64, error) {
 	return blkInfo.Height, nil
 }
 
+func (t *xModSnapshot) GetUncommited(bucket string, key []byte) (*kledger.VersionedData, error) {
+	return nil, fmt.Errorf("not support")
+}
+
 func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *kledger.VersionedData {
 	if tx == nil || int(offset) >= len(tx.TxOutputsExt) || offset < 0 {
 		return nil
