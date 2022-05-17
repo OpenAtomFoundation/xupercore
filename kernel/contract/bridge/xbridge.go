@@ -103,7 +103,7 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		}
 	} else {
 		// test if contract exists
-		desc, err = newCodeProvider(ctxCfg.State).GetContractCodeDesc(ctxCfg.ContractName)
+		desc, err = newCodeProviderWithCache(ctxCfg.State).GetContractCodeDesc(ctxCfg.ContractName)
 		if err != nil {
 			return nil, err
 		}
@@ -117,15 +117,20 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		return nil, fmt.Errorf("vm for contract type %s not supported", tp)
 	}
 	var cp ContractCodeProvider
-	// 如果当前在部署合约，合约代码从cache获取
-	// 合约调用的情况则从model中拿取合约代码，避免交易中包含合约代码的引用。
+
+	ctx := v.ctxmgr.MakeContext()
+
+	// 1. 如果当前在部署合约，合约代码从sandbox中获取
+	// 2. 合约调用的情况则从model中拿取合约代码，避免交易中包含合约代码的引用
+	// 2.1 wasm与native有本地缓存，所以对代码的读取是不确定的，所以不能在读集中出现合约代码引用
+	// 2.2 由于evm合约没有本地缓存，所以如果部署和调用在同一个区块时需要从底层batchCache缓存中读取
+	ctx.ReadFromCache = ctxCfg.TxInBlock
 	if ctxCfg.ContractCodeFromCache {
-		cp = newCodeProvider(ctxCfg.State)
+		ctx.ReadFromCache = false
+		cp = newCodeProviderWithCache(ctxCfg.State)
 	} else {
 		cp = newDescProvider(v.codeProvider, desc)
 	}
-
-	ctx := v.ctxmgr.MakeContext()
 	ctx.State = ctxCfg.State
 	ctx.Core = v.core
 	ctx.Module = ctxCfg.Module
@@ -156,7 +161,6 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 	release := func() {
 		v.ctxmgr.DestroyContext(ctx)
 	}
-
 	instance, err := vm.CreateInstance(ctx, cp)
 	if err != nil {
 		v.ctxmgr.DestroyContext(ctx)

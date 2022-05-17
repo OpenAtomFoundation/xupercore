@@ -26,6 +26,8 @@ type ContractCodeProvider interface {
 	GetContractCodeDesc(name string) (*protos.WasmCodeDesc, error)
 	GetContractCode(name string) ([]byte, error)
 	GetContractAbi(name string) ([]byte, error)
+	GetContractCodeFromCache(name string) ([]byte, error)
+	GetContractAbiFromCache(name string) ([]byte, error)
 }
 
 // InstanceCreator is the creator of contract virtual machine instance
