@@ -358,6 +358,9 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction, txidInBlock map[string]bo
 
 	conflictTxs := make([]*pb.Transaction, 0, 0)
 	ranged := make(map[*Node]bool, 0)
+	if n, ok := m.unconfirmed[string(tx.Txid)]; ok {
+		ranged[n] = true
+	}
 	for _, txInput := range tx.TxInputs {
 		// 根据 utxo 找到冲突的所有交易以及子交易。
 		utxoConflictTxs := m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), ranged)
