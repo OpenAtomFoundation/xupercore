@@ -434,6 +434,10 @@ func (r *FakeXMReader) Select(bucket string, startKey []byte, endKey []byte) (le
 	return nil, nil
 }
 
+func (r *FakeXMReader) GetUncommited(bucket string, key []byte) (*ledger.VersionedData, error) {
+	return nil, fmt.Errorf("not support")
+}
+
 func NewXContent() *xctx.BaseCtx {
 	return &xctx.BaseCtx{}
 }

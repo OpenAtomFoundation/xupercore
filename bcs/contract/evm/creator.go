@@ -49,6 +49,7 @@ func (e *evmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeP
 		state:      state,
 		blockState: blockState,
 		cp:         cp,
+		fromCache:  ctx.ReadFromCache,
 	}, nil
 }
 
@@ -64,21 +65,36 @@ type evmInstance struct {
 	code       []byte
 	abi        []byte
 	gasUsed    uint64
+	fromCache  bool
 }
 
 func (e *evmInstance) Exec() error {
 	var err error
 
 	// 获取合约的 code。
-	e.code, err = e.cp.GetContractCode(e.ctx.ContractName)
-	if err != nil {
-		return err
+	if e.fromCache {
+		e.code, err = e.cp.GetContractCodeFromCache(e.ctx.ContractName)
+		if err != nil {
+			return err
+		}
+	} else {
+		e.code, err = e.cp.GetContractCode(e.ctx.ContractName)
+		if err != nil {
+			return err
+		}
 	}
 
 	// 部署合约或者调用合约时参数未使用 abi 编码时需要获取到合约的 abi。执行结果也需要使用 abi 解析。
-	e.abi, err = e.cp.GetContractAbi(e.ctx.ContractName)
-	if err != nil {
-		return err
+	if e.fromCache {
+		e.abi, err = e.cp.GetContractAbiFromCache(e.ctx.ContractName)
+		if err != nil {
+			return err
+		}
+	} else {
+		e.abi, err = e.cp.GetContractAbi(e.ctx.ContractName)
+		if err != nil {
+			return err
+		}
 	}
 
 	if e.ctx.Method == initializeMethod {
