@@ -120,6 +120,26 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 			return nil, fmt.Errorf("transfer gov tokens failed, sender's insufficient balance")
 		}
 	}
+
+	// 自己转给自己则直接更新账本
+	if string(receiverBuf) == sender {
+		senderBalanceBuf, _ := json.Marshal(senderBalance)
+		senderKey := utils.MakeAccountBalanceKey(sender)
+		err = ctx.Put(utils.GetGovernTokenBucket(), []byte(senderKey), senderBalanceBuf)
+		if err != nil {
+			return nil, fmt.Errorf("transfer gov tokens failed, update sender's balance")
+		}
+		delta := contract.Limits{
+			XFee: t.NewGovResourceAmount / 1000,
+		}
+		ctx.AddResourceUsed(delta)
+		return &contract.Response{
+			Status:  utils.StatusOK,
+			Message: "success",
+			Body:    nil,
+		}, nil
+	}
+
 	senderBalance.TotalBalance.Sub(senderBalance.TotalBalance, amount)
 
 	// 设置receiver余额
