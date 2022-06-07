@@ -79,9 +79,9 @@ func (c *contractProcess) makeNativeProcess() (Process, error) {
 		startcmd: startcmd,
 		envs:     envs,
 		mounts:   mounts,
-		// ports:    []string{strconv.Itoa(c.rpcPort)},
-		cfg:    &c.cfg.Docker,
-		Logger: c.logger,
+		ports:    []string{strconv.Itoa(c.rpcPort)},
+		cfg:      &c.cfg.Docker,
+		Logger:   c.logger,
 	}, nil
 }
 
