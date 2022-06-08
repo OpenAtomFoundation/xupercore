@@ -1,10 +1,12 @@
 #!/bin/bash
+set -e
 
 cd `dirname $0`/../../../
 
 HOMEDIR=`pwd`
 OUTDIR="$HOMEDIR/.compile_cache/xvm"
-XVMPKG="https://codeload.github.com/xuperchain/xvm/zip/main"
+XVMPKG="https://github.com/xuperchain/xvm.git"
+XVM_VERSION=v0.1.0
 
 function buildxvm() {
     # clean dir
@@ -13,19 +15,7 @@ function buildxvm() {
 
     # download pkg
     echo "start downloading xvm pkg..."
-    curl -L -k -o "$OUTDIR/xvm.zip" "$XVMPKG"
-    if [ $? != 0 ]; then
-        echo "download xvm failed"
-        exit 1
-    fi
-
-    # unzip
-    unzip -d "$OUTDIR" "$OUTDIR/xvm.zip"
-    if [ $? != 0 ]; then
-        echo "unzip xvm.zip failed"
-        exit 1
-    fi
-    mv "$OUTDIR/xvm-main" "$OUTDIR/xvm"
+    git clone -b ${XVM_VERSION} ${XVMPKG} ${OUTDIR}/xvm
 
     # make
     make -C "$OUTDIR/xvm/compile/wabt" -j 4
