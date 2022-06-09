@@ -51,7 +51,6 @@ func (d *DockerProcess) Start() error {
 
 // Stop implements process interface
 func (d *DockerProcess) Stop(timeout time.Duration) error {
-	return nil
 	client, err := getDockerClient()
 	if err != nil {
 		return err
