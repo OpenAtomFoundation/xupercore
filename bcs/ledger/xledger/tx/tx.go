@@ -213,7 +213,11 @@ func (t *Tx) GetUnconfirmedTx(dedup bool, sizeLimit int) ([]*pb.Transaction, err
 
 	t.Mempool.Range(f)
 	t.UnconfirmTxAmount = int64(t.Mempool.GetTxCounnt())
-	t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount)
+	if len(result) > 0 {
+		t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount, "packTxs", len(result))
+	} else {
+		t.log.Debug("Tx GetUnconfirmedTx", "UnconfirmTxCount", t.UnconfirmTxAmount)
+	}
 	return result, nil
 }
 
@@ -312,6 +316,7 @@ func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 		count++
 	}
 	t.UnconfirmTxAmount = int64(t.Mempool.GetTxCounnt())
+	t.Mempool.Debug()
 	return nil
 }
 

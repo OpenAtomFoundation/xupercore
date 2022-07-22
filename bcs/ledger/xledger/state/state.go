@@ -565,7 +565,8 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	// mempool 中回滚的交易重新验证、执行一遍，避免正确的交易丢失。
 	// 主要是在区块内有只读交易，mempool中有写交易的情况。
 	go t.recoverUnconfirmedTx(mempoolDelTxs)
-
+	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "repostTxLen", len(mempoolDelTxs), "mempoolUnconfirmedTxCount", t.tx.Mempool.GetTxCounnt())
+	t.tx.Mempool.Debug()
 	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "costs", timer.Print())
 	return nil
 }

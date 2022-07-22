@@ -51,14 +51,18 @@ type Mempool struct {
 func (m *Mempool) Debug() {
 	m.m.Lock()
 	defer m.m.Unlock()
+	m.debug()
+}
 
+func (m *Mempool) debug() {
 	if m.emptyTxIDNode != nil {
 		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen", len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes),
 			"len(m.emptyTxIDNode.readonlyOutputs)", len(m.emptyTxIDNode.readonlyOutputs), "len(m.emptyTxIDNode.bucketKeyToNode)", len(m.emptyTxIDNode.bucketKeyToNode),
 			"len(m.emptyTxIDNode.bucketKeyToReadonlyNode)", len(m.emptyTxIDNode.bucketKeyToReadonlyNode),
 			"len(m.emptyTxIDNode.txOutputsExt)", len(m.emptyTxIDNode.txOutputsExt))
 	} else {
-		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen", len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes))
+		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen",
+			len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes))
 	}
 }
 
@@ -281,15 +285,11 @@ func (m *Mempool) processReadAndWriteNodes(n *Node, readToWriteNodes, writeToRea
 			if rs, ok := writeToReadonlyNodes[w]; ok {
 				// 如果写交易入度为0，判断依赖的只读交易是否已经全部打包。
 				if waitRangeNodes[w] && len(rs) <= len(writeToRangedReadNodes[w]) {
-					if !f(w.tx) {
+					// 递归处理
+					if !m.processReadAndWriteNodes(w, readToWriteNodes, writeToRangedReadNodes, writeToRangedReadNodes, waitRangeNodes, f, q) {
 						return false
 					}
-					q.PushBack(w)
-					delete(waitRangeNodes, w)
 				}
-			} else {
-				// 这里不需要判断w是否需要打包，因为此时还没遍历到w，只需要记录w作为写交易，有n作为其读交易。
-				writeToReadonlyNodes[w] = map[*Node]bool{n: true}
 			}
 		}
 	}
@@ -356,7 +356,7 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction, txidInBlock map[string]bo
 
 	m.log.Debug("Mempool FindConflictByTx", "txid", tx.HexTxid())
 
-	conflictTxs := make([]*pb.Transaction, 0, 0)
+	conflictTxs := make([]*pb.Transaction, 0, 10)
 	ranged := make(map[*Node]bool, 0)
 	if n, ok := m.unconfirmed[string(tx.Txid)]; ok {
 		ranged[n] = true
@@ -958,19 +958,22 @@ func (m *Mempool) pruneReadonlyOutputs(node *Node) {
 // 遍历子节点，如果是孤儿交易，遍历孤儿交易的所有父节点，如果所有父节点都在确认表或者未确认表时，此交易加入未确认表，否则此交易还是孤儿交易。
 func (m *Mempool) checkAndMoveOrphan(node *Node) {
 	orphans := make([]*Node, 0, len(node.txOutputs)+len(node.txOutputsExt))
+	om := make(map[*Node]bool, len(node.txOutputs)+len(node.txOutputsExt))
 	for _, n := range node.txOutputs {
-		if n == nil {
+		if n == nil || om[n] {
 			continue
 		}
+		om[n] = true
 		if _, ok := m.orphans[n.txid]; ok {
 			orphans = append(orphans, n)
 		}
 	}
 
 	for _, n := range node.txOutputsExt {
-		if n == nil {
+		if n == nil || om[n] {
 			continue
 		}
+		om[n] = true
 		if _, ok := m.orphans[n.txid]; ok {
 			orphans = append(orphans, n)
 		}
@@ -981,6 +984,10 @@ func (m *Mempool) checkAndMoveOrphan(node *Node) {
 			continue
 		}
 		for id, v := range n {
+			if v == nil || om[v] {
+				continue
+			}
+			om[v] = true
 			if _, ok := m.orphans[id]; ok {
 				orphans = append(orphans, v)
 			}
@@ -997,17 +1004,22 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 	}
 
 	var q deque.Deque
+	om := make(map[*Node]bool, len(orphans))
 	for _, n := range orphans {
 		q.PushBack(n)
+		om[n] = true
 	}
 
 	for q.Len() > 0 {
 		n := q.PopFront().(*Node)
+		delete(om, n)
 		allFatherFound := true
+		childrenMap := make(map[*Node]bool, 100)
 		for _, v := range n.txInputs {
-			if v == nil {
+			if v == nil || childrenMap[v] {
 				continue
 			}
+			childrenMap[v] = true
 			if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 				allFatherFound = false
 				break
@@ -1016,9 +1028,10 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 
 		if allFatherFound {
 			for _, v := range n.txInputsExt {
-				if v == nil {
+				if v == nil || childrenMap[v] {
 					continue
 				}
+				childrenMap[v] = true
 				if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 					allFatherFound = false
 					break
@@ -1028,9 +1041,10 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 
 		if allFatherFound {
 			for _, v := range n.readonlyInputs {
-				if v == nil {
+				if v == nil || childrenMap[v] {
 					continue
 				}
+				childrenMap[v] = true
 				if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 					allFatherFound = false
 					break
@@ -1043,7 +1057,24 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 			m.unconfirmed[n.txid] = n
 			for _, cn := range n.getAllChildren() {
 				if _, ok := m.orphans[cn.txid]; ok {
-					q.PushBack(cn)
+					parent := cn.getAllParent()
+					shouldPush := true
+					for _, pn := range parent {
+						if !om[pn] && !m.inConfirmedOrUnconfirmed(pn.txid) {
+							shouldPush = false
+							break
+						}
+					}
+					hexid := hex.EncodeToString([]byte(cn.txid))
+					if shouldPush {
+						if _, ok := om[cn]; ok {
+							m.log.Info("Mempool processOrphansToUnconfirmed push back", "in om txid donot push", hexid)
+						} else {
+							m.log.Info("Mempool processOrphansToUnconfirmed push back", "txid", hexid)
+							om[cn] = true
+							q.PushBack(cn) // 放入队列的前提是这个节点的所有父交易都是unconfirm或者在队列中
+						}
+					}
 				}
 			}
 		}
@@ -1066,6 +1097,9 @@ func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 	index := len(res) - maxLen
 	if index > 0 { // 说明有孤儿交易依赖于无效的引用。
 		for _, n := range res[maxLen:] {
+			if n == nil {
+				continue
+			}
 			m.deleteTx(n.txid)
 		}
 		res = res[:maxLen]
