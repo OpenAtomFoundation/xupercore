@@ -1,6 +1,8 @@
 package reader
 
 import (
+	"errors"
+
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -22,6 +24,8 @@ type ContractReader interface {
 	QueryContractMethodACL(contract, method string) (*protos.Acl, error)
 	// 查询账户治理代币余额
 	QueryAccountGovernTokenBalance(account string) (*protos.GovernTokenBalance, error)
+	//
+	GetContractDesc(name string) (*protos.WasmCodeDesc, error)
 }
 
 type contractReader struct {
@@ -129,4 +133,11 @@ func (t *contractReader) QueryAccountGovernTokenBalance(account string) (*protos
 	}
 
 	return amount, nil
+}
+
+func (t *contractReader) GetContractDesc(name string) (*protos.WasmCodeDesc, error) {
+	if name == "" {
+		return nil, errors.New("contract name can not be empty")
+	}
+	return t.chainCtx.State.GetContractDesc(name)
 }
