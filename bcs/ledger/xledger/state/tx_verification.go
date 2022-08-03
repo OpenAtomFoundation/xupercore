@@ -621,10 +621,21 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 				"txid", hex.EncodeToString(tx.Txid))
 			return false, errors.New("out of gas")
 		}
+		if tmpReq.ModuleName == "" {
+			// 如果请求中不指定 module，根据合约名字查询对应 module。
+			// 系统合约仍然需要指定 module，例如部署合约、创建合约账户等，因为系统合约查询不到 module。
+			desc, err := t.GetContractDesc(tmpReq.GetContractName())
+			if err != nil {
+				return false, err
+			}
+			contextConfig.Module = desc.GetContractType()
+		} else {
+			contextConfig.Module = tmpReq.ModuleName
+		}
+
 		contextConfig.ResourceLimits = limits
-		contextConfig.Module = tmpReq.ModuleName
 		contextConfig.ContractName = tmpReq.GetContractName()
-		contextConfig.Module = tmpReq.GetModuleName()
+
 		if transContractName == tmpReq.GetContractName() {
 			contextConfig.TransferAmount = transAmount.String()
 		} else {
