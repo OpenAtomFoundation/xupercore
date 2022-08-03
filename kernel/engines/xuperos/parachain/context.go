@@ -14,6 +14,11 @@ const (
 	ParaChainKernelContract = "$parachain"
 )
 
+const (
+	ParaChainStatusStart = 0
+	ParaChainStatusStop  = 1
+)
+
 type ParaChainCtx struct {
 	// 基础上下文
 	xcontext.BaseCtx
