@@ -3,6 +3,7 @@ package xuperos
 import (
 	"fmt"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"io/ioutil"
 	"path/filepath"
 	"sync"
@@ -234,6 +235,9 @@ func (t *Engine) loadChains() error {
 		group, err := parachain.GetParaChainGroup(rootChainReader, fInfo.Name())
 		if err != nil {
 			t.log.Error("get para chain group failed", "chain", fInfo.Name(), "err", err.Error())
+			if !kvdb.ErrNotFound(err) {
+				continue
+			}
 			return err
 		}
 
@@ -247,7 +251,8 @@ func (t *Engine) loadChains() error {
 		chain, err := LoadChain(t.engCtx, fInfo.Name())
 		if err != nil {
 			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
-			return err
+			// 平行链加载失败时可以忽略直接跳过运行
+			continue
 		}
 		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
 
@@ -258,7 +263,7 @@ func (t *Engine) loadChains() error {
 		chainCnt++
 	}
 
-	t.log.Trace("load chain form data dir succeeded", "chainCnt", chainCnt)
+	t.log.Trace("load chain from data dir succeeded", "chainCnt", chainCnt)
 	return nil
 }
 
