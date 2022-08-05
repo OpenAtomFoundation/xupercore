@@ -54,4 +54,6 @@ type ContextConfig struct {
 	ContractCodeFromCache bool
 
 	TxInBlock bool
+
+	ChainName string
 }

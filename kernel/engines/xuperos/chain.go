@@ -151,6 +151,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		Initiator:      initiator,
 		AuthRequire:    authRequires,
 		ResourceLimits: contract.MaxLimits,
+		ChainName:      t.ctx.BCName,
 	}
 
 	gasPrice := t.ctx.State.GetMeta().GetGasPrice()

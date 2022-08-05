@@ -1,8 +1,9 @@
 package bridge
 
 import (
-	"github.com/xuperchain/xupercore/lib/logs"
 	"sync"
+
+	"github.com/xuperchain/xupercore/lib/logs"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
@@ -56,6 +57,8 @@ type Context struct {
 
 	// Read from cache
 	ReadFromCache bool
+
+	ChainName string
 }
 
 // DiskUsed returns the bytes written to xmodel
