@@ -92,13 +92,13 @@ sh ./control.sh start
 
 # 参与贡献
 
-XuperCore在持续建设阶段，欢迎感兴趣的同学一起参与贡献。
+XuperCore在持续建设阶段，欢迎感兴趣的同学一起参与贡献，可参考[设计揭秘](https://mp.weixin.qq.com/s/pLQq_Qw8XyXJihEOXWv8Gg)。
 
-如果你遇到问题或需要新功能，欢迎创建issue。
+如果你遇到问题或需要新功能，欢迎创建[issue](https://github.com/xuperchain/xupercore/issues)。
 
 如果你可以解决某个issue, 欢迎发送PR。
 
-如项目对您有帮助，欢迎star支持。
+如项目对您有帮助，欢迎star支持，项目源码[xupercore](https://github.com/xuperchain/xupercore)。
 
 # 开源许可
 
