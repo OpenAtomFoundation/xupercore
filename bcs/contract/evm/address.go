@@ -92,12 +92,19 @@ func EVMAddressToContractAccount(evmAddr crypto.Address) (string, error) {
 	return utils.GetAccountPrefix() + contractNameStrWithPrefix[4:] + "@xuper", nil
 }
 
+// 返回的合约账户不包括前缀XC和后缀@xuper（或其他链名）
+func EVMAddressToContractAccountWithoutPrefixAndSuffix(evmAddr crypto.Address) (string, error) {
+	contractNameWithPrefix := evmAddr.Bytes()
+	contractNameStrWithPrefix := string(contractNameWithPrefix)
+	return contractNameStrWithPrefix[4:], nil
+}
+
 // determine whether it is a contract account
 func DetermineContractAccount(account string) bool {
 	if utils.IsAccount(account) != 1 {
 		return false
 	}
-	return strings.Index(account, "@xuper") != -1
+	return strings.Index(account, "@") != -1
 }
 
 // determine whether it is a contract name
@@ -133,7 +140,8 @@ func DetermineEVMAddress(evmAddr crypto.Address) (string, string, error) {
 	var addr, addrType string
 	var err error
 	if evmAddrStrWithPrefix[0:4] == contractAccountPrefixs {
-		addr, err = EVMAddressToContractAccount(evmAddr)
+		// 此时 addr 不包括前缀和后缀！
+		addr, err = EVMAddressToContractAccountWithoutPrefixAndSuffix(evmAddr)
 		addrType = contractAccountType
 	} else if evmAddrStrWithPrefix[0:4] == contractNamePrefixs {
 		addr, err = EVMAddressToContractName(evmAddr)

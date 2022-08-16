@@ -601,6 +601,7 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		State:       sandBox,
 		Initiator:   tx.GetInitiator(),
 		AuthRequire: tx.GetAuthRequire(),
+		ChainName:   t.sctx.BCName,
 	}
 	gasLimit, err := getGasLimitFromTx(tx)
 	if err != nil {
