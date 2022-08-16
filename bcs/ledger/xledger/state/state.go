@@ -1469,3 +1469,19 @@ func (t *State) queryContractBannedStatus(contractName string) (bool, error) {
 func (t *State) WaitBlockHeight(target int64) int64 {
 	return t.heightNotifier.WaitHeight(target)
 }
+
+func (t *State) GetContractDesc(contractName string) (*protos.WasmCodeDesc, error) {
+	verdata, err := t.xmodel.Get("contract", bridge.ContractCodeDescKey(contractName))
+	if err != nil {
+		t.log.Warn("GetContractDesc get version data error", "error", err.Error())
+		return nil, err
+	}
+
+	val := verdata.PureData.Value
+	valDesc := new(protos.WasmCodeDesc)
+	err = proto.Unmarshal(val, valDesc)
+	if err != nil {
+		t.log.Error("GetContractDesc", "name", contractName, "protoUnmarshalErr", err)
+	}
+	return valDesc, err
+}
