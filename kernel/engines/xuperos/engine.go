@@ -2,6 +2,8 @@ package xuperos
 
 import (
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"io/ioutil"
 	"path/filepath"
 	"sync"
@@ -174,11 +176,12 @@ func (t *Engine) loadChains() error {
 
 	chainCnt := 0
 	rootChain := t.engCtx.EngCfg.RootChain
+
+	// 优先加载主链
 	for _, fInfo := range dir {
-		if !fInfo.IsDir() {
+		if !fInfo.IsDir() || fInfo.Name() != rootChain {
 			continue
 		}
-
 		chainDir := filepath.Join(dataDir, fInfo.Name())
 		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
 		chain, err := LoadChain(t.engCtx, fInfo.Name())
@@ -212,11 +215,55 @@ func (t *Engine) loadChains() error {
 	}
 
 	// root链必须存在
-	if _, err := t.chainM.Get(rootChain); err != nil {
+	rootChainHandle, err := t.chainM.Get(rootChain)
+	if err != nil {
 		t.log.Error("root chain not exist, please create it first", "rootChain", rootChain)
 		return fmt.Errorf("root chain not exist")
 	}
-	t.log.Trace("load chain form data dir succeeded", "chainCnt", chainCnt)
+	rootChainReader, err := rootChainHandle.Context().State.GetTipXMSnapshotReader()
+	if err != nil {
+		t.log.Error("root chain get tip reader failed", "err", err.Error())
+		return err
+	}
+	// 加载平行链
+	for _, fInfo := range dir {
+		if !fInfo.IsDir() || fInfo.Name() == rootChain {
+			continue
+		}
+
+		// 通过主链的平行链账本状态，确认是否可以加载该平行链
+		group, err := parachain.GetParaChainGroup(rootChainReader, fInfo.Name())
+		if err != nil {
+			t.log.Error("get para chain group failed", "chain", fInfo.Name(), "err", err.Error())
+			if !kvdb.ErrNotFound(err) {
+				continue
+			}
+			return err
+		}
+
+		if !parachain.IsParaChainEnable(group) {
+			t.log.Debug("para chain stopped", "chain", fInfo.Name())
+			continue
+		}
+
+		chainDir := filepath.Join(dataDir, fInfo.Name())
+		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
+		chain, err := LoadChain(t.engCtx, fInfo.Name())
+		if err != nil {
+			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
+			// 平行链加载失败时可以忽略直接跳过运行
+			continue
+		}
+		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
+
+		// 记录链实例
+		t.chainM.Put(fInfo.Name(), chain)
+
+		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
+		chainCnt++
+	}
+
+	t.log.Trace("load chain from data dir succeeded", "chainCnt", chainCnt)
 	return nil
 }
 
