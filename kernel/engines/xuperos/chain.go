@@ -151,6 +151,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		Initiator:      initiator,
 		AuthRequire:    authRequires,
 		ResourceLimits: contract.MaxLimits,
+		ChainName:      t.ctx.BCName,
 	}
 
 	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
@@ -167,9 +168,20 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 			ctx.GetLog().Warn("PreExec req empty", "req", req)
 			continue
 		}
+		if req.ModuleName == "" {
+			// 如果请求中不指定 module，根据合约名字查询对应 module。
+			// 系统合约仍然需要指定 module，例如部署合约、创建合约账户等，因为系统合约查询不到 module。
+			desc, err := t.ctx.State.GetContractDesc(req.ContractName)
+			if err != nil {
+				return nil, err
+			}
+			contextConfig.Module = desc.GetContractType()
+		} else {
+			contextConfig.Module = req.ModuleName
+		}
 
 		beginTime := time.Now()
-		contextConfig.Module = req.ModuleName
+
 		contextConfig.ContractName = req.ContractName
 		if transContractName == req.ContractName {
 			contextConfig.TransferAmount = transAmount.String()

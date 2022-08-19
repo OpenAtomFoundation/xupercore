@@ -93,7 +93,7 @@ func TestDetermineEVMAddress(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if contractAccountFromEVMAddr != contractAccount {
+	if "XC"+contractAccountFromEVMAddr+"@xuper" != contractAccount {
 		t.Errorf("expect %s got %s", contractAccount, contractAccountFromEVMAddr)
 	}
 	if addrType != contractAccountType {
