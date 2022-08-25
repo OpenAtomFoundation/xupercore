@@ -316,6 +316,7 @@ func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 		count++
 	}
 	t.UnconfirmTxAmount = int64(t.Mempool.GetTxCounnt())
+	t.log.Info("LoadUnconfirmedTxFromDisk", "txCount", count)
 	t.Mempool.Debug()
 	return nil
 }

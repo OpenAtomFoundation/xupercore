@@ -345,7 +345,8 @@ func TestPackTxReadonlyAndWrite(t *testing.T) {
 			},
 		},
 	}
-	r := m.FindConflictByTx(txConflict, map[string]bool{})
+	ranged := map[*Node]bool{}
+	r := m.FindConflictByTx(txConflict, map[string]bool{}, ranged)
 	fmt.Println("冲突的交易ID")
 	for _, v := range r {
 		fmt.Print(string(v.Txid), " ")

@@ -566,7 +566,6 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	// 主要是在区块内有只读交易，mempool中有写交易的情况。
 	go t.recoverUnconfirmedTx(mempoolDelTxs)
 	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "repostTxLen", len(mempoolDelTxs), "mempoolUnconfirmedTxCount", t.tx.Mempool.GetTxCounnt())
-	t.tx.Mempool.Debug()
 	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "costs", timer.Print())
 	return nil
 }
@@ -1388,6 +1387,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	unconfirmToConfirm := map[string]bool{}
 	undoTxs := make([]*pb.Transaction, 0, 0)
 	UTXOKeysInBlock := map[string]bool{}
+	conflictTxMap := make(map[*tx.Node]bool, len(block.Transactions))
 	for _, tx := range block.Transactions {
 		for _, txInput := range tx.TxInputs {
 			utxoKey := utxo.GenUtxoKey(txInput.FromAddr, txInput.RefTxid, txInput.RefOffset)
@@ -1406,7 +1406,8 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		}
 		// 删除 mempool 中与此交易有冲突的交易，比如 utxo 双花、某个 key 的版本冲突。
 		// 无论当前交易是否在mempool中，都需要找冲突的交易。
-		undoTxs = append(undoTxs, t.tx.Mempool.FindConflictByTx(tx, txidsInBlock)...)
+		ctxs := t.tx.Mempool.FindConflictByTx(tx, txidsInBlock, conflictTxMap)
+		undoTxs = append(undoTxs, ctxs...)
 	}
 
 	t.log.Trace("  undoTxs", "undoTxCount", len(undoTxs))

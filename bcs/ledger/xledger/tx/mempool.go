@@ -3,7 +3,6 @@ package tx
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -350,14 +349,13 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 // 1.区块内只读交易不在mempool，mempool中有写交易无论在不在区块内，找到所有mempool中的写交易，上层进行undo；
 // 2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
 // 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
-func (m *Mempool) FindConflictByTx(tx *pb.Transaction, txidInBlock map[string]bool) []*pb.Transaction {
+func (m *Mempool) FindConflictByTx(tx *pb.Transaction, txidInBlock map[string]bool, ranged map[*Node]bool) []*pb.Transaction {
 	m.m.Lock()
 	defer m.m.Unlock()
 
 	m.log.Debug("Mempool FindConflictByTx", "txid", tx.HexTxid())
 
 	conflictTxs := make([]*pb.Transaction, 0, 10)
-	ranged := make(map[*Node]bool, 0)
 	if n, ok := m.unconfirmed[string(tx.Txid)]; ok {
 		ranged[n] = true
 	}
@@ -371,32 +369,77 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction, txidInBlock map[string]bo
 	readonlyKeyVersion, writeKeyVersion := getTxUsedKeyVersion(tx) // 找到当前交易所有引用的 key 的 verison。
 	if _, ok := m.unconfirmed[string(tx.Txid)]; !ok {
 		// 1.区块内只读交易不在mempool，mempool中有写交易无论在不在区块内，找到所有mempool中的写交易，上层进行undo；
-		for k := range readonlyKeyVersion {
-			nodes, ok := m.bucketKeyNodes[k] // 找到某个 key 的所有相关 node。
+		for refTxid, offsetMap := range readonlyKeyVersion {
+			refNode, ok := m.unconfirmed[refTxid]
 			if !ok {
-				continue
+				refNode, ok = m.confirmed[refTxid]
+				if !ok {
+					continue
+				}
+			}
+			for offset, bk := range offsetMap {
+				if refTxid == "" {
+					wn, ok := refNode.bucketKeyToNode[bk]
+					if !ok {
+						continue
+					}
+					if wn != nil && !ranged[wn] {
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+					}
+				} else {
+					wn := refNode.txOutputsExt[offset]
+					if wn != nil && !ranged[wn] {
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+					}
+				}
 			}
 
-			for _, n := range nodes {
-				// 判断当前 node 是否和区块中的交易有 key 的冲突，如果冲突找到其所以子交易。
-				// ranged 参数为之前已经遍历过的所有交易，因此再找到新的交易只能是之前的所有交易的父交易或者完全无关交易，因此可以 append 到最终冲突交易列表中。
-				keyConflictTxs := m.findKeyConflictTxs(n, readonlyKeyVersion, ranged, txidInBlock, true)
-				conflictTxs = append(conflictTxs, keyConflictTxs...)
-			}
 		}
 	}
 
-	for k := range writeKeyVersion {
-		nodes, ok := m.bucketKeyNodes[k] // 找到某个 key 的所有相关 node。
+	for refTxid, offsetMap := range writeKeyVersion {
+		refNode, ok := m.unconfirmed[refTxid]
 		if !ok {
-			continue
+			refNode, ok = m.confirmed[refTxid]
+			if !ok {
+				continue
+			}
 		}
+		for offset, bk := range offsetMap {
+			if refTxid == "" {
+				rns, ok := refNode.bucketKeyToReadonlyNode[bk]
+				if !ok {
+					continue
+				}
+				for _, r := range rns {
+					if r != nil && !txidInBlock[r.txid] && !ranged[r] {
+						//2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(r, ranged)...)
+					}
+				}
+				wn, ok := refNode.bucketKeyToNode[bk]
+				if !ok {
+					continue
+				}
+				if wn != nil && wn.txid != string(tx.Txid) && !ranged[wn] {
+					// 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
+					conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+				}
 
-		for _, n := range nodes {
-			// 判断当前 node 是否和区块中的交易有 key 的冲突，如果冲突找到其所以子交易。
-			// ranged 参数为之前已经遍历过的所有交易，因此再找到新的交易只能是之前的所有交易的父交易或者完全无关交易，因此可以 append 到最终冲突交易列表中。
-			keyConflictTxs := m.findKeyConflictTxs(n, writeKeyVersion, ranged, txidInBlock, false)
-			conflictTxs = append(conflictTxs, keyConflictTxs...)
+			} else {
+				rns := refNode.readonlyOutputs[offset]
+				for _, r := range rns {
+					if r != nil && !txidInBlock[r.txid] && !ranged[r] {
+						//2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(r, ranged)...)
+					}
+				}
+				wn := refNode.txOutputsExt[offset]
+				if wn != nil && wn.txid != string(tx.Txid) && !ranged[wn] {
+					// 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
+					conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+				}
+			}
 		}
 	}
 
@@ -484,47 +527,9 @@ func (m *Mempool) findByUtxo(txid string, offset int, ranged map[*Node]bool) []*
 	return result
 }
 
-// TODO：此函数可以优化，可以优化成不使用 bucketKeyNodes，直接使用readonlyInput来判断冲突。
-// 理论上可以少占用内存，但是实际效果和目前应该差别不大，后续可优化。
-func (m *Mempool) findKeyConflictTxs(node *Node, usedKeyVersion map[string]string, ranged map[*Node]bool, txidInBlock map[string]bool, readonly bool) []*pb.Transaction {
-	result := make([]*pb.Transaction, 0, 10)
-	tx := node.tx
-	for i, input := range tx.GetTxInputsExt() {
-		bk := input.GetBucket() + string(input.GetKey())
-		if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
-			if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
-				if ranged[node] { // 说明此冲突节点已经在之前找到过了。
-					continue
-				}
-				if readonly {
-					// 如果是只读，那么usedKeyVersion参数中都是只读的key数据，此时需要找到mempool中修改了这个key版本的交易（视为冲突交易）。
-					// 1.区块内只读交易不在mempool，mempool中有写交易无论在不在区块内，找到所有mempool中的写交易，上层进行undo；
-					if !node.isReadonlyKey(i) { // 检查是否写了这个key。
-						txs := m.findChildrenFromNode(node, ranged)
-						result = append(result, txs...)
-					}
-				} else {
-					// 如果是读写，那么usedKeyVersion参数中都是修改的key数据，此时需要找到mempool中只读以及读写这个key以及版本的交易（视为冲突交易）。
-					if node.isReadonlyKey(i) && txidInBlock[string(tx.Txid)] {
-						// 区块内写交易无论在不在mempool，mempool中只读交易在区块内时不需要处理。
-						continue
-					}
-					// 2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
-					// 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
-					txs := m.findChildrenFromNode(node, ranged)
-					result = append(result, txs...)
-				}
-			}
-		}
-	}
-
-	return result
-}
-
-// 返回 key：bucket+key，value：version。返回值第一个是只读的，第二个是写key的。
-func getTxUsedKeyVersion(tx *pb.Transaction) (map[string]string, map[string]string) {
-	readonlyKeyVersion := make(map[string]string, len(tx.GetTxOutputsExt()))
-	writeKeyVersion := make(map[string]string, len(tx.GetTxOutputsExt()))
+func getTxUsedKeyVersion(tx *pb.Transaction) (map[string]map[int]string, map[string]map[int]string) {
+	readonlyKeyVersion := make(map[string]map[int]string, len(tx.GetTxOutputsExt()))
+	writeKeyVersion := make(map[string]map[int]string, len(tx.GetTxOutputsExt()))
 
 	outKeys := make(map[string]struct{})
 	for _, output := range tx.GetTxOutputsExt() {
@@ -534,17 +539,22 @@ func getTxUsedKeyVersion(tx *pb.Transaction) (map[string]string, map[string]stri
 	for _, input := range tx.GetTxInputsExt() {
 		bk := input.GetBucket() + string(input.GetKey())
 		if _, ok := outKeys[bk]; ok {
-			writeKeyVersion[bk] = makeVersion(input.GetRefTxid(), input.GetRefOffset())
+			if tmp, ok := writeKeyVersion[string(input.GetRefTxid())]; ok {
+				tmp[int(input.GetRefOffset())] = bk
+			} else {
+				writeKeyVersion[string(input.GetRefTxid())] = map[int]string{int(input.GetRefOffset()): bk}
+			}
+
 		} else {
-			readonlyKeyVersion[bk] = makeVersion(input.GetRefTxid(), input.GetRefOffset())
+			if tmp, ok := readonlyKeyVersion[string(input.GetRefTxid())]; ok {
+				tmp[int(input.GetRefOffset())] = bk
+			} else {
+				readonlyKeyVersion[string(input.GetRefTxid())] = map[int]string{int(input.GetRefOffset()): bk}
+			}
 		}
 	}
 
 	return readonlyKeyVersion, writeKeyVersion
-}
-
-func makeVersion(txid []byte, offset int32) string {
-	return fmt.Sprintf("%x_%d", txid, offset)
 }
 
 func (m *Mempool) inUnconfirmedOrOrphans(txid string) bool {
