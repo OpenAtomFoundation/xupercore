@@ -7,7 +7,7 @@ const (
 
 const (
 	accountSize            = 16
-	contractNameMaxSize    = 16
+	contractNameMaxSize    = 64
 	contractNameMinSize    = 4
 	accountPrefix          = "XC"
 	accountBucket          = "XCAccount"
