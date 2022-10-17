@@ -15,6 +15,7 @@ const (
 
 type ParaChainConfig struct {
 	MinNewChainAmount string
+	NewChainWhiteList map[string]bool `yaml:"newChainWhiteList,omitempty"` //能创建链的address白名单
 }
 
 // Manager
@@ -36,7 +37,7 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	t := NewParaChainContract(ctx.BcName, minNewChainAmount, ctx.ChainCtx)
+	t := NewParaChainContract(ctx.BcName, minNewChainAmount, conf.NewChainWhiteList, ctx.ChainCtx)
 	register := ctx.Contract.GetKernRegistry()
 	// 注册合约方法
 	kMethods := map[string]contract.KernMethod{
@@ -77,6 +78,7 @@ func loadConfig(fname string) (*ParaChainConfig, error) {
 
 	cfg := &ParaChainConfig{
 		MinNewChainAmount: "100",
+		NewChainWhiteList: map[string]bool{},
 	}
 	if err = viperObj.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("unmatshal config failed.path:%s,err:%v", fname, err)
