@@ -9,6 +9,7 @@ import (
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/utils"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
 )
 
@@ -123,7 +124,7 @@ func (p *paraChainContract) handleRefreshChain(ctx common.TaskContext) error {
 	}
 	// 根据当前节点目前是否有权限获取该链，决定当前是停掉链还是加载链
 	haveAccess := isContain(args.Group.Admin, p.ChainCtx.Address.Address) || isContain(args.Group.Identities, p.ChainCtx.Address.Address)
-	if haveAccess {
+	if haveAccess && IsParaChainEnable(args.Group) {
 		return p.doCreateChain(args.BcName, args.GenesisConfig)
 	}
 	return p.doStopChain(args.BcName)
@@ -149,6 +150,7 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 		GroupID:    bcName,
 		Admin:      []string{ctx.Initiator()},
 		Identities: nil,
+		Status:     ParaChainStatusStart,
 	}
 	if bcGroup != nil {
 		group = bcGroup
@@ -223,7 +225,19 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
 	}
 
-	// 4. 将该链停掉
+	// 4. 记录群组运行状态，并写入账本
+	chainGroup.Status = ParaChainStatusStop
+	rawBytes, err := json.Marshal(chainGroup)
+	if err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+
+	if err := ctx.Put(ParaChainKernelContract,
+		[]byte(bcName), rawBytes); err != nil {
+		return newContractErrResponse(internalServerErr, err.Error()), err
+	}
+
+	// 5. 将该链停掉
 	message := stopChainMessage{
 		BcName: bcName,
 	}
@@ -294,6 +308,7 @@ type Group struct {
 	GroupID    string   `json:"name,omitempty"`
 	Admin      []string `json:"admin,omitempty"`
 	Identities []string `json:"identities,omitempty"`
+	Status     int      `json:"status,omitempty"`
 }
 
 // methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
@@ -438,4 +453,24 @@ func newContractErrResponse(status int, msg string) *contract.Response {
 		Status:  status,
 		Message: msg,
 	}
+}
+
+func GetParaChainGroup(reader kledger.XMSnapshotReader, bcname string) (Group, error) {
+	group := Group{}
+	val, err := reader.Get(ParaChainKernelContract, []byte(bcname))
+	if err != nil {
+		return group, err
+	}
+	err = json.Unmarshal(val, &group)
+	if err != nil {
+		return group, err
+	}
+	return group, nil
+}
+
+func IsParaChainEnable(g Group) bool {
+	if g.Status == ParaChainStatusStart {
+		return true
+	}
+	return false
 }

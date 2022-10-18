@@ -3,50 +3,29 @@ package native
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 
-	log15 "github.com/xuperchain/log15"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
 )
 
-type MockLogger struct {
-	log15.Logger
-}
+const (
+	RUNTIME_DOCKER = "docker"
+	RUNTIME_HOST   = "host"
+	IMAGE_NAME     = "alpine"
+)
 
-func (*MockLogger) GetLogId() string {
-	return ""
-}
-
-func (*MockLogger) SetCommField(key string, value interface{}) {
-
-}
-func (*MockLogger) SetInfoField(key string, value interface{}) {
-
-}
-
-var contractConfig = &contract.ContractConfig{
-	EnableUpgrade: true,
-	Xkernel: contract.XkernelConfig{
-		Enable: true,
-		Driver: "default",
-	},
-	Native: contract.NativeConfig{
-		Enable: true,
-		Driver: "native",
-	},
-	LogDriver: &MockLogger{
-		log15.New(),
-	},
-}
-
-func compile(th *mock.TestHelper) ([]byte, error) {
+func compile(th *mock.TestHelper, runtime string) ([]byte, error) {
 	target := filepath.Join(th.Basedir(), "counter.bin")
 	cmd := exec.Command("go", "build", "-o", target)
+	if runtime == RUNTIME_DOCKER {
+		cmd.Env = append(os.Environ(), []string{"GOOS=linux", "GOARCH=amd64", "CGO_ENABLED=0"}...)
+	}
 	cmd.Dir = "testdata"
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -59,102 +38,108 @@ func compile(th *mock.TestHelper) ([]byte, error) {
 	return bin, nil
 }
 
-func TestNativeDeploy(t *testing.T) {
-	th := mock.NewTestHelper(contractConfig)
-	defer th.Close()
+func TestNative(t *testing.T) {
 
-	bin, err := compile(th)
-	if err != nil {
-		t.Fatal(err)
+	var contractConfig = &contract.ContractConfig{
+		EnableUpgrade: true,
+		Xkernel: contract.XkernelConfig{
+			Enable: true,
+			Driver: "default",
+		},
+		Native: contract.NativeConfig{
+			Enable: true,
+			Driver: "native",
+			Docker: contract.NativeDockerConfig{
+				Enable:    true,
+				ImageName: IMAGE_NAME,
+			},
+		},
+		LogDriver: mock.NewMockLogger(),
 	}
 
-	resp, err := th.Deploy("native", "go", "counter", bin, map[string][]byte{
-		"creator": []byte("icexin"),
-	})
-	if err != nil {
-		t.Fatal(err)
+	runtimes := []string{RUNTIME_HOST, RUNTIME_DOCKER}
+
+	for _, runtime := range runtimes {
+		if runtime == RUNTIME_DOCKER {
+			_, err := exec.Command("docker", "info").CombinedOutput()
+			if err != nil {
+				t.Skip("docker not available")
+			}
+
+			t.Log("pulling image......")
+			pullResp, errPull := exec.Command("docker", "pull", IMAGE_NAME).CombinedOutput()
+			if errPull != nil {
+				t.Error(err)
+				continue
+				t.Log(string(pullResp))
+			}
+			contractConfig.Native.Docker.Enable = true
+		} else {
+			contractConfig.Native.Docker.Enable = false
+		}
+		t.Run("TestNativeDeploy_"+runtime, func(t *testing.T) {
+			th := mock.NewTestHelper(contractConfig)
+			defer th.Close()
+
+			bin, err := compile(th, runtime)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			resp, err := th.Deploy("native", "go", "counter", bin, map[string][]byte{
+				"creator": []byte("icexin"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("%#v", resp)
+		})
+		t.Run("TestNativeInvoke_"+runtime, func(t *testing.T) {
+			th := mock.NewTestHelper(contractConfig)
+			defer th.Close()
+
+			bin, err := compile(th, runtime)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
+				"creator": []byte("icexin"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			resp, err := th.Invoke("native", "counter", "increase", map[string][]byte{
+				"key": []byte("k1"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("body:%s", resp.Body)
+		})
+
+		t.Run("TestNativeUpgrade_"+runtime, func(t *testing.T) {
+			th := mock.NewTestHelper(contractConfig)
+			defer th.Close()
+
+			bin, err := compile(th, runtime)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
+				"creator": []byte("icexin"),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			err = th.Upgrade("counter", bin)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+
 	}
-
-	t.Logf("%#v", resp)
-}
-
-func TestNativeInvoke(t *testing.T) {
-	th := mock.NewTestHelper(contractConfig)
-	defer th.Close()
-
-	bin, err := compile(th)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
-		"creator": []byte("icexin"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp, err := th.Invoke("native", "counter", "increase", map[string][]byte{
-		"key": []byte("k1"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("body:%s", resp.Body)
-}
-
-func TestNativeUpgrade(t *testing.T) {
-	th := mock.NewTestHelper(contractConfig)
-	defer th.Close()
-
-	bin, err := compile(th)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = th.Deploy("native", "go", "counter", bin, map[string][]byte{
-		"creator": []byte("icexin"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = th.Upgrade("counter", bin)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestNativeDocker(t *testing.T) {
-	const imageName = "centos:7.5.1804"
-	_, err := exec.Command("docker", "inspect", imageName).CombinedOutput()
-	if err != nil {
-		t.Skip("docker available")
-		return
-	}
-	cfg := *contractConfig
-	cfg.Native.Docker = contract.NativeDockerConfig{
-		Enable:    true,
-		ImageName: imageName,
-		Cpus:      1,
-		Memory:    "1G",
-	}
-
-	th := mock.NewTestHelper(&cfg)
-	defer th.Close()
-
-	bin, err := compile(th)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	resp, err := th.Deploy("native", "go", "counter", bin, map[string][]byte{
-		"creator": []byte("icexin"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("%#v", resp)
 }

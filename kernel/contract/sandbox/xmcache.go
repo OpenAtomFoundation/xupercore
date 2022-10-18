@@ -162,10 +162,16 @@ func (xc *XMCache) Select(bucket string, startKey []byte, endKey []byte) (contra
 
 // newXModelCacheIterator new an instance of XModel Cache iterator
 func (mc *XMCache) newXModelCacheIterator(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
-	iter, _ := mc.outputsCache.Select(bucket, startKey, endKey)
+	iter, err := mc.outputsCache.Select(bucket, startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
 	outputIter := iter
 
-	iter, _ = mc.inputsCache.Select(bucket, startKey, endKey)
+	iter, err = mc.inputsCache.Select(bucket, startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
 	inputIter := newStripDelIterator(iter)
 
 	backendIter, err := mc.model.Select(bucket, startKey, endKey)
