@@ -39,13 +39,15 @@ type paraChainContract struct {
 	BcName            string
 	MinNewChainAmount int64
 	ChainCtx          *common.ChainCtx
+	NewChainWhiteList map[string]bool
 }
 
-func NewParaChainContract(bcName string, minNewChainAmount int64, chainCtx *common.ChainCtx) *paraChainContract {
+func NewParaChainContract(bcName string, minNewChainAmount int64, newChainWhiteList map[string]bool, chainCtx *common.ChainCtx) *paraChainContract {
 	t := &paraChainContract{
 		BcName:            bcName,
 		MinNewChainAmount: minNewChainAmount,
 		ChainCtx:          chainCtx,
+		NewChainWhiteList: newChainWhiteList,
 	}
 
 	return t
@@ -133,6 +135,9 @@ func (p *paraChainContract) handleRefreshChain(ctx common.TaskContext) error {
 func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Response, error) {
 	if p.BcName != p.ChainCtx.EngCtx.EngCfg.RootChain {
 		return nil, ErrUnAuthorized
+	}
+	if len(p.NewChainWhiteList) > 0 && !p.NewChainWhiteList[ctx.Initiator()] {
+		return newContractErrResponse(unAuthorized, utils.ErrCreateChainPermission.Error()), utils.ErrCreateChainPermission
 	}
 	bcName, bcData, bcGroup, err := p.parseArgs(ctx.Args())
 	if err != nil {

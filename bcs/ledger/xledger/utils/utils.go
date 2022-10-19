@@ -23,6 +23,8 @@ var (
 	ErrBlockChainExist = errors.New("blockchain exist")
 	// ErrCreateBlockChain is returned when create block chain error
 	ErrCreateBlockChain = errors.New("create blockchain error")
+	// ErrCreateChainPermission is returned when check permission for create blockchain
+	ErrCreateChainPermission = errors.New("no permission to create chain")
 )
 
 // 通过创世块配置创建全新账本
