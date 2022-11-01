@@ -448,6 +448,13 @@ func (t *Chain) initChainCtx() error {
 	t.ctx.State.SetTimerTaskMG(t.ctx.TimerTask)
 	t.log.Trace("create timer_task succ", "bcName", t.ctx.BCName)
 	t.log.Trace("create chain succ", "bcName", t.ctx.BCName)
+
+	// 11.xtoken创建
+	_, err = t.relyAgent.CreateXToken()
+	if err != nil {
+		return err
+	}
+	t.log.Trace("create xtoken succ", "bcName", t.ctx.BCName)
 	return nil
 }
 

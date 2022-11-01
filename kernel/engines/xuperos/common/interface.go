@@ -12,6 +12,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken/base"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
@@ -61,6 +62,7 @@ type ChainRelyAgent interface {
 	CreateGovernToken() (governToken.GovManager, error)
 	CreateProposal() (propose.ProposeManager, error)
 	CreateTimerTask() (timerTask.TimerManager, error)
+	CreateXToken() (base.XTokenManager, error)
 }
 
 type ChainManager interface {
