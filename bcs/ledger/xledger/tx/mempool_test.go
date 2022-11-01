@@ -95,6 +95,268 @@ func TestConfirmTx(t *testing.T) {
 	}
 }
 
+func TestDescEvidence(t *testing.T) {
+	isTest = true
+	tx1Read := &pb.Transaction{
+		Txid: []byte("1"),
+		Desc: []byte("test desc"),
+	}
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	l, _ := logs.NewLogger("1111", "test")
+	m := NewMempool(nil, l, 0)
+	err = m.PutTx(tx1Read)
+	if err != nil {
+		panic(err)
+	}
+
+	result := batchTx(m)
+
+	printMempool(m)
+	fmt.Println("打包的交易ID")
+	for _, v := range result {
+		fmt.Print(string(v.Txid), " ")
+	}
+}
+
+func TestPackTxReadonlyAndWrite(t *testing.T) {
+	isTest = true
+	type dbtxs struct {
+		Txid string
+	}
+
+	txs := []string{
+		"root0",
+		"root1",
+		"root2",
+		"root3",
+		"root4",
+		"root5",
+		"root6",
+		"root7",
+		"root8",
+		"root9",
+	}
+
+	for _, t := range txs {
+		id := []byte(t)
+		tx0 := &pb.Transaction{
+			Txid: id,
+			TxInputs: []*protos.TxInput{
+				{
+					RefTxid: []byte("nil"),
+				},
+			},
+			TxOutputs: []*protos.TxOutput{
+				{
+					Amount: []byte("1"),
+				},
+				{
+					Amount: []byte("1"),
+				},
+				{
+					Amount: []byte("1"),
+				},
+				{
+					Amount: []byte("1"),
+				},
+			},
+			TxInputsExt: []*protos.TxInputExt{
+				{
+					RefTxid: []byte("nil"),
+				},
+			},
+			TxOutputsExt: []*protos.TxOutputExt{
+				{
+					Bucket: "nil",
+					Key:    []byte("nil"),
+					Value:  []byte("nil"),
+				},
+			},
+		}
+		dbTxs[string(id)] = tx0
+	}
+	econf, err := mock.NewEnvConfForTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs.InitLog(econf.GenConfFilePath(econf.LogConf), econf.GenDirAbsPath(econf.LogDir))
+	l, _ := logs.NewLogger("1111", "test")
+	m := NewMempool(nil, l, 0)
+
+	tx1Read := &pb.Transaction{
+		Txid: []byte("1"),
+		TxInputs: []*protos.TxInput{
+			{
+				RefTxid: []byte("root0"),
+			},
+			{
+				RefTxid: []byte("root1"),
+			},
+			{
+				RefTxid: []byte("root2"),
+			},
+			{
+				RefTxid: []byte("root3"),
+			},
+			{
+				RefTxid: []byte("root4"),
+			},
+			{
+				RefTxid: []byte("root5"),
+			},
+			{
+				RefTxid: []byte("root6"),
+			},
+			{
+				RefTxid: []byte("root7"),
+			},
+			{
+				RefTxid: []byte("root8"),
+			},
+			{
+				RefTxid: []byte("root9"),
+			},
+		},
+		TxOutputs: []*protos.TxOutput{
+			{
+				Amount: []byte("1"),
+			},
+		},
+		TxInputsExt: []*protos.TxInputExt{
+			{
+				RefTxid:   []byte("root0"),
+				Bucket:    "nil",
+				Key:       []byte("nil"),
+				RefOffset: 0,
+			},
+		},
+		TxOutputsExt: []*protos.TxOutputExt{
+			{
+				Bucket: "1",
+				Key:    []byte("1"),
+				Value:  []byte("1"),
+			},
+		},
+	}
+	err = m.PutTx(tx1Read)
+	if err != nil {
+		panic(err)
+	}
+
+	tx2Read := &pb.Transaction{
+		Txid: []byte("2"),
+		TxInputs: []*protos.TxInput{
+			{
+				RefTxid:   []byte("root1"),
+				RefOffset: 1,
+			},
+		},
+		TxOutputs: []*protos.TxOutput{
+			{
+				Amount: []byte("1"),
+			},
+		},
+		TxInputsExt: []*protos.TxInputExt{
+			{
+				RefTxid:   []byte("root0"),
+				Bucket:    "nil",
+				Key:       []byte("nil"),
+				RefOffset: 0,
+			},
+		},
+		TxOutputsExt: []*protos.TxOutputExt{
+			{
+				Bucket: "1",
+				Key:    []byte("1"),
+				Value:  []byte("1"),
+			},
+		},
+	}
+	err = m.PutTx(tx2Read)
+	if err != nil {
+		panic(err)
+	}
+
+	txWrite := &pb.Transaction{
+		Txid: []byte("3"),
+		TxInputs: []*protos.TxInput{
+			{
+				RefTxid:   []byte("root2"),
+				RefOffset: 1,
+			},
+		},
+		TxOutputs: []*protos.TxOutput{
+			{
+				Amount: []byte("1"),
+			},
+		},
+		TxInputsExt: []*protos.TxInputExt{
+			{
+				RefTxid:   []byte("root0"),
+				Bucket:    "nil",
+				Key:       []byte("nil"),
+				RefOffset: 0,
+			},
+		},
+		TxOutputsExt: []*protos.TxOutputExt{
+			{
+				Bucket: "nil",
+				Key:    []byte("nil"),
+				Value:  []byte("1"),
+			},
+		},
+	}
+	err = m.PutTx(txWrite)
+	if err != nil {
+		panic(err)
+	}
+
+	result := batchTx(m)
+
+	printMempool(m)
+	fmt.Println("打包的交易ID")
+	for _, v := range result {
+		fmt.Print(string(v.Txid), " ")
+	}
+	if string(result[2].Txid) != "3" {
+		t.Fatal("assert write tx index failed")
+	}
+	fmt.Println("")
+
+	txConflict := &pb.Transaction{
+		Txid: []byte("4"),
+		TxInputsExt: []*protos.TxInputExt{
+			{
+				RefTxid:   []byte("root0"),
+				Bucket:    "nil",
+				Key:       []byte("nil"),
+				RefOffset: 0,
+			},
+		},
+		TxOutputsExt: []*protos.TxOutputExt{
+			{
+				Bucket: "nil",
+				Key:    []byte("nil"),
+				Value:  []byte("1"),
+			},
+		},
+	}
+	ranged := map[*Node]bool{}
+	r := m.FindConflictByTx(txConflict, map[string]bool{}, ranged)
+	fmt.Println("冲突的交易ID")
+	for _, v := range r {
+		fmt.Print(string(v.Txid), " ")
+	}
+	fmt.Println("")
+	if len(r) != 3 {
+		t.Fatal("Find conflict by tx assert failed")
+	}
+}
+
 func TestMy(t *testing.T) {
 	run(nil, t)
 }
@@ -133,6 +395,10 @@ func run(b *testing.B, t *testing.T) {
 	}
 
 	result := batchTx(m)
+	fmt.Println("打包的交易ID")
+	// for _, v := range result {
+	// 	fmt.Print(string(v.Txid), " ")
+	// }
 	printMempool(m)
 	fmt.Println("确认一笔交易")
 	cb := time.Now()
@@ -420,8 +686,8 @@ func setup(m *Mempool) {
 				},
 				TxInputsExt: []*protos.TxInputExt{
 					{
-						RefTxid:   []byte(strconv.Itoa(0 + (ii-1)*100)),
-						RefOffset: int32(i),
+						Bucket: strconv.Itoa(ii),
+						Key:    []byte(strconv.Itoa(ii)),
 					},
 					{
 						RefTxid:   []byte(strconv.Itoa(1 + (ii-1)*100)),
@@ -513,7 +779,21 @@ func setup(m *Mempool) {
 					},
 				},
 			}
-			m.PutTx(tx1)
+			if i == 2 {
+				tx1.TxOutputsExt = append(tx1.TxOutputsExt, &protos.TxOutputExt{
+					Bucket: strconv.Itoa(ii),
+					Key:    []byte(strconv.Itoa(ii)),
+					Value:  []byte("nil"),
+				})
+			}
+			if string(tx1.Txid) == "500000" {
+				b := time.Now()
+				m.PutTx(tx1)
+				fmt.Println("PutTx 500000: ", time.Since(b))
+			} else {
+				m.PutTx(tx1)
+			}
+
 		}
 	}
 }

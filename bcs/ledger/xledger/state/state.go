@@ -480,13 +480,13 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.utxo.Mutex.Lock()
 	defer func() {
 		t.utxo.Mutex.Unlock()
-		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.UnconfirmTxAmount))
+		metrics.StateUnconfirmedTxGauge.WithLabelValues(t.sctx.BCName).Set(float64(t.tx.Mempool.GetTxCounnt()))
 		metrics.CallMethodHistogram.WithLabelValues(t.sctx.BCName, "PlayAndRepost").Observe(time.Since(beginTime).Seconds())
 	}()
 	timer.Mark("get_utxo_lock")
 
 	// 下面开始处理unconfirmed的交易
-	undoTxs, unconfirmToConfirm, err := t.processUnconfirmTxs(block, batch, needRepost)
+	undoTxs, unconfirmToConfirm, undoDone, err := t.processUnconfirmTxs(block, batch, needRepost)
 	timer.Mark("process_unconfirmed_txs")
 	if err != nil {
 		return err
@@ -501,10 +501,16 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	}
 	t.log.Debug("play and repost verify block tx succ")
 
+	txUndoInBlock := make(map[string]bool, len(block.Transactions))
 	for idx := 0; idx < len(block.Transactions); idx++ {
 		tx := block.Transactions[idx]
 		txid := string(tx.Txid)
-		if unconfirmToConfirm[txid] == false { // 本地没预执行过的Tx, 从block中收到的，需要Play执行
+		undo := false
+		if undoDone[txid] { // 记录所有在区块内且被undo的交易。
+			txUndoInBlock[txid] = true
+			undo = true
+		}
+		if !unconfirmToConfirm[txid] || undo { // 本地没预执行过的Tx, 从block中收到的，需要Play执行，或者这个交易被undo了也需要执行。
 			cacheFiller := &utxo.CacheFiller{}
 			err := t.doTxInternal(tx, batch, cacheFiller)
 			if err != nil {
@@ -541,7 +547,14 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.tx.Mempool.BatchConfirmTxID(ids)
 	t.log.Debug("write to state succ")
 
-	t.tx.Mempool.BatchDeleteTx(undoTxs) // 删除 undo 的所有交易。
+	// undoTxs 中包括所以undo的交易，也可能包括区块内的交易，此时需要排除区块内的交易，其他交易从mempool中删除。
+	mempoolDelTxs := make([]*pb.Transaction, 0, len(undoTxs))
+	for _, tx := range undoTxs {
+		if !txUndoInBlock[string(tx.Txid)] {
+			mempoolDelTxs = append(mempoolDelTxs, tx)
+		}
+	}
+	t.tx.Mempool.BatchDeleteTx(mempoolDelTxs) // 删除 undo 的所有交易。
 
 	// 内存级别更新UtxoMeta信息
 	t.meta.MutexMeta.Lock()
@@ -549,6 +562,10 @@ func (t *State) PlayAndRepost(blockid []byte, needRepost bool, isRootTx bool) er
 	t.meta.Meta = newMeta
 	t.meta.MutexMeta.Unlock()
 
+	// mempool 中回滚的交易重新验证、执行一遍，避免正确的交易丢失。
+	// 主要是在区块内有只读交易，mempool中有写交易的情况。
+	go t.recoverUnconfirmedTx(mempoolDelTxs)
+	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "repostTxLen", len(mempoolDelTxs), "mempoolUnconfirmedTxCount", t.tx.Mempool.GetTxCounnt())
 	t.log.Info("play and repost", "height", block.Height, "blockId", utils.F(block.Blockid), "unconfirmed", len(unconfirmToConfirm), "costs", timer.Print())
 	return nil
 }
@@ -1355,11 +1372,11 @@ func (t *State) collectDelayedTxs(interval time.Duration) {
 //执行一个block的时候, 处理本地未确认交易
 //返回：被确认的txid集合、err
 // 目的：把 mempool（准确来说是未确认交易池）中与区块中交易有冲突的交易（双花等），状态机回滚这些交易同时从 mempool 删除。
-func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, needRepost bool) ([]*pb.Transaction, map[string]bool, error) {
+func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, needRepost bool) ([]*pb.Transaction, map[string]bool, map[string]bool, error) {
 	if !bytes.Equal(block.PreHash, t.latestBlockid) {
 		t.log.Warn("play failed", "block.PreHash", utils.F(block.PreHash),
 			"latestBlockid", utils.F(t.latestBlockid))
-		return nil, nil, ErrPreBlockMissMatch
+		return nil, nil, nil, ErrPreBlockMissMatch
 	}
 
 	txidsInBlock := map[string]bool{} // block里面所有的txid
@@ -1370,12 +1387,13 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 	unconfirmToConfirm := map[string]bool{}
 	undoTxs := make([]*pb.Transaction, 0, 0)
 	UTXOKeysInBlock := map[string]bool{}
+	conflictTxMap := make(map[*tx.Node]bool, len(block.Transactions))
 	for _, tx := range block.Transactions {
 		for _, txInput := range tx.TxInputs {
 			utxoKey := utxo.GenUtxoKey(txInput.FromAddr, txInput.RefTxid, txInput.RefOffset)
 			if UTXOKeysInBlock[utxoKey] { //检查块内的utxo双花情况
 				t.log.Warn("found duplicated utxo in same block", "utxoKey", utxoKey, "txid", utils.F(tx.Txid))
-				return nil, nil, ErrUTXODuplicated
+				return nil, nil, nil, ErrUTXODuplicated
 			}
 			UTXOKeysInBlock[utxoKey] = true
 		}
@@ -1385,10 +1403,11 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 			batch.Delete(append([]byte(pb.UnconfirmedTablePrefix), []byte(txid)...))
 			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 			unconfirmToConfirm[txid] = true
-		} else { // 如果区块中的交易不在 mempool 中再去检查冲突交易。
-			// 删除 mempool 中与此交易有冲突的交易，比如 utxo 双花、某个 key 的版本冲突。
-			undoTxs = append(undoTxs, t.tx.Mempool.FindConflictByTx(tx)...)
 		}
+		// 删除 mempool 中与此交易有冲突的交易，比如 utxo 双花、某个 key 的版本冲突。
+		// 无论当前交易是否在mempool中，都需要找冲突的交易。
+		ctxs := t.tx.Mempool.FindConflictByTx(tx, txidsInBlock, conflictTxMap)
+		undoTxs = append(undoTxs, ctxs...)
 	}
 
 	t.log.Trace("  undoTxs", "undoTxCount", len(undoTxs))
@@ -1402,7 +1421,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		undoErr := t.undoUnconfirmedTx(undoTx, batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)
-			return nil, nil, undoErr
+			return nil, nil, nil, undoErr
 		}
 	}
 
@@ -1412,14 +1431,14 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		// 此时 mempool 已经删除了和区块冲突的交易。
 		unconfirmTxs, _, loadErr := t.tx.SortUnconfirmedTx(0)
 		if loadErr != nil {
-			return nil, nil, loadErr
+			return nil, nil, nil, loadErr
 		}
 
 		go func() {
 			t.utxo.OfflineTxChan <- unconfirmTxs
 		}()
 	}
-	return undoTxs, unconfirmToConfirm, nil
+	return undoTxs, unconfirmToConfirm, undoDone, nil
 }
 
 func (t *State) Close() {

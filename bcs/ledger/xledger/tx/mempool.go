@@ -3,7 +3,6 @@ package tx
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -45,6 +44,25 @@ type Mempool struct {
 	stoneNode     *Node // 所有的子节点都是存在交易，即所有的 input 和 output 都是空，意味着这些交易是从石头里蹦出来的（emmm... 应该能说得过去）。
 
 	m *sync.Mutex
+}
+
+// Debug Debug mempool.
+func (m *Mempool) Debug() {
+	m.m.Lock()
+	defer m.m.Unlock()
+	m.debug()
+}
+
+func (m *Mempool) debug() {
+	if m.emptyTxIDNode != nil {
+		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen", len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes),
+			"len(m.emptyTxIDNode.readonlyOutputs)", len(m.emptyTxIDNode.readonlyOutputs), "len(m.emptyTxIDNode.bucketKeyToNode)", len(m.emptyTxIDNode.bucketKeyToNode),
+			"len(m.emptyTxIDNode.bucketKeyToReadonlyNode)", len(m.emptyTxIDNode.bucketKeyToReadonlyNode),
+			"len(m.emptyTxIDNode.txOutputsExt)", len(m.emptyTxIDNode.txOutputsExt))
+	} else {
+		m.log.Error("Mempool Debug", "confirmedLen", len(m.confirmed), "unconfirmedLen",
+			len(m.unconfirmed), "orphanLen", len(m.orphans), "bucketKeyNodesLen", len(m.bucketKeyNodes))
+	}
 }
 
 // NewMempool new mempool.
@@ -102,48 +120,179 @@ func (m *Mempool) Range(f func(tx *pb.Transaction) bool) {
 	m.log.Debug("Mempool Range", "confirmed", len(m.confirmed), "unconfirmed", len(m.unconfirmed), "orphans", len(m.orphans), "bucketKeyNodes", len(m.bucketKeyNodes))
 	var q deque.Deque
 	nodeInputSumMap := make(map[*Node]int, len(m.confirmed))
+	confirmed := make(map[*Node]bool, len(m.confirmed))
 	for _, n := range m.confirmed { // 先把 confirmed 中的交易放入要遍历的列表。
 		q.PushBack(n)
+		confirmed[n] = true
 	}
+
+	// key为只读交易，value为读写交易，所有key。
+	readToWriteNodes := make(map[*Node]map[*Node]bool, 0)
+
+	// 写交易为key，所有只读交易为value，针对同一个bucket+key。
+	writeToReadonlyNodes := make(map[*Node]map[*Node]bool, 0)
+
+	// 写交易为key，所有遍历过的只读交易为value，针对同一个bucket+key。
+	writeToRangedReadNodes := make(map[*Node]map[*Node]bool, 0)
+
+	// 如果某个写交易可以被打包，但是同个key的读交易还未打包，那么写交易放到此map，等到读交易全部打包完成再打包写交易
+	waitRangeNodes := make(map[*Node]bool, 0)
+
+	// 记录处理过读写关系的节点。
+	processedRWRefNodes := make(map[*Node]bool, 0)
 
 	for q.Len() > 0 {
 		node := q.PopFront().(*Node)
+
+		for _, children := range node.readonlyOutputs {
+			for _, n := range children {
+				if n == nil {
+					continue
+				}
+				if !processedRWRefNodes[n] {
+					m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+					processedRWRefNodes[n] = true
+				}
+				if m.isNextNode(n, false, nodeInputSumMap) {
+					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
+						return
+					}
+				}
+			}
+		}
+
+		// 只读交易，引用的key的version为空，此时 node 为 emptyTxIDNode。
+		for _, nodeMap := range node.bucketKeyToReadonlyNode {
+			for _, n := range nodeMap {
+				if n == nil {
+					continue
+				}
+				if !processedRWRefNodes[n] {
+					m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+					processedRWRefNodes[n] = true
+				}
+				if m.isNextNode(n, false, nodeInputSumMap) {
+					if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
+						return
+					}
+				}
+			}
+		}
+
+		// utxo 子交易
 		for _, n := range node.txOutputs {
+			if n == nil {
+				continue
+			}
+			if !processedRWRefNodes[n] {
+				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+				processedRWRefNodes[n] = true
+			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if !f(n.tx) {
+				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 					return
 				}
-				q.PushBack(n)
 			}
 		}
 
+		// 写子交易，当前n为写交易
 		for _, n := range node.txOutputsExt {
+			if n == nil {
+				continue
+			}
+			if !processedRWRefNodes[n] {
+				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+				processedRWRefNodes[n] = true
+			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if !f(n.tx) {
+				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 					return
 				}
-				q.PushBack(n)
 			}
 		}
 
-		for _, n := range node.readonlyOutputs {
-			if m.isNextNode(n, true, nodeInputSumMap) {
-				if !f(n.tx) {
-					return
-				}
-				q.PushBack(n)
+		// 此时 node 为 emptyTxIDNode，此时n为写交易，refTxid为空。
+		for _, n := range node.bucketKeyToNode { // 读写，此处要判断只读交易是否都已经打包
+			if n == nil {
+				continue
 			}
-		}
-
-		for _, n := range node.bucketKeyToNode {
+			if !processedRWRefNodes[n] {
+				m.processRWRefNodes(n, readToWriteNodes, writeToReadonlyNodes, confirmed)
+				processedRWRefNodes[n] = true
+			}
 			if m.isNextNode(n, false, nodeInputSumMap) {
-				if !f(n.tx) {
+				if !m.processReadAndWriteNodes(n, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes, waitRangeNodes, f, &q) {
 					return
 				}
-				q.PushBack(n)
 			}
 		}
 	}
+}
+
+func (m *Mempool) processRWRefNodes(n *Node, readToWriteNodes, writeToReadonlyNodes map[*Node]map[*Node]bool, confirmed map[*Node]bool) {
+	ws := n.getWriteBrotherNodes(confirmed)
+	if _, ok := readToWriteNodes[n]; !ok {
+		readToWriteNodes[n] = ws
+	} else {
+		for w := range ws {
+			readToWriteNodes[n][w] = true
+		}
+	}
+	rs := n.getReadonlyBrotherNodes(confirmed)
+	if _, ok := writeToReadonlyNodes[n]; !ok {
+		writeToReadonlyNodes[n] = rs
+	} else {
+		for r := range rs {
+			writeToReadonlyNodes[n][r] = true
+		}
+	}
+}
+
+// 当 n 的入度为0时，判断相关联的只读、读写交易。
+func (m *Mempool) processReadAndWriteNodes(n *Node, readToWriteNodes, writeToReadonlyNodes, writeToRangedReadNodes map[*Node]map[*Node]bool,
+	waitRangeNodes map[*Node]bool, f func(tx *pb.Transaction) bool, q *deque.Deque) bool {
+	ranged := false
+	if rs, ok := writeToReadonlyNodes[n]; ok { // 此时n作为一个写交易，存在需要先打包的读交易。
+		if len(rs) <= len(writeToRangedReadNodes[n]) { // 已经打包的依赖只读交易如果大于等于依赖的所有的只读交易，说明此交易可打包。
+			if !f(n.tx) {
+				return false
+			}
+			ranged = true
+			q.PushBack(n)
+			delete(waitRangeNodes, n)
+		} else {
+			waitRangeNodes[n] = true // 此时n作为写交易，有依赖的只读交易还未打包。
+		}
+	} else { // 没有依赖的只读交易，可以直接打包此交易。
+		if !f(n.tx) {
+			return false
+		}
+		ranged = true
+		q.PushBack(n)
+		delete(waitRangeNodes, n)
+	}
+
+	if ws, ok := readToWriteNodes[n]; ok { // 此时n作为一个只读交易，有依赖于n的读写交易。
+		for w := range ws { // 遍历所有依赖n的读写交易，检查是否有可以打包的读写交易。
+			if ranged { // 更新读写交易的依赖的已经打包的只读交易，
+				if _, ok := writeToRangedReadNodes[w]; ok {
+					writeToRangedReadNodes[w][n] = true
+				} else {
+					writeToRangedReadNodes[w] = map[*Node]bool{n: true}
+				}
+			}
+			if rs, ok := writeToReadonlyNodes[w]; ok {
+				// 如果写交易入度为0，判断依赖的只读交易是否已经全部打包。
+				if waitRangeNodes[w] && len(rs) <= len(writeToRangedReadNodes[w]) {
+					// 递归处理
+					if !m.processReadAndWriteNodes(w, readToWriteNodes, writeToRangedReadNodes, writeToRangedReadNodes, waitRangeNodes, f, q) {
+						return false
+					}
+				}
+			}
+		}
+	}
+	return true
 }
 
 // GetTxCounnt get 获取未确认交易与孤儿交易总数
@@ -195,20 +344,21 @@ func (m *Mempool) PutTx(tx *pb.Transaction) error {
 	return m.putTx(tx, false)
 }
 
-// FindConflictByTx 找多所有与 tx 冲突的交易。返回数组中，前面是子交易，后面是父交易。
+// FindConflictByTx 找到所有与 tx 冲突的交易。返回数组中，前面是子交易，后面是父交易。
 // 保证事物原子性，此接口不删除交易，只返回交易列表，如果需要删除需要调用删除交易相关接口。
-func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
-	if m.HasTx(string(tx.GetTxid())) {
-		// 如果 mempool 中有此交易，说明没有冲突交易，在 PutTx 时会保证冲突。
-		return nil
-	}
+// 1.区块内只读交易不在mempool，mempool中有写交易无论在不在区块内，找到所有mempool中的写交易，上层进行undo；
+// 2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
+// 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
+func (m *Mempool) FindConflictByTx(tx *pb.Transaction, txidInBlock map[string]bool, ranged map[*Node]bool) []*pb.Transaction {
 	m.m.Lock()
 	defer m.m.Unlock()
 
 	m.log.Debug("Mempool FindConflictByTx", "txid", tx.HexTxid())
 
-	conflictTxs := make([]*pb.Transaction, 0, 0)
-	ranged := make(map[*Node]bool, 0)
+	conflictTxs := make([]*pb.Transaction, 0, 10)
+	if n, ok := m.unconfirmed[string(tx.Txid)]; ok {
+		ranged[n] = true
+	}
 	for _, txInput := range tx.TxInputs {
 		// 根据 utxo 找到冲突的所有交易以及子交易。
 		utxoConflictTxs := m.findByUtxo(string(txInput.RefTxid), int(txInput.RefOffset), ranged)
@@ -216,18 +366,80 @@ func (m *Mempool) FindConflictByTx(tx *pb.Transaction) []*pb.Transaction {
 	}
 
 	// 根据 tx 找到所有 key 版本冲突的交易以及子交易。
-	usedKeyVersion := getTxUsedKeyVersion(tx) // 找到当前交易所有用掉的 key 的 verison。
-	for k := range usedKeyVersion {
-		nodes, ok := m.bucketKeyNodes[k] // 找到某个 key 的所有相关 node。
-		if !ok {
-			continue
-		}
+	readonlyKeyVersion, writeKeyVersion := getTxUsedKeyVersion(tx) // 找到当前交易所有引用的 key 的 verison。
+	if _, ok := m.unconfirmed[string(tx.Txid)]; !ok {
+		// 1.区块内只读交易不在mempool，mempool中有写交易无论在不在区块内，找到所有mempool中的写交易，上层进行undo；
+		for refTxid, offsetMap := range readonlyKeyVersion {
+			refNode, ok := m.unconfirmed[refTxid]
+			if !ok {
+				refNode, ok = m.confirmed[refTxid]
+				if !ok {
+					continue
+				}
+			}
+			for offset, bk := range offsetMap {
+				if refTxid == "" {
+					wn, ok := refNode.bucketKeyToNode[bk]
+					if !ok {
+						continue
+					}
+					if wn != nil && !ranged[wn] {
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+					}
+				} else {
+					wn := refNode.txOutputsExt[offset]
+					if wn != nil && !ranged[wn] {
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+					}
+				}
+			}
 
-		for _, n := range nodes {
-			// 判断当前 node 是否和区块中的交易有 key 的冲突，如果冲突找到其所以子交易。
-			// ranged 参数为之前已经遍历过的所有交易，因此再找到新的交易只能是之前的所有交易的父交易或者完全无关交易，因此可以 append 到最终冲突交易列表中。
-			keyConflictTxs := m.findKeyConflictTxs(n, usedKeyVersion, ranged)
-			conflictTxs = append(conflictTxs, keyConflictTxs...)
+		}
+	}
+
+	for refTxid, offsetMap := range writeKeyVersion {
+		refNode, ok := m.unconfirmed[refTxid]
+		if !ok {
+			refNode, ok = m.confirmed[refTxid]
+			if !ok {
+				continue
+			}
+		}
+		for offset, bk := range offsetMap {
+			if refTxid == "" {
+				rns, ok := refNode.bucketKeyToReadonlyNode[bk]
+				if !ok {
+					continue
+				}
+				for _, r := range rns {
+					if r != nil && !txidInBlock[r.txid] && !ranged[r] {
+						//2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(r, ranged)...)
+					}
+				}
+				wn, ok := refNode.bucketKeyToNode[bk]
+				if !ok {
+					continue
+				}
+				if wn != nil && wn.txid != string(tx.Txid) && !ranged[wn] {
+					// 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
+					conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+				}
+
+			} else {
+				rns := refNode.readonlyOutputs[offset]
+				for _, r := range rns {
+					if r != nil && !txidInBlock[r.txid] && !ranged[r] {
+						//2.区块内写交易无论在不在mempool，mempool中只读交易（不在区块内），找到所有mempool中的只读交易，上层进行undo；
+						conflictTxs = append(conflictTxs, m.findChildrenFromNode(r, ranged)...)
+					}
+				}
+				wn := refNode.txOutputsExt[offset]
+				if wn != nil && wn.txid != string(tx.Txid) && !ranged[wn] {
+					// 3.区块内写交易无论在不在mempool，mempool中写交易，mempool 中的写交易为无效交易，上层进行undo。
+					conflictTxs = append(conflictTxs, m.findChildrenFromNode(wn, ranged)...)
+				}
+			}
 		}
 	}
 
@@ -259,8 +471,10 @@ func (m *Mempool) dfs(node *Node, ranged map[*Node]bool, f func(n *Node)) {
 	}
 
 	for _, v := range node.readonlyOutputs {
-		if v != nil && !ranged[node] {
-			m.dfs(v, ranged, f)
+		for _, n := range v {
+			if n != nil && !ranged[node] {
+				m.dfs(n, ranged, f)
+			}
 		}
 	}
 
@@ -313,35 +527,9 @@ func (m *Mempool) findByUtxo(txid string, offset int, ranged map[*Node]bool) []*
 	return result
 }
 
-func (m *Mempool) findKeyConflictTxs(node *Node, usedKeyVersion map[string]string, ranged map[*Node]bool) []*pb.Transaction {
-	result := make([]*pb.Transaction, 0, 10)
-	outKeys := make(map[string]struct{})
-	tx := node.tx
-	for _, output := range tx.GetTxOutputsExt() { // 找到所有写 key。
-		outKeys[output.GetBucket()+string(output.GetKey())] = struct{}{}
-	}
-
-	for _, input := range tx.GetTxInputsExt() {
-		bk := input.GetBucket() + string(input.GetKey())
-		if _, ok := outKeys[bk]; ok { // 说明 bk 非只读。
-			if v, ok := usedKeyVersion[bk]; ok { // 说明 bk 某个 version 已经被用掉了。
-				if v == makeVersion(input.GetRefTxid(), input.GetRefOffset()) { // 说明 input 引用的 bk 的 version 已经被用掉了。
-					if ranged[node] { // 说明此冲突节点已经在之前找到过了。
-						continue
-					}
-					txs := m.findChildrenFromNode(node, ranged)
-					result = append(result, txs...)
-				}
-			}
-		}
-	}
-
-	return result
-}
-
-// 返回 key：bucket+key，value：version。
-func getTxUsedKeyVersion(tx *pb.Transaction) map[string]string {
-	keyVersion := make(map[string]string, len(tx.GetTxOutputsExt()))
+func getTxUsedKeyVersion(tx *pb.Transaction) (map[string]map[int]string, map[string]map[int]string) {
+	readonlyKeyVersion := make(map[string]map[int]string, len(tx.GetTxOutputsExt()))
+	writeKeyVersion := make(map[string]map[int]string, len(tx.GetTxOutputsExt()))
 
 	outKeys := make(map[string]struct{})
 	for _, output := range tx.GetTxOutputsExt() {
@@ -351,15 +539,22 @@ func getTxUsedKeyVersion(tx *pb.Transaction) map[string]string {
 	for _, input := range tx.GetTxInputsExt() {
 		bk := input.GetBucket() + string(input.GetKey())
 		if _, ok := outKeys[bk]; ok {
-			keyVersion[bk] = makeVersion(input.GetRefTxid(), input.GetRefOffset())
+			if tmp, ok := writeKeyVersion[string(input.GetRefTxid())]; ok {
+				tmp[int(input.GetRefOffset())] = bk
+			} else {
+				writeKeyVersion[string(input.GetRefTxid())] = map[int]string{int(input.GetRefOffset()): bk}
+			}
+
+		} else {
+			if tmp, ok := readonlyKeyVersion[string(input.GetRefTxid())]; ok {
+				tmp[int(input.GetRefOffset())] = bk
+			} else {
+				readonlyKeyVersion[string(input.GetRefTxid())] = map[int]string{int(input.GetRefOffset()): bk}
+			}
 		}
 	}
 
-	return keyVersion
-}
-
-func makeVersion(txid []byte, offset int32) string {
-	return fmt.Sprintf("%x_%d", txid, offset)
+	return readonlyKeyVersion, writeKeyVersion
 }
 
 func (m *Mempool) inUnconfirmedOrOrphans(txid string) bool {
@@ -613,9 +808,14 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 		node = n
 		if node.tx == nil {
 			node.tx = tx
-			node.readonlyInputs = make(map[string]*Node)
-			node.readonlyOutputs = make(map[string]*Node)
-			node.bucketKeyToNode = make(map[string]*Node)
+			node.readonlyInputs = make([]*Node, len(tx.GetTxInputsExt()))
+			if len(node.bucketKeyToNode) == 0 {
+				node.bucketKeyToNode = make(map[string]*Node)
+			}
+			if len(node.bucketKeyToReadonlyNode) == 0 {
+				node.bucketKeyToReadonlyNode = make(map[string]map[string]*Node)
+			}
+
 			node.txInputs = make([]*Node, len(tx.GetTxInputs()))
 			node.txInputsExt = make([]*Node, len(tx.GetTxInputsExt()))
 		}
@@ -709,10 +909,12 @@ func (m *Mempool) putBucketKey(node *Node) {
 func (m *Mempool) processEvidenceNode(node *Node) {
 	if m.stoneNode == nil {
 		m.stoneNode = NewNode(stoneNodeID, nil)
+		m.stoneNode.readonlyOutputs = append(m.stoneNode.readonlyOutputs, map[string]*Node{node.txid: node})
 	}
 	m.confirmed[m.stoneNode.txid] = m.stoneNode
-	m.stoneNode.readonlyOutputs[node.txid] = node
-	node.readonlyInputs[m.stoneNode.txid] = m.stoneNode
+	m.stoneNode.readonlyOutputs[0][node.txid] = node
+	node.readonlyInputs = append(node.readonlyInputs, m.stoneNode)
+
 	m.unconfirmed[node.txid] = node
 }
 
@@ -739,28 +941,49 @@ func (m *Mempool) processNodeOutputs(node *Node, isOrphan bool) {
 	// 如果 node 为 mock orphan，发现孤儿交易引用的 offset 在父交易中不存在，那么此孤儿交易为无效交易，此无效交易的所有子交易也是无效交易
 	node.txOutputs = m.pruneSlice(node.txOutputs, len(node.tx.GetTxOutputs()))
 	node.txOutputsExt = m.pruneSlice(node.txOutputsExt, len(node.tx.GetTxOutputsExt()))
+	m.pruneReadonlyOutputs(node)
 	if isOrphan {
 		return
 	}
 	m.checkAndMoveOrphan(node)
 }
 
+func (m *Mempool) pruneReadonlyOutputs(node *Node) {
+	index := len(node.readonlyOutputs) - len(node.tx.GetTxOutputsExt())
+	maxLen := len(node.tx.GetTxOutputsExt())
+	if index > 0 { // 说明有孤儿交易依赖于无效的引用。
+		for _, txidMap := range node.readonlyOutputs[maxLen:] {
+			for txid := range txidMap {
+				m.deleteTx(txid)
+			}
+		}
+		node.readonlyOutputs = node.readonlyOutputs[:maxLen]
+	}
+
+	if index < 0 {
+		node.readonlyOutputs = append(node.readonlyOutputs, make([]map[string]*Node, maxLen-len(node.readonlyOutputs))...)
+	}
+}
+
 // 遍历子节点，如果是孤儿交易，遍历孤儿交易的所有父节点，如果所有父节点都在确认表或者未确认表时，此交易加入未确认表，否则此交易还是孤儿交易。
 func (m *Mempool) checkAndMoveOrphan(node *Node) {
 	orphans := make([]*Node, 0, len(node.txOutputs)+len(node.txOutputsExt))
+	om := make(map[*Node]bool, len(node.txOutputs)+len(node.txOutputsExt))
 	for _, n := range node.txOutputs {
-		if n == nil {
+		if n == nil || om[n] {
 			continue
 		}
+		om[n] = true
 		if _, ok := m.orphans[n.txid]; ok {
 			orphans = append(orphans, n)
 		}
 	}
 
 	for _, n := range node.txOutputsExt {
-		if n == nil {
+		if n == nil || om[n] {
 			continue
 		}
+		om[n] = true
 		if _, ok := m.orphans[n.txid]; ok {
 			orphans = append(orphans, n)
 		}
@@ -770,8 +993,14 @@ func (m *Mempool) checkAndMoveOrphan(node *Node) {
 		if n == nil {
 			continue
 		}
-		if _, ok := m.orphans[n.txid]; ok {
-			orphans = append(orphans, n)
+		for id, v := range n {
+			if v == nil || om[v] {
+				continue
+			}
+			om[v] = true
+			if _, ok := m.orphans[id]; ok {
+				orphans = append(orphans, v)
+			}
 		}
 	}
 
@@ -785,17 +1014,22 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 	}
 
 	var q deque.Deque
+	om := make(map[*Node]bool, len(orphans))
 	for _, n := range orphans {
 		q.PushBack(n)
+		om[n] = true
 	}
 
 	for q.Len() > 0 {
 		n := q.PopFront().(*Node)
+		delete(om, n)
 		allFatherFound := true
+		childrenMap := make(map[*Node]bool, 100)
 		for _, v := range n.txInputs {
-			if v == nil {
+			if v == nil || childrenMap[v] {
 				continue
 			}
+			childrenMap[v] = true
 			if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 				allFatherFound = false
 				break
@@ -804,9 +1038,10 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 
 		if allFatherFound {
 			for _, v := range n.txInputsExt {
-				if v == nil {
+				if v == nil || childrenMap[v] {
 					continue
 				}
+				childrenMap[v] = true
 				if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 					allFatherFound = false
 					break
@@ -816,9 +1051,10 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 
 		if allFatherFound {
 			for _, v := range n.readonlyInputs {
-				if v == nil {
+				if v == nil || childrenMap[v] {
 					continue
 				}
+				childrenMap[v] = true
 				if ok := m.inConfirmedOrUnconfirmed(v.txid); !ok {
 					allFatherFound = false
 					break
@@ -831,7 +1067,24 @@ func (m *Mempool) processOrphansToUnconfirmed(orphans []*Node) {
 			m.unconfirmed[n.txid] = n
 			for _, cn := range n.getAllChildren() {
 				if _, ok := m.orphans[cn.txid]; ok {
-					q.PushBack(cn)
+					parent := cn.getAllParent()
+					shouldPush := true
+					for _, pn := range parent {
+						if !om[pn] && !m.inConfirmedOrUnconfirmed(pn.txid) {
+							shouldPush = false
+							break
+						}
+					}
+					hexid := hex.EncodeToString([]byte(cn.txid))
+					if shouldPush {
+						if _, ok := om[cn]; ok {
+							m.log.Info("Mempool processOrphansToUnconfirmed push back", "in om txid donot push", hexid)
+						} else {
+							m.log.Info("Mempool processOrphansToUnconfirmed push back", "txid", hexid)
+							om[cn] = true
+							q.PushBack(cn) // 放入队列的前提是这个节点的所有父交易都是unconfirm或者在队列中
+						}
+					}
 				}
 			}
 		}
@@ -854,6 +1107,9 @@ func (m *Mempool) pruneSlice(res []*Node, maxLen int) []*Node {
 	index := len(res) - maxLen
 	if index > 0 { // 说明有孤儿交易依赖于无效的引用。
 		for _, n := range res[maxLen:] {
+			if n == nil {
+				continue
+			}
 			m.deleteTx(n.txid)
 		}
 		res = res[:maxLen]
@@ -951,15 +1207,22 @@ func (m *Mempool) processEmptyRefTxID(node *Node, index int) error {
 	bucket := node.tx.TxInputsExt[index].GetBucket()
 	key := node.tx.TxInputsExt[index].GetKey()
 	bk := bucket + string(key)
+	offset := node.tx.TxInputsExt[index].GetRefOffset()
 	if m.emptyTxIDNode == nil {
 		m.emptyTxIDNode = NewNode("", nil)
+		m.emptyTxIDNode.bucketKeyToReadonlyNode = map[string]map[string]*Node{}
+		m.emptyTxIDNode.readonlyOutputs = append(m.emptyTxIDNode.readonlyOutputs, make([]map[string]*Node, offset+1)...)
 	}
 
 	m.confirmed[""] = m.emptyTxIDNode
-	if node.isReadonlyKey(index) {
-		m.emptyTxIDNode.readonlyOutputs[node.txid] = node
-		node.readonlyInputs[m.emptyTxIDNode.txid] = m.emptyTxIDNode
-	} else {
+	if node.isReadonlyKey(index) { // 只读的key，此时index一定为0。
+		node.readonlyInputs[index] = m.emptyTxIDNode
+
+		if m.emptyTxIDNode.bucketKeyToReadonlyNode[bk] == nil {
+			m.emptyTxIDNode.bucketKeyToReadonlyNode[bk] = make(map[string]*Node, 1)
+		}
+		m.emptyTxIDNode.bucketKeyToReadonlyNode[bk][node.txid] = node
+	} else { // 修改了这个key，也就是 bucketKeyToNode 中全是修改了这个key的node。
 		if _, ok := m.emptyTxIDNode.bucketKeyToNode[bk]; ok {
 			return errors.New("bucket and key invalid:" + bucket + "_" + string(key))
 		}
@@ -1124,8 +1387,7 @@ func (m *Mempool) cleanConfirmedTxs() {
 		if len(node.bucketKeyToNode) != 0 {
 			continue
 		}
-
-		if len(node.readonlyOutputs) != 0 {
+		if len(node.bucketKeyToReadonlyNode) != 0 {
 			continue
 		}
 
@@ -1142,6 +1404,16 @@ func (m *Mempool) cleanConfirmedTxs() {
 
 		for _, n := range node.txOutputsExt {
 			if n != nil {
+				hasChild = true
+				break
+			}
+		}
+		if hasChild {
+			continue
+		}
+
+		for _, n := range node.readonlyOutputs {
+			if len(n) > 0 {
 				hasChild = true
 				break
 			}
