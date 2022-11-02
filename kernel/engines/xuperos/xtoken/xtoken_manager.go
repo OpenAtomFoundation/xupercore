@@ -13,8 +13,8 @@ const (
 )
 
 type XTokenConfig struct {
-	XTokenAdmins map[string]bool  `json:"xtoken_admins"`
-	XTokenFee    map[string]int64 `json:"xtoken_fee"`
+	XTokenAdmins map[string]bool  `yaml:"xtoken_admins"`
+	XTokenFee    map[string]int64 `yaml:"xtoken_fee"`
 }
 
 type Manager struct {
