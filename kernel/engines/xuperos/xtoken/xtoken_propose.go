@@ -69,6 +69,7 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 
 func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	// 1、检查参数是否正确（token、proposal 是否存在且提案状态是否为 voting）
+	// 检查投票topic下是否有已经投票的提案，如果有则不允许投票。
 	args := ctx.Args()
 	tokenName := string(args["tokenName"])
 	topic := string(args["topic"])
@@ -104,6 +105,21 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}
 	if bal.Cmp(voteAmount) < 0 {
 		return nil, errors.New("insufficient balance to vote")
+	}
+
+	// 同一个topic下只能为一个提案投票
+	votingProposal, err := x.getAddressVotingProposal(ctx, tokenName, ctx.Initiator())
+	if err != nil {
+		return nil, err
+	}
+	if len(votingProposal) > 0 {
+		pid2value, ok := votingProposal[topic]
+		if ok {
+			v, ok := pid2value[proposalID]
+			if ok && v.Cmp(big.NewInt(0)) > 0 {
+				return nil, errors.New("only one proposal can be voted on at the same time under the same topic")
+			}
+		}
 	}
 
 	// 3、更新投票数据

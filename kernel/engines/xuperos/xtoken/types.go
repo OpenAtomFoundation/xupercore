@@ -55,7 +55,7 @@ type GenesisProposal struct {
 	ProposeMinToken         *big.Int        `json:"proposeMinToken"`
 	FavourRate              uint32          `json:"favourRate"` // 提案投票通过的百分比，1-100。
 	InitialData             []*Proposal     `json:"initialData"`
-	ExcludeCheckVoteAddress map[string]bool `json:"excludeCheckVoteAddress"` // 不参与计票的地址。
+	ExcludeCheckVoteAddress map[string]bool `json:"excludeCheckVoteAddress"` // 不参与计票的地址。TODO 先先不用此字段
 }
 
 type Proposal struct {
