@@ -5,12 +5,17 @@ import "math/big"
 const (
 	ProposalVoting = iota + 1 // 从1开始。
 	ProposalSuccess
-	Proposalfailure
+	ProposalFailure
+	ProposalInvalid // 参与提案的总票数不足时，提案为此状态。
 )
 
 const (
-	XTokenContract = "XToken"
+	voteAgreeOption = iota + 1
+	voteOpposeOption
+	voteWaiveOption
+)
 
+const (
 	NewToken        = "NewToken"
 	TotalSupply     = "TotalSupply"
 	BalanceOf       = "BalanceOf"
@@ -40,6 +45,10 @@ const (
 	Success = 200
 )
 
+var (
+	XTokenContract = "XToken"
+)
+
 type XToken struct {
 	Name                  string              `json:"name"`
 	TotalSupply           *big.Int            `json:"totalSupply"`
@@ -52,10 +61,11 @@ type XToken struct {
 }
 
 type GenesisProposal struct {
-	ProposeMinToken         *big.Int        `json:"proposeMinToken"`
-	FavourRate              uint32          `json:"favourRate"` // 提案投票通过的百分比，1-100。
-	InitialData             []*Proposal     `json:"initialData"`
-	ExcludeCheckVoteAddress map[string]bool `json:"excludeCheckVoteAddress"` // 不参与计票的地址。TODO 先先不用此字段
+	// 发起提案者账户余额限制。
+	ProposeMinToken *big.Int `json:"proposeMinToken"`
+	// 提案有效的总投票金额，有效不意味着通过，总投票金额小于此数据时，提案不生效。
+	ProposalEffectiveAmount *big.Int    `json:"proposalEffectiveAmount"`
+	InitialData             []*Proposal `json:"initialData"`
 }
 
 type Proposal struct {
@@ -69,6 +79,13 @@ type Proposal struct {
 type Balance struct {
 	BalanceTotal *big.Int `json:"balanceTotal"`
 	Frozen       *big.Int `json:"frozen"`
+}
+
+type CheckVoteResult struct {
+	Status      int      `json:"status,omitempty"`
+	AgreeCount  *big.Int `json:"agreeCount"`
+	OpposeCount *big.Int `json:"opposeCount"`
+	WaiveCount  *big.Int `json:"waiveCount"`
 }
 
 func KeyOfToken(tokenName string) string {
@@ -109,16 +126,36 @@ func KeyOfTopicData(tokenName, topic string) string {
 	return "G_proposal_" + tokenName + "_" + topic + "_data"
 }
 
-func KeyOfID2AddressVotePrefix(tokenName, topic string, id *big.Int) string {
-	return "G_vote_" + tokenName + "_" + topic + "_" + id.String() + "_"
+// 赞成票前缀
+func KeyOfID2AddressAgreeVotePrefix(tokenName, topic string, id *big.Int) string {
+	return "G_vote_" + tokenName + "_" + topic + "_" + id.String() + "_agree_"
 }
 
-func KeyOfID2AddressVote(tokenName, topic, address string, id *big.Int) string {
-	return KeyOfID2AddressVotePrefix(tokenName, topic, id) + address
+// 反对票前缀
+func KeyOfID2AddressOpposeVotePrefix(tokenName, topic string, id *big.Int) string {
+	return "G_vote_" + tokenName + "_" + topic + "_" + id.String() + "_oppose_"
 }
 
-func KeyOfAddress2IDVote(tokenName, topic, address string, id *big.Int) string {
-	return "G_vote_" + tokenName + "_" + topic + "_" + address + "_" + id.String()
+// 弃权票前缀
+func KeyOfID2AddressWaiveVotePrefix(tokenName, topic string, id *big.Int) string {
+	return "G_vote_" + tokenName + "_" + topic + "_" + id.String() + "_waive_"
+}
+
+func KeyOfID2AddressAgreeVote(tokenName, topic, address string, id *big.Int) string {
+	return KeyOfID2AddressAgreeVotePrefix(tokenName, topic, id) + address
+}
+
+func KeyOfID2AddressOpposeVote(tokenName, topic, address string, id *big.Int) string {
+	return KeyOfID2AddressOpposeVotePrefix(tokenName, topic, id) + address
+}
+
+func KeyOfID2AddressWaiveVote(tokenName, topic, address string, id *big.Int) string {
+	return KeyOfID2AddressWaiveVotePrefix(tokenName, topic, id) + address
+}
+
+// 用户发起的还未结束的提案，存储数据为提案ID以及用户锁定的余额，同一时间只会有同一个提案。
+func KeyOfProposer2Proposal(tokenName, address string) string {
+	return "G_proposal_" + tokenName + "_" + address + "_proposal"
 }
 
 func KeyOfAddressVotingProposal(tokenName, address string) string {

@@ -542,9 +542,9 @@ func (x *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
 	if token.GenesisProposal == nil {
 		return errors.New("invalid token GenesisProposal")
 	}
-	// 提案投票通过的百分比范围是[1-100]。
-	if token.GenesisProposal.FavourRate < 1 || token.GenesisProposal.FavourRate > 100 {
-		return errors.New("invalid token FavourRate")
+	// 提案生效限制
+	if token.GenesisProposal.ProposalEffectiveAmount == nil || token.GenesisProposal.ProposalEffectiveAmount.Cmp(big.NewInt(0)) < 0 {
+		return errors.New("invalid token ProposalEffectiveAmount")
 	}
 
 	// 创建token时的初始化提案数据的topic不能为空，且提案ID必须是0。
@@ -665,6 +665,22 @@ func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address st
 			if amount.Cmp(max) > 0 {
 				max = amount
 			}
+		}
+	}
+
+	// 查询是否有因为发起提案锁定的余额。
+	pid2amount, err := x.getVotingProposalByProposer(ctx, tokenName, address)
+	if err != nil {
+		return nil, errors.Wrap(err, "getVotingProposalByProposer failed")
+	}
+
+	for _, amount := range pid2amount {
+		amountInt, ok := big.NewInt(0).SetString(amount, 10)
+		if !ok {
+			return nil, errors.New("invalid getVotingProposalByProposer value")
+		}
+		if amountInt.Cmp(max) > 0 {
+			max = amountInt
 		}
 	}
 	return max, nil
