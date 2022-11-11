@@ -151,6 +151,9 @@ func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 	if !ok {
 		return nil, errors.New("invalid value param")
 	}
+	if value.Cmp(big.NewInt(0)) <= 0 {
+		return nil, errors.New("invalid transfer value")
+	}
 	from := ctx.Initiator()
 	fromTotal, err := x.balanceOf(ctx, tokenName, from)
 	if err != nil {
@@ -210,6 +213,9 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 	value, ok := big.NewInt(0).SetString(valueParam, 10)
 	if !ok {
 		return nil, errors.New("invalid value param")
+	}
+	if value.Cmp(big.NewInt(0)) <= 0 {
+		return nil, errors.New("invalid transfer value")
 	}
 	// 1、判断发起人是否有权限使用from的余额
 	approveData, err := x.getApproveData(ctx, tokenName, from)
@@ -289,7 +295,9 @@ func (x *Contract) Approve(ctx contract.KContext) (*contract.Response, error) {
 	if !ok {
 		return nil, errors.New("invalid value param")
 	}
-
+	if value.Cmp(big.NewInt(0)) <= 0 {
+		return nil, errors.New("invalid approve value")
+	}
 	from := ctx.Initiator()
 
 	bal, err := x.balanceOf(ctx, tokenName, from)
@@ -372,6 +380,9 @@ func (x *Contract) AddSupply(ctx contract.KContext) (*contract.Response, error) 
 	if !ok {
 		return nil, errors.New("invalid value")
 	}
+	if add.Cmp(big.NewInt(0)) <= 0 {
+		return nil, errors.New("invalid add supply value")
+	}
 	token.TotalSupply = big.NewInt(0).Add(token.TotalSupply, add)
 	tokenValue, err := json.Marshal(token)
 	if err != nil {
@@ -421,7 +432,9 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 	if !ok {
 		return nil, errors.New("invalid value")
 	}
-
+	if burn.Cmp(big.NewInt(0)) <= 0 {
+		return nil, errors.New("invalid burn value")
+	}
 	// 检查账户余额
 	bal, err := x.balanceOf(ctx, token.Name, ctx.Initiator())
 	if err != nil {
@@ -526,6 +539,9 @@ func (x *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
 	if len(token.InitialAllocation) > 0 {
 		count := big.NewInt(0)
 		for addr, value := range token.InitialAllocation {
+			if value.Cmp(big.NewInt(0)) <= 0 {
+				return errors.New("invalid InitialAllocation value")
+			}
 			if len(addr) <= 0 {
 				return errors.New("invalid token InitialAllocation")
 			}
@@ -552,6 +568,9 @@ func (x *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
 		for _, p := range token.GenesisProposal.InitialData {
 			if p.Topic == "" {
 				return errors.New("invalid token proposal initial topic")
+			}
+			if p.ID == nil {
+				p.ID = big.NewInt(0)
 			}
 			if p.ID.Cmp(big.NewInt(0)) > 0 {
 				return errors.New("invalid token proposal initial ID")

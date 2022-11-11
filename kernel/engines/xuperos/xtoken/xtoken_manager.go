@@ -46,6 +46,9 @@ func NewManager(ctx *Context) (*Manager, error) {
 		}
 		XTokenContract = conf.XTokenContractName
 	}
+	if XTokenContract == "" {
+		XTokenContract = "XToken"
+	}
 
 	x := NewContract(admins, fee, ctx)
 

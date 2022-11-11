@@ -262,7 +262,7 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 }
 
 func (x *Contract) setProposalResult(ctx contract.KContext, proposal *Proposal, tokenName string, agreeCount, opposeCount, waiveCount *big.Int) (*CheckVoteResult, error) {
-	if err := x.saveProposal(ctx, tokenName, proposal); err != nil {
+	if err := x.updateProposal(ctx, tokenName, proposal); err != nil {
 		return nil, err
 	}
 	if proposal.Status == ProposalSuccess {
@@ -514,6 +514,7 @@ func (x *Contract) saveNewProposal(ctx contract.KContext, token, topic, data str
 	return x.saveProposal(ctx, token, p)
 }
 
+// 保存proposal以及更新最新的proposalID
 func (x *Contract) saveProposal(ctx contract.KContext, token string, p *Proposal) error {
 	value, err := json.Marshal(p)
 	if err != nil {
@@ -525,6 +526,20 @@ func (x *Contract) saveProposal(ctx contract.KContext, token string, p *Proposal
 		return err
 	}
 	err = x.saveLatestProposalID(ctx, token, p.Topic, p.ID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// 只保存proposal，不更新最新的proposalID
+func (x *Contract) updateProposal(ctx contract.KContext, token string, p *Proposal) error {
+	value, err := json.Marshal(p)
+	if err != nil {
+		return errors.Wrap(err, "json marshal new proposal failed")
+	}
+	key := []byte(KeyOfProposalID(token, p.Topic, p.ID))
+	err = ctx.Put(XTokenContract, key, value)
 	if err != nil {
 		return err
 	}
