@@ -209,15 +209,15 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 	}
 
 	// 获取所有此提案的投票数据，包括赞成、反对、弃权，
-	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID)
+	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID, true)
 	if err != nil {
 		return nil, err
 	}
-	opposeCount, err := x.getOpposeVoteAmount(ctx, tokenName, topic, pID)
+	opposeCount, err := x.getOpposeVoteAmount(ctx, tokenName, topic, pID, true)
 	if err != nil {
 		return nil, err
 	}
-	waiveCount, err := x.getWaiveVoteAmount(ctx, tokenName, topic, pID)
+	waiveCount, err := x.getWaiveVoteAmount(ctx, tokenName, topic, pID, true)
 	if err != nil {
 		return nil, err
 	}
@@ -334,15 +334,15 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 		return nil, errors.New("invalid proposalID")
 	}
 
-	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID)
+	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
 	}
-	opposeCount, err := x.getOpposeVoteAmount(ctx, tokenName, topic, pID)
+	opposeCount, err := x.getOpposeVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
 	}
-	waiveCount, err := x.getWaiveVoteAmount(ctx, tokenName, topic, pID)
+	waiveCount, err := x.getWaiveVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -562,19 +562,19 @@ func (x *Contract) getProposal(ctx contract.KContext, token, topic string, propo
 	return p, nil
 }
 
-func (x *Contract) getAgreeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int) (*big.Int, error) {
-	return x.getVoteAmount(ctx, token, topic, proposalID, voteAgreeOption)
+func (x *Contract) getAgreeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
+	return x.getVoteAmount(ctx, token, topic, proposalID, voteAgreeOption, delAddrVotiingProposal)
 }
 
-func (x *Contract) getOpposeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int) (*big.Int, error) {
-	return x.getVoteAmount(ctx, token, topic, proposalID, voteOpposeOption)
+func (x *Contract) getOpposeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
+	return x.getVoteAmount(ctx, token, topic, proposalID, voteOpposeOption, delAddrVotiingProposal)
 }
 
-func (x *Contract) getWaiveVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int) (*big.Int, error) {
-	return x.getVoteAmount(ctx, token, topic, proposalID, voteWaiveOption)
+func (x *Contract) getWaiveVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
+	return x.getVoteAmount(ctx, token, topic, proposalID, voteWaiveOption, delAddrVotiingProposal)
 }
 
-func (x *Contract) getVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, option int) (*big.Int, error) {
+func (x *Contract) getVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, option int, delAddrVotiingProposal bool) (*big.Int, error) {
 	start, _ := x.getVoteKeyPrefix(token, topic, option, proposalID)
 	iter, err := ctx.Select(XTokenContract, []byte(start), []byte(start+"~"))
 	if err != nil {
@@ -594,9 +594,12 @@ func (x *Contract) getVoteAmount(ctx contract.KContext, token, topic string, pro
 			return nil, errors.New("vote value invalid, address: " + address)
 		}
 		voteCount = voteCount.Add(voteCount, voteAmount)
-		err = x.delAddressVotingProposal(ctx, token, address, topic, proposalID)
-		if err != nil {
-			return nil, err
+		if delAddrVotiingProposal {
+			// 检票时，此参数为true，查询投票时为false。
+			err = x.delAddressVotingProposal(ctx, token, address, topic, proposalID)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	return voteCount, nil
