@@ -51,6 +51,10 @@ func (rc *refCounter) Release(key string) int {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.ctMap[key]--
+	if rc.ctMap[key] == 0 {
+		delete(rc.ctMap, key)
+		return 0
+	}
 	return rc.ctMap[key]
 }
 
