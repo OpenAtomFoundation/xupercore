@@ -45,7 +45,7 @@ const (
 	Success = 200
 )
 
-var (
+const (
 	XTokenContract = "XToken"
 )
 

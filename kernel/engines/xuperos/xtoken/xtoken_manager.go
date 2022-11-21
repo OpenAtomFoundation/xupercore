@@ -37,17 +37,6 @@ func NewManager(ctx *Context) (*Manager, error) {
 		}
 		admins = conf.XTokenAdmins
 		fee = conf.XTokenFee
-		XTokenContract = conf.XTokenContractName
-	} else {
-		// todo 后期删除合约名字可配置，目前为了测试。
-		conf, err := loadConfig(ctx.ChainCtx.EngCtx.EnvCfg.GenConfFilePath(ConfigName))
-		if err != nil {
-			return nil, err
-		}
-		XTokenContract = conf.XTokenContractName
-	}
-	if XTokenContract == "" {
-		XTokenContract = "XToken"
 	}
 
 	x := NewContract(admins, fee, ctx)
