@@ -55,6 +55,10 @@ type RootConfig struct {
 	IrreversibleSlideWindow string `json:"irreversibleslidewindow"`
 	// GroupChainContract
 	GroupChainContract InvokeRequest `json:"group_chain_contract"`
+	// XToken admins
+	XTokenAdmins map[string]bool `json:"xtoken_admins"`
+	// XToken fee
+	XTokenFee map[string]int64 `json:"xtoken_fee"`
 }
 
 // GasPrice define gas rate for utxo

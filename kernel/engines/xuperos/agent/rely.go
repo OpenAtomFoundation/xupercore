@@ -19,6 +19,8 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken"
+	xtokenInter "github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken/base"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
@@ -222,4 +224,17 @@ func (t *ChainRelyAgentImpl) CreateTimerTask() (timerTask.TimerManager, error) {
 	}
 
 	return timerObj, nil
+}
+
+func (t *ChainRelyAgentImpl) CreateXToken() (xtokenInter.XTokenManager, error) {
+	ctx := t.chain.Context()
+	xctx, err := xtoken.NewXTokenCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mgr, err := xtoken.NewManager(xctx)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, err
 }
