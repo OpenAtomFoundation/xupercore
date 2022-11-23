@@ -10,7 +10,7 @@ var (
 )
 
 const (
-	contractNameMaxSize = 16
+	contractNameMaxSize = 64
 	contractNameMinSize = 4
 )
 
