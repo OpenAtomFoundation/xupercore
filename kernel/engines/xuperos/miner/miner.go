@@ -186,7 +186,7 @@ func (t *Miner) step() error {
 		if t.status == statusFollowing || isSync {
 			ctx.GetLog().Info("miner change follow=>miner",
 				"miner", t.ctx.Address.Address,
-				"netAddr", t.ctx.EngCtx.Net.PeerInfo().Id,
+				// "netAddr", t.ctx.EngCtx.Net.PeerInfo().Id,
 				"height", t.ctx.Ledger.GetMeta().GetTrunkHeight(),
 			)
 
@@ -221,7 +221,7 @@ func (t *Miner) step() error {
 	if t.status == statusMining {
 		ctx.GetLog().Info("miner change miner=>following",
 			"miner", t.ctx.Address.Address,
-			"netAddr", t.ctx.EngCtx.Net.PeerInfo().Id,
+			// "netAddr", t.ctx.EngCtx.Net.PeerInfo().Id,
 			"height", t.ctx.Ledger.GetMeta().GetTrunkHeight(),
 		)
 	}
