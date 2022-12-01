@@ -4,20 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/proto"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/xuperchain/xupercore/lib/metrics"
+	"strings"
 	"time"
 
-	"github.com/xuperchain/xupercore/kernel/common/xaddress"
-	knet "github.com/xuperchain/xupercore/kernel/network"
-	"github.com/xuperchain/xupercore/kernel/network/config"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
-	"github.com/xuperchain/xupercore/kernel/network/p2p"
-	"github.com/xuperchain/xupercore/lib/logs"
-	pb "github.com/xuperchain/xupercore/protos"
-
-	ipfsaddr "github.com/ipfs/go-ipfs-addr"
+	"github.com/golang/protobuf/proto"
+	ipfsAddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
 	circuit "github.com/libp2p/go-libp2p-circuit"
 	"github.com/libp2p/go-libp2p-core/host"
@@ -26,9 +17,19 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-kad-dht"
 	record "github.com/libp2p/go-libp2p-record"
-	secio "github.com/libp2p/go-libp2p-secio"
+	secIO "github.com/libp2p/go-libp2p-secio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/patrickmn/go-cache"
+	prom "github.com/prometheus/client_golang/prometheus"
+
+	"github.com/xuperchain/xupercore/kernel/common/xaddress"
+	kNet "github.com/xuperchain/xupercore/kernel/network"
+	"github.com/xuperchain/xupercore/kernel/network/config"
+	netCtx "github.com/xuperchain/xupercore/kernel/network/context"
+	"github.com/xuperchain/xupercore/kernel/network/p2p"
+	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/metrics"
+	pb "github.com/xuperchain/xupercore/protos"
 )
 
 const (
@@ -39,7 +40,7 @@ const (
 )
 
 func init() {
-	knet.Register(ServerName, NewP2PServerV2)
+	kNet.Register(ServerName, NewP2PServerV2)
 }
 
 var (
@@ -59,18 +60,18 @@ var (
 var (
 	ErrGenerateOpts     = errors.New("generate host opts error")
 	ErrCreateHost       = errors.New("create host error")
+	ErrBindAddress      = errors.New("bind address error")
 	ErrCreateKadDht     = errors.New("create kad dht error")
 	ErrCreateStreamPool = errors.New("create stream pool error")
 	ErrCreateBootStrap  = errors.New("create bootstrap error pool error")
 	ErrConnectBootStrap = errors.New("error to connect to all bootstrap")
 	ErrLoadAccount      = errors.New("load account error")
-	ErrStoreAccount     = errors.New("dht store account error")
 	ErrConnect          = errors.New("connect all boot and static peer error")
 )
 
 // P2PServerV2 is the node in the network
 type P2PServerV2 struct {
-	ctx    *nctx.NetCtx
+	ctx    *netCtx.NetCtx
 	log    logs.Logger
 	config *config.NetConf
 
@@ -99,7 +100,7 @@ func NewP2PServerV2() p2p.Server {
 }
 
 // Init initialize p2p server using given config
-func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
+func (p *P2PServerV2) Init(ctx *netCtx.NetCtx) error {
 	p.ctx = ctx
 	p.log = ctx.GetLog()
 	p.config = ctx.P2PConf
@@ -115,6 +116,9 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 	ho, err := libp2p.New(ctx, opts...)
 	if err != nil {
 		p.log.Error("Create p2p host error", "error", err)
+		if strings.Contains(err.Error(), "bind: cannot assign requested address") {
+			return ErrBindAddress
+		}
 		return ErrCreateHost
 	}
 
@@ -171,7 +175,7 @@ func (p *P2PServerV2) Init(ctx *nctx.NetCtx) error {
 	return nil
 }
 
-func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
+func genHostOption(ctx *netCtx.NetCtx) ([]libp2p.Option, error) {
 	cfg := ctx.P2PConf
 	muAddr, err := multiaddr.NewMultiaddr(cfg.Address)
 	if err != nil {
@@ -200,16 +204,16 @@ func genHostOption(ctx *nctx.NetCtx) ([]libp2p.Option, error) {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.Security(secio.ID, secio.New))
+		opts = append(opts, libp2p.Security(secIO.ID, secIO.New))
 	}
 
 	return opts, nil
 }
 
-func setStaticNodes(ctx *nctx.NetCtx, p *P2PServerV2) {
+func setStaticNodes(ctx *netCtx.NetCtx, p *P2PServerV2) {
 	cfg := ctx.P2PConf
 	staticNodes := map[string][]peer.ID{}
-	for bcname, peers := range cfg.StaticNodes {
+	for bcName, peers := range cfg.StaticNodes {
 		peerIDs := make([]peer.ID, 0, len(peers))
 		for _, peerAddr := range peers {
 			id, err := p2p.GetPeerIDByAddress(peerAddr)
@@ -219,7 +223,7 @@ func setStaticNodes(ctx *nctx.NetCtx, p *P2PServerV2) {
 			}
 			peerIDs = append(peerIDs, id)
 		}
-		staticNodes[bcname] = peerIDs
+		staticNodes[bcName] = peerIDs
 	}
 	p.staticNodes = staticNodes
 }
@@ -260,7 +264,6 @@ func (p *P2PServerV2) Start() {
 				return
 			case <-t.C:
 				p.log.Trace("RoutingTable", "id", p.host.ID(), "size", p.kdht.RoutingTable().Size())
-				// p.kdht.RoutingTable().Print()
 			}
 		}
 	}()
@@ -291,8 +294,12 @@ func (p *P2PServerV2) streamHandler(netStream network.Stream) {
 // Stop stop the node
 func (p *P2PServerV2) Stop() {
 	p.log.Info("StopP2PServer")
-	p.kdht.Close()
-	p.host.Close()
+	if err := p.kdht.Close(); err != nil {
+		p.log.Warn("close P2P kdht error", "error", err)
+	}
+	if err := p.host.Close(); err != nil {
+		p.log.Warn("close P2P host error", "error", err)
+	}
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -345,7 +352,7 @@ func (p *P2PServerV2) HandleMessage(stream p2p.Stream, msg *pb.XuperMessage) err
 	return nil
 }
 
-func (p *P2PServerV2) Context() *nctx.NetCtx {
+func (p *P2PServerV2) Context() *netCtx.NetCtx {
 	return p.ctx
 }
 
@@ -402,7 +409,7 @@ func (p *P2PServerV2) connectPeerByAddress(addresses []string) int {
 func (p *P2PServerV2) getAddrInfos(addresses []string) []peer.AddrInfo {
 	addrInfos := make([]peer.AddrInfo, 0, len(addresses))
 	for _, addr := range addresses {
-		peerAddr, err := ipfsaddr.ParseString(addr)
+		peerAddr, err := ipfsAddr.ParseString(addr)
 		if err != nil {
 			p.log.Error("p2p: parse peer address error", "peerAddr", peerAddr, "error", err)
 			continue
