@@ -287,11 +287,11 @@ func (p *P2PServerV2) getStaticNodes(bcname string) []peer.ID {
 }
 
 func (p *P2PServerV2) GetPeerIdByAccount(account string) (peer.ID, error) {
-	if value, ok := p.accounts.Get(account); ok {
+	key := Key(account)
+	if value, ok := p.accounts.Get(key); ok {
 		return value.(peer.ID), nil
 	}
 
-	key := Key(account)
 	value, err := p.kdht.GetValue(context.Background(), key)
 	if err != nil {
 		return "", fmt.Errorf("dht get peer id error: %s", err)
