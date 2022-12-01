@@ -86,12 +86,18 @@ func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
 	p.address, err = multiaddr.NewMultiaddr(ctx.P2PConf.Address)
 	if err != nil {
 		log.Printf("network address error: %v", err)
+		p.log.Error("convert address error",
+			"address", ctx.P2PConf.Address,
+			"error", err)
 		return ErrAddressIllegal
 	}
 
 	_, _, err = manet.DialArgs(p.address)
 	if err != nil {
 		log.Printf("network address error: %v", err)
+		p.log.Error("dial address error",
+			"address", ctx.P2PConf.Address,
+			"error", err)
 		return ErrAddressIllegal
 	}
 
