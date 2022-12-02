@@ -601,7 +601,7 @@ func (uv *UtxoVM) SetModifyBlockAddr(addr string) {
 // GetAccountContracts get account contracts, return a slice of contract names
 func (uv *UtxoVM) GetAccountContracts(account string) ([]string, error) {
 	contracts := []string{}
-	if aclu.IsAccount(account) != 1 {
+	if !aclu.IsAccount(account) {
 		uv.log.Warn("GetAccountContracts valid account name error", "error", "account name is not valid")
 		return nil, errors.New("account name is not valid")
 	}
@@ -698,7 +698,7 @@ func (uv *UtxoVM) QueryUtxoRecord(accountName string, displayCount int64) (*pb.U
 
 func (uv *UtxoVM) QueryAccountContainAK(address string) ([]string, error) {
 	accounts := []string{}
-	if aclu.IsAccount(address) != 0 {
+	if !aclu.IsAK(address) {
 		return accounts, errors.New("address is not valid")
 	}
 	prefixKey := pb.ExtUtxoTablePrefix + aclu.GetAK2AccountBucket() + "/" + address

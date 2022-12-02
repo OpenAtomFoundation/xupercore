@@ -63,10 +63,10 @@ func New(cfg *XBridgeConfig) (*XBridge, error) {
 	return xbridge, nil
 }
 
-func (v *XBridge) initVM() error {
+func (b *XBridge) initVM() error {
 	types := []ContractType{TypeWasm, TypeNative, TypeEvm, TypeKernel}
 	for _, tp := range types {
-		vmconfig, ok := v.vmconfigs[tp]
+		vmconfig, ok := b.vmconfigs[tp]
 		if !ok {
 			// log.Error("config for contract type not found", "type", tp)
 			continue
@@ -76,24 +76,24 @@ func (v *XBridge) initVM() error {
 			continue
 		}
 		creatorConfig := &InstanceCreatorConfig{
-			Basedir:        filepath.Join(v.basedir, vmconfig.DriverName()),
-			SyscallService: v.syscallService,
+			Basedir:        filepath.Join(b.basedir, vmconfig.DriverName()),
+			SyscallService: b.syscallService,
 			VMConfig:       vmconfig,
 		}
 		creator, err := Open(tp, vmconfig.DriverName(), creatorConfig)
 		if err != nil {
 			return err
 		}
-		v.creators[tp] = creator
+		b.creators[tp] = creator
 	}
 	return nil
 }
 
-func (v *XBridge) getCreator(tp ContractType) InstanceCreator {
-	return v.creators[tp]
+func (b *XBridge) getCreator(tp ContractType) InstanceCreator {
+	return b.creators[tp]
 }
 
-func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, error) {
+func (b *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, error) {
 	var desc *protos.WasmCodeDesc
 	var err error
 
@@ -112,13 +112,13 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 	if err != nil {
 		return nil, err
 	}
-	vm := v.getCreator(tp)
+	vm := b.getCreator(tp)
 	if vm == nil {
 		return nil, fmt.Errorf("vm for contract type %s not supported", tp)
 	}
 	var cp ContractCodeProvider
 
-	ctx := v.ctxmgr.MakeContext()
+	ctx := b.ctxmgr.MakeContext()
 
 	// 1. 如果当前在部署合约，合约代码从sandbox中获取
 	// 2. 合约调用的情况则从model中拿取合约代码，避免交易中包含合约代码的引用
@@ -129,10 +129,10 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		ctx.ReadFromCache = false
 		cp = newCodeProviderWithCache(ctxCfg.State)
 	} else {
-		cp = newDescProvider(v.codeProvider, desc)
+		cp = newDescProvider(b.codeProvider, desc)
 	}
 	ctx.State = ctxCfg.State
-	ctx.Core = v.core
+	ctx.Core = b.core
 	ctx.Module = ctxCfg.Module
 	ctx.ContractName = ctxCfg.ContractName
 	ctx.Initiator = ctxCfg.Initiator
@@ -148,10 +148,11 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 	}
 	// lifecycle of debug logger driver is coincident with bridge
 	// while ctx.Logger's coincident with context
-	if v.debugLogger != nil {
-		ctx.Logger = v.debugLogger
+	if b.debugLogger != nil {
+		ctx.Logger = b.debugLogger
 	} else {
-		// use contract Name for convience of filter log from specific contract using grep or other logging processing stack
+		// use contract name for convenience of filter specific contract from logs
+		// by grep or other logging processing stack
 		ctx.Logger, err = logs.NewLogger(fmt.Sprintf("%016d", ctx.ID), "contract")
 	}
 	ctx.ChainName = ctxCfg.ChainName
@@ -160,11 +161,11 @@ func (v *XBridge) NewContext(ctxCfg *contract.ContextConfig) (contract.Context, 
 		return nil, err
 	}
 	release := func() {
-		v.ctxmgr.DestroyContext(ctx)
+		b.ctxmgr.DestroyContext(ctx)
 	}
 	instance, err := vm.CreateInstance(ctx, cp)
 	if err != nil {
-		v.ctxmgr.DestroyContext(ctx)
+		b.ctxmgr.DestroyContext(ctx)
 		return nil, err
 	}
 	ctx.Instance = instance

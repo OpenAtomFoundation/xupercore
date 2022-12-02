@@ -31,7 +31,7 @@ type evmCreator struct {
 	vm *evm.EVM
 }
 
-func newEvmCreator(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
+func newEvmCreator(_ *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
 	opt := evm.Options{}
 	vm := evm.New(opt)
 	return &evmCreator{
@@ -53,7 +53,7 @@ func (e *evmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeP
 	}, nil
 }
 
-func (e *evmCreator) RemoveCache(name string) {
+func (e *evmCreator) RemoveCache(_ string) {
 }
 
 type evmInstance struct {
@@ -102,7 +102,7 @@ func (e *evmInstance) Exec() error {
 	}
 
 	var caller crypto.Address
-	if DetermineContractAccount(e.state.ctx.Initiator) {
+	if IsContractAccount(e.state.ctx.Initiator) {
 		caller, err = ContractAccountToEVMAddress(e.state.ctx.Initiator)
 	} else {
 		caller, err = XchainToEVMAddress(e.state.ctx.Initiator)
@@ -242,7 +242,7 @@ func unpackEventFromAbi(abiByte []byte, contractName string, log *exec.LogEvent)
 func (e *evmInstance) deployContract() error {
 	var caller crypto.Address
 	var err error
-	if DetermineContractAccount(e.state.ctx.Initiator) {
+	if IsContractAccount(e.state.ctx.Initiator) {
 		caller, err = ContractAccountToEVMAddress(e.state.ctx.Initiator)
 	} else {
 		caller, err = XchainToEVMAddress(e.state.ctx.Initiator)
