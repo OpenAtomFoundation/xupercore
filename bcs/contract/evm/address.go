@@ -99,9 +99,21 @@ func EVMAddressToContractAccountWithoutPrefixAndSuffix(evmAddr crypto.Address) (
 	return contractNameStrWithPrefix[4:], nil
 }
 
+// Deprecating, use IsContractAccount instead
+func DetermineContractAccount(account string) bool {
+	return IsContractAccount(account)
+}
+
 // IsContractAccount returns true for a contract account
 func IsContractAccount(account string) bool {
 	return utils.IsAccount(account) && strings.Contains(account, "@")
+}
+
+// Deprecating
+// if error of incorrect name is needed, use `contract.ValidContractName`
+// otherwise, use IsContractName
+func DetermineContractName(contractName string) error {
+	return contract.ValidContractName(contractName)
 }
 
 // IsContractName determine whether it is a contract name

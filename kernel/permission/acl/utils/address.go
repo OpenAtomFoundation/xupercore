@@ -51,6 +51,11 @@ func IsAK(address string) bool {
 	return isValid && t == AddressAK
 }
 
+// Deprecating, use ValidAccountNumber instead
+func ValidRawAccount(number string) error {
+	return ValidAccountNumber(number)
+}
+
 // ValidAccountNumber validate account number
 // a valid account number pattern is `[0-9]{16}`
 func ValidAccountNumber(number string) error {
