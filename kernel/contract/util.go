@@ -15,16 +15,17 @@ const (
 )
 
 // ValidContractName return error when contractName is not a valid contract name.
-func ValidContractName(contractName string) error {
-	// param absence check
-	// contract naming rule check
-	contractSize := len(contractName)
-	contractMaxSize := contractNameMaxSize
-	contractMinSize := contractNameMinSize
-	if contractSize > contractMaxSize || contractSize < contractMinSize {
-		return fmt.Errorf("contract name length expect [%d~%d], actual: %d", contractMinSize, contractMaxSize, contractSize)
+func ValidContractName(name string) error {
+
+	// check name size
+	nameSize := len(name)
+	if nameSize > contractNameMaxSize || nameSize < contractNameMinSize {
+		return fmt.Errorf("contract name length expect [%d~%d], actual: %d",
+			contractNameMinSize, contractNameMaxSize, nameSize)
 	}
-	if !contractNameRegex.MatchString(contractName) {
+
+	// check name pattern
+	if !contractNameRegex.MatchString(name) {
 		return fmt.Errorf("contract name does not fit the rule of contract name")
 	}
 	return nil

@@ -227,8 +227,12 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 	}
 
 	// verify initiator
-	akType := aclu.IsAccount(tx.Initiator)
-	if akType == 0 {
+	akType, isValid := aclu.ParseAddressType(tx.Initiator)
+	if !isValid {
+		t.log.Warn("verifySignatures failed, invalid address", "address", tx.Initiator)
+		return false, nil, ErrInvalidSignature
+	}
+	if akType == aclu.AddressAK {
 		// check initiator address signature
 		ok, err := aclu.IdentifyAK(tx.Initiator, tx.InitiatorSigns[0], digestHash)
 		if err != nil || !ok {
@@ -236,7 +240,7 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 			return false, nil, err
 		}
 		verifiedAddr[tx.Initiator] = true
-	} else if akType == 1 {
+	} else if akType == aclu.AddressAccount {
 		initiatorAddr := make([]string, 0)
 		// check initiator account signatures
 		for _, sign := range tx.InitiatorSigns {
@@ -264,9 +268,6 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 				"account", tx.Initiator, "error", err)
 			return false, nil, err
 		}
-	} else {
-		t.log.Warn("verifySignatures failed, invalid address", "address", tx.Initiator)
-		return false, nil, ErrInvalidSignature
 	}
 
 	// verify authRequire
@@ -353,9 +354,9 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 	for _, txInput := range tx.TxInputs {
 		// if transfer from contract
 		addr := txInput.GetFromAddr()
-		txid := txInput.GetRefTxid()
+		txID := txInput.GetRefTxid()
 		offset := txInput.GetRefOffset()
-		utxoKey := utxo.GenUtxoKey(addr, txid, offset)
+		utxoKey := utxo.GenUtxoKey(addr, txID, offset)
 		if conUtxoInputsMap[utxoKey] {
 			// this utxo transfer from contract, will verify in rwset verify
 			continue
@@ -366,8 +367,12 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 			// this ID(either AK or Account) is verified before
 			continue
 		}
-		akType := aclu.IsAccount(name)
-		if akType == 1 {
+		akType, isValid := aclu.ParseAddressType(name)
+		if !isValid {
+			t.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
+			return false, ErrInvalidAccount
+		}
+		if akType == aclu.AddressAccount {
 			// Identify account
 			acl, err := t.queryAccountACL(name)
 			if err != nil || acl == nil {
@@ -379,13 +384,10 @@ func (t *State) verifyUTXOPermission(tx *pb.Transaction, verifiedID map[string]b
 				t.log.Warn("verifyUTXOPermission error, failed to IdentifyAccount", "error", err)
 				return false, ErrACLNotEnough
 			}
-		} else if akType == 0 {
+		} else if akType == aclu.AddressAK {
 			// Identify address failed, if address not in verifiedID then it must have no signature
 			t.log.Warn("verifyUTXOPermission error, address has no signature", "address", name)
 			return false, ErrInvalidSignature
-		} else {
-			t.log.Warn("verifyUTXOPermission error, Invalid account/address name", "name", name)
-			return false, ErrInvalidAccount
 		}
 		verifiedID[name] = true
 	}
@@ -830,7 +832,7 @@ func (t *State) checkRelyOnMarkedTxid(reftxid []byte, blockid []byte) (bool, boo
 func (t *State) removeDuplicateUser(initiator string, authRequire []string) []string {
 	dupCheck := make(map[string]bool)
 	finalUsers := make([]string, 0)
-	if aclu.IsAccount(initiator) == 0 {
+	if aclu.IsAK(initiator) {
 		finalUsers = append(finalUsers, initiator)
 		dupCheck[initiator] = true
 	}

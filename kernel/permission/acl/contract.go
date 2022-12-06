@@ -41,7 +41,7 @@ func (t *KernMethod) NewAccount(ctx contract.KContext) (*contract.Response, erro
 		return nil, fmt.Errorf("Invoke NewAccount failed, warn: account name is empty")
 	}
 	accountStr := string(accountName)
-	if validErr := utils.ValidRawAccount(accountStr); validErr != nil {
+	if validErr := utils.ValidAccountNumber(accountStr); validErr != nil {
 		return nil, validErr
 	}
 
