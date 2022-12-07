@@ -3,7 +3,6 @@ package p2pv1
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -19,7 +18,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	"github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/config"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
+	netCtx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/def"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -43,7 +42,7 @@ func init() {
 
 // P2PServerV1
 type P2PServerV1 struct {
-	ctx    *nctx.NetCtx
+	ctx    *netCtx.NetCtx
 	log    logs.Logger
 	config *config.NetConf
 
@@ -69,7 +68,7 @@ func NewP2PServerV1() p2p.Server {
 }
 
 // Init initialize p2p server using given config
-func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
+func (p *P2PServerV1) Init(ctx *netCtx.NetCtx) error {
 	pool, err := NewConnPool(ctx)
 	if err != nil {
 		p.log.Error("Init P2PServerV1 NewConnPool error", "error", err)
@@ -85,13 +84,17 @@ func (p *P2PServerV1) Init(ctx *nctx.NetCtx) error {
 	// address
 	p.address, err = multiaddr.NewMultiaddr(ctx.P2PConf.Address)
 	if err != nil {
-		log.Printf("network address error: %v", err)
+		p.log.Error("convert address error",
+			"address", ctx.P2PConf.Address,
+			"error", err)
 		return ErrAddressIllegal
 	}
 
 	_, _, err = manet.DialArgs(p.address)
 	if err != nil {
-		log.Printf("network address error: %v", err)
+		p.log.Error("dial address error",
+			"address", ctx.P2PConf.Address,
+			"error", err)
 		return ErrAddressIllegal
 	}
 
@@ -204,7 +207,7 @@ func (p *P2PServerV1) UnRegister(sub p2p.Subscriber) error {
 	return p.dispatcher.UnRegister(sub)
 }
 
-func (p *P2PServerV1) Context() *nctx.NetCtx {
+func (p *P2PServerV1) Context() *netCtx.NetCtx {
 	return p.ctx
 }
 

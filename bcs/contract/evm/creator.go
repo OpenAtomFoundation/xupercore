@@ -31,7 +31,7 @@ type evmCreator struct {
 	vm *evm.EVM
 }
 
-func newEvmCreator(config *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
+func newEvmCreator(_ *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, error) {
 	opt := evm.Options{}
 	vm := evm.New(opt)
 	return &evmCreator{
@@ -53,7 +53,7 @@ func (e *evmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeP
 	}, nil
 }
 
-func (e *evmCreator) RemoveCache(name string) {
+func (e *evmCreator) RemoveCache(_ string) {
 }
 
 type evmInstance struct {
@@ -68,50 +68,50 @@ type evmInstance struct {
 	fromCache  bool
 }
 
-func (e *evmInstance) Exec() error {
+func (i *evmInstance) Exec() error {
 	var err error
 
 	// 获取合约的 code。
-	if e.fromCache {
-		e.code, err = e.cp.GetContractCodeFromCache(e.ctx.ContractName)
+	if i.fromCache {
+		i.code, err = i.cp.GetContractCodeFromCache(i.ctx.ContractName)
 		if err != nil {
 			return err
 		}
 	} else {
-		e.code, err = e.cp.GetContractCode(e.ctx.ContractName)
+		i.code, err = i.cp.GetContractCode(i.ctx.ContractName)
 		if err != nil {
 			return err
 		}
 	}
 
 	// 部署合约或者调用合约时参数未使用 abi 编码时需要获取到合约的 abi。执行结果也需要使用 abi 解析。
-	if e.fromCache {
-		e.abi, err = e.cp.GetContractAbiFromCache(e.ctx.ContractName)
+	if i.fromCache {
+		i.abi, err = i.cp.GetContractAbiFromCache(i.ctx.ContractName)
 		if err != nil {
 			return err
 		}
 	} else {
-		e.abi, err = e.cp.GetContractAbi(e.ctx.ContractName)
+		i.abi, err = i.cp.GetContractAbi(i.ctx.ContractName)
 		if err != nil {
 			return err
 		}
 	}
 
-	if e.ctx.Method == initializeMethod {
-		return e.deployContract()
+	if i.ctx.Method == initializeMethod {
+		return i.deployContract()
 	}
 
 	var caller crypto.Address
-	if DetermineContractAccount(e.state.ctx.Initiator) {
-		caller, err = ContractAccountToEVMAddress(e.state.ctx.Initiator)
+	if IsContractAccount(i.state.ctx.Initiator) {
+		caller, err = ContractAccountToEVMAddress(i.state.ctx.Initiator)
 	} else {
-		caller, err = XchainToEVMAddress(e.state.ctx.Initiator)
+		caller, err = XchainToEVMAddress(i.state.ctx.Initiator)
 	}
 	if err != nil {
 		return err
 	}
 
-	callee, err := ContractNameToEVMAddress(e.ctx.ContractName)
+	callee, err := ContractNameToEVMAddress(i.ctx.ContractName)
 	if err != nil {
 		return err
 	}
@@ -121,20 +121,20 @@ func (e *evmInstance) Exec() error {
 	// 如果客户端已经将参数进行了 abi 编码，那么此处不需要再进行编码，而且返回的结果也不需要 abi 解码。否则此处需要将参数 abi 编码同时将结果 abi 解码。
 	needDecodeResp := false
 	input := []byte{}
-	jsonEncoded, ok := e.ctx.Args[evmParamJSONEncoded]
+	jsonEncoded, ok := i.ctx.Args[evmParamJSONEncoded]
 	if !ok || string(jsonEncoded) != "true" {
-		input = e.ctx.Args[evmInput]
+		input = i.ctx.Args[evmInput]
 	} else {
 		needDecodeResp = true
-		if input, err = e.encodeInvokeInput(); err != nil {
+		if input, err = i.encodeInvokeInput(); err != nil {
 			return err
 		}
 	}
 
 	value := big.NewInt(0)
 	ok = false
-	if e.ctx.TransferAmount != "" {
-		value, ok = new(big.Int).SetString(e.ctx.TransferAmount, 0)
+	if i.ctx.TransferAmount != "" {
+		value, ok = new(big.Int).SetString(i.ctx.TransferAmount, 0)
 		if !ok {
 			return fmt.Errorf("get evm value error")
 		}
@@ -147,51 +147,51 @@ func (e *evmInstance) Exec() error {
 		Value:    value,
 		Gas:      &gas,
 	}
-	out, err := e.vm.Execute(e.state, e.blockState, e, params, e.code)
+	out, err := i.vm.Execute(i.state, i.blockState, i, params, i.code)
 	if err != nil {
 		return err
 	}
 
 	if needDecodeResp {
 		// 执行结果根据 abi 解码，返回 json 格式的数组。
-		out, err = decodeRespWithAbiForEVM(string(e.abi), e.ctx.Method, out)
+		out, err = decodeRespWithAbiForEVM(string(i.abi), i.ctx.Method, out)
 		if err != nil {
 			return err
 		}
 	}
 
-	e.gasUsed = uint64(contract.MaxLimits.Cpu) - *params.Gas
+	i.gasUsed = uint64(contract.MaxLimits.Cpu) - *params.Gas
 
-	e.ctx.Output = &pb.Response{
+	i.ctx.Output = &pb.Response{
 		Status: 200,
 		Body:   out,
 	}
 	return nil
 }
 
-func (e *evmInstance) ResourceUsed() contract.Limits {
+func (i *evmInstance) ResourceUsed() contract.Limits {
 	return contract.Limits{
-		Cpu: int64(e.gasUsed),
+		Cpu: int64(i.gasUsed),
 	}
 }
 
-func (e *evmInstance) Release() {
+func (i *evmInstance) Release() {
 }
 
-func (e *evmInstance) Abort(msg string) {
+func (i *evmInstance) Abort(msg string) {
 }
 
-func (e *evmInstance) Call(call *exec.CallEvent, exception *errors.Exception) error {
+func (i *evmInstance) Call(call *exec.CallEvent, exception *errors.Exception) error {
 	return nil
 }
 
-func (e *evmInstance) Log(log *exec.LogEvent) error {
+func (i *evmInstance) Log(log *exec.LogEvent) error {
 	contractName, _, err := DetermineEVMAddress(log.Address)
 	if err != nil {
 		return err
 	}
 
-	contractAbiByte, err := e.cp.GetContractAbi(contractName)
+	contractAbiByte, err := i.cp.GetContractAbi(contractName)
 	if err != nil {
 		return err
 	}
@@ -199,8 +199,8 @@ func (e *evmInstance) Log(log *exec.LogEvent) error {
 	if err != nil {
 		return err
 	}
-	e.ctx.Events = append(e.ctx.Events, event)
-	e.ctx.State.AddEvent(event)
+	i.ctx.Events = append(i.ctx.Events, event)
+	i.ctx.State.AddEvent(event)
 	return nil
 }
 
@@ -239,19 +239,19 @@ func unpackEventFromAbi(abiByte []byte, contractName string, log *exec.LogEvent)
 	return event, nil
 }
 
-func (e *evmInstance) deployContract() error {
+func (i *evmInstance) deployContract() error {
 	var caller crypto.Address
 	var err error
-	if DetermineContractAccount(e.state.ctx.Initiator) {
-		caller, err = ContractAccountToEVMAddress(e.state.ctx.Initiator)
+	if IsContractAccount(i.state.ctx.Initiator) {
+		caller, err = ContractAccountToEVMAddress(i.state.ctx.Initiator)
 	} else {
-		caller, err = XchainToEVMAddress(e.state.ctx.Initiator)
+		caller, err = XchainToEVMAddress(i.state.ctx.Initiator)
 	}
 	if err != nil {
 		return err
 	}
 
-	callee, err := ContractNameToEVMAddress(e.ctx.ContractName)
+	callee, err := ContractNameToEVMAddress(i.ctx.ContractName)
 	if err != nil {
 		return err
 	}
@@ -259,13 +259,13 @@ func (e *evmInstance) deployContract() error {
 	gas := uint64(contract.MaxLimits.Cpu)
 
 	input := []byte{}
-	jsonEncoded, ok := e.ctx.Args[evmParamJSONEncoded]
+	jsonEncoded, ok := i.ctx.Args[evmParamJSONEncoded]
 	if !ok || string(jsonEncoded) != "true" {
 		// 客户端传来的参数是已经 abi 编码的。
-		input = e.code
+		input = i.code
 	} else {
 		// 客户端未将参数编码。
-		if input, err = e.encodeDeployInput(); err != nil {
+		if input, err = i.encodeDeployInput(); err != nil {
 			return err
 		}
 	}
@@ -279,20 +279,20 @@ func (e *evmInstance) deployContract() error {
 		Value:    big.NewInt(0),
 		Gas:      &gas,
 	}
-	contractCode, err := e.vm.Execute(e.state, e.blockState, e, params, input)
+	contractCode, err := i.vm.Execute(i.state, i.blockState, i, params, input)
 	if err != nil {
 		return err
 	}
 
-	key := evmCodeKey(e.ctx.ContractName)
-	err = e.ctx.State.Put("contract", key, contractCode)
+	key := evmCodeKey(i.ctx.ContractName)
+	err = i.ctx.State.Put("contract", key, contractCode)
 	if err != nil {
 		return err
 	}
 
-	e.gasUsed = uint64(contract.MaxLimits.Cpu) - *params.Gas
+	i.gasUsed = uint64(contract.MaxLimits.Cpu) - *params.Gas
 
-	e.ctx.Output = &pb.Response{
+	i.ctx.Output = &pb.Response{
 		Status: 200,
 	}
 	return nil
@@ -339,9 +339,9 @@ func decodeRespWithAbiForEVM(abiData, funcName string, resp []byte) ([]byte, err
 	return out, nil
 }
 
-func (e *evmInstance) encodeDeployInput() ([]byte, error) {
+func (i *evmInstance) encodeDeployInput() ([]byte, error) {
 	// 客户端如果未将参数进行 abi 编码，那么通过 input 获取的是参数 json 序列化的结果。
-	argsBytes, ok := e.ctx.Args[evmInput]
+	argsBytes, ok := i.ctx.Args[evmInput]
 	if !ok {
 		return nil, fmt.Errorf("missing emvInput")
 	}
@@ -352,7 +352,7 @@ func (e *evmInstance) encodeDeployInput() ([]byte, error) {
 		return nil, err
 	}
 
-	enc, err := xabi.New(e.abi)
+	enc, err := xabi.New(i.abi)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func (e *evmInstance) encodeDeployInput() ([]byte, error) {
 		return nil, err
 	}
 
-	evmCode := string(e.code) + hex.EncodeToString(input)
+	evmCode := string(i.code) + hex.EncodeToString(input)
 	codeBuf, err := hex.DecodeString(evmCode)
 	if err != nil {
 		return nil, err
@@ -371,8 +371,8 @@ func (e *evmInstance) encodeDeployInput() ([]byte, error) {
 	return codeBuf, nil
 }
 
-func (e *evmInstance) encodeInvokeInput() ([]byte, error) {
-	argsBytes, ok := e.ctx.Args[evmInput]
+func (i *evmInstance) encodeInvokeInput() ([]byte, error) {
+	argsBytes, ok := i.ctx.Args[evmInput]
 	if !ok {
 		return nil, nil
 	}
@@ -382,12 +382,12 @@ func (e *evmInstance) encodeInvokeInput() ([]byte, error) {
 		return nil, err
 	}
 
-	enc, err := xabi.New(e.abi)
+	enc, err := xabi.New(i.abi)
 	if err != nil {
 		return nil, err
 	}
 
-	input, err := enc.Encode(e.ctx.Method, args)
+	input, err := enc.Encode(i.ctx.Method, args)
 	if err != nil {
 		return nil, err
 	}

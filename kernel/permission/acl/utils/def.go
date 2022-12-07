@@ -6,7 +6,7 @@ const (
 )
 
 const (
-	accountSize            = 16
+	accountNumberSize      = 16
 	contractNameMaxSize    = 16
 	contractNameMinSize    = 4
 	accountPrefix          = "XC"
@@ -72,8 +72,8 @@ func GetAKAccountSeparator() string {
 	return addressAccountSep
 }
 
-// GetAccountBcnameSep return the separator string for account and blockchain name
-func GetAccountBcnameSep() string {
+// GetAccountBcNameSep return the separator string for account and blockchain name
+func GetAccountBcNameSep() string {
 	return accountBcnameSep
 }
 
@@ -82,9 +82,9 @@ func GetContractBucket() string {
 	return contractBucket
 }
 
-// GetAccountSize return the account number size
-func GetAccountSize() int {
-	return accountSize
+// GetAccountNumberSize return the account number size
+func GetAccountNumberSize() int {
+	return accountNumberSize
 }
 
 // GetAkLimit return maximum AK numbers of an ACL

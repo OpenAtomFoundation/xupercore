@@ -68,43 +68,43 @@ func validatePermTree(root *ptree.PermNode, isAccount bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	listlen := len(plist)
+	size := len(plist)
 	vf := &rule.ACLValidatorFactory{}
 
 	// reverse travel the perm tree
-	for i := listlen - 1; i >= 0; i-- {
-		pnode := plist[i]
-		nameCheck := IsAccount(pnode.Name)
+	for i := size - 1; i >= 0; i-- {
+		node := plist[i]
+		t, isValid := ParseAddressType(node.Name)
 		// 0 means AK, 1 means Account, otherwise invalid
-		if nameCheck < 0 || nameCheck > 1 {
+		if !isValid {
 			return false, errors.New("Invalid account/ak name")
 		}
 
 		// for non-account perm tree, the root node is not account name
 		if i == 0 && !isAccount {
-			nameCheck = 1
+			t = AddressAccount
 		}
 
 		checkResult := false
-		if nameCheck == 0 {
+		if t == AddressAK {
 			// current node is AK, signature should be validated before
 			checkResult = true
-		} else if nameCheck == 1 {
+		} else if t == AddressAccount {
 			// current node is Account, so validation using ACLValidator
-			if pnode.ACL == nil {
+			if node.ACL == nil {
 				// empty ACL means everyone could pass ACL validation
 				checkResult = true
 			} else {
-				if pnode.ACL.Pm == nil {
+				if node.ACL.Pm == nil {
 					return false, errors.New("Acl has empty Pm field")
 				}
 
 				// get ACLValidator by ACL type
-				validator, err := vf.GetACLValidator(pnode.ACL.Pm.Rule)
+				validator, err := vf.GetACLValidator(node.ACL.Pm.Rule)
 				if err != nil {
 					return false, err
 				}
-				checkResult, err = validator.Validate(pnode)
+				checkResult, err = validator.Validate(node)
 				if err != nil {
 					return false, err
 				}
@@ -113,9 +113,9 @@ func validatePermTree(root *ptree.PermNode, isAccount bool) (bool, error) {
 
 		// set validation status
 		if checkResult {
-			pnode.Status = ptree.Success
+			node.Status = ptree.Success
 		} else {
-			pnode.Status = ptree.Failed
+			node.Status = ptree.Failed
 		}
 	}
 	return (root.Status == ptree.Success), nil
