@@ -16,8 +16,8 @@ import (
 	pb "github.com/xuperchain/xupercore/protos"
 
 	ggio "github.com/gogo/protobuf/io"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
 	ma "github.com/multiformats/go-multiaddr"
 )
 

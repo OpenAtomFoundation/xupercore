@@ -4,7 +4,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/lib/logs"

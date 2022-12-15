@@ -10,14 +10,15 @@ import (
 	"github.com/golang/protobuf/proto"
 	ipfsAddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
-	circuit "github.com/libp2p/go-libp2p-circuit"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-libp2p-kad-dht"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	record "github.com/libp2p/go-libp2p-record"
-	secIO "github.com/libp2p/go-libp2p-secio"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
+
+	// circuit "github.com/libp2p/go-libp2p/p2p/protocol/internal/circuitv1-deprecated"
+	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/patrickmn/go-cache"
 	prom "github.com/prometheus/client_golang/prometheus"
@@ -113,7 +114,7 @@ func (p *P2PServerV2) Init(ctx *netCtx.NetCtx) error {
 		return ErrGenerateOpts
 	}
 
-	ho, err := libp2p.New(ctx, opts...)
+	ho, err := libp2p.New(opts...)
 	if err != nil {
 		p.log.Error("Create p2p host error", "error", err)
 		if strings.Contains(err.Error(), "bind: cannot assign requested address") {
@@ -184,7 +185,7 @@ func genHostOption(ctx *netCtx.NetCtx) ([]libp2p.Option, error) {
 
 	opts := []libp2p.Option{
 		libp2p.ListenAddrs(muAddr),
-		libp2p.EnableRelay(circuit.OptHop),
+		// libp2p.EnableRelay(circuit.OptHop),
 	}
 
 	if cfg.IsNat {
@@ -204,7 +205,7 @@ func genHostOption(ctx *netCtx.NetCtx) ([]libp2p.Option, error) {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.Security(secIO.ID, secIO.New))
+		opts = append(opts, libp2p.Security(noise.ID, noise.New))
 	}
 
 	return opts, nil
