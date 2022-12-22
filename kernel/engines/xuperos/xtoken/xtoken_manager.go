@@ -62,7 +62,8 @@ func NewManager(ctx *Context) (*Manager, error) {
 		CheckVote:          x.CheckVote,
 		QueryProposal:      x.QueryProposal,
 		QueryProposalVotes: x.QueryProposalVotes,
-		QueryTopic:         x.QueryTopic,
+		StopVote:           x.StopVote,
+		// QueryTopic:         x.QueryTopic,
 
 		// Admins
 		AddAdmins:   x.AddAdmins,

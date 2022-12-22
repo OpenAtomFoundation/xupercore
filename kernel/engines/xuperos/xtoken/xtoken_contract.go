@@ -3,6 +3,7 @@ package xtoken
 import (
 	"encoding/json"
 	"math/big"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -17,6 +18,8 @@ import (
 type Contract struct {
 	Admins map[string]bool  // 创世配置的或者节点配置文件写的，如果通过交易设置admin，此字段会作废。
 	Fees   map[string]int64 // 创世配置的或者节点配置文件写的，如果通过交易设置fee，此字段会作废。
+
+	proposalChecking sync.Map
 
 	contractCtx *Context
 }
@@ -175,6 +178,14 @@ func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient account balance transfer")
 	}
 
+	// 更新发起人所参与的提案
+	if err = x.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+	if err = x.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+
 	// 更新 from 地址余额
 	fromBal := big.NewInt(0).Sub(fromTotal, value)
 	err = x.saveAddressBalance(ctx, tokenName, from, fromBal)
@@ -246,6 +257,13 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 	usable := big.NewInt(0).Sub(fromBal, frozen)
 	if usable.Cmp(value) < 0 {
 		return nil, errors.New("from address insufficient usable balance")
+	}
+
+	if err = x.updateAddressVotingProposal(ctx, tokenName, from); err != nil {
+		return nil, err
+	}
+	if err = x.updateVotingProposalByProposal(ctx, tokenName, from); err != nil {
+		return nil, err
 	}
 
 	// 4、更新from账户和to账户的余额
@@ -452,6 +470,13 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 	usable := big.NewInt(0).Sub(bal, frozen)
 	if usable.Cmp(burn) < 0 {
 		return nil, errors.New("insufficient usalbe balance to burn")
+	}
+
+	if err = x.updateAddressVotingProposal(ctx, token.Name, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+	if err = x.updateVotingProposalByProposal(ctx, token.Name, ctx.Initiator()); err != nil {
+		return nil, err
 	}
 
 	// 更新账户余额
@@ -670,6 +695,7 @@ func (x *Contract) saveApproveData(ctx contract.KContext, token, address string,
 	return ctx.Put(XTokenContract, key, value)
 }
 
+// 查询余额时，需要根据提案的状态过滤真正冻结的金额
 func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address string) (*big.Int, error) {
 	votingProposalMap, err := x.getAddressVotingProposal(ctx, tokenName, address)
 	if err != nil {
@@ -679,27 +705,35 @@ func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address st
 	// 此函数的复杂度On^2，实际上一个地址参与的不同类型下的不同提案且为voting状态的不会很多。
 	// 所以复杂度中的n为一个地址在一个token下，所有参与的提案topic下所有状态为voting的提案的个数。
 	// 并且实际业务场景中，大多数一个地址参与的不同类型的提案不会很多，且同时为voting状态的提案也不会很多。
-	for _, pid2amount := range votingProposalMap {
-		for _, amount := range pid2amount {
-			if amount.Cmp(max) > 0 {
+	for topic, pid2amount := range votingProposalMap {
+		for pidstr, amount := range pid2amount {
+			pid, _ := big.NewInt(0).SetString(pidstr, 10)
+			p, err := x.getProposal(ctx, tokenName, topic, pid)
+			if err != nil {
+				return nil, err
+			}
+			if p.Status == ProposalVoting && amount.Cmp(max) > 0 {
 				max = amount
 			}
 		}
 	}
 
 	// 查询是否有因为发起提案锁定的余额。
-	pid2amount, err := x.getVotingProposalByProposer(ctx, tokenName, address)
+	proposerProposalMap, err := x.getVotingProposalByProposer(ctx, tokenName, address)
 	if err != nil {
 		return nil, errors.Wrap(err, "getVotingProposalByProposer failed")
 	}
 
-	for _, amount := range pid2amount {
-		amountInt, ok := big.NewInt(0).SetString(amount, 10)
-		if !ok {
-			return nil, errors.New("invalid getVotingProposalByProposer value")
-		}
-		if amountInt.Cmp(max) > 0 {
-			max = amountInt
+	for topic, pid2amount := range proposerProposalMap {
+		for pidstr, amount := range pid2amount {
+			pid, _ := big.NewInt(0).SetString(pidstr, 10)
+			p, err := x.getProposal(ctx, tokenName, topic, pid)
+			if err != nil {
+				return nil, err
+			}
+			if p.Status == ProposalVoting && amount.Cmp(max) > 0 {
+				max = amount
+			}
 		}
 	}
 	return max, nil

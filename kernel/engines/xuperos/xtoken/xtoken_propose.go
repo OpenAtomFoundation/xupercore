@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
 
@@ -58,8 +59,15 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 		return nil, err
 	}
 
+	if err = x.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+	if err = x.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+
 	// 锁定发起人账户余额。
-	err = x.lockProposerToken(ctx, tokenName, ctx.Initiator(), pID)
+	err = x.lockProposerToken(ctx, tokenName, topic, ctx.Initiator(), pID)
 	if err != nil {
 		return nil, err
 	}
@@ -84,12 +92,12 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 }
 
 // 锁定提案者所有余额
-func (x *Contract) lockProposerToken(ctx contract.KContext, token, address string, pid *big.Int) error {
+func (x *Contract) lockProposerToken(ctx contract.KContext, token, topic, address string, pid *big.Int) error {
 	bal, err := x.balanceOf(ctx, token, address)
 	if err != nil {
 		return err
 	}
-	return x.setVotingProposalByProposer(ctx, token, address, pid, bal)
+	return x.addVotingProposalByProposer(ctx, token, topic, address, pid, bal)
 }
 
 func (x *Contract) checkVoteOption(option string) (int, error) {
@@ -164,6 +172,12 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 4、更新投票人的所有voting状态的提案数据
+	if err = x.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+	if err = x.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
 	if err := x.addAddressVotingProposal(ctx, tokenName, ctx.Initiator(), topic, pID, voteAmount); err != nil {
 		return nil, err
 	}
@@ -177,6 +191,7 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
+// 投票人数数量少于5k可以使用此接口
 func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) {
 	ok, err := x.checkPermission(ctx, ctx.Initiator())
 	if err != nil {
@@ -261,6 +276,54 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 	}, nil
 }
 
+// StopVote stop a proposal without returning vote result.
+func (x *Contract) StopVote(ctx contract.KContext) (*contract.Response, error) {
+	ok, err := x.checkPermission(ctx, ctx.Initiator())
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("check permission failed")
+	}
+
+	args := ctx.Args()
+	tokenName := string(args["tokenName"])
+	topic := string(args["topic"])
+	proposalID := string(args["proposalID"])
+
+	// 检查参数
+	if len(tokenName) == 0 || len(topic) == 0 || len(proposalID) == 0 {
+		return nil, errors.New("invalid param")
+	}
+	pID, ok := big.NewInt(0).SetString(proposalID, 10)
+	if !ok {
+		return nil, errors.New("invalid proposalID")
+	}
+
+	proposal, err := x.getProposal(ctx, tokenName, topic, pID)
+	if err != nil {
+		return nil, err
+	}
+	if proposal.Status != ProposalVoting {
+		return nil, errors.New("proposal closed")
+	}
+	// 更新提案状态为 stoped，之后不再支持投票。
+	proposal.Status = ProposalStopped
+
+	_, err = x.setProposalResult(ctx, proposal, tokenName, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	err = x.addFee(ctx, StopVote)
+	if err != nil {
+		return nil, err
+	}
+	return &contract.Response{
+		Status: Success,
+	}, nil
+}
+
 func (x *Contract) setProposalResult(ctx contract.KContext, proposal *Proposal, tokenName string, agreeCount, opposeCount, waiveCount *big.Int) (*CheckVoteResult, error) {
 	if err := x.updateProposal(ctx, tokenName, proposal); err != nil {
 		return nil, err
@@ -273,7 +336,7 @@ func (x *Contract) setProposalResult(ctx contract.KContext, proposal *Proposal, 
 	}
 
 	// 更新proposer下的进行中的提案数据
-	err := x.delVotingProposalByProposer(ctx, tokenName, proposal.Proposer, proposal.ID)
+	err := x.delVotingProposalByProposer(ctx, tokenName, proposal.Topic, proposal.Proposer, proposal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -334,6 +397,21 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 		return nil, errors.New("invalid proposalID")
 	}
 
+	p, err := x.getProposal(ctx, tokenName, topic, pID)
+	if err != nil {
+		return nil, err
+	}
+	t, err := x.getToken(ctx, tokenName)
+	if err != nil {
+		return nil, err
+	}
+	proposalEffectiveAmount := t.GenesisProposal.ProposalEffectiveAmount
+	if p.Status == ProposalStopped {
+		// 异步检票流程
+		return x.getOrCheckVoteAsync(ctx, tokenName, topic, pID, proposalEffectiveAmount)
+	}
+
+	// 此时说明还是使用 CheckVote 接口，因此都是同步的方式。
 	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
@@ -367,26 +445,136 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 	}, nil
 }
 
-func (x *Contract) QueryTopic(ctx contract.KContext) (*contract.Response, error) {
-	tokenName := string(ctx.Args()["tokenName"])
-	topic := string(ctx.Args()["topic"])
-	if len(tokenName) == 0 || len(topic) == 0 {
-		return nil, errors.New("tokenName and topic param can not be empty")
+func (x *Contract) getOrCheckVoteAsync(ctx contract.KContext, token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int) (*contract.Response, error) {
+	key := proposalCheckingKey(token, topic, pid.String())
+
+	dbkey := KeyOfProposalResult(token, topic, pid)
+	dbvalue, err := x.contractCtx.ChainCtx.State.GetLDB().Get([]byte(dbkey))
+	if err != nil && !kvdb.ErrNotFound(err) {
+		return nil, errors.Wrap(err, "query proposal vote result failed from db")
 	}
-	key := []byte(KeyOfTopicData(tokenName, topic))
-	value, err := ctx.Get(XTokenContract, key)
-	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
-		return nil, errors.Wrap(err, "get address voting topic failed")
+	if len(dbvalue) != 0 {
+		result := &CheckVoteResult{}
+		err := json.Unmarshal(dbvalue, result)
+		if err != nil {
+			return nil, err
+		}
+		return &contract.Response{
+			Status: Success,
+			Body:   dbvalue,
+		}, nil
 	}
 
-	err = x.addFee(ctx, QueryTopic)
+	// 如果正在检票，则返回错误，否则标记为检票中且开始检票工作。
+	if _, ok := x.proposalChecking.LoadOrStore(key, true); ok {
+		return nil, errors.New("checking, please try again later")
+	}
+	// 开始检票
+	rc := make(chan *CheckVoteResult, 1)
+	go x.calcVoteResult(token, topic, pid, proposalEffectiveAmount, rc)
+
+	select {
+	case result := <-rc:
+		v, _ := json.Marshal(result)
+		return &contract.Response{
+			Status: Success,
+			Body:   v,
+		}, nil
+
+	case <-time.After(time.Second * 2):
+		// 2s中还不能检票结束，则返回检票中。
+		return nil, errors.New("checking, please try again later")
+	}
+}
+
+func (x *Contract) calcVoteResult(token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int, resultChan chan *CheckVoteResult) {
+	key := proposalCheckingKey(token, topic, pid.String())
+	defer x.proposalChecking.Delete(key)
+	agreeVoteCount, err := x.getAgreeVoteAmountFromXM(token, topic, pid)
 	if err != nil {
+		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getAgreeVoteAmountFromXM error", err)
+		return
+	}
+	opposeVoteCount, err := x.getOpposeVoteAmountFromXM(token, topic, pid)
+	if err != nil {
+		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getOpposeVoteAmountFromXM error", err)
+		return
+	}
+	waiveVoteCount, err := x.getWaiveVoteAmountFromXM(token, topic, pid)
+	if err != nil {
+		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getWaiveVoteAmountFromXM error", err)
+		return
+	}
+	tmp := big.NewInt(0).Add(agreeVoteCount, opposeVoteCount)
+	totalVote := tmp.Add(tmp, waiveVoteCount)
+	status := 0
+	if totalVote.Cmp(proposalEffectiveAmount) < 0 {
+		status = ProposalInvalid
+	} else {
+		if agreeVoteCount.Cmp(opposeVoteCount) > 0 {
+			// 判断赞成票是否大于反对票，是则更新提案为成功，否则提案失败。
+			status = ProposalSuccess
+		} else {
+			status = ProposalFailure
+		}
+	}
+
+	result := &CheckVoteResult{
+		Status:      status,
+		AgreeCount:  agreeVoteCount,
+		OpposeCount: opposeVoteCount,
+		WaiveCount:  waiveVoteCount,
+	}
+	resultChan <- result // 此处不会阻塞
+	value, _ := json.Marshal(result)
+	// 写到数据库
+	db := x.contractCtx.ChainCtx.State.GetLDB()
+	err = db.Put([]byte(KeyOfProposalResult(token, topic, pid)), value)
+	if err != nil {
+		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult db put CheckVoteResult error", err)
+	}
+}
+
+// getAgreeVoteAmountFromXM 从状态机直接遍历赞成票
+func (x *Contract) getAgreeVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
+	return x.getVoteAmountFromXM(token, topic, pid, voteAgreeOption)
+}
+
+// getOpposeVoteAmountFromXM 从状态机直接遍历反对票
+func (x *Contract) getOpposeVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
+	return x.getVoteAmountFromXM(token, topic, pid, voteOpposeOption)
+}
+
+// getWaiveVoteAmountFromXM 从状态机直接遍历弃权票
+func (x *Contract) getWaiveVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
+	return x.getVoteAmountFromXM(token, topic, pid, voteWaiveOption)
+}
+
+func (x *Contract) getVoteAmountFromXM(token, topic string, proposalID *big.Int, option int) (*big.Int, error) {
+	start, _ := x.getVoteKeyPrefix(token, topic, option, proposalID)
+	reader := x.contractCtx.ChainCtx.State.CreateXMReader()
+	it, err := reader.Select(XTokenContract, []byte(start), []byte(start+"~"))
+	if err != nil {
+		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult reader select error", err)
 		return nil, err
 	}
-	return &contract.Response{
-		Status: Success,
-		Body:   value,
-	}, nil
+	defer it.Close()
+
+	voteCount := big.NewInt(0)
+	for it.Next() {
+		value := string(it.Value().PureData.GetValue())
+		voteAmount, ok := big.NewInt(0).SetString(value, 10)
+		if !ok {
+			// 此处不应有错误，如果有，说明投票时检查的有问题。
+			return nil, errors.New("vote value invalid")
+		}
+		voteCount = voteCount.Add(voteCount, voteAmount)
+	}
+	return voteCount, nil
+}
+
+func proposalCheckingKey(token, topic, pid string) string {
+	return token + topic + pid
 }
 
 func (x *Contract) setTopicData(ctx contract.KContext, tokenName, topic, data string) error {
@@ -407,6 +595,43 @@ func (x *Contract) getAddressVotingProposal(ctx contract.KContext, token, addres
 		}
 	}
 	return proposalMap, nil
+}
+
+// 查询 address 所有参与投票的提案，根据提案状态更新提案列表。
+func (x *Contract) updateAddressVotingProposal(ctx contract.KContext, token, address string) error {
+	votingProposalMap, err := x.getAddressVotingProposal(ctx, token, address)
+	if err != nil {
+		return err
+	}
+
+	// 同一个用户在同一个token下，同时参与的投票不会很多。
+	for topic, pid2amount := range votingProposalMap {
+		for pidstr := range pid2amount {
+			pid, _ := big.NewInt(0).SetString(pidstr, 10)
+			p, err := x.getProposal(ctx, token, topic, pid)
+			if err != nil {
+				return err
+			}
+			if p.Status != ProposalVoting {
+				delete(votingProposalMap[topic], pidstr)
+			}
+			if len(votingProposalMap[topic]) == 0 {
+				delete(votingProposalMap, topic)
+			}
+		}
+	}
+
+	value, err := json.Marshal(votingProposalMap)
+	if err != nil {
+		return err
+	}
+	key := []byte(KeyOfAddressVotingProposal(token, address))
+	err = ctx.Put(XTokenContract, key, value)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // 用户的voting状态的提案列表添加一个新的提案ID，用户投票时调用此函数。
@@ -654,14 +879,14 @@ func (x *Contract) getVoteKeyPrefix(token, topic string, option int, proposalID 
 }
 
 // 查询地址下发起的进行中的提案。
-func (x *Contract) getVotingProposalByProposer(ctx contract.KContext, token, address string) (map[string]string, error) {
+func (x *Contract) getVotingProposalByProposer(ctx contract.KContext, token, address string) (map[string]map[string]*big.Int, error) {
 	key := []byte(KeyOfProposer2Proposal(token, address))
 	value, err := ctx.Get(XTokenContract, []byte(key))
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
 		return nil, errors.Wrap(err, "get address proposal failed")
 	}
 
-	result := make(map[string]string, 0)
+	result := make(map[string]map[string]*big.Int, 0)
 	if len(value) != 0 {
 		err := json.Unmarshal(value, &result)
 		if err != nil {
@@ -674,41 +899,102 @@ func (x *Contract) getVotingProposalByProposer(ctx contract.KContext, token, add
 	return result, nil
 }
 
-func (x *Contract) setVotingProposalByProposer(ctx contract.KContext, token, address string, pid, amount *big.Int) error {
-	key := []byte(KeyOfProposer2Proposal(token, address))
-	pid2value := map[string]string{
-		pid.String(): amount.String(),
-	}
-	value, err := json.Marshal(pid2value)
+func (x *Contract) addVotingProposalByProposer(ctx contract.KContext, token, topic, address string, pid, amount *big.Int) error {
+	proposalMap, err := x.getVotingProposalByProposer(ctx, token, address)
 	if err != nil {
 		return err
 	}
+	if pidMap, ok := proposalMap[topic]; ok {
+		if pidMap == nil {
+			pidMap = map[string]*big.Int{pid.String(): amount}
+		} else {
+			if _, ok := pidMap[pid.String()]; ok {
+				return errors.New("address voting proposal ID already exist")
+			}
+			pidMap[pid.String()] = amount
+		}
+		proposalMap[topic] = pidMap
+	} else {
+		proposalMap[topic] = map[string]*big.Int{pid.String(): amount}
+	}
+
+	value, err := json.Marshal(proposalMap)
+	if err != nil {
+		return err
+	}
+	key := []byte(KeyOfProposer2Proposal(token, address))
 	return ctx.Put(XTokenContract, key, value)
 }
 
-func (x *Contract) delVotingProposalByProposer(ctx contract.KContext, token, address string, pid *big.Int) error {
-	key := []byte(KeyOfProposer2Proposal(token, address))
-	value, err := ctx.Get(XTokenContract, []byte(key))
-	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
-		return errors.Wrap(err, "get address proposal failed")
+func (x *Contract) delVotingProposalByProposer(ctx contract.KContext, token, topic, address string, pid *big.Int) error {
+	proposalMap, err := x.getVotingProposalByProposer(ctx, token, address)
+	if err != nil {
+		return err
+	}
+	if pidMap, ok := proposalMap[topic]; !ok {
+		return nil
+	} else {
+		if pidMap == nil {
+			// 不应有此错误，若有说明投票或者检票时数据处理有问题。
+			return errors.New("address voting topic pidMap empty when delete proposal by ID")
+		}
+		if _, ok := pidMap[pid.String()]; !ok {
+			// 不应有此错误，若有说明投票或者检票时数据处理有问题。
+			return errors.New("address voting amount in pidMap empty when delete proposal by ID")
+		}
+		delete(pidMap, pid.String())
+		if len(pidMap) == 0 {
+			delete(proposalMap, topic)
+		} else {
+			proposalMap[topic] = pidMap
+		}
 	}
 
-	result := make(map[string]string, 0)
-	if len(value) != 0 {
-		err := json.Unmarshal(value, &result)
-		if err != nil {
-			return err
-		}
-		_, ok := result[pid.String()]
-		if ok {
-			delete(result, pid.String())
-			key := []byte(KeyOfProposer2Proposal(token, address))
-			value, err := json.Marshal(result)
+	value, err := json.Marshal(proposalMap)
+	if err != nil {
+		return err
+	}
+	key := []byte(KeyOfProposer2Proposal(token, address))
+	err = ctx.Put(XTokenContract, key, value)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// 更新 address 下所有发起的进行中的提案。
+func (x *Contract) updateVotingProposalByProposal(ctx contract.KContext, token, address string) error {
+	votingProposalMap, err := x.getVotingProposalByProposer(ctx, token, address)
+	if err != nil {
+		return err
+	}
+
+	// 同一个用户在同一个token下，同时参与的投票不会很多。
+	for topic, pid2amount := range votingProposalMap {
+		for pidstr := range pid2amount {
+			pid, _ := big.NewInt(0).SetString(pidstr, 10)
+			p, err := x.getProposal(ctx, token, topic, pid)
 			if err != nil {
 				return err
 			}
-			return ctx.Put(XTokenContract, key, value)
+			if p.Status != ProposalVoting {
+				delete(votingProposalMap[topic], pidstr)
+			}
+			if len(votingProposalMap[topic]) == 0 {
+				delete(votingProposalMap, topic)
+			}
 		}
 	}
+
+	value, err := json.Marshal(votingProposalMap)
+	if err != nil {
+		return err
+	}
+	key := []byte(KeyOfProposer2Proposal(token, address))
+	err = ctx.Put(XTokenContract, key, value)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
