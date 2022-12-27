@@ -85,4 +85,3 @@ message ContractStatus {
     int64 timestamp = 5;
     string runtime = 6;
 }
-

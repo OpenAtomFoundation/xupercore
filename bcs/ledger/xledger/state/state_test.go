@@ -252,7 +252,7 @@ func TestStateWorkWithLedger(t *testing.T) {
         , "maxblocksize" : "128"
         , "period" : "5000"
         , "award" : "1000"
-		} 
+		}
     `))
 	if err != nil {
 		t.Fatal(err)
@@ -499,7 +499,7 @@ func TestFrozenHeight(t *testing.T) {
         , "maxblocksize" : "128"
         , "period" : "5000"
         , "award" : "1000"
-		} 
+		}
     `))
 	if err != nil {
 		t.Fatal(err)
@@ -617,7 +617,7 @@ func TestGetSnapShotWithBlock(t *testing.T) {
         , "maxblocksize" : "128"
         , "period" : "5000"
         , "award" : "1000"
-		} 
+		}
     `))
 	if err != nil {
 		t.Fatal(err)

@@ -39,5 +39,3 @@ message Proposal {
     ProposalStatus status = 6;
     string proposer = 7;
 }
-
-

@@ -40,5 +40,4 @@ service Syscall {
 
   // Send Event
   rpc EmitEvent(xchain.contract.sdk.EmitEventRequest) returns (xchain.contract.sdk.EmitEventResponse);
-} 
-
+}

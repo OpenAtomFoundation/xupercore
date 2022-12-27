@@ -31,7 +31,7 @@ function buildpkg() {
         version=`git rev-parse --abbrev-ref HEAD`
         commitId=`git rev-parse --short HEAD`
     fi
-    
+
     # build
     if [ ! -d "$OUTDIR/bin" ]; then
         mkdir "$OUTDIR/bin"

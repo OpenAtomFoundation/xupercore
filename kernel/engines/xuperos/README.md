@@ -103,5 +103,3 @@ type UtxoReader interface {
 }
 
 ```
-
-

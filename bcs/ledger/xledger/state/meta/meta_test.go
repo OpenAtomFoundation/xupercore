@@ -102,7 +102,7 @@ func TestMetaGetFunc(t *testing.T) {
         , "maxblocksize" : "128"
         , "period" : "5000"
         , "award" : "1000"
-		} 
+		}
     `))
 	if err != nil {
 		t.Fatal(err)

@@ -113,7 +113,7 @@ function replace() {
     done
 
     sed -i "s/github.com\/xuperchain\/xchain/github.com\/$GITREPO\/$NEWCHAINNAME/g" ./go.mod
-    sed -i "s/rootChain: xuper/rootChain: $NEWCHAINNAME/g" ./conf/engine.yaml 
+    sed -i "s/rootChain: xuper/rootChain: $NEWCHAINNAME/g" ./conf/engine.yaml
     sed -i "s/DefChainName = \"xuper\"/DefChainName = \"$NEWCHAINNAME\"/g" ./common/def/def.go
 
     cd "$HOMEDIR"
@@ -129,7 +129,7 @@ replace
 # move to output dir
 coderepodir="$OUTPUTDIR/github.com/$GITREPO/$NEWCHAINNAME/"
 if [ -d "$coderepodir" ]; then
-    echo "output dir has exist,auto gen failed.outdir:$coderepodir"   
+    echo "output dir has exist,auto gen failed.outdir:$coderepodir"
     exit 1
 fi
 mkdir -p "$OUTPUTDIR/github.com/$GITREPO/"

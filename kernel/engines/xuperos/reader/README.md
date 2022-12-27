@@ -18,7 +18,7 @@
  GetSystemStatus(ctx context.Context, in *pb.CommonIn) (*pb.SystemsStatusReply, error) {
  GetNetURL(ctx context.Context, in *pb.CommonIn) (*pb.RawUrl, error) {
 
- // 账本读组件提供 
+ // 账本读组件提供
  QueryTx(ctx context.Context, in *pb.TxStatus) (*pb.TxStatus, error) {
  GetBlock(ctx context.Context, in *pb.BlockID) (*pb.Block, error) {
  GetBlockByHeight(ctx context.Context, in *pb.BlockHeight) (*pb.Block, error) {

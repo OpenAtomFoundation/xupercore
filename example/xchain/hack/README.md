@@ -50,4 +50,3 @@ https://github.com/xuperchain/xupercore
 如果你遇到问题或需要新功能，欢迎到xupercore创建issue。
 
 如果你可以解决某个issue, 欢迎发送PR。
-

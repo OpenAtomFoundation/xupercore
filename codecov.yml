@@ -7,7 +7,7 @@ coverage:
       default:
         target: 45%
         threshold: 0%
-        branches: 
+        branches:
           - master
         if_ci_failed: error
 
@@ -22,6 +22,5 @@ parsers:
 comment:
   behavior: new
   require_changes: false
-  branches:               
+  branches:
     - "master"
-
