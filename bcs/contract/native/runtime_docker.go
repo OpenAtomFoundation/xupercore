@@ -60,7 +60,8 @@ func (d *DockerProcess) Stop(timeout time.Duration) error {
 		return err
 	}
 	d.Info("stop container success", "id", d.id)
-	client.WaitContainer(d.id)
+	// TODO: deal with error
+	_, _ = client.WaitContainer(d.id)
 	d.Info("wait container success", "id", d.id)
 	return nil
 }

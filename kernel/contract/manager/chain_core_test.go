@@ -50,7 +50,7 @@ func TestBridgeFeatures(t *testing.T) {
 			Driver: "native",
 		},
 		LogDriver: &mock.MockLogger{
-			logger,
+			Logger: logger,
 		},
 	}
 	buffer := bytes.NewBuffer([]byte{})
@@ -135,7 +135,7 @@ func TestContractCall(t *testing.T) {
 			Driver: "native",
 		},
 		LogDriver: &mock.MockLogger{
-			logger,
+			Logger: logger,
 		},
 	}
 	buffer := bytes.NewBuffer([]byte{})
@@ -152,6 +152,9 @@ func TestContractCall(t *testing.T) {
 	_, err = th.Deploy("native", "go", mock.FeaturesContractName, bin, map[string][]byte{
 		"creator": []byte("xchain"),
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	_, err = th.Deploy("native", "go", callerContractName, bin, map[string][]byte{})
 	if err != nil {

@@ -5,7 +5,7 @@ package pb
 
 import (
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
+	proto "github.com/golang/protobuf/proto"  //nolint:staticcheck
 	math "math"
 )
 

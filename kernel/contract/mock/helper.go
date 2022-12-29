@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"
@@ -74,7 +74,8 @@ func (t *TestHelper) UTXOState() *contract.UTXORWSet {
 }
 
 func (t *TestHelper) initAccount() {
-	t.state.Put(utils.GetAccountBucket(), []byte(ContractAccount), &ledger.VersionedData{
+	// no error expected here
+	_ = t.state.Put(utils.GetAccountBucket(), []byte(ContractAccount), &ledger.VersionedData{
 		RefTxid:  []byte("txid"),
 		PureData: nil,
 	})
@@ -137,7 +138,7 @@ func (t *TestHelper) Deploy(module, lang, contractName string, bin []byte, args 
 		return nil, err
 	}
 
-	ctx.Release()
+	_ = ctx.Release() // error ignored
 	t.Commit(state)
 	return resp, nil
 }
@@ -166,7 +167,7 @@ func (t *TestHelper) Upgrade(contractName string, bin []byte) error {
 		"contract_name": []byte(contractName),
 		"contract_code": bin,
 	})
-	ctx.Release()
+	_ = ctx.Release() // error ignored
 	t.Commit(state)
 	return err
 }
@@ -191,7 +192,10 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 	if err != nil {
 		return nil, err
 	}
-	defer ctx.Release()
+	defer func() {
+		// error ignored
+		_ = ctx.Release()
+	}()
 
 	resp, err := ctx.Invoke(method, args)
 	if err != nil {
@@ -206,9 +210,11 @@ func (t *TestHelper) Invoke(module, contractName, method string, args map[string
 func (t *TestHelper) Commit(state contract.StateSandbox) {
 	rwset := state.RWSet()
 	txbuf := make([]byte, 32)
-	rand.Read(txbuf)
+	// no error expected here
+	_, _ = rand.Read(txbuf)
 	for i, w := range rwset.WSet {
-		t.state.Put(w.Bucket, w.Key, &ledger.VersionedData{
+		// no error expected here
+		_ = t.state.Put(w.Bucket, w.Key, &ledger.VersionedData{
 			RefTxid:   txbuf,
 			RefOffset: int32(i),
 			PureData: &ledger.PureData{
@@ -221,5 +227,6 @@ func (t *TestHelper) Commit(state contract.StateSandbox) {
 }
 
 func (t *TestHelper) Close() {
-	os.RemoveAll(t.basedir)
+	// no error expected here
+	_ = os.RemoveAll(t.basedir)
 }

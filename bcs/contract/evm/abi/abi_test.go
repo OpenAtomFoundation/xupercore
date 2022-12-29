@@ -29,6 +29,9 @@ func TestNewAbi(t *testing.T) {
 	fmt.Printf("%v\n", input1)
 
 	enc2, err := LoadFile(abiFile)
+	if err != nil {
+		t.Error(err)
+	}
 	input2, err := enc2.Encode(method, args)
 	if err != nil {
 		t.Error(err)

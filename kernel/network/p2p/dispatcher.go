@@ -133,7 +133,7 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 	}
 
 	var wg sync.WaitGroup
-	for sub, _ := range d.mc[msg.GetHeader().GetType()] {
+	for sub := range d.mc[msg.GetHeader().GetType()] {
 		if !sub.Match(msg) {
 			continue
 		}
@@ -143,7 +143,8 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 		go func(sub Subscriber) {
 			defer wg.Done()
 
-			sub.HandleMessage(ctx, msg, stream)
+			// TODO: deal with error
+			_ = sub.HandleMessage(ctx, msg, stream)
 			<-d.parallel
 		}(sub)
 	}

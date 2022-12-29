@@ -152,12 +152,16 @@ func TestBasicFunc(t *testing.T) {
 		t.Fatal(err)
 	}
 	balance, err := utxoHandle.GetBalance(BobAddress)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("get balance before add：", balance.String())
 	utxoHandle.AddBalance([]byte(BobAddress), big.NewInt(10000000))
 	balance, err = utxoHandle.GetBalance(BobAddress)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Log("get balance", balance.String())
+	t.Log("get balance after add: ", balance.String())
 
 	tx1 := &pb.Transaction{}
 	tx1.Nonce = "nonce"
@@ -193,7 +197,7 @@ func TestBasicFunc(t *testing.T) {
 	if err != nil {
 		t.Log(err)
 	}
-	txInputs, _, utxoTotal, err = utxoHandle.SelectUtxosBySize(BobAddress, true, false)
+	_, _, _, err = utxoHandle.SelectUtxosBySize(BobAddress, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +208,7 @@ func TestBasicFunc(t *testing.T) {
 	total = utxoHandle.GetTotal()
 	t.Log("total", total.String())
 
-	txInputs, _, utxoTotal, err = utxoHandle.SelectUtxosBySize(BobAddress, false, false)
+	_, _, _, err = utxoHandle.SelectUtxosBySize(BobAddress, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -62,7 +62,7 @@ func GetCompact(number *big.Int) (uint32, bool) {
 func SetCompact(nCompact uint32) (*big.Int, bool, bool) {
 	nSize := nCompact >> 24
 	nWord := new(big.Int)
-	u := new(big.Int)
+	var u *big.Int
 	nCompactInt := big.NewInt(int64(nCompact))
 	// 0x00800000是一个符号位，故nWord仅为后23位
 	lowBits := big.NewInt(0x007fffff)
@@ -99,14 +99,14 @@ func unmarshalPowConfig(input []byte) (*PoWConfig, error) {
 		"defaultTarget": 0,
 		"maxTarget":     0,
 	}
-	for k, _ := range int32Map {
+	for k := range int32Map {
 		value, err := strconv.ParseInt(consCfg[k].(string), 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("marshal consensus config failed key %s set error", k)
 		}
 		int32Map[k] = int32(value)
 	}
-	for k, _ := range uint32Map {
+	for k := range uint32Map {
 		value, err := strconv.ParseInt(consCfg[k].(string), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("marshal consensus config failed key %s set error", k)

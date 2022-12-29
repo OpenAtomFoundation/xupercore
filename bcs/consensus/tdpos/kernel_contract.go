@@ -364,7 +364,7 @@ func (tp *tdposConsensus) runGetTdposInfos(contractCtx contract.KContext) (*cont
 
 	// vote信息
 	voteMap := make(map[string]voteValue)
-	for candidate, _ := range nominateValue {
+	for candidate := range nominateValue {
 		// 读取投票存储
 		voteKey := fmt.Sprintf("%s_%d_%s%s", tp.status.Name, tp.status.Version, voteKeyPrefix, candidate)
 		res, err = contractCtx.Get(tp.election.bindContractBucket, []byte(voteKey))

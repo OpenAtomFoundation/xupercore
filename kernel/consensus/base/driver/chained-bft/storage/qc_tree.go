@@ -260,7 +260,8 @@ func (t *QCPendingTree) UpdateQcStatus(node *ProposalNode) error {
 	if parent.In.GetProposalView() < t.highQC.In.GetProposalView() {
 		return nil
 	}
-	t.updateQCs(parent)
+	// TODO: deal with error
+	_ = t.updateQCs(parent)
 	return nil
 }
 
@@ -278,7 +279,8 @@ func (t *QCPendingTree) UpdateHighQC(inProposalId []byte) {
 	if node.In.GetProposalView() < t.highQC.In.GetProposalView() {
 		return
 	}
-	t.updateQCs(node)
+	// TOOD: deal with error
+	_ = t.updateQCs(node)
 }
 
 // enforceUpdateHighQC 强制更改HighQC指针，用于错误时回滚，注意: 本实现没有timeoutQC因此需要此方法
@@ -337,22 +339,24 @@ func (t *QCPendingTree) insert(node *ProposalNode) error {
 	parent := dfsQuery(t.root, node.In.GetParentProposalId())
 	if parent != nil {
 		parent.Sons = append(parent.Sons, node)
-		t.adoptOrphans(node)
+		if err := t.adoptOrphans(node); err != nil {
+			return err
+		}
 		return nil
 	}
 	// 作为孤儿节点加入
-	t.insertOrphan(node)
-	return nil
+	return t.insertOrphan(node)
 }
 
 // insertOrphan为向孤儿数组插入孤儿节点的逻辑
 // 若该node的父节点不存在在slice中，则查看该node的是否为slice中节点的父节点，若是则代替该节点反转挂上，若否继续查看
 // 若该node的父节点存在在sli中，则直接挂在父节点下，如否则在sli中追加节点
 // [A1,   B1,  C1,  D1 ...]
-//  ｜    ||
-//  A2  B2 B2'
-//  |
-//  A3
+//
+//	｜    ||
+//	A2  B2 B2'
+//	|
+//	A3
 func (t *QCPendingTree) insertOrphan(node *ProposalNode) error {
 	if _, ok := t.orphanMap[utils.F(node.In.GetProposalId())]; ok {
 		return nil // 重复退出

@@ -62,11 +62,13 @@ func newHXVMCreator(creatorConfig *bridge.InstanceCreatorConfig) (bridge.Instanc
 }
 
 func (creator *HXVMCreator) tierUp1(ctx *bridge.Context, cp bridge.ContractCodeProvider) {
-	creator.tier1Creator.CreateInstance(ctx, cp)
+	// TODO: deal with error
+	_, _ = creator.tier1Creator.CreateInstance(ctx, cp)
 }
 
 func (creator *HXVMCreator) tierUp2(ctx *bridge.Context, cp bridge.ContractCodeProvider) {
-	creator.tier2Creator.CreateInstance(ctx, cp)
+	// TODO: deal with error
+	_, _ = creator.tier2Creator.CreateInstance(ctx, cp)
 }
 
 func (creator *HXVMCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeProvider) (bridge.Instance, error) {

@@ -120,7 +120,7 @@ func (i *evmInstance) Exec() error {
 
 	// 如果客户端已经将参数进行了 abi 编码，那么此处不需要再进行编码，而且返回的结果也不需要 abi 解码。否则此处需要将参数 abi 编码同时将结果 abi 解码。
 	needDecodeResp := false
-	input := []byte{}
+	var input []byte
 	jsonEncoded, ok := i.ctx.Args[evmParamJSONEncoded]
 	if !ok || string(jsonEncoded) != "true" {
 		input = i.ctx.Args[evmInput]
@@ -132,7 +132,6 @@ func (i *evmInstance) Exec() error {
 	}
 
 	value := big.NewInt(0)
-	ok = false
 	if i.ctx.TransferAmount != "" {
 		value, ok = new(big.Int).SetString(i.ctx.TransferAmount, 0)
 		if !ok {
@@ -258,7 +257,7 @@ func (i *evmInstance) deployContract() error {
 
 	gas := uint64(contract.MaxLimits.Cpu)
 
-	input := []byte{}
+	var input []byte
 	jsonEncoded, ok := i.ctx.Args[evmParamJSONEncoded]
 	if !ok || string(jsonEncoded) != "true" {
 		// 客户端传来的参数是已经 abi 编码的。

@@ -22,6 +22,7 @@ import (
 )
 
 func init() {
+	// ignore error, it will panic if error exist
 	consensus.Register("tdpos", NewTdposConsensus)
 }
 
@@ -101,7 +102,7 @@ func NewTdposConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consens
 	tdpos.kMethod = tdposKMethods
 
 	// 凡属于共识升级的逻辑，新建的Tdpos实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
-	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
+	timeKey := time.Since(time.Unix(0, 0)).Milliseconds() / tdpos.config.Period
 	tdpos.isProduce[timeKey] = true
 	return tdpos
 }
@@ -365,7 +366,7 @@ func (tp *tdposConsensus) initBFT() error {
 // 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 func (tp *tdposConsensus) Stop() error {
 	// 注销合约方法
-	for method, _ := range tp.kMethod {
+	for method := range tp.kMethod {
 		// 若有历史句柄，删除老句柄
 		tp.contract.GetKernRegistry().UnregisterKernMethod(tp.election.bindContractBucket, method)
 	}

@@ -44,8 +44,6 @@ type Stream struct {
 	rc       ggio.ReadCloser
 
 	valid bool
-
-	grpcPort string
 }
 
 // NewStream create Stream instance
@@ -100,7 +98,8 @@ func (s *Stream) reset() {
 func (s *Stream) resetLockFree() {
 	if s.Valid() {
 		if s.stream != nil {
-			s.stream.Reset()
+			// TODO: deal with error
+			_ = s.stream.Reset()
 		}
 		s.stream = nil
 		s.valid = false
@@ -122,7 +121,9 @@ func (s *Stream) Send(msg *pb.XuperMessage) error {
 	}
 
 	deadline := time.Now().Add(time.Duration(s.config.Timeout) * time.Second)
-	s.stream.SetWriteDeadline(deadline)
+	if err := s.stream.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
 	msg.Header.From = s.srv.PeerID()
 	if err := s.wc.WriteMsg(msg); err != nil {
 		s.resetLockFree()
@@ -152,7 +153,6 @@ func (s *Stream) Recv() {
 			s.reset()
 			return
 		}
-		msg = nil
 	}
 }
 
@@ -184,7 +184,10 @@ func (s *Stream) SendMessageWithResponse(ctx xctx.XContext,
 		s.log.Error("sendMessageWithResponse register error", "error", err)
 		return nil, err
 	}
-	defer s.srv.dispatcher.UnRegister(sub)
+	defer func() {
+		// TODO: deal with error
+		_ = s.srv.dispatcher.UnRegister(sub)
+	}()
 
 	errCh := make(chan error, 1)
 	respCh := make(chan *pb.XuperMessage, 1)

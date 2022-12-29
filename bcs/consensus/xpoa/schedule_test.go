@@ -79,10 +79,10 @@ func TestGetValidates(t *testing.T) {
 		return
 	}
 	l, _ := s.ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
-	l.Put(kmock.NewBlock(4))
-	l.Put(kmock.NewBlock(5))
-	l.Put(kmock.NewBlock(6))
+	_ = l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(4))
+	_ = l.Put(kmock.NewBlock(5))
+	_ = l.Put(kmock.NewBlock(6))
 	// 2. 整理Block的共识存储
 	l.SetConsensusStorage(1, SetXpoaStorage(1, nil))
 	l.SetConsensusStorage(2, SetXpoaStorage(1, nil))
@@ -92,6 +92,9 @@ func TestGetValidates(t *testing.T) {
 	l.SetConsensusStorage(6, SetXpoaStorage(3, nil))
 	l.SetSnapshot(poaBucket, []byte(fmt.Sprintf("0_%s", validateKeys)), ValidateKey1())
 	v, err := s.getValidates(6)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !common.AddressEqual(v, newValidators) {
 		t.Error("AddressEqual error1.", "v", v)
 	}

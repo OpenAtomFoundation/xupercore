@@ -115,7 +115,7 @@ func (x *xpoaConsensus) isAuthAddress(validators []string, aks map[string]float6
 		return weight >= threshold
 	}
 	// 1. 判断aks中的地址是否是当前集合地址
-	for addr, _ := range aks {
+	for addr := range aks {
 		if !Find(addr, validators) {
 			return false
 		}

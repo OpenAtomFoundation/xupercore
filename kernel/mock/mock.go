@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"fmt"
 	"path/filepath"
 
 	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
@@ -26,11 +27,9 @@ func NewEnvConfForTest(paths ...string) (*xconf.EnvConf, error) {
 	return econf, nil
 }
 
-func InitLogForTest() error {
+func InitLogForTest() {
 	_, err := NewEnvConfForTest()
 	if err != nil {
-		return err
+		fmt.Printf("InitLogForTest() error: %s", err)
 	}
-
-	return nil
 }

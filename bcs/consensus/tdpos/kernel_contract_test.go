@@ -80,10 +80,10 @@ func TestRunNominateCandidate(t *testing.T) {
 	}
 	// 1. 构造term存储
 	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
-	l.Put(kmock.NewBlock(4))
-	l.Put(kmock.NewBlock(5))
-	l.Put(kmock.NewBlock(6))
+	_ = l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(4))
+	_ = l.Put(kmock.NewBlock(5))
+	_ = l.Put(kmock.NewBlock(6))
 	// 2. 整理Block的共识存储
 	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
 	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
@@ -116,10 +116,10 @@ func TestRunRevokeCandidate(t *testing.T) {
 	}
 	// 1. 构造term存储
 	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
-	l.Put(kmock.NewBlock(4))
-	l.Put(kmock.NewBlock(5))
-	l.Put(kmock.NewBlock(6))
+	_ = l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(4))
+	_ = l.Put(kmock.NewBlock(5))
+	_ = l.Put(kmock.NewBlock(6))
 	// 2. 整理Block的共识存储
 	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
 	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
@@ -137,7 +137,9 @@ func TestRunRevokeCandidate(t *testing.T) {
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewRevokeNominateArgs(), NewM())
-	tdpos.runRevokeCandidate(fakeCtx)
+	if _, err := tdpos.runRevokeCandidate(fakeCtx); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestRunVote(t *testing.T) {
@@ -148,10 +150,10 @@ func TestRunVote(t *testing.T) {
 	}
 	// 1. 构造term存储
 	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
-	l.Put(kmock.NewBlock(4))
-	l.Put(kmock.NewBlock(5))
-	l.Put(kmock.NewBlock(6))
+	_ = l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(4))
+	_ = l.Put(kmock.NewBlock(5))
+	_ = l.Put(kmock.NewBlock(6))
 	// 2. 整理Block的共识存储
 	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
 	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
@@ -169,7 +171,10 @@ func TestRunVote(t *testing.T) {
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewVoteArgs(), NewM())
-	tdpos.runVote(fakeCtx)
+	_, err = tdpos.runVote(fakeCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 func TestRunRevokeVote(t *testing.T) {
 	cCtx, err := prepare(getTdposConsensusConf())
@@ -178,11 +183,11 @@ func TestRunRevokeVote(t *testing.T) {
 		return
 	}
 	// 1. 构造term存储
-	l, _ := cCtx.Ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
-	l.Put(kmock.NewBlock(4))
-	l.Put(kmock.NewBlock(5))
-	l.Put(kmock.NewBlock(6))
+	l := cCtx.Ledger.(*kmock.FakeLedger)
+	_ = l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(4))
+	_ = l.Put(kmock.NewBlock(5))
+	_ = l.Put(kmock.NewBlock(6))
 	// 2. 整理Block的共识存储
 	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
 	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
@@ -200,5 +205,7 @@ func TestRunRevokeVote(t *testing.T) {
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
 	tdpos, _ := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
-	tdpos.runRevokeVote(fakeCtx)
+	if _, err := tdpos.runRevokeVote(fakeCtx); err != nil {
+		t.Fatal(err)
+	}
 }

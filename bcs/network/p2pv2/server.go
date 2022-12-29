@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 	ipfsAddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
 	circuit "github.com/libp2p/go-libp2p-circuit"

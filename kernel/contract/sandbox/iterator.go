@@ -170,7 +170,8 @@ func (r *rsetIterator) Next() bool {
 		return false
 	}
 	// fill read set
-	r.mc.Get(r.bucket, r.XMIterator.Key())
+	// TODO: deal with get result
+	_, _ = r.mc.Get(r.bucket, r.XMIterator.Key())
 	return true
 }
 

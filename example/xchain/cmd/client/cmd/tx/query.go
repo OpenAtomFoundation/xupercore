@@ -39,13 +39,13 @@ func GetQueryTxCmd() *QueryTxCmd {
 func (t *QueryTxCmd) printTxInfo() error {
 	xcli, err := client.NewXchainClient()
 	if err != nil {
-		fmt.Sprintf("grpc dial failed.err:%v\n", err)
+		fmt.Printf("grpc dial failed.err:%v\n", err)
 		return fmt.Errorf("grpc dial failed")
 	}
 
 	resp, err := xcli.QueryTx(t.TxId)
 	if err != nil {
-		fmt.Sprintf("query tx failed.err:%v", err)
+		fmt.Printf("query tx failed.err:%v", err)
 		return fmt.Errorf("query tx failed")
 	}
 
@@ -62,7 +62,7 @@ func (t *QueryTxCmd) printTxInfo() error {
 
 	output, err := json.MarshalIndent(txInfo, "", "  ")
 	if err != nil {
-		fmt.Sprintf("json marshal tx failed.err:%v", err)
+		fmt.Printf("json marshal tx failed.err:%v", err)
 		return fmt.Errorf("json marshal tx failed")
 	}
 

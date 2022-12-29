@@ -26,7 +26,6 @@ type RpcServMG struct {
 	log       logs.Logger
 	rpcServ   *RpcServ
 	servHD    *grpc.Server
-	tlsServHD *grpc.Server
 	isInit    bool
 	exitOnce  *sync.Once
 }

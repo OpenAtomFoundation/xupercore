@@ -48,7 +48,8 @@ func processExists(pid int) bool {
 
 // Stop implements process interface
 func (h *HostProcess) Stop(timeout time.Duration) error {
-	h.cmd.Process.Signal(syscall.SIGTERM)
+	// TODO: deal with error
+	_ = h.cmd.Process.Signal(syscall.SIGTERM)
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if !processExists(h.cmd.Process.Pid) {
@@ -58,7 +59,9 @@ func (h *HostProcess) Stop(timeout time.Duration) error {
 	}
 	// force kill if timeout
 	if !time.Now().Before(deadline) {
-		h.cmd.Process.Kill()
+		if err := h.cmd.Process.Kill(); err != nil {
+			return err
+		}
 	}
 	h.Info("stop command success", "pid", h.cmd.Process.Pid)
 	return h.cmd.Wait()

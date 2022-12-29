@@ -16,10 +16,12 @@ func TestPaceMaker(t *testing.T) {
 			ProposalView: 1,
 		},
 	}
-	p.AdvanceView(qc)
+	_, err := p.AdvanceView(qc)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if qc.GetProposalView() != 1 {
-		t.Error("AdvanceView error.")
-		return
+		t.Fatal("AdvanceView error.")
 	}
 	if p.GetCurrentView() != 2 {
 		t.Error("GetCurrentView error.")

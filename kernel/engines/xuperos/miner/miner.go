@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 	"github.com/patrickmn/go-cache"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"

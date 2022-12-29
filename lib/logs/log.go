@@ -43,7 +43,9 @@ func InitLog(cfgFile, logDir string) {
 func OpenLog(lc *lconf.LogConf, logDir string) (LogDriver, error) {
 	infoFile := filepath.Join(logDir, lc.Filename+".log")
 	wfFile := filepath.Join(logDir, lc.Filename+".log.wf")
-	os.MkdirAll(logDir, os.ModePerm)
+	if err := os.MkdirAll(logDir, os.ModePerm); err != nil {
+		return nil, err
+	}
 
 	lfmt := log.LogfmtFormat()
 	switch lc.Fmt {

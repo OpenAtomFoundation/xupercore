@@ -25,7 +25,7 @@ import (
 	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/protos"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 )
 
 // ImmediateVerifyTx verify tx Immediately
@@ -76,7 +76,7 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 			t.log.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
 			return false, err
 		}
-		if bytes.Compare(tx.Txid, txid) != 0 {
+		if !bytes.Equal(tx.Txid, txid) {
 			t.log.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
 			return false, fmt.Errorf("Txid verify failed")
 		}
@@ -188,7 +188,7 @@ func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isR
 			t.log.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
 			return false, err
 		}
-		if bytes.Compare(tx.Txid, txid) != 0 {
+		if !bytes.Equal(tx.Txid, txid) {
 			t.log.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
 			return false, fmt.Errorf("Txid verify failed")
 		}
@@ -404,7 +404,7 @@ func (t *State) verifyContractOwnerPermission(contractName string, tx *pb.Transa
 		return false, err
 	}
 	pureData := versionData.GetPureData()
-	if pureData == nil || confirmed == false {
+	if pureData == nil || !confirmed {
 		return false, errors.New("pure data is nil or unconfirmed")
 	}
 	accountName := string(pureData.GetValue())
@@ -659,18 +659,21 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 
 		ctxResponse, ctxErr := ctx.Invoke(tmpReq.MethodName, tmpReq.Args)
 		if ctxErr != nil {
-			ctx.Release()
+			// TODO: deal with error
+			_ = ctx.Release()
 			t.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", tmpReq.GetContractName())
 			return false, ctxErr
 		}
 		// 判断合约调用的返回码
 		if ctxResponse.Status >= 400 && i < len(reservedRequests) {
-			ctx.Release()
+			// TODO: deal with error
+			_ = ctx.Release()
 			t.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", tmpReq.GetContractName())
 			return false, errors.New(ctxResponse.Message)
 		}
 
-		ctx.Release()
+		// TODO: deal with error
+		_ = ctx.Release()
 	}
 
 	err = sandBox.Flush()
@@ -716,10 +719,10 @@ func (t *State) verifyAutoTxRWSets(tx, autoTx *pb.Transaction) (bool, error) {
 		return false, err
 	}
 
-	if bytes.Compare(txRsetsBytes, autoRsetsBytes) != 0 {
+	if !bytes.Equal(txRsetsBytes, autoRsetsBytes) {
 		return false, fmt.Errorf("read set not equal")
 	}
-	if bytes.Compare(txWsetsBytes, autoWsetsBytes) != 0 {
+	if !bytes.Equal(txWsetsBytes, autoWsetsBytes) {
 		return false, fmt.Errorf("write set not equal")
 	}
 
@@ -923,30 +926,31 @@ func (t *State) verifyDAGTxs(blockHeight int64, txs []*pb.Transaction, isRootTx 
 		if tx == nil {
 			return errors.New("verifyTx error, tx is nil")
 		}
-		txid := string(tx.GetTxid())
-		if unconfirmToConfirm[txid] == false {
-			if t.verifyAutogenTxValid(tx) {
-				// 校验auto tx
-				if ok, err := t.ImmediateVerifyAutoTx(blockHeight, tx, isRootTx); !ok {
-					t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
-					return errors.New("dotx failed to ImmediateVerifyAutoTx error")
-				}
+		if unconfirmToConfirm[string(tx.GetTxid())] {
+			continue
+		}
+
+		if t.verifyAutogenTxValid(tx) {
+			// 校验auto tx
+			if ok, err := t.ImmediateVerifyAutoTx(blockHeight, tx, isRootTx); !ok {
+				t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+				return errors.New("dotx failed to ImmediateVerifyAutoTx error")
 			}
-			if !tx.Autogen && !tx.Coinbase {
-				// 校验用户交易
-				if ok, err := t.ImmediateVerifyTx(tx, isRootTx); !ok {
-					t.log.Warn("dotx failed to ImmediateVerifyTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
-					ok, isRelyOnMarkedTx, err := t.verifyMarked(tx)
-					if isRelyOnMarkedTx {
-						if !ok || err != nil {
-							t.log.Warn("tx verification failed because it is blocked tx", "err", err)
-						} else {
-							t.log.Trace("blocked tx verification succeed")
-						}
-						return err
+		}
+		if !tx.Autogen && !tx.Coinbase {
+			// 校验用户交易
+			if ok, err := t.ImmediateVerifyTx(tx, isRootTx); !ok {
+				t.log.Warn("dotx failed to ImmediateVerifyTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+				ok, isRelyOnMarkedTx, err := t.verifyMarked(tx)
+				if isRelyOnMarkedTx {
+					if !ok || err != nil {
+						t.log.Warn("tx verification failed because it is blocked tx", "err", err)
+					} else {
+						t.log.Trace("blocked tx verification succeed")
 					}
-					return errors.New("dotx failed to ImmediateVerifyTx error")
+					return err
 				}
+				return errors.New("dotx failed to ImmediateVerifyTx error")
 			}
 		}
 	}

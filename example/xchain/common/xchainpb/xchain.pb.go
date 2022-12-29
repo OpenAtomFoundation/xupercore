@@ -6,7 +6,7 @@ package xchainpb
 import (
 	context "context"
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
+	proto "github.com/golang/protobuf/proto"  //nolint:staticcheck
 	xldgpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	protos "github.com/xuperchain/xupercore/protos"
 	grpc "google.golang.org/grpc"

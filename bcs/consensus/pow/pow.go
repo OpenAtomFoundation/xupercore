@@ -219,7 +219,7 @@ func (pow *PoWConsensus) CheckMinerMatch(ctx xcontext.XContext, block context.Bl
 	}
 	// 跟address比较
 	chkResult, _ := pow.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
-	if chkResult == false {
+	if !chkResult {
 		ctx.GetLog().Warn("PoW::CheckMinerMatch::address is not match publickey", "miner", string(block.GetProposer()))
 		return false, err
 	}
@@ -245,7 +245,8 @@ func (pow *PoWConsensus) ProcessBeforeMiner(height, timestamp int64) ([]byte, []
 	}
 	bits, err := pow.refreshDifficulty(preBlock.GetBlockid(), tipHeight+1)
 	if err != nil {
-		pow.Stop()
+		// TODO: deal with error
+		 _ = pow.Stop()
 	}
 	pow.targetBits = bits
 	store := &PoWStorage{
@@ -409,10 +410,7 @@ func (pow *PoWConsensus) IsProofed(blockID []byte, targetBits uint32) bool {
 	// 原xuperchain逻辑
 	target := big.NewInt(1)
 	target.Lsh(target, uint(256-targetBits))
-	if hash.Cmp(target) == 1 {
-		return false
-	}
-	return true
+	return hash.Cmp(target) != 1
 }
 
 // mining 为带副作用的函数，将直接对block进行操作，更改其原始值
@@ -440,14 +438,16 @@ func (pow *PoWConsensus) mining(task *mineTask) {
 			return
 		}
 		if pow.IsProofed(bid, pow.targetBits) {
-			task.block.SetItem("blockid", bid)
+			// TODO: deal with error
+			_ = task.block.SetItem("blockid", bid)
 			// 签名重置
 			s, err := pow.Crypto.SignECDSA(pow.Address.PrivateKey, bid)
 			if err != nil {
 				task.doDone(BlockSignErr)
 				return
 			}
-			task.block.SetItem("sign", s)
+			// TODO: deal with error
+			_ = task.block.SetItem("sign", s)
 			task.doDone(nil)
 			return
 		}

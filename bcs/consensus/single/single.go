@@ -110,7 +110,7 @@ func (s *SingleConsensus) CheckMinerMatch(ctx xcontext.XContext, block cctx.Bloc
 		return false, err
 	}
 	chkResult, _ := s.ctx.Crypto.VerifyAddressUsingPublicKey(string(block.GetProposer()), k)
-	if chkResult == false {
+	if !chkResult {
 		ctx.GetLog().Warn("Single::CheckMinerMatch::address is not match publickey")
 		return false, err
 	}

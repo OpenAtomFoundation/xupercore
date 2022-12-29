@@ -125,7 +125,7 @@ func (t *xModSnapshot) genVerDataByTx(tx *pb.Transaction, offset int32) *kledger
 func (t *xModSnapshot) getPreOutExt(inputsExt []*protos.TxInputExt,
 	bucket string, key []byte) ([]byte, int32, error) {
 	for _, inExt := range inputsExt {
-		if inExt.Bucket == bucket && bytes.Compare(inExt.Key, key) == 0 {
+		if inExt.Bucket == bucket && bytes.Equal(inExt.Key, key) {
 			return inExt.RefTxid, inExt.RefOffset, nil
 		}
 	}

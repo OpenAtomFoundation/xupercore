@@ -35,20 +35,20 @@ func GetChainStatusCmd() *ChainStatusCmd {
 func (t *ChainStatusCmd) printChainStatus() error {
 	xcli, err := client.NewXchainClient()
 	if err != nil {
-		fmt.Sprintf("grpc dial failed.err:%v\n", err)
+		fmt.Printf("grpc dial failed.err:%v\n", err)
 		return fmt.Errorf("grpc dial failed")
 	}
 
 	resp, err := xcli.QueryChainStatus()
 	if err != nil {
-		fmt.Sprintf("query chain status failed.err:%v", err)
+		fmt.Printf("query chain status failed.err:%v", err)
 		return fmt.Errorf("query chain status failed")
 	}
 
 	outInfo := client.FromChainStatusPB(resp)
 	output, err := json.MarshalIndent(outInfo, "", "  ")
 	if err != nil {
-		fmt.Sprintf("json marshal chain status failed.err:%v", err)
+		fmt.Printf("json marshal chain status failed.err:%v", err)
 		return fmt.Errorf("json marshal chain status failed")
 	}
 

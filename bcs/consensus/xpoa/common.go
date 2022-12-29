@@ -12,7 +12,6 @@ var (
 	NotValidContract = errors.New("Cannot get valid res with contract.")
 	InvalidQC        = errors.New("QC struct is invalid.")
 	targetParamErr   = errors.New("Target paramters are invalid, please check them.")
-	tooLowHeight     = errors.New("The height should be higher than 3.")
 	aclErr           = errors.New("Xpoa needs valid acl account.")
 	scheduleErr      = errors.New("minerScheduling overflow")
 )

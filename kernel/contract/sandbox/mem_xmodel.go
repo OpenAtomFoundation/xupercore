@@ -18,7 +18,8 @@ type MemXModel struct {
 func XMReaderFromRWSet(rwset *contract.RWSet) ledger.XMReader {
 	m := NewMemXModel()
 	for _, r := range rwset.RSet {
-		m.Put(r.PureData.Bucket, r.PureData.Key, r)
+		// TODO: deal with error
+		_ = m.Put(r.PureData.Bucket, r.PureData.Key, r)
 	}
 	return m
 }

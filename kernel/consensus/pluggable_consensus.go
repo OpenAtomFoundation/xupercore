@@ -90,9 +90,13 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (PluggableConsensusInterface,
 			cCtx.XLog.Error("Pluggable Consensus::NewPluggableConsensus::make first consensus item error!", "error", err.Error())
 			return nil, err
 		}
-		pc.stepConsensus.put(genesisConsensus)
+		if err := pc.stepConsensus.put(genesisConsensus); err != nil {
+			return nil, err
+		}
 		// 启动实例
-		genesisConsensus.Start()
+		if err := genesisConsensus.Start(); err != nil {
+			return nil, err
+		}
 		cCtx.XLog.Debug("Pluggable Consensus::NewPluggableConsensus::create a instance for the first time.")
 		return pc, nil
 	}
@@ -108,14 +112,20 @@ func NewPluggableConsensus(cCtx cctx.ConsensusCtx) (PluggableConsensusInterface,
 		config := c[i]
 		oldConsensus, err := pc.makeConsensusItem(cCtx, config)
 		if err != nil {
-			cCtx.XLog.Warn("Pluggable Consensus::NewPluggableConsensus::make old consensus item error!", "error", err.Error())
+			cCtx.XLog.Warn("Pluggable Consensus::NewPluggableConsensus::make old consensus item error!",
+				"error", err.Error())
 		}
-		pc.stepConsensus.put(oldConsensus)
+		if err := pc.stepConsensus.put(oldConsensus); err != nil {
+			return nil, err
+		}
 		// 最近一次共识实例吊起
 		if i == len(c)-1 {
-			oldConsensus.Start()
+			if err := oldConsensus.Start(); err != nil {
+				return nil, err
+			}
 		}
-		cCtx.XLog.Debug("Pluggable Consensus::NewPluggableConsensus::create a instance with history reader.", "StepConsensus", pc.stepConsensus)
+		cCtx.XLog.Debug("Pluggable Consensus::NewPluggableConsensus::create a instance with history reader.",
+			"StepConsensus", pc.stepConsensus)
 	}
 
 	return pc, nil

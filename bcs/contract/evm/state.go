@@ -68,12 +68,12 @@ func (s *stateManager) GetStorage(address crypto.Address, key binary.Word256) ([
 
 // Updates the fields of updatedAccount by address, creating the account
 // if it does not exist
-func (s *stateManager) UpdateAccount(updatedAccount *acm.Account) error {
+func (s *stateManager) UpdateAccount(_ *acm.Account) error {
 	return nil
 }
 
 // Remove the account at address
-func (s *stateManager) RemoveAccount(address crypto.Address) error {
+func (s *stateManager) RemoveAccount(_ crypto.Address) error {
 	return nil
 }
 

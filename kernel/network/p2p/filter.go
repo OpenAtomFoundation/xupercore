@@ -6,8 +6,8 @@ type FilterStrategy string
 // supported filter strategies
 const (
 	DefaultStrategy           FilterStrategy = "DefaultStrategy"
-	BucketsStrategy                          = "BucketsStrategy"
-	NearestBucketStrategy                    = "NearestBucketStrategy"
-	BucketsWithFactorStrategy                = "BucketsWithFactorStrategy"
-	CorePeersStrategy                        = "CorePeersStrategy"
+	BucketsStrategy           FilterStrategy = "BucketsStrategy"
+	NearestBucketStrategy     FilterStrategy = "NearestBucketStrategy"
+	BucketsWithFactorStrategy FilterStrategy = "BucketsWithFactorStrategy"
+	CorePeersStrategy         FilterStrategy = "CorePeersStrategy"
 )

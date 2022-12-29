@@ -53,7 +53,10 @@ func (n *nativeCreator) startRpcServer(service *bridge.SyscallService) (string, 
 
 	port := listener.Addr().(*net.TCPAddr).Port
 
-	go rpcServer.Serve(listener)
+	go func() {
+		// ignore error
+		_ = rpcServer.Serve(listener)
+	}()
 	chainAddr := chainAddrHost
 	if n.config.VMConfig.(*contract.NativeConfig).Docker.Enable {
 		chainAddr = chainAddrDocker

@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+
 	pb "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 )
 

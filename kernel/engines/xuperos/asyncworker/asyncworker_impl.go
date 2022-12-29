@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/event"
@@ -140,12 +140,9 @@ func (aw *AsyncWorkerImpl) Start() (err error) {
 	}
 
 	go func() {
-		select {
-		case <-aw.close:
-			iter.Close()
-			aw.log.Warn("async task loop shut down.")
-			return
-		}
+		<-aw.close
+		iter.Close()
+		aw.log.Warn("async task loop shut down.")
 	}()
 
 	go func() {
@@ -162,10 +159,12 @@ func (aw *AsyncWorkerImpl) Start() (err error) {
 			}
 			// 当且仅当断点有效，且当前高度为断点存储高度时，需要过滤部分已做异步任务
 			if cursor != nil && block.BlockHeight == cursor.BlockHeight {
-				aw.doAsyncTasks(block.Txs, block.BlockHeight, cursor)
+				// TODO: deal with error
+				_ = aw.doAsyncTasks(block.Txs, block.BlockHeight, cursor)
 				continue
 			}
-			aw.doAsyncTasks(block.Txs, block.BlockHeight, nil)
+			// TODO: deal with error
+			_ = aw.doAsyncTasks(block.Txs, block.BlockHeight, nil)
 		}
 	}()
 	return
@@ -281,7 +280,7 @@ func (aw *AsyncWorkerImpl) Stop() {
 }
 
 type asyncWorkerCursor struct {
-	BlockHeight int64 `json:"block_height,required"`
-	TxIndex     int64 `json:"tx_index,required"`
-	EventIndex  int64 `json:"event_index,required"`
+	BlockHeight int64 `json:"block_height,required"` //nolint:staticcheck
+	TxIndex     int64 `json:"tx_index,required"`     //nolint:staticcheck
+	EventIndex  int64 `json:"event_index,required"`  //nolint:staticcheck
 }

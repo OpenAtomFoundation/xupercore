@@ -6,13 +6,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	utils2 "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"math/big"
 	"path/filepath"
 	"runtime"
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -150,7 +152,7 @@ func newLedger(lctx *LedgerCtx, createIfMissing bool, genesisCfg []byte) (*Ledge
 
 	txCache := TxCacheSize
 	if lctx.LedgerCfg.TxCacheSize != 0 {
-		blockCache = lctx.LedgerCfg.TxCacheSize
+		txCache = lctx.LedgerCfg.TxCacheSize
 	}
 	ledger.txCache = cache.NewLRUCache(txCache)
 	ledger.confirmBatch = baseDB.NewBatch()
@@ -361,10 +363,14 @@ func (l *Ledger) saveBlock(block *pb.InternalBlock, batchWrite kvdb.Batch) error
 		l.xlog.Warn("marshal block fail", "pbErr", pbErr)
 		return pbErr
 	}
-	batchWrite.Put(append([]byte(pb.BlocksTablePrefix), block.Blockid...), blockBuf)
+	blockKey := append([]byte(pb.BlocksTablePrefix), block.Blockid...)
+	if err := batchWrite.Put(blockKey, blockBuf); err != nil {
+		return err
+	}
 	if block.InTrunk {
 		sHeight := []byte(fmt.Sprintf("%020d", block.Height))
-		batchWrite.Put(append([]byte(pb.BlockHeightPrefix), sHeight...), block.Blockid)
+		heightKey := append([]byte(pb.BlockHeightPrefix), sHeight...)
+		return batchWrite.Put(heightKey, block.Blockid)
 	}
 	return nil
 }
@@ -420,7 +426,7 @@ func (l *Ledger) correctTxsBlockid(blockID []byte, batchWrite kvdb.Batch) error 
 				l.xlog.Warn("marshal trasaction failed when confirm block", "err", err)
 				return err
 			}
-			batchWrite.Put(append([]byte(pb.ConfirmedTablePrefix), tx.Txid...), pbTxBuf)
+			utils2.NewRichBatch(batchWrite).PutConfirmedTx(tx.Txid, pbTxBuf)
 		}
 	}
 	return nil
@@ -508,6 +514,9 @@ func (l *Ledger) UpdateBlockChainData(txid string, ptxid string, publickey strin
 	l.xlog.Info("ledger UpdateBlockChainData", "tx", txid, "ptxid", ptxid)
 
 	rawTxid, err := hex.DecodeString(txid)
+	if err != nil {
+		return err
+	}
 	tx, err := l.QueryTransaction(rawTxid)
 	if err != nil {
 		l.xlog.Warn("ledger UpdateBlockChainData query tx error")
@@ -526,10 +535,12 @@ func (l *Ledger) UpdateBlockChainData(txid string, ptxid string, publickey strin
 
 	pbTxBuf, err := proto.Marshal(tx)
 	if err != nil {
-		l.xlog.Warn("marshal trasaction failed when UpdateBlockChainData", "err", err)
+		l.xlog.Warn("marshal transaction failed when UpdateBlockChainData", "err", err)
 		return err
 	}
-	l.confirmedTable.Put(tx.Txid, pbTxBuf)
+	if err := l.confirmedTable.Put(tx.Txid, pbTxBuf); err != nil {
+		return err
+	}
 
 	l.xlog.Info("Update BlockChainData success", "txid", hex.EncodeToString(tx.Txid))
 	return nil
@@ -709,6 +720,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 	cbNum := 0
 	oldBlockCache := map[string]*pb.InternalBlock{}
 	trace("checktx")
+	richerBatch := utils2.NewRichBatch(batchWrite)
 	for i, tx := range realTransactions {
 		if tx.Coinbase {
 			cbNum = cbNum + 1
@@ -723,14 +735,14 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		pbTxBuf := txData[i]
 		if pbTxBuf == nil {
 			confirmStatus.Succ = false
-			l.xlog.Warn("marshal trasaction failed when confirm block")
+			l.xlog.Warn("marshal transaction failed when confirm block")
 			return confirmStatus
 		}
 		hasTx := txExist[string(tx.Txid)]
 		if !hasTx {
-			batchWrite.Put(append([]byte(pb.ConfirmedTablePrefix), tx.Txid...), pbTxBuf)
+			richerBatch.PutConfirmedTx(tx.Txid, pbTxBuf)
 		} else {
-			//confirm表已经存在这个交易了，需要检查一下是否存在多个主干block包含同样trasnaction的情况
+			//confirm表已经存在这个交易了，需要检查一下是否存在多个主干block包含同样transaction的情况
 			oldPbTxBuf, _ := l.confirmedTable.Get(tx.Txid)
 			oldTx := &pb.Transaction{}
 			parserErr := proto.Unmarshal(oldPbTxBuf, oldTx)
@@ -747,7 +759,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 				if blockErr != nil {
 					if def.NormalizedKVError(blockErr) == def.ErrKVNotFound {
 						l.xlog.Warn("old block that contains the tx has been truncated", "txid", utils.F(tx.Txid), "blockid", utils.F(oldTx.Blockid))
-						batchWrite.Put(append([]byte(pb.ConfirmedTablePrefix), tx.Txid...), pbTxBuf) //overwrite with newtx
+						richerBatch.PutConfirmedTx(tx.Txid, pbTxBuf) //overwrite with newtx
 						continue
 					}
 					confirmStatus.Succ = false
@@ -771,14 +783,15 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 				return confirmStatus
 			} else if block.InTrunk {
 				l.xlog.Info("change blockid of tx", "txid", utils.F(tx.Txid), "blockid", utils.F(block.Blockid))
-				batchWrite.Put(append([]byte(pb.ConfirmedTablePrefix), tx.Txid...), pbTxBuf)
+				richerBatch.PutConfirmedTx(tx.Txid, pbTxBuf)
 			}
 		}
 	}
 	trace("saveTx")
 	blkTimer.Mark("saveAllTxs")
 	//删除pendingBlock中对应的数据
-	batchWrite.Delete(append([]byte(pb.PendingBlocksTablePrefix), block.Blockid...))
+	// TODO: deal with error
+	_ = batchWrite.Delete(append([]byte(pb.PendingBlocksTablePrefix), block.Blockid...))
 	//改meta
 	metaBuf, pbErr := proto.Marshal(newMeta)
 	if pbErr != nil {
@@ -786,7 +799,8 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		confirmStatus.Succ = false
 		return confirmStatus
 	}
-	batchWrite.Put([]byte(pb.MetaTablePrefix), metaBuf)
+	// TODO: deal with error
+	_ = richerBatch.PutMeta("", metaBuf)
 	l.xlog.Debug("print block size when confirm block", "blockSize", batchWrite.ValueSize(), "blockid", utils.F(block.Blockid))
 	kvErr := batchWrite.Write() // blocks, confirmed_transaction两张表原子写入
 	blkTimer.Mark("saveToDisk")
@@ -1160,10 +1174,11 @@ func (l *Ledger) removeBlocks(fromBlockid []byte, toBlockid []byte, batch kvdb.B
 		l.xlog.Info("remove block", "blockid", utils.F(fromBlock.Blockid), "height", fromBlock.Height)
 		l.blkHeaderCache.Del(string(fromBlock.Blockid))
 		l.blockCache.Del(string(fromBlock.Blockid))
-		batch.Delete(append([]byte(pb.BlocksTablePrefix), fromBlock.Blockid...))
+		// TODO: deal with error
+		_ = batch.Delete(append([]byte(pb.BlocksTablePrefix), fromBlock.Blockid...))
 		if fromBlock.InTrunk {
 			sHeight := []byte(fmt.Sprintf("%020d", fromBlock.Height))
-			batch.Delete(append([]byte(pb.BlockHeightPrefix), sHeight...))
+			_ = batch.Delete(append([]byte(pb.BlockHeightPrefix), sHeight...))
 		}
 		//iter to prev block
 		fromBlock, findErr = l.fetchBlock(fromBlock.PreHash)
@@ -1224,7 +1239,9 @@ func (l *Ledger) Truncate(utxovmLastID []byte) error {
 		l.xlog.Warn("failed to marshal pb meta")
 		return err
 	}
-	batchWrite.Put([]byte(pb.MetaTablePrefix), metaBuf)
+	if err := utils2.NewRichBatch(batchWrite).PutMeta("", metaBuf); err != nil {
+		return err
+	}
 	err = batchWrite.Write()
 	if err != nil {
 		l.xlog.Warn("batch write failed when truncate", "err", err)
@@ -1261,7 +1278,7 @@ func (l *Ledger) VerifyBlock(block *pb.InternalBlock, logid string) (bool, error
 		return false, nil
 	}
 	chkResult, _ := l.cryptoClient.VerifyAddressUsingPublicKey(string(block.Proposer), k)
-	if chkResult == false {
+	if !chkResult {
 		l.xlog.Warn("VerifyBlock address is not match publickey", "logid", logid)
 		return false, nil
 	}

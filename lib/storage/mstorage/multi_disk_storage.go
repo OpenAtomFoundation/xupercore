@@ -12,7 +12,6 @@ package mstorage
 import (
 	"errors"
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
 	"io"
 	"io/ioutil"
 	"os"
@@ -24,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 const (
@@ -31,7 +32,6 @@ const (
 )
 
 var (
-	errFileOpen = errors.New("leveldb/mstorage: file still open")
 	errReadOnly = errors.New("leveldb/mstorage: storage is read-only")
 )
 
@@ -127,7 +127,7 @@ func OpenFile(path string, readOnly bool, dataPaths []string) (storage.Storage, 
 
 	defer func() {
 		if err != nil {
-			flock.release()
+			_ = flock.release()
 		}
 	}()
 
@@ -206,7 +206,8 @@ func (fs *MultiDiskStorage) printDay(t time.Time) {
 		return
 	}
 	fs.day = t.Day()
-	fs.logw.Write([]byte("=============== " + t.Format("Jan 2, 2006 (MST)") + " ===============\n"))
+	// TODO: update log size?
+	_, _ = fs.logw.Write([]byte("=============== " + t.Format("Jan 2, 2006 (MST)") + " ===============\n"))
 }
 
 func (fs *MultiDiskStorage) doLog(t time.Time, str string) {
@@ -215,7 +216,8 @@ func (fs *MultiDiskStorage) doLog(t time.Time, str string) {
 		fs.logw.Close()
 		fs.logw = nil
 		fs.logSize = 0
-		rename(filepath.Join(fs.path, "LOG"), filepath.Join(fs.path, "LOG.old"))
+		// TODO: deal with error
+		_ = rename(filepath.Join(fs.path, "LOG"), filepath.Join(fs.path, "LOG.old"))
 	}
 	if fs.logw == nil {
 		var err error

@@ -22,26 +22,33 @@ func newEncoder(w io.Writer) *encoder {
 	}
 }
 
+// EncodeInt64
+// write error is ignored
 func (e *encoder) EncodeInt64(x int64) {
 	buf := e.intbuf[:8]
 	binary.BigEndian.PutUint64(buf, uint64(x))
-	e.w.Write(buf)
+	_, _ = e.w.Write(buf)
 }
 
+// EncodeString
+// write error is ignored
 func (e *encoder) EncodeString(s string) {
 	e.EncodeInt64(int64(len(s)))
 	if len(s) == 0 {
 		return
 	}
-	io.WriteString(e.w, s)
+	_, _ = io.WriteString(e.w, s)
 }
 
+
+// EncodeBytes
+// write error is ignored
 func (e *encoder) EncodeBytes(s []byte) {
 	e.EncodeInt64(int64(len(s)))
 	if len(s) == 0 {
 		return
 	}
-	e.w.Write(s)
+	_, _ = e.w.Write(s)
 }
 
 func (e *encoder) EncodeMap(m map[string][]byte) {

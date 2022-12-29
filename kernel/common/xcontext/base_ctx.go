@@ -55,7 +55,7 @@ func (t *BaseCtx) Done() <-chan struct{} {
 
 func (t *BaseCtx) Err() error {
 	if t.Context != nil {
-		t.Context.Err()
+		return t.Context.Err()
 	}
 	return nil
 }

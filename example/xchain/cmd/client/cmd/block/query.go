@@ -39,13 +39,13 @@ func GetQueryBlockCmd() *QueryBlockCmd {
 func (t *QueryBlockCmd) printBlockInfo() error {
 	xcli, err := client.NewXchainClient()
 	if err != nil {
-		fmt.Sprintf("grpc dial failed.err:%v\n", err)
+		fmt.Printf("grpc dial failed.err:%v\n", err)
 		return fmt.Errorf("grpc dial failed")
 	}
 
 	resp, err := xcli.QueryBlock(t.BlockId)
 	if err != nil {
-		fmt.Sprintf("query block info failed.err:%v", err)
+		fmt.Printf("query block info failed.err:%v", err)
 		return fmt.Errorf("query block info failed")
 	}
 
@@ -60,7 +60,7 @@ func (t *QueryBlockCmd) printBlockInfo() error {
 
 	output, err := json.MarshalIndent(blkInfo, "", "  ")
 	if err != nil {
-		fmt.Sprintf("json marshal block info failed.err:%v", err)
+		fmt.Printf("json marshal block info failed.err:%v", err)
 		return fmt.Errorf("json marshal block info failed")
 	}
 

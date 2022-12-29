@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
@@ -241,9 +241,7 @@ func (t *Tx) GetDelayedTxs() []*pb.Transaction {
 		tx := delayedTxs[i]
 		result = append(result, tx)
 		deleted := t.Mempool.DeleteTxAndChildren(string(tx.GetTxid()))
-		for _, tx := range deleted {
-			result = append(result, tx)
-		}
+		result = append(result, deleted...)
 		result = append(result, tx)
 	}
 	t.log.Debug("Tx GetDelayedTxs", "delayedTxsCount", len(delayedTxs), "delayedTxsAndDeletedChildrenInMempool", len(result))

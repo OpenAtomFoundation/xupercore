@@ -61,7 +61,7 @@ func TestXMCacheIterator(t *testing.T) {
 	state := NewMemXModel()
 	for i := 0; i < N/2; i++ {
 		t.Logf("write state:%s", keys[i])
-		state.Put("test", []byte(keys[i]), &ledger.VersionedData{
+		_ = state.Put("test", []byte(keys[i]), &ledger.VersionedData{
 			RefTxid: []byte("txid"),
 			PureData: &ledger.PureData{
 				Bucket: "test",
@@ -76,7 +76,7 @@ func TestXMCacheIterator(t *testing.T) {
 	})
 	for i := N / 2; i < N; i++ {
 		t.Logf("write cache:%s", keys[i])
-		mc.Put("test", []byte(keys[i]), []byte(keys[i]))
+		_ = mc.Put("test", []byte(keys[i]), []byte(keys[i]))
 	}
 
 	sort.Slice(keys, func(i, j int) bool {

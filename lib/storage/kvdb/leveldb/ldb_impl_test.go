@@ -50,30 +50,27 @@ func BenchmarkLdbBatch_Put(b *testing.B) {
 	}
 	defer db.Close()
 
-	key := RandBytes(64)
-	value := RandBytes(1024)
-
 	keys := make([][]byte, 5)
 	for i := 0; i < b.N; i++ {
 		for k := 0; k < 10; k++ {
-			db.Get(keys[k%5])
+			_, _ = db.Get(keys[k%5])
 		}
 
 		batch := db.NewBatch()
 
 		if i > 0 {
-			batch.Delete(keys[1])
-			batch.Delete(keys[3])
+			_ = batch.Delete(keys[1])
+			_ = batch.Delete(keys[3])
 		}
 
 		for j := 0; j < 5; j++ {
-			key = RandBytes(64)
-			value = RandBytes(1024)
-			batch.Put(key, value)
+			key := RandBytes(64)
+			value := RandBytes(1024)
+			_ = batch.Put(key, value)
 
 			keys[j] = key
 		}
-		batch.Write()
+		_ = batch.Write()
 	}
 }
 
@@ -92,22 +89,22 @@ func BenchmarkLdbBatch_ParallelPut(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			i := int(rand.Int63n(10240))
-			db.Get(key)
+			_, _ = db.Get(key)
 			batch := db.NewBatch()
 
 			if i > 0 {
-				batch.Delete(keys[1])
-				batch.Delete(keys[3])
+				_ = batch.Delete(keys[1])
+				_ = batch.Delete(keys[3])
 			}
 
 			for j := 0; j < 5; j++ {
 				key[(i+j)%64] = 'K'
 				value[(i+j)%1024] = 'V'
-				batch.Put(key, value)
+				_ = batch.Put(key, value)
 
 				keys[j] = key
 			}
-			batch.Write()
+			_ = batch.Write()
 		}
 	})
 }
@@ -122,9 +119,9 @@ func BenchmarkLdbBatch_Get(b *testing.B) {
 
 	key := RandBytes(64)
 	value := RandBytes(1024)
-	db.Put(key, value)
+	_ = db.Put(key, value)
 	for i := 0; i < b.N; i++ {
-		db.Get(key)
+		_, _ = db.Get(key)
 	}
 }
 
@@ -138,10 +135,10 @@ func BenchmarkLdbBatch_Get_Parallel(b *testing.B) {
 
 	key := RandBytes(64)
 	value := RandBytes(1024)
-	db.Put(key, value)
+	_ = db.Put(key, value)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			db.Get(key)
+			_, _ = db.Get(key)
 		}
 	})
 }
@@ -156,7 +153,7 @@ func BenchmarkLdbBatch_GetNotExist(b *testing.B) {
 
 	key := RandBytes(64)
 	for i := 0; i < b.N; i++ {
-		db.Get(key)
+		_, _ =db.Get(key)
 	}
 }
 
@@ -171,7 +168,7 @@ func BenchmarkLdbBatch_ParallelGetNotExist(b *testing.B) {
 	key := RandBytes(64)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			db.Get(key)
+			_, _ =db.Get(key)
 		}
 	})
 }

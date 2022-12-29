@@ -474,8 +474,5 @@ func GetParaChainGroup(reader kledger.XMSnapshotReader, bcname string) (Group, e
 }
 
 func IsParaChainEnable(g Group) bool {
-	if g.Status == ParaChainStatusStart {
-		return true
-	}
-	return false
+	return g.Status == ParaChainStatusStart
 }

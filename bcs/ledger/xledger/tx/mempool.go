@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"sync"
-	"time"
 
 	"github.com/gammazero/deque"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
@@ -557,29 +556,14 @@ func getTxUsedKeyVersion(tx *pb.Transaction) (map[string]map[int]string, map[str
 	return readonlyKeyVersion, writeKeyVersion
 }
 
-func (m *Mempool) inUnconfirmedOrOrphans(txid string) bool {
-	if _, ok := m.unconfirmed[txid]; ok {
-		return true
-	}
-
-	if n, ok := m.orphans[txid]; ok {
-		if n.tx != nil {
-			return true
-		}
-		return false
-	}
-	return false
-}
-
 func (m *Mempool) getNode(txid string) *Node {
 	if n, ok := m.confirmed[txid]; ok {
 		return n
-	} else if n, ok := m.unconfirmed[txid]; ok {
-		return n
-	} else if n, ok := m.orphans[txid]; ok {
+	}
+	if n, ok := m.unconfirmed[txid]; ok {
 		return n
 	}
-	return nil
+	return m.orphans[txid]
 }
 
 // BatchDeleteTx 从 mempool 删除所有 txs。
@@ -713,7 +697,8 @@ func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 	} else if n, ok := m.orphans[id]; ok {
 		// n 可能是 mock
 		if n.tx == nil {
-			m.putTx(tx, true)
+			// TODO: deal with error
+			_ = m.putTx(tx, true)
 		}
 		m.moveToConfirmed(n)
 	} else {
@@ -723,59 +708,6 @@ func (m *Mempool) ConfirmTx(tx *pb.Transaction) error {
 
 	m.cleanConfirmedTxs()
 	return nil
-}
-
-// RetrieveTx tx.
-// 将交易恢复到 mempool。与mempool中交易冲突时，保留此交易。
-// 此次版本暂时不用此接口。
-// func (m *Mempool) RetrieveTx(tx *pb.Transaction) error {
-// 	if tx == nil {
-// 		return errors.New("tx is nil")
-// 	}
-// 	m.m.RLock()
-// 	defer m.m.RUnlock()
-
-// 	m.log.Debug("Mempool RetrieveTx", "txid", tx.HexTxid())
-
-// 	// tx 可能是确认交易、未确认交易以及孤儿交易，检查双花。
-// 	txid := string(tx.Txid)
-// 	if _, ok := m.confirmed[txid]; ok {
-// 		return nil
-// 	}
-// 	if _, ok := m.unconfirmed[txid]; ok {
-// 		return nil
-// 	}
-
-// 	if n, ok := m.orphans[txid]; ok {
-// 		if n.tx != nil {
-// 			return nil
-// 		}
-// 	}
-
-// 	return m.putTx(tx, true)
-// }
-
-// 暂定每隔十分钟处理一次孤儿交易
-// func (m *Mempool) gc() { // todo
-// 	ticker := time.NewTicker(time.Minute * 10)
-// 	for range ticker.C {
-// 		m.gcOrphans()
-// 	}
-// }
-
-func (m *Mempool) gcOrphans() {
-	m.m.Lock()
-	defer m.m.Unlock()
-	for _, v := range m.orphans {
-		if v.tx == nil {
-			continue
-		}
-		recvTimestamp := v.tx.GetTimestamp() // unix nano
-		t := time.Unix(0, recvTimestamp)
-		if time.Since(t) > time.Second*600 {
-			m.deleteTx(v.txid)
-		}
-	}
 }
 
 func (m *Mempool) isNextNode(node *Node, readonly bool, inputSumMap map[*Node]int) bool {
@@ -842,10 +774,8 @@ func (m *Mempool) putTx(tx *pb.Transaction, retrieve bool) error {
 		m.orphans[node.txid] = node
 	} else {
 		m.unconfirmed[node.txid] = node
-		if _, ok := m.orphans[node.txid]; ok {
-			// 如果是 mock orphan，则删除掉。
-			delete(m.orphans, node.txid)
-		}
+		// 如果是 mock orphan，则删除掉。
+		delete(m.orphans, node.txid)
 	}
 
 	// 更新节点的所有子关系。
@@ -1134,19 +1064,6 @@ func (m *Mempool) deleteChildrenFromNode(node *Node) []*pb.Transaction {
 	return deletedTxs
 }
 
-func (m *Mempool) inMempool(txid string) bool {
-	if _, ok := m.unconfirmed[txid]; ok {
-		return true
-	}
-	if _, ok := m.confirmed[txid]; ok {
-		return true
-	}
-	if _, ok := m.orphans[txid]; ok {
-		return true
-	}
-	return false
-}
-
 // 更新 node 的 TxInputs 字段。
 func (m *Mempool) processTxInputs(node *Node, retrieve bool) (bool, error) {
 	isOrphan := false
@@ -1237,7 +1154,9 @@ func (m *Mempool) processTxInputsExt(node *Node, retrieve bool) (bool, error) {
 	tx := node.tx
 	for index, input := range tx.TxInputsExt {
 		if len(input.GetRefTxid()) == 0 {
-			m.processEmptyRefTxID(node, index)
+			if err := m.processEmptyRefTxID(node, index); err != nil {
+				return false, err
+			}
 			continue
 		}
 
@@ -1304,8 +1223,7 @@ func (m *Mempool) queryTxFromDB(txid string) (*pb.Transaction, error) {
 	if !isTest { // 单测使用。
 		return m.Tx.ledger.QueryTransaction([]byte(txid))
 	}
-	tx, _ := dbTxs[txid]
-	return tx, nil
+	return dbTxs[txid], nil
 }
 
 // 在 ConfirmTx 时，如果当前交易不在 mempool 中，那么删除掉所有与此交易有冲突的交易。

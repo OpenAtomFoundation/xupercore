@@ -178,7 +178,8 @@ func NewFakeLedger(conf []byte) *FakeLedger {
 	}
 	l.fakeReader = NewFakeXMReader()
 	for i := 0; i < 3; i++ {
-		l.Put(NewBlock(i))
+		// no error occurred when create fake ledger
+		_ = l.Put(NewBlock(i))
 	}
 	return l
 }
@@ -392,9 +393,7 @@ func (r *FakeRegistry) RegisterKernMethod(contract, method string, handler contr
 	r.M[method] = handler
 }
 
-func (r *FakeRegistry) UnregisterKernMethod(ctract, method string) {
-	return
-}
+func (r *FakeRegistry) UnregisterKernMethod(ctract, method string) {}
 
 func (r *FakeRegistry) GetKernMethod(contract, method string) (contract.KernMethod, error) {
 	return nil, nil

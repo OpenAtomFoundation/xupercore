@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"  //nolint:staticcheck
 	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	cctx "github.com/xuperchain/xupercore/kernel/consensus/context"
@@ -58,9 +58,14 @@ func getBFTXpoaConsensusConf() string {
 func prepare(config string) (*cctx.ConsensusCtx, error) {
 	l := kmock.NewFakeLedger([]byte(config))
 	cCtx, err := bmock.NewConsensusCtx(l)
+	if err != nil {
+		return nil, err
+	}
 	cCtx.Ledger = l
 	p, ctxN, err := kmock.NewP2P("node")
-	p.Init(ctxN)
+	if err := p.Init(ctxN); err != nil {
+		return nil, err
+	}
 	cCtx.Network = p
 	cCtx.XLog = bmock.NewFakeLogger()
 	return cCtx, err
@@ -118,7 +123,9 @@ func TestCheckMinerMatch(t *testing.T) {
 	}
 	b3 := kmock.NewBlock(3)
 	c := cCtx.BaseCtx
-	i.CheckMinerMatch(&c, b3)
+	if _, err := i.CheckMinerMatch(&c, b3); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestProcessBeforeMiner(t *testing.T) {
@@ -132,7 +139,9 @@ func TestProcessBeforeMiner(t *testing.T) {
 		t.Error("NewXpoaConsensus error", "conf", getConfig(getXpoaConsensusConf()))
 		return
 	}
-	i.ProcessBeforeMiner(0, time.Now().UnixNano())
+	if _, _, err := i.ProcessBeforeMiner(0, time.Now().UnixNano()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestProcessConfirmBlock(t *testing.T) {
@@ -165,9 +174,12 @@ func TestGetJustifySigns(t *testing.T) {
 	}
 	xpoa, _ := i.(*xpoaConsensus)
 	l, _ := xpoa.election.ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(3))
 	l.SetConsensusStorage(1, SetXpoaStorage(1, nil))
 	b, err := l.QueryBlockHeaderByHeight(3)
+	if err != nil {
+		t.Fatal(err)
+	}
 	xpoa.GetJustifySigns(b)
 }
 
@@ -202,8 +214,10 @@ func TestBFT(t *testing.T) {
 		t.Error("NewXpoaConsensus error", "conf", getConfig(getBFTXpoaConsensusConf()))
 		return
 	}
-	xpoa, _ := i.(*xpoaConsensus)
-	xpoa.initBFT()
+	xpoa := i.(*xpoaConsensus)
+	if err := xpoa.initBFT(); err != nil {
+		t.Fatal(err)
+	}
 	l, _ := xpoa.election.ledger.(*kmock.FakeLedger)
 	xpoa.election.address = "now=dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
 	// 1, 2区块storage修复
@@ -212,14 +226,17 @@ func TestBFT(t *testing.T) {
 
 	b3 := kmock.NewBlock(3)
 	b3.SetTimestamp(1616481092 * int64(time.Millisecond))
-	l.Put(b3)
+	_ = l.Put(b3)
 	l.SetConsensusStorage(3, SetXpoaStorage(3, justify(3)))
 	b33, _ := l.QueryBlockHeaderByHeight(3)
-	xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33)
-	xpoa.ProcessBeforeMiner(0, 1616481107*int64(time.Millisecond))
+	if _, err := xpoa.CheckMinerMatch(&cCtx.BaseCtx, b33); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := xpoa.ProcessBeforeMiner(0, 1616481107*int64(time.Millisecond)); err != nil {
+		t.Fatal(err)
+	}
 	err = xpoa.ProcessConfirmBlock(b33)
 	if err != nil {
-		t.Error("ProcessConfirmBlock error", "err", err)
-		return
+		t.Fatal("ProcessConfirmBlock error", "err", err)
 	}
 }

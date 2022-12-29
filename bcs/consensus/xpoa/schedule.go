@@ -53,20 +53,17 @@ func NewXpoaSchedule(xconfig *xpoaConfig, cCtx context.ConsensusCtx, startHeight
 	}
 	// xpoaSchedule 实现了ProposerElectionInterface接口，接口定义了validators操作
 	// 重启时需要使用最新的validator数据，而不是initValidators数据
-	var validators []string
-	for _, v := range xconfig.InitProposer.Address {
-		validators = append(validators, v)
-	}
-	s.initValidators = validators
+	s.initValidators = xconfig.InitProposer.Address
 	reader, _ := s.ledger.GetTipXMSnapshotReader()
 	res, err := reader.Get(s.bindContractBucket, []byte(fmt.Sprintf("%d_%s", s.consensusVersion, validateKeys)))
 	if err != nil {
 		return nil
 	}
 	if snapshotValidators, _ := loadValidatorsMultiInfo(res); snapshotValidators != nil {
-		validators = snapshotValidators
+		s.validators = snapshotValidators
+	} else {
+		s.validators = s.initValidators
 	}
-	s.validators = validators
 	return &s
 }
 

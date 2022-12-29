@@ -74,7 +74,7 @@ func Test_Gm(t *testing.T) {
 		return
 	}
 
-	if bytes.Compare(msg, decode) != 0 {
+	if !bytes.Equal(msg, decode) {
 		t.Errorf("Decrypt data is invalid, decoded=%s\n", string(decode))
 		return
 	}

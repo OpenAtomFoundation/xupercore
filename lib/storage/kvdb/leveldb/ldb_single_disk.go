@@ -16,7 +16,7 @@ func (ldb *LDBDatabase) OpenSingle(path string, options map[string]interface{}) 
 	dataPaths := options["dataPaths"].([]string)
 
 	// Open the db and recover any potential corruptions
-	if dataPaths == nil || len(dataPaths) == 0 {
+	if len(dataPaths) == 0 {
 		db, err := leveldb.OpenFile(path, &opt.Options{
 			OpenFilesCacheCapacity: fds,
 			BlockCacheCapacity:     cache / 2 * opt.MiB,

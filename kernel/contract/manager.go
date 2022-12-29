@@ -2,9 +2,9 @@ package contract
 
 import (
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"sync"
 
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 )

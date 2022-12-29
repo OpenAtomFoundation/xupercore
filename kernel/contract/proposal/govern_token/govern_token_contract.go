@@ -151,7 +151,8 @@ func (t *KernMethod) TransferGovernTokens(ctx contract.KContext) (*contract.Resp
 	receiverBalanceBuf, err := ctx.Get(utils.GetGovernTokenBucket(), []byte(receiverKey))
 	if err == nil {
 		receiverBalanceOld := &utils.GovernTokenBalance{}
-		json.Unmarshal(receiverBalanceBuf, receiverBalanceOld)
+		// TODO: deal with error
+		_ = json.Unmarshal(receiverBalanceBuf, receiverBalanceOld)
 		receiverBalance.TotalBalance.Add(receiverBalance.TotalBalance, receiverBalanceOld.TotalBalance)
 	}
 

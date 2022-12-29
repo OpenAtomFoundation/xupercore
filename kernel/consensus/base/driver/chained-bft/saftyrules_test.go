@@ -72,7 +72,11 @@ func TestCheckProposal(t *testing.T) {
 		return
 	}
 	proposal := mock.MockCreateQC([]byte{2}, 2, []byte{1}, 1)
-	s.CheckProposal(proposal, generic, []string{"gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"})
+	if err := s.CheckProposal(proposal, generic, []string{"gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"}); err != nil {
+		t.Fatal(err)
+	}
 	s.VoteProposal([]byte{2}, 2, generic)
-	s.CheckVote(generic, "123", []string{"gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"})
+	if err := s.CheckVote(generic, "123", []string{"gNhga8vLc4JcmoHB2yeef2adBhntkc5d1"}); err != nil {
+		t.Fatal(err)
+	}
 }

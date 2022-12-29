@@ -312,7 +312,9 @@ func TestStateWorkWithLedger(t *testing.T) {
 	} else {
 		t.Logf("next block id: %x", nextBlockid)
 	}
-	stateHandle.Play(nextBlockid)
+	if err := stateHandle.Play(nextBlockid); err != nil {
+		t.Fatal(err)
+	}
 	bobBalance, _ = stateHandle.GetBalance(BobAddress)
 	aliceBalance, _ = stateHandle.GetBalance(AliceAddress)
 	t.Logf("bob balance: %s, alice balance: %s", bobBalance.String(), aliceBalance.String())
@@ -323,7 +325,9 @@ func TestStateWorkWithLedger(t *testing.T) {
 	} else {
 		t.Logf("next block id: %x", nextBlockid)
 	}
-	stateHandle.Play(nextBlockid)
+	if err := stateHandle.Play(nextBlockid); err != nil {
+		t.Fatal(err)
+	}
 	bobBalance, _ = stateHandle.GetBalance(BobAddress)
 	aliceBalance, _ = stateHandle.GetBalance(AliceAddress)
 	t.Logf("bob balance: %s, alice balance: %s", bobBalance.String(), aliceBalance.String())
@@ -356,13 +360,21 @@ func TestStateWorkWithLedger(t *testing.T) {
 	}
 	sctx.EnvCfg.ChainDir = workspace2
 	stateHandle2, _ := NewState(sctx)
-	stateHandle2.Play(ledger2.GetMeta().RootBlockid) //先做一下根节点
+	//先做一下根节点
+	if err := stateHandle2.Play(ledger2.GetMeta().RootBlockid); err != nil {
+		t.Fatal(err)
+	}
 	dummyBlockid, dummyErr := transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().RootBlockid, "", 0)
 	if dummyErr != nil {
 		t.Fatal(dummyErr)
 	}
-	stateHandle2.Play(dummyBlockid)
-	stateHandle2.Walk(ledger2.GetMeta().TipBlockid, false) //再游走到末端 ,预期会导致dummmy block回滚
+	if err := stateHandle2.Play(dummyBlockid); err != nil {
+		t.Fatal(err)
+	}
+	//再游走到末端 ,预期会导致dummmy block回滚
+	if err := stateHandle2.Walk(ledger2.GetMeta().TipBlockid, false); err != nil {
+		t.Fatal(err)
+	}
 	bobBalance, _ = stateHandle2.GetBalance(BobAddress)
 	aliceBalance, _ = stateHandle2.GetBalance(AliceAddress)
 	minerBalance, _ := stateHandle2.GetBalance("miner-1")
@@ -370,9 +382,9 @@ func TestStateWorkWithLedger(t *testing.T) {
 	if bobBalance.String() != "9999989" || aliceBalance.String() != "20000011" {
 		t.Fatal("unexpected balance", bobBalance, aliceBalance)
 	}
-	transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
-	transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
-	stateHandle2.Walk(ledger2.GetMeta().TipBlockid, false)
+	_, _ = transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
+	_, _ = transfer("bob", "alice", t, stateHandle2, ledger2, "7", ledger2.GetMeta().TipBlockid, "", 0)
+	_ = stateHandle2.Walk(ledger2.GetMeta().TipBlockid, false)
 	bobBalance, _ = stateHandle2.GetBalance(BobAddress)
 	aliceBalance, _ = stateHandle2.GetBalance(AliceAddress)
 	minerBalance, _ = stateHandle2.GetBalance("miner-1")
@@ -536,7 +548,7 @@ func TestFrozenHeight(t *testing.T) {
 	}
 	metaInfo := stateHandle.GetMeta()
 	if metaInfo == nil {
-		fmt.Errorf("nil meta")
+		t.Log("nil meta")
 	}
 	//bob 给alice转100，账本高度=2的时候才能解冻
 	nextBlockid, blockErr := transfer("bob", "alice", t, stateHandle, ledger, "100", ledger.GetMeta().TipBlockid, "", 2)
@@ -553,12 +565,12 @@ func TestFrozenHeight(t *testing.T) {
 		t.Log("alice frozen balance ", frozenBalance)
 	}
 	//alice给bob转300, 预期失败，因为无法使用被冻住的utxo
-	nextBlockid, blockErr = transfer("alice", "bob", t, stateHandle, ledger, "300", ledger.GetMeta().TipBlockid, "", 0)
+	_, blockErr = transfer("alice", "bob", t, stateHandle, ledger, "300", ledger.GetMeta().TipBlockid, "", 0)
 	if blockErr != utxo.ErrNoEnoughUTXO {
 		t.Fatal("unexpected ", blockErr)
 	}
 	//alice先给自己转1块钱，让块高度增加
-	nextBlockid, blockErr = transfer("alice", "alice", t, stateHandle, ledger, "1", ledger.GetMeta().TipBlockid, "", 0)
+	_, blockErr = transfer("alice", "alice", t, stateHandle, ledger, "1", ledger.GetMeta().TipBlockid, "", 0)
 	if blockErr != nil {
 		t.Fatal(blockErr)
 	}

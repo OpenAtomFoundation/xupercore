@@ -29,7 +29,11 @@ func GetS3Client(opt OpenOption) (*S3Client, error) {
 		Credentials: creds,
 		Endpoint:    aws.String(opt.Endpoint),
 	}
-	client := s3.New(session.New(config))
+	s, err := session.NewSession(config)
+	if err != nil {
+		return nil, err
+	}
+	client := s3.New(s)
 	testBucket := &s3.HeadBucketInput{
 		Bucket: aws.String(opt.Bucket),
 	}
@@ -67,10 +71,7 @@ func (client *S3Client) Remove(key string) error {
 		Bucket: aws.String(client.opt.Bucket),
 		Key:    aws.String(client.opt.Path + "/" + key),
 	})
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 func (client *S3Client) List() ([]storage.FileDesc, error) {

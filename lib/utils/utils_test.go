@@ -85,11 +85,9 @@ func wait(wg *sync.WaitGroup, tch <-chan string) <-chan int {
 		// check consumer is finish?
 		isFin := false
 		for !isFin {
-			select {
-			case <-time.Tick(1 * time.Second):
-				if len(tch) < 1 {
-					isFin = true
-				}
+			<-time.Tick(1 * time.Second)
+			if len(tch) < 1 {
+				isFin = true
 			}
 		}
 

@@ -115,7 +115,7 @@ func NewXpoaConsensus(cCtx cctx.ConsensusCtx, cCfg def.ConsensusConfig) consensu
 	xpoa.kMethod = xpoaKMethods
 
 	// 凡属于共识升级的逻辑，新建的Xpoa实例将直接将当前值置为true，原因是上一共识模块已经在当前值生成了高度为trigger height的区块，新的实例会再生成一边
-	timeKey := time.Now().Sub(time.Unix(0, 0)).Milliseconds() / xpoa.config.Period
+	timeKey := time.Since(time.Unix(0, 0)).Milliseconds() / xpoa.config.Period
 	xpoa.isProduce[timeKey] = true
 
 	cCtx.XLog.Debug("consensus:xpoa:NewXpoaConsensus: create a poa instance successfully!")

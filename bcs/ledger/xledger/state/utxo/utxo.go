@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	utils2 "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"math/big"
 	"strconv"
 	"strings"
@@ -81,17 +82,9 @@ type UtxoVM struct {
 	BalanceCache      *cache.LRUCache          //余额cache,加速GetBalance查询
 	CacheSize         int                      //记录构造utxo时传入的cachesize
 	BalanceViewDirty  map[string]int           //balanceCache 标记dirty: addr -> sequence of view
-	unconfirmTxInMem  *sync.Map                //未确认Tx表的内存镜像
-	unconfirmTxAmount int64                    // 未确认的Tx数目，用于监控
 	bcname            string
 	batchCache        *sync.Map  // 同一个 batch 的 utxo 缓存，play block 时缓存同一个区块内的交易的 utxo。
 	lastBatch         kvdb.Batch // 上一个交易对应的 batch，postTx 时每个交易的 batch 不同，但是执行区块时（walk 或者 play）batch 相同。
-}
-
-// InboundTx is tx wrapper
-type InboundTx struct {
-	tx    *pb.Transaction
-	txBuf []byte
 }
 
 type UtxoLockItem struct {
@@ -333,7 +326,8 @@ func (uv *UtxoVM) UpdateUtxoTotal(delta *big.Int, batch kvdb.Batch, inc bool) {
 	} else {
 		uv.utxoTotal = uv.utxoTotal.Sub(uv.utxoTotal, delta)
 	}
-	batch.Put(append([]byte(pb.MetaTablePrefix), []byte(UTXOTotalKey)...), uv.utxoTotal.Bytes())
+	// TODO: deal with error
+	_ = utils2.NewRichBatch(batch).PutMeta(UTXOTotalKey, uv.utxoTotal.Bytes())
 }
 
 // parseUtxoKeys extract (txid, offset) from key of utxo item

@@ -110,7 +110,7 @@ func TestDescEvidence(t *testing.T) {
 	m := NewMempool(nil, l, 0)
 	err = m.PutTx(tx1Read)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	result := batchTx(m)
@@ -124,10 +124,6 @@ func TestDescEvidence(t *testing.T) {
 
 func TestPackTxReadonlyAndWrite(t *testing.T) {
 	isTest = true
-	type dbtxs struct {
-		Txid string
-	}
-
 	txs := []string{
 		"root0",
 		"root1",
@@ -386,9 +382,6 @@ func run(b *testing.B, t *testing.T) {
 	l, _ := logs.NewLogger("1111", "test")
 	m := NewMempool(nil, l, 0)
 	setup(m)
-	// printMempool(m)
-	// return
-	// now := time.Now()
 
 	if b != nil {
 		b.ResetTimer()
@@ -396,43 +389,17 @@ func run(b *testing.B, t *testing.T) {
 
 	result := batchTx(m)
 	fmt.Println("打包的交易ID")
-	// for _, v := range result {
-	// 	fmt.Print(string(v.Txid), " ")
-	// }
 	printMempool(m)
 	fmt.Println("确认一笔交易")
 	cb := time.Now()
-	// for i := 0; i < 10000; i++ {
-	// 	e := m.ConfirmTx(result[i]) //
-	// 	if e != nil {
-	// 		panic(e)
-	// 	}
-	// }
 	m.BatchConfirmTx(result[:10000])
 
 	fmt.Println("confirm tx:", string(result[40].Txid), "耗时=", time.Since(cb))
 
-	// deleteID := string(result[80].Txid) //"8001"
-	// fmt.Println("delete tx:", deleteID)
-	// m.DeleteTxAndChildren(deleteID)
-	// m.ConfirmeTx(result[800])
-	// if e != nil {
-	// 	panic(e)
-	// }
 	printMempool(m)
-	// _, ok := m.unconfirmed[deleteID]
-	// fmt.Println("删除的交易在 未确认交易表吗？", ok)
-	// fmt.Println("确认一笔交易OK")
 	fmt.Println("再次打包")
 	batchTx(m)
 }
-
-// var result []*pb.Transaction
-
-// func ff(tx *pb.Transaction) bool {
-// 	result = append(result, tx)
-// 	return true
-// }
 
 func batchTx(m *Mempool) []*pb.Transaction {
 	now := time.Now()
@@ -445,20 +412,11 @@ func batchTx(m *Mempool) []*pb.Transaction {
 
 	fmt.Println("耗时：", end.Sub(now))
 	fmt.Println("打包交易量：", len(rrr))
-	txids := make([]string, 0, len(rrr))
-	for _, v := range rrr {
-		txids = append(txids, string(v.Txid))
-	}
-	// fmt.Println(txids)
 	return rrr
 }
 
 func setup(m *Mempool) {
 	isTest = true
-	type dbtxs struct {
-		Txid string
-	}
-
 	txs := []string{
 		"root0",
 		"root1",
@@ -602,7 +560,7 @@ func setup(m *Mempool) {
 				},
 			},
 		}
-		m.PutTx(tx)
+		_ = m.PutTx(tx)
 	}
 
 	for ii := 1; ii <= sum; ii++ {
@@ -788,10 +746,10 @@ func setup(m *Mempool) {
 			}
 			if string(tx1.Txid) == "500000" {
 				b := time.Now()
-				m.PutTx(tx1)
+				_ = m.PutTx(tx1)
 				fmt.Println("PutTx 500000: ", time.Since(b))
 			} else {
-				m.PutTx(tx1)
+				_ = m.PutTx(tx1)
 			}
 
 		}

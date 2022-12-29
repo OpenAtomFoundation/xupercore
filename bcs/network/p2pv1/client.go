@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	prom "github.com/prometheus/client_golang/prometheus"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -227,10 +227,11 @@ func (p *P2PServerV1) GetPeerIdByAccount(account string) (string, error) {
 		delete(addresses, addr)
 	}
 	var retryPeers []string
-	for k, _ := range addresses {
+	for k := range addresses {
 		retryPeers = append(retryPeers, k)
 	}
-	p.GetPeerInfo(retryPeers)
+	// TODO: update accounts?
+	_, _ = p.GetPeerInfo(retryPeers)
 	// retry
 	if value, ok := p.accounts.Get(account); ok {
 		return value.(string), nil

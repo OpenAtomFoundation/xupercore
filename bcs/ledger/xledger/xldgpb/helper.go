@@ -37,10 +37,7 @@ func (tx *Transaction) GetAmountByAddress(address string) *big.Int {
 
 // FromAddrInList 判断交易的发起人是否在白名单
 func (tx *Transaction) FromAddrInList(whiteList map[string]bool) bool {
-	if whiteList[tx.Initiator] {
-		return true
-	}
-	return false
+	return whiteList[tx.Initiator]
 }
 
 // HexTxid get txid in hex string

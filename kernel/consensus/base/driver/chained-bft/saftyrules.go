@@ -167,10 +167,7 @@ func (s *DefaultSaftyRules) CheckProposal(proposal, parent storage.QuorumCertInt
 // 注意： 由于本smr支持不同节点产生同一round， 因此下述round比较和leader比较与原文(验证Proposal的Round是否和pacemaker的Round相等)并不同。
 // 仅需proposal round不超过范围即可
 func (s *DefaultSaftyRules) CheckPacemaker(pending int64, local int64) bool {
-	if pending <= local-StrictInternal {
-		return false
-	}
-	return true
+	return pending > local-StrictInternal
 }
 
 func isInSlice(target string, s []string) bool {

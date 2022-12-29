@@ -19,6 +19,7 @@ type XchainClient struct {
 }
 
 func NewXchainClient() (*XchainClient, error) {
+	//nolint:staticcheck
 	conn, err := grpc.Dial(global.GFlagHost, grpc.WithInsecure(), grpc.WithMaxMsgSize(64<<20-1))
 	if err != nil {
 		return nil, err
