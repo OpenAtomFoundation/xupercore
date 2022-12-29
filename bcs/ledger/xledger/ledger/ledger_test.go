@@ -13,7 +13,7 @@ import (
 	//"os"
 	"testing"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"

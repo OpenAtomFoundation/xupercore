@@ -308,7 +308,7 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *
 	return bcName, bcData, &bcGroup, nil
 }
 
-//////////// Group ///////////
+// ////////// Group ///////////
 type Group struct {
 	GroupID    string   `json:"name,omitempty"`
 	Admin      []string `json:"admin,omitempty"`

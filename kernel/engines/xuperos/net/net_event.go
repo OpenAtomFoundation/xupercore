@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -266,7 +266,7 @@ func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 }
 
 // sendMessage wrapper function which ignore error
-func sendMessage(n network.Network, ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc)  {
+func sendMessage(n network.Network, ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
 	// ignore error
 	_ = n.SendMessage(ctx, msg, of...)
 }

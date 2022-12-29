@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"

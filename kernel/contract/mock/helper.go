@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"

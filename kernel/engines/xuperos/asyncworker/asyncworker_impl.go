@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/event"

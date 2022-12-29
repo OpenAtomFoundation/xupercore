@@ -19,7 +19,7 @@ type refCounter struct {
 	mu    sync.Mutex
 }
 
-//SpinLock is a collections of small locks on special keys
+// SpinLock is a collections of small locks on special keys
 type SpinLock struct {
 	m          *sync.Map
 	refCounter *refCounter
@@ -63,7 +63,7 @@ func NewSpinLock() *SpinLock {
 	return &SpinLock{m: &sync.Map{}, refCounter: &refCounter{ctMap: map[string]int{}}}
 }
 
-//ExtractLockKeys extract lock items from a transaction
+// ExtractLockKeys extract lock items from a transaction
 func (sp *SpinLock) ExtractLockKeys(tx *pb.Transaction) []*LockKey {
 	keys := []*LockKey{}
 	for _, input := range tx.TxInputs {
@@ -106,13 +106,13 @@ func (sp *SpinLock) ExtractLockKeys(tx *pb.Transaction) []*LockKey {
 	return keys[:lim]
 }
 
-//IsLocked returns whether a key is locked
+// IsLocked returns whether a key is locked
 func (sp *SpinLock) IsLocked(key string) bool {
 	_, locked := sp.m.Load(key)
 	return locked
 }
 
-//TryLock try to lock some keys
+// TryLock try to lock some keys
 func (sp *SpinLock) TryLock(lockKeys []*LockKey) ([]*LockKey, bool) {
 	succLocked := []*LockKey{}
 	for _, k := range lockKeys {
@@ -133,7 +133,7 @@ func (sp *SpinLock) TryLock(lockKeys []*LockKey) ([]*LockKey, bool) {
 	return succLocked, true
 }
 
-//Unlock release the locks on some keys
+// Unlock release the locks on some keys
 func (sp *SpinLock) Unlock(lockKeys []*LockKey) {
 	N := len(lockKeys)
 	for i := N - 1; i >= 0; i-- {

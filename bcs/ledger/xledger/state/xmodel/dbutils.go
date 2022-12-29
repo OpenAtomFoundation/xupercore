@@ -8,7 +8,7 @@ import (
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 )
 
 // KVEngineType KV storage type

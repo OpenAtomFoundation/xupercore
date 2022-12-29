@@ -6,7 +6,7 @@ import (
 
 	"github.com/xuperchain/xupercore/kernel/network/def"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/golang/snappy"
 
 	"github.com/xuperchain/xupercore/lib/utils"

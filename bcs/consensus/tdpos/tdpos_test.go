@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
 	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"

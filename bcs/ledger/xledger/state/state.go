@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
-	rich "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
+	rb "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
@@ -432,7 +432,7 @@ func (t *State) PlayForMiner(blockid []byte) error {
 				return err
 			}
 		} else {
-			rich.NewRichBatch(batch).DeleteUnconfirmedTx([]byte(txid))
+			rb.NewRichBatch(batch).DeleteUnconfirmedTx([]byte(txid))
 		}
 		err = t.payFee(tx, batch, block)
 		if err != nil {
@@ -829,7 +829,7 @@ func (t *State) doTxSync(tx *pb.Transaction) error {
 		return err
 	}
 
-	rich.NewRichBatch(batch).PutUnconfirmedTx(tx.Txid, pbTxBuf)
+	rb.NewRichBatch(batch).PutUnconfirmedTx(tx.Txid, pbTxBuf)
 	t.log.Debug("print tx size when DoTx", "tx_size", batch.ValueSize(), "txid", utils.F(tx.Txid))
 	beginTime = time.Now()
 	writeErr := batch.Write()
@@ -860,7 +860,7 @@ func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *
 		t.log.Warn("xmodel DoTx failed", "err", err)
 		return ErrRWSetInvalid
 	}
-	richBatch := rich.NewRichBatch(batch)
+	richBatch := rb.NewRichBatch(batch)
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
 		txid := txInput.RefTxid
@@ -987,7 +987,7 @@ func (t *State) undoUnconfirmedTx(tx *pb.Transaction,
 	if undoErr != nil {
 		return undoErr
 	}
-	rich.NewRichBatch(batch).DeleteUnconfirmedTx(tx.Txid)
+	rb.NewRichBatch(batch).DeleteUnconfirmedTx(tx.Txid)
 
 	// 记录回滚交易，用于重放
 	if undoDone != nil {
@@ -1012,7 +1012,7 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 		return ErrRWSetInvalid
 	}
 
-	richBatch := rich.NewRichBatch(batch)
+	richBatch := rb.NewRichBatch(batch)
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
 		txid := txInput.RefTxid
@@ -1141,7 +1141,7 @@ func (t *State) updateLatestBlockid(newBlockid []byte, batch kvdb.Batch, reason 
 	if err != nil {
 		return err
 	}
-	if err := rich.NewRichBatch(batch).PutMeta(utxo.LatestBlockKey, newBlockid); err != nil {
+	if err := rb.NewRichBatch(batch).PutMeta(utxo.LatestBlockKey, newBlockid); err != nil {
 		return err
 	}
 	writeErr := batch.Write()
@@ -1156,7 +1156,7 @@ func (t *State) updateLatestBlockid(newBlockid []byte, batch kvdb.Batch, reason 
 }
 
 func (t *State) undoPayFee(tx *pb.Transaction, batch kvdb.Batch, block *pb.InternalBlock) error {
-	richBatch := rich.NewRichBatch(batch)
+	richBatch := rb.NewRichBatch(batch)
 	for offset, txOutput := range tx.TxOutputs {
 		addr := txOutput.ToAddr
 		if !bytes.Equal(addr, []byte(FeePlaceholder)) {
@@ -1269,7 +1269,7 @@ func (t *State) payFee(tx *pb.Transaction, batch kvdb.Batch, block *pb.InternalB
 		if uErr != nil {
 			return uErr
 		}
-		rich.NewRichBatch(batch).PutUtxoWithPrefix(utxoKey, uItemBinary)// 插入本交易产生的utxo
+		rb.NewRichBatch(batch).PutUtxoWithPrefix(utxoKey, uItemBinary) // 插入本交易产生的utxo
 		t.utxo.AddBalance(addr, uItem.Amount)
 		t.utxo.UtxoCache.Insert(string(addr), utxoKey, uItem)
 		t.log.Trace("    insert fee utxo key", "utxoKey", utxoKey, "amount", uItem.Amount.String())
@@ -1362,7 +1362,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 
 		txid := string(tx.GetTxid())
 		if t.tx.Mempool.HasTx(txid) {
-			rich.NewRichBatch(batch).DeleteUnconfirmedTx([]byte(txid))
+			rb.NewRichBatch(batch).DeleteUnconfirmedTx([]byte(txid))
 			t.log.Trace("  delete from unconfirmed", "txid", fmt.Sprintf("%x", tx.GetTxid()))
 			unconfirmToConfirm[txid] = true
 		}
@@ -1379,7 +1379,7 @@ func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, n
 		if undoDone[string(undoTx.Txid)] {
 			continue
 		}
-		rich.NewRichBatch(batch).DeleteUnconfirmedTx(undoTx.Txid) // mempool 中删除后，db 的未确认交易中也要删除。
+		rb.NewRichBatch(batch).DeleteUnconfirmedTx(undoTx.Txid) // mempool 中删除后，db 的未确认交易中也要删除。
 		undoErr := t.undoUnconfirmedTx(undoTx, batch, undoDone, nil)
 		if undoErr != nil {
 			t.log.Warn("fail to undo tx", "undoErr", undoErr)

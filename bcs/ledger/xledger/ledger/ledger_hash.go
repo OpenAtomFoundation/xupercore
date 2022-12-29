@@ -144,7 +144,7 @@ func MakeMerkleTree(txList []*pb.Transaction) [][]byte {
 // 	wg.Wait()
 // }
 
-//序列化系统合约失败的Txs
+// 序列化系统合约失败的Txs
 func encodeFailedTxs(buf *bytes.Buffer, block *pb.InternalBlock) error {
 	txids := []string{}
 	for txid := range block.FailedTxs {

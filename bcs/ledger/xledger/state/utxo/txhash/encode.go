@@ -40,7 +40,6 @@ func (e *encoder) EncodeString(s string) {
 	_, _ = io.WriteString(e.w, s)
 }
 
-
 // EncodeBytes
 // write error is ignored
 func (e *encoder) EncodeBytes(s []byte) {

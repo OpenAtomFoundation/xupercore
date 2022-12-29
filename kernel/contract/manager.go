@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 )
 

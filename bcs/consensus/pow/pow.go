@@ -246,7 +246,7 @@ func (pow *PoWConsensus) ProcessBeforeMiner(height, timestamp int64) ([]byte, []
 	bits, err := pow.refreshDifficulty(preBlock.GetBlockid(), tipHeight+1)
 	if err != nil {
 		// TODO: deal with error
-		 _ = pow.Stop()
+		_ = pow.Stop()
 	}
 	pow.targetBits = bits
 	store := &PoWStorage{
@@ -393,7 +393,7 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (ui
 	return newTargetBits, nil
 }
 
-//IsProofed check workload proof
+// IsProofed check workload proof
 func (pow *PoWConsensus) IsProofed(blockID []byte, targetBits uint32) bool {
 	hash := new(big.Int)
 	hash.SetBytes(blockID)

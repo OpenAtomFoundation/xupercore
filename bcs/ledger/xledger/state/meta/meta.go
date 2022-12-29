@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
-	rich "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
+	rb "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
@@ -133,7 +133,7 @@ func (t *Meta) UpdateNewAccountResourceAmount(newAccountResourceAmount int64, ba
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.NewAccountResourceAmountKey, newAccountResourceAmountBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.NewAccountResourceAmountKey, newAccountResourceAmountBuf)
 	if err == nil {
 		t.log.Info("Update newAccountResourceAmount succeed")
 	}
@@ -185,7 +185,7 @@ func (t *Meta) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.MaxBlockSizeKey, maxBlockSizeBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.MaxBlockSizeKey, maxBlockSizeBuf)
 	if err == nil {
 		t.log.Info("Update maxBlockSize succeed")
 	}
@@ -213,7 +213,7 @@ func (t *Meta) LoadReservedContracts() ([]*protos.InvokeRequest, error) {
 	return nil, findErr
 }
 
-//when to register to kernel method
+// when to register to kernel method
 func (t *Meta) UpdateReservedContracts(params []*protos.InvokeRequest, batch kvdb.Batch) error {
 	if params == nil {
 		return fmt.Errorf("invalid reservered contract requests")
@@ -226,7 +226,7 @@ func (t *Meta) UpdateReservedContracts(params []*protos.InvokeRequest, batch kvd
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.ReservedContractsKey, paramsBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.ReservedContractsKey, paramsBuf)
 	if err == nil {
 		t.log.Info("Update reservered contract succeed")
 	}
@@ -292,7 +292,7 @@ func (t *Meta) UpdateForbiddenContract(param *protos.InvokeRequest, batch kvdb.B
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.ForbiddenContractKey, paramBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.ForbiddenContractKey, paramBuf)
 	if err == nil {
 		t.log.Info("Update forbidden contract succeed")
 	}
@@ -352,7 +352,7 @@ func (t *Meta) UpdateIrreversibleBlockHeight(nextIrreversibleBlockHeight int64, 
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.IrreversibleBlockHeightKey, irreversibleBlockHeightBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.IrreversibleBlockHeightKey, irreversibleBlockHeightBuf)
 	if err != nil {
 		return err
 	}
@@ -427,7 +427,7 @@ func (t *Meta) UpdateIrreversibleSlideWindow(nextIrreversibleSlideWindow int64, 
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.IrreversibleSlideWindowKey, irreversibleSlideWindowBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.IrreversibleSlideWindowKey, irreversibleSlideWindowBuf)
 	if err != nil {
 		return err
 	}
@@ -506,7 +506,7 @@ func (t *Meta) UpdateGasPrice(nextGasPrice *protos.GasPrice, batch kvdb.Batch) e
 		t.log.Warn("failed to marshal pb meta")
 		return pbErr
 	}
-	err := rich.NewRichBatch(batch).PutMeta(ledger.GasPriceKey, gasPriceBuf)
+	err := rb.NewRichBatch(batch).PutMeta(ledger.GasPriceKey, gasPriceBuf)
 	if err != nil {
 		return err
 	}

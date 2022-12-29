@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	rich "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
+	rb "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
@@ -89,7 +89,7 @@ func (s *XModel) updateExtUtxo(tx *pb.Transaction, batch kvdb.Batch) error {
 		}
 		bucketAndKey := makeRawKey(txOut.Bucket, txOut.Key)
 		valueVersion := MakeVersion(tx.Txid, int32(offset))
-		richBatch := rich.NewRichBatch(batch)
+		richBatch := rb.NewRichBatch(batch)
 		if isDelFlag(txOut.Value) {
 			// TODO: deal with error
 			_ = richBatch.SoftDeleteExtUtxo(bucketAndKey, valueVersion)
@@ -144,7 +144,7 @@ func (s *XModel) UndoTx(tx *pb.Transaction, batch kvdb.Batch) error {
 		version := GetVersionOfTxInput(txIn)
 		inputVersionMap[rawKey] = version
 	}
-	richBatch := rich.NewRichBatch(batch)
+	richBatch := rb.NewRichBatch(batch)
 	for _, txOut := range tx.TxOutputsExt {
 		if txOut.Bucket == TransientBucket {
 			continue

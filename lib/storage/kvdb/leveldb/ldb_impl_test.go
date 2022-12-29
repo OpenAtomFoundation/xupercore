@@ -153,7 +153,7 @@ func BenchmarkLdbBatch_GetNotExist(b *testing.B) {
 
 	key := RandBytes(64)
 	for i := 0; i < b.N; i++ {
-		_, _ =db.Get(key)
+		_, _ = db.Get(key)
 	}
 }
 
@@ -168,7 +168,7 @@ func BenchmarkLdbBatch_ParallelGetNotExist(b *testing.B) {
 	key := RandBytes(64)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			_, _ =db.Get(key)
+			_, _ = db.Get(key)
 		}
 	})
 }

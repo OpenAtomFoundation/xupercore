@@ -21,13 +21,13 @@ import (
 
 // rpc server启停控制管理
 type RpcServMG struct {
-	scfg      *sconf.ServConf
-	engine    ecom.Engine
-	log       logs.Logger
-	rpcServ   *RpcServ
-	servHD    *grpc.Server
-	isInit    bool
-	exitOnce  *sync.Once
+	scfg     *sconf.ServConf
+	engine   ecom.Engine
+	log      logs.Logger
+	rpcServ  *RpcServ
+	servHD   *grpc.Server
+	isInit   bool
+	exitOnce *sync.Once
 }
 
 func NewRpcServMG(scfg *sconf.ServConf, engine engines.BCEngine) (*RpcServMG, error) {

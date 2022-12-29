@@ -153,10 +153,10 @@ func TestCursor(t *testing.T) {
 		t.Errorf("reloadCursor value error")
 		return
 	}
-	err =aw.storeCursor(asyncWorkerCursor{
+	err = aw.storeCursor(asyncWorkerCursor{
 		BlockHeight: 10,
 	})
-	if  err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
 }

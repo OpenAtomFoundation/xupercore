@@ -6,7 +6,7 @@ package pbrpc
 import (
 	context "context"
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"  //nolint:staticcheck
+	proto "github.com/golang/protobuf/proto" //nolint:staticcheck
 	pb "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"

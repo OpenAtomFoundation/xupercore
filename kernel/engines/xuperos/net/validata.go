@@ -3,7 +3,7 @@ package xuperos
 import (
 	"errors"
 
-	"github.com/golang/protobuf/proto"  //nolint:staticcheck
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 

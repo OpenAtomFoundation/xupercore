@@ -5,7 +5,7 @@ package protos
 
 import (
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"  //nolint:staticcheck
+	proto "github.com/golang/protobuf/proto" //nolint:staticcheck
 	math "math"
 )
 
