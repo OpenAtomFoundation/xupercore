@@ -46,6 +46,10 @@ func (timer *XTimer) Print() string {
 	deltaTotal := float64(now - timer.bornTime)
 	msg := []string{}
 	for _, point := range timer.points {
+		if point == nil {
+			// 目前会出现此情况，具体原因还在排查中，暂时先用此方案解决。
+			continue
+		}
 		msg = append(msg, fmt.Sprintf("%s:%.2fms", point.tag, point.delta/float64(time.Millisecond)))
 	}
 	msg = append(msg, fmt.Sprintf("total:%.2fms", deltaTotal/float64(time.Millisecond)))
