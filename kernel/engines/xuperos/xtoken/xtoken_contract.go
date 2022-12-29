@@ -3,6 +3,7 @@ package xtoken
 import (
 	"encoding/json"
 	"math/big"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -555,6 +556,10 @@ func (x *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
 	}
 	if len(value) != 0 { // 检查token是否已经存在。
 		return errors.New("token already exist")
+	}
+	if strings.Contains(token.Name, "_") {
+		// 限制 token name 不能有下划线
+		return errors.New("token name cannot contain underscores")
 	}
 	// 检查token相关参数。
 	if token.ConvertibleProportion.Cmp(big.NewInt(0)) < 0 {
