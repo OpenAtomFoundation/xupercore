@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	utils2 "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"math/big"
 	"path/filepath"
 	"runtime"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
+	rb "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -426,7 +426,7 @@ func (l *Ledger) correctTxsBlockid(blockID []byte, batchWrite kvdb.Batch) error 
 				l.xlog.Warn("marshal trasaction failed when confirm block", "err", err)
 				return err
 			}
-			utils2.NewRichBatch(batchWrite).PutConfirmedTx(tx.Txid, pbTxBuf)
+			rb.NewRichBatch(batchWrite).PutConfirmedTx(tx.Txid, pbTxBuf)
 		}
 	}
 	return nil
@@ -722,7 +722,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 	cbNum := 0
 	oldBlockCache := map[string]*pb.InternalBlock{}
 	trace("checktx")
-	richerBatch := utils2.NewRichBatch(batchWrite)
+	richBatch := rb.NewRichBatch(batchWrite)
 	for i, tx := range realTransactions {
 		if tx.Coinbase {
 			cbNum = cbNum + 1
@@ -742,7 +742,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		}
 		hasTx := txExist[string(tx.Txid)]
 		if !hasTx {
-			richerBatch.PutConfirmedTx(tx.Txid, pbTxBuf)
+			richBatch.PutConfirmedTx(tx.Txid, pbTxBuf)
 		} else {
 			//confirm表已经存在这个交易了，需要检查一下是否存在多个主干block包含同样transaction的情况
 			oldPbTxBuf, _ := l.confirmedTable.Get(tx.Txid)
@@ -761,7 +761,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 				if blockErr != nil {
 					if def.NormalizedKVError(blockErr) == def.ErrKVNotFound {
 						l.xlog.Warn("old block that contains the tx has been truncated", "txid", utils.F(tx.Txid), "blockid", utils.F(oldTx.Blockid))
-						richerBatch.PutConfirmedTx(tx.Txid, pbTxBuf) //overwrite with newtx
+						richBatch.PutConfirmedTx(tx.Txid, pbTxBuf) //overwrite with newtx
 						continue
 					}
 					confirmStatus.Succ = false
@@ -785,7 +785,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 				return confirmStatus
 			} else if block.InTrunk {
 				l.xlog.Info("change blockid of tx", "txid", utils.F(tx.Txid), "blockid", utils.F(block.Blockid))
-				richerBatch.PutConfirmedTx(tx.Txid, pbTxBuf)
+				richBatch.PutConfirmedTx(tx.Txid, pbTxBuf)
 			}
 		}
 	}
@@ -802,7 +802,7 @@ func (l *Ledger) ConfirmBlock(block *pb.InternalBlock, isRoot bool) ConfirmStatu
 		return confirmStatus
 	}
 	// TODO: deal with error
-	_ = richerBatch.PutMeta("", metaBuf)
+	_ = richBatch.PutMeta("", metaBuf)
 	l.xlog.Debug("print block size when confirm block", "blockSize", batchWrite.ValueSize(), "blockid", utils.F(block.Blockid))
 	kvErr := batchWrite.Write() // blocks, confirmed_transaction两张表原子写入
 	blkTimer.Mark("saveToDisk")
@@ -1241,7 +1241,7 @@ func (l *Ledger) Truncate(utxovmLastID []byte) error {
 		l.xlog.Warn("failed to marshal pb meta")
 		return err
 	}
-	if err := utils2.NewRichBatch(batchWrite).PutMeta("", metaBuf); err != nil {
+	if err := rb.NewRichBatch(batchWrite).PutMeta("", metaBuf); err != nil {
 		return err
 	}
 	err = batchWrite.Write()

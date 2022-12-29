@@ -40,9 +40,6 @@ func TestCommandNotFound(t *testing.T) {
 		}
 
 		err = process.Start()
-		if err != nil {
-			t.Fatal(err)
-		}
 		defer func() {
 			_ = process.Stop(time.Second)
 		}()
