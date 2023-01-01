@@ -35,6 +35,8 @@ func NewNetCtx(envCfg *xconf.EnvConf) (*NetCtx, error) {
 
 	// 配置路径转为绝对路径
 	cfg.KeyPath = envCfg.GenDataAbsPath(cfg.KeyPath)
+	cfg.GMCertKeyPath = envCfg.GenDataAbsPath(cfg.GMCertKeyPath)
+	cfg.CertKeyPath = envCfg.GenDataAbsPath(cfg.CertKeyPath)
 
 	log, err := logs.NewLogger("", def.SubModName)
 	if err != nil {
