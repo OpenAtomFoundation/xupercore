@@ -12,6 +12,7 @@ import (
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
 )
@@ -48,20 +49,19 @@ type XMCache struct {
 
 	model ledger.XMReader
 
-	utxoSandbox *utxo.UTXOSandbox
-	// crossQueryCache *CrossQueryCache
-	events []*protos.ContractEvent
+	utxoSandbox     *utxo.UTXOSandbox
+	crossQueryCache *CrossQueryCache
+	events          []*protos.ContractEvent
 }
 
 // NewXModelCache new an instance of XModel Cache
 func NewXModelCache(cfg *contract.SandboxConfig) *XMCache {
 	return &XMCache{
-		model:        cfg.XMReader,
-		inputsCache:  NewMemXModel(),
-		outputsCache: NewMemXModel(),
-		utxoSandbox:  utxo.NewUTXOSandbox(cfg),
-
-		// crossQueryCache: NewCrossQueryCache(),
+		model:           cfg.XMReader,
+		inputsCache:     NewMemXModel(),
+		outputsCache:    NewMemXModel(),
+		utxoSandbox:     utxo.NewUTXOSandbox(cfg),
+		crossQueryCache: NewCrossQueryCache(),
 	}
 }
 
@@ -378,61 +378,65 @@ func (xc *XMCache) flushUTXORWSet() error {
 //}
 
 // CrossQuery will query contract from other chain
-//func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
-//	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
-//}
+func (xc *XMCache) CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error) {
+	return xc.crossQueryCache.CrossQuery(crossQueryRequest, queryMeta)
+}
+
+func (xc *XMCache) CrossQueryCache(crossQueries []*pb.CrossQueryInfo) {
+	xc.crossQueryCache.CrossQueryCache(crossQueries)
+}
 
 // ParseCrossQuery parse cross query from tx
-//func ParseCrossQuery(tx *pb.Transaction) ([]*pb.CrossQueryInfo, error) {
-//	var (
-//		crossQueryInfos []*pb.CrossQueryInfo
-//		queryInfos      []byte
-//	)
-//	for _, out := range tx.GetTxOutputsExt() {
-//		if out.GetBucket() != TransientBucket {
-//			continue
-//		}
-//		if bytes.Equal(out.GetKey(), crossQueryInfosKey) {
-//			queryInfos = out.GetValue()
-//		}
-//	}
-//	if queryInfos != nil {
-//		err := UnmsarshalMessages(queryInfos, &crossQueryInfos)
-//		if err != nil {
-//			return nil, err
-//		}
-//	}
-//	return crossQueryInfos, nil
-//}
+func ParseCrossQuery(tx *lpb.Transaction) ([]*pb.CrossQueryInfo, error) {
+	var (
+		crossQueryInfos []*pb.CrossQueryInfo
+		queryInfos      []byte
+	)
+	for _, out := range tx.GetTxOutputsExt() {
+		if out.GetBucket() != TransientBucket {
+			continue
+		}
+		if bytes.Equal(out.GetKey(), crossQueryInfosKey) {
+			queryInfos = out.GetValue()
+		}
+	}
+	if queryInfos != nil {
+		err := UnmsarshalMessages(queryInfos, &crossQueryInfos)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return crossQueryInfos, nil
+}
 
 // IsCrossQueryEffective check if crossQueryInfos effective
 // TODO: zq
-//func IsCrossQueryEffective(cqi []*pb.CrossQueryInfo, tx *pb.Transaction) bool {
-//	return true
-//}
+func IsCrossQueryEffective(cqi []*pb.CrossQueryInfo, tx *lpb.Transaction) bool {
+	return true
+}
 
 // PutCrossQueries put queryInfos to db
-//func (xc *XMCache) putCrossQueries(queryInfos []*pb.CrossQueryInfo) error {
-//	var qi []byte
-//	var err error
-//	if len(queryInfos) != 0 {
-//		qi, err = MarshalMessages(queryInfos)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	if qi != nil {
-//		err = xc.Put(TransientBucket, crossQueryInfosKey, qi)
-//		if err != nil {
-//			return err
-//		}
-//	}
-//	return nil
-//}
+func (xc *XMCache) putCrossQueries(queryInfos []*pb.CrossQueryInfo) error {
+	var qi []byte
+	var err error
+	if len(queryInfos) != 0 {
+		qi, err = MarshalMessages(queryInfos)
+		if err != nil {
+			return err
+		}
+	}
+	if qi != nil {
+		err = xc.Put(TransientBucket, crossQueryInfosKey, qi)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
 
-//func (xc *XMCache) writeCrossQueriesRWSet() error {
-//	return xc.putCrossQueries(xc.crossQueryCache.GetCrossQueryRWSets())
-//}
+func (xc *XMCache) writeCrossQueriesRWSet() error {
+	return xc.putCrossQueries(xc.crossQueryCache.GetCrossQueryRWSets())
+}
 
 // ParseContractEvents parse contract events from tx
 func ParseContractEvents(tx *lpb.Transaction) ([]*protos.ContractEvent, error) {
@@ -479,10 +483,10 @@ func (xc *XMCache) Flush() error {
 		return err
 	}
 
-	// err = xc.writeCrossQueriesRWSet()
-	// if err != nil {
-	// 	return err
-	// }
+	err = xc.writeCrossQueriesRWSet()
+	if err != nil {
+		return err
+	}
 
 	err = xc.writeEventRWSet()
 	if err != nil {

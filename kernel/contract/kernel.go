@@ -1,5 +1,7 @@
 package contract
 
+import "github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
+
 type KernRegistry interface {
 	RegisterKernMethod(contract, method string, handler KernMethod)
 	UnregisterKernMethod(ctract, method string)
@@ -27,4 +29,6 @@ type KContext interface {
 
 	// 合约异步事件调用
 	EmitAsyncTask(event string, args interface{}) error
+
+	CrossQuery(crossQueryRequest *pb.CrossQueryRequest, queryMeta *pb.CrossQueryMeta) (*pb.ContractResponse, error)
 }

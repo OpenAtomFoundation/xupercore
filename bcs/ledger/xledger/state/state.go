@@ -4,6 +4,7 @@ package state
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -931,6 +932,40 @@ func (t *State) QueryBlock(blockid []byte) (kledger.BlockHandle, error) {
 	return NewBlockAgent(block), nil
 
 }
+
+func (t *State) ResolveChain(chainName string) (*pb2.CrossQueryMeta, error) {
+	xmReader := t.CreateXMReader()
+	sandBoxCfg := &contract.SandboxConfig{
+		XMReader: xmReader,
+	}
+	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxCfg)
+	if err != nil {
+		return nil, err
+	}
+	contextConfig := &contract.ContextConfig{
+		State:          sandBox,
+		ResourceLimits: contract.MaxLimits,
+		ContractName:   "crossQueryNaming",
+	}
+
+	ctx, err := t.sctx.ContractMgr.NewContext(contextConfig)
+	if err != nil {
+		t.log.Warn("queryContractBannedStatus new context error", "error", err)
+		return nil, err
+	}
+	args := map[string][]byte{}
+	args["name"] = []byte(chainName)
+	invokeRes, invokeErr := ctx.Invoke("Resolve", args)
+	if invokeErr != nil {
+		ctx.Release()
+		return nil, invokeErr
+	}
+	ctx.Release()
+	res := &pb2.CrossQueryMeta{}
+	err = json.Unmarshal(invokeRes.Body, res)
+	return res, err
+}
+
 func (t *State) QueryTransaction(txid []byte) (*pb2.Transaction, error) {
 	ltx, err := t.sctx.Ledger.QueryTransaction(txid)
 	if err != nil {

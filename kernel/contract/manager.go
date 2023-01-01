@@ -2,8 +2,9 @@ package contract
 
 import (
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 	"sync"
+
+	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
 
 	"github.com/xuperchain/xupercore/kernel/common/xconfig"
 	"github.com/xuperchain/xupercore/kernel/ledger"
@@ -46,7 +47,7 @@ type ChainCore interface {
 	QueryBlock(blockid []byte) (ledger.BlockHandle, error)
 
 	// ResolveChain resolve chain endorsorinfos
-	// ResolveChain(chainName string) (*pb.CrossQueryMeta, error)
+	ResolveChain(chainName string) (*pb.CrossQueryMeta, error)
 }
 
 func Register(name string, f NewManagerFunc) {

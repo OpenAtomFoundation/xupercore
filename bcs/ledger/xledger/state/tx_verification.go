@@ -588,17 +588,32 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 		XMReader:   reader,
 		UTXOReader: utxoReader,
 	}
+
 	sandBox, err := t.sctx.ContractMgr.NewStateSandbox(sandBoxConfig)
 	if err != nil {
 		t.log.Error("NewStateSandbox error", "err", err)
 		return false, err
 	}
 
+	// 构建CrossQueryCache 依据xuperchain v3.10的流程添加
+	// 1.ParseCrossQuery()
+	crossQueries, err := sandbox.ParseCrossQuery(tx)
+	if err != nil {
+		t.log.Warn("PrepareEnv ParseCrossQuery error", "err", err.Error())
+		return false, err
+	}
+	// 2.IsCrossQueryEffective()
+	if ok := sandbox.IsCrossQueryEffective(crossQueries, tx); !ok {
+		t.log.Warn("PrepareEnv IsCrossQueryEffective error")
+		return false, errors.New("PrepareEnv CheckCrossQueryEffective error")
+	}
+	// 3.crossQueries 缓存赋值到 XMCache 中
+	sandBox.CrossQueryCache(crossQueries)
+
 	transContractName, transAmount, err := txn.ParseContractTransferRequest(req)
 	if err != nil {
 		return false, err
 	}
-
 	contextConfig := &contract.ContextConfig{
 		State:       sandBox,
 		Initiator:   tx.GetInitiator(),

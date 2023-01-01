@@ -37,3 +37,7 @@ func (t *fakeChainCore) QueryTransaction(txid []byte) (*pb.Transaction, error) {
 		Blockid: "testblockd",
 	}, nil
 }
+
+func (t *fakeChainCore) ResolveChain(chainName string) (*pb.CrossQueryMeta, error) {
+	return &pb.CrossQueryMeta{}, nil
+}

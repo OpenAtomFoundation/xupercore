@@ -2,15 +2,21 @@ package p2p
 
 import (
 	"crypto/rand"
-	"crypto/tls"
-	"crypto/x509"
+	defaulttls "crypto/tls"
+	defaultx509 "crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"errors"
 	"io/ioutil"
 	math_rand "math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
+
+	tls "github.com/tjfoc/gmsm/gmtls"
+	"github.com/tjfoc/gmsm/gmtls/gmcredentials"
+	"github.com/tjfoc/gmsm/x509"
 
 	iaddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -20,32 +26,79 @@ import (
 	"github.com/xuperchain/xupercore/kernel/network/config"
 )
 
+// serverName  为key,缓存 creds
+var serverNameMap = make(map[string]credentials.TransportCredentials)
+
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {
+
+	if len(serviceName) < 1 {
+		return nil, errors.New("serviceName is empty")
+	}
+
+	//如果缓存中有值
+	if creds, ok := serverNameMap[serviceName]; ok {
+		return creds, nil
+	}
+
 	bs, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
 	if err != nil {
 		return nil, err
 	}
-
-	certPool := x509.NewCertPool()
-	ok := certPool.AppendCertsFromPEM(bs)
-	if !ok {
+	cacert, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
+	if err != nil {
 		return nil, err
 	}
-
-	certificate, err := tls.LoadX509KeyPair(filepath.Join(path, "cert.pem"), filepath.Join(path, "private.key"))
+	pb, _ := pem.Decode(cacert)
+	x509cert, err := x509.ParseCertificate(pb.Bytes)
 	if err != nil {
 		return nil, err
 	}
 
-	creds := credentials.NewTLS(
-		&tls.Config{
-			ServerName:   serviceName,
-			Certificates: []tls.Certificate{certificate},
-			RootCAs:      certPool,
-			ClientCAs:    certPool,
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-		})
-	return creds, nil
+	if strings.Contains(strings.ToLower(x509cert.SignatureAlgorithm.String()), "sm") { //国密
+		certPool := x509.NewCertPool()
+		ok := certPool.AppendCertsFromPEM(bs)
+		if !ok {
+			return nil, err
+		}
+		certificate, err := tls.LoadX509KeyPair(filepath.Join(path, "cert.pem"), filepath.Join(path, "private.key"))
+		if err != nil {
+			return nil, err
+		}
+		creds := gmcredentials.NewTLS(
+			&tls.Config{
+				GMSupport:    tls.NewGMSupport(),
+				ServerName:   serviceName,
+				Certificates: []tls.Certificate{certificate, certificate},
+				RootCAs:      certPool,
+				ClientCAs:    certPool,
+				ClientAuth:   tls.RequireAndVerifyClientCert,
+			})
+		serverNameMap[serviceName] = creds
+		return creds, nil
+	} else { //非国密
+		certPool := defaultx509.NewCertPool()
+		ok := certPool.AppendCertsFromPEM(bs)
+		if !ok {
+			return nil, err
+		}
+
+		certificate, err := defaulttls.LoadX509KeyPair(filepath.Join(path, "cert.pem"), filepath.Join(path, "private.key"))
+		if err != nil {
+			return nil, err
+		}
+
+		creds := credentials.NewTLS(
+			&defaulttls.Config{
+				ServerName:   serviceName,
+				Certificates: []defaulttls.Certificate{certificate},
+				RootCAs:      certPool,
+				ClientCAs:    certPool,
+				ClientAuth:   defaulttls.RequireAndVerifyClientCert,
+			})
+		serverNameMap[serviceName] = creds
+		return creds, nil
+	}
+
 }
 
 // GenerateKeyPairWithPath generate xuper net key pair

@@ -11,6 +11,43 @@ message PingRequest {
 message PingResponse {
 }
 
+
+enum XChainErrorEnum {
+  SUCCESS = 0;
+  UNKNOW_ERROR = 1;
+  CONNECT_REFUSE = 2;
+  NOT_ENOUGH_UTXO_ERROR = 3;
+  UTXOVM_ALREADY_UNCONFIRM_ERROR = 4;
+  UTXOVM_NOT_FOUND_ERROR = 5;
+  INPUT_OUTPUT_NOT_EQUAL_ERROR = 6;
+  TX_NOT_FOUND_ERROR = 7;
+  TX_SIGN_ERROR = 8;
+  BLOCKCHAIN_NOTEXIST = 9;
+  VALIDATE_ERROR = 10;
+  CANNOT_SYNC_BLOCK_ERROR = 11;
+  CONFIRM_BLOCK_ERROR = 12;
+  UTXOVM_PLAY_ERROR = 13;
+  WALK_ERROR = 14;
+  NOT_READY_ERROR = 15;
+  BLOCK_EXIST_ERROR = 16;
+  ROOT_BLOCK_EXIST_ERROR = 17;
+  TX_DUPLICATE_ERROR = 19;
+  SERVICE_REFUSED_ERROR = 20;
+  TXDATA_SIGN_ERROR = 21;
+  TX_SLE_ERROR = 25;
+  TX_FEE_NOT_ENOUGH_ERROR = 26;
+  UTXO_SIGN_ERROR = 28;
+  DPOS_QUERY_ERROR = 31;
+  RWSET_INVALID_ERROR = 33;
+  RWACL_INVALID_ERROR = 34;
+  GAS_NOT_ENOUGH_ERROR = 35;
+  TX_VERSION_INVALID_ERROR = 36;
+  COMPLIANCE_CHECK_NOT_APPROVED = 37;
+  ACCOUNT_CONTRACT_STATUS_ERROR = 38;
+  TX_VERIFICATION_ERROR = 40;
+}
+
+
 message NativeCallRequest {
   // The context id of this request
   int64  ctxid = 1;
@@ -151,8 +188,7 @@ message GetCallArgsRequest {
 }
 
 // Transaction input
-message TxInput
-{
+message TxInput{
     // The transaction id referenced to
     string ref_txid = 1;
     // The output offset of the transaction referenced to
@@ -166,8 +202,7 @@ message TxInput
 }
 
 // Transaction output
-message TxOutput
-{
+message TxOutput{
     // The amount of the transaction
     string amount = 1;
     // The address of the launcher
@@ -177,8 +212,7 @@ message TxOutput
 }
 
 // Transaction is the information of the transaction
-message Transaction
-{
+message Transaction{
     // txid is the id of this transaction
     string txid = 1;
     // the blockid the transaction belong to
@@ -198,8 +232,7 @@ message Transaction
 }
 
 // The block struct
-message Block
-{
+message Block{
     // blockid generate the hash sign of the block used by sha256
     string blockid = 3;
     // pre_hash is the parent blockid of the block
@@ -251,3 +284,78 @@ message EmitEventRequest {
 
 message EmitEventResponse {
 }
+
+message CrossQueryRequest {
+  string bcname = 1;
+  int64 timestamp = 2;
+  string initiator = 3;
+  repeated string auth_require = 4;
+  InvokeRequest request = 5;
+}
+// 预执行的请求结构
+message InvokeRequest {
+  string module_name = 1;
+  string contract_name = 2;
+  string method_name = 3;
+  map<string, bytes> args = 4;
+  repeated ResourceLimit resource_limits = 5;
+  // amount is the amount transfer to the contract
+  // attention: In one transaction, transfer to only one contract is allowed
+  string amount = 6;
+}
+
+message ResourceLimit {
+  ResourceType type = 1;
+  int64 limit = 2;
+}
+enum ResourceType {
+  CPU = 0;
+  MEMORY = 1;
+  DISK = 2;
+  XFEE = 3; // the fee used in kernel contract
+}
+
+
+message CrossChainMeta {
+  string type = 1;
+  int64 min_endorsor_num = 2;
+}
+
+message CrossEndorsor {
+  string address = 1;
+  string pub_key = 2;
+  // ip+port
+  string host = 3;
+}
+message CrossQueryMeta {
+  CrossChainMeta chain_meta = 1;
+  repeated CrossEndorsor endorsors = 2;
+}
+// ContractResponse is the response returnd by contract
+message ContractResponse {
+  int32 status = 1;
+  string message = 2;
+  bytes body = 3;
+}
+message CrossQueryResponse {
+  ContractResponse response = 1;
+}
+
+// 签名详情
+message SignatureInfo {
+  string PublicKey = 1;
+  bytes Sign = 2;
+}
+
+message CrossQueryInfo {
+  CrossQueryRequest request = 1;
+  CrossQueryResponse response = 2;
+  repeated SignatureInfo signs = 3;
+}
+
+message Header {
+  string logid = 1; //如果logid没填写，生成一个
+  string from_node = 2; // call rpc client address，客户端可以为空，节点一定要写自己的address
+  XChainErrorEnum error = 3;
+}
+
