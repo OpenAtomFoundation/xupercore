@@ -448,6 +448,13 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 }
 
 func (x *Contract) getOrCheckVoteAsync(ctx contract.KContext, token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int) (*contract.Response, error) {
+	if x.lastCheckVoteErr != nil {
+		// 如果上一次检票有error直接返回并清空。
+		err := x.lastCheckVoteErr
+		x.lastCheckVoteErr = nil
+		return nil, err
+	}
+
 	key := proposalCheckingKey(token, topic, pid.String())
 
 	dbkey := KeyOfProposalResult(token, topic, pid)
@@ -495,16 +502,19 @@ func (x *Contract) calcVoteResult(token, topic string, pid *big.Int, proposalEff
 	agreeVoteCount, err := x.getAgreeVoteAmountFromXM(token, topic, pid)
 	if err != nil {
 		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getAgreeVoteAmountFromXM error", err)
+		x.lastCheckVoteErr = err
 		return
 	}
 	opposeVoteCount, err := x.getOpposeVoteAmountFromXM(token, topic, pid)
 	if err != nil {
 		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getOpposeVoteAmountFromXM error", err)
+		x.lastCheckVoteErr = err
 		return
 	}
 	waiveVoteCount, err := x.getWaiveVoteAmountFromXM(token, topic, pid)
 	if err != nil {
 		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getWaiveVoteAmountFromXM error", err)
+		x.lastCheckVoteErr = err
 		return
 	}
 	tmp := big.NewInt(0).Add(agreeVoteCount, opposeVoteCount)
@@ -534,6 +544,7 @@ func (x *Contract) calcVoteResult(token, topic string, pid *big.Int, proposalEff
 	err = db.Put([]byte(KeyOfProposalResult(token, topic, pid)), value)
 	if err != nil {
 		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult db put CheckVoteResult error", err)
+		x.lastCheckVoteErr = err
 	}
 }
 
@@ -571,6 +582,10 @@ func (x *Contract) getVoteAmountFromXM(token, topic string, proposalID *big.Int,
 			return nil, errors.New("vote value invalid")
 		}
 		voteCount = voteCount.Add(voteCount, voteAmount)
+	}
+	if err := it.Error(); err != nil {
+		x.contractCtx.XLog.Error("XToken contract", "State CreateXMReader iterator error", err)
+		return nil, err
 	}
 	return voteCount, nil
 }

@@ -21,6 +21,7 @@ type Contract struct {
 	Fees   map[string]int64 // 创世配置的或者节点配置文件写的，如果通过交易设置fee，此字段会作废。
 
 	proposalChecking sync.Map
+	lastCheckVoteErr error
 
 	contractCtx *Context
 }
