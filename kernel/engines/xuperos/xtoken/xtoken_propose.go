@@ -405,9 +405,10 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 	if err != nil {
 		return nil, err
 	}
-	proposalEffectiveAmount := t.GenesisProposal.ProposalEffectiveAmount
+
 	if p.Status == ProposalStopped {
 		// 异步检票流程
+		proposalEffectiveAmount := t.GenesisProposal.ProposalEffectiveAmount
 		return x.getOrCheckVoteAsync(ctx, tokenName, topic, pID, proposalEffectiveAmount)
 	}
 
@@ -426,6 +427,7 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 	}
 
 	result := &CheckVoteResult{
+		Status:      p.Status,
 		AgreeCount:  agreeCount,
 		OpposeCount: opposeCount,
 		WaiveCount:  waiveCount,

@@ -712,12 +712,15 @@ func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address st
 	// 并且实际业务场景中，大多数一个地址参与的不同类型的提案不会很多，且同时为voting状态的提案也不会很多。
 	for topic, pid2amount := range votingProposalMap {
 		for pidstr, amount := range pid2amount {
+			if amount.Cmp(max) <= 0 {
+				continue
+			}
 			pid, _ := big.NewInt(0).SetString(pidstr, 10)
 			p, err := x.getProposal(ctx, tokenName, topic, pid)
 			if err != nil {
 				return nil, err
 			}
-			if p.Status == ProposalVoting && amount.Cmp(max) > 0 {
+			if p.Status == ProposalVoting {
 				max = amount
 			}
 		}
@@ -731,12 +734,15 @@ func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address st
 
 	for topic, pid2amount := range proposerProposalMap {
 		for pidstr, amount := range pid2amount {
+			if amount.Cmp(max) <= 0 {
+				continue
+			}
 			pid, _ := big.NewInt(0).SetString(pidstr, 10)
 			p, err := x.getProposal(ctx, tokenName, topic, pid)
 			if err != nil {
 				return nil, err
 			}
-			if p.Status == ProposalVoting && amount.Cmp(max) > 0 {
+			if p.Status == ProposalVoting {
 				max = amount
 			}
 		}
