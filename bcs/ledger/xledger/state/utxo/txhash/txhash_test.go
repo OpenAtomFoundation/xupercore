@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
 )
@@ -42,7 +43,8 @@ func BenchmarkTxHashV1(b *testing.B) {
 	tx := readTxFile(b, "tx.pb")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		MakeTransactionID(tx)
+		// result ignored for benchmark test
+		_, _ = MakeTransactionID(tx)
 	}
 }
 

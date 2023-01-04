@@ -232,8 +232,6 @@ func (n *Node) updateInputExt(index, offset int, node *Node, retrieve bool) (*No
 			if indexa > 0 {
 				if !readonly {
 					node.txOutputsExt = append(node.txOutputsExt, make([]*Node, index)...)
-				} else {
-
 				}
 			}
 		}
@@ -351,23 +349,4 @@ func (n *Node) getInputSum() int {
 	}
 
 	return sum
-}
-
-func (n *Node) removeAllInputs() {
-	for i, fn := range n.txInputs {
-		if fn == nil {
-			continue
-		}
-		n.txInputs[i] = nil
-
-		for ii, cn := range fn.txOutputs {
-			if fn == nil {
-				continue
-			}
-
-			if cn.txid == n.txid {
-				fn.txOutputs[ii] = nil
-			}
-		}
-	}
 }

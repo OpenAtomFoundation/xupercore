@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 )
 
 var (
@@ -30,7 +30,7 @@ func MarshalMessages(msgs interface{}) ([]byte, error) {
 	}
 
 	var buf proto.Buffer
-	buf.EncodeVarint(uint64(value.Len()))
+	_ = buf.EncodeVarint(uint64(value.Len())) // no error expected
 	for i := 0; i < value.Len(); i++ {
 		msg := value.Index(i).Interface().(proto.Message)
 		err := buf.EncodeMessage(msg)

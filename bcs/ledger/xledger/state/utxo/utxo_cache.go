@@ -73,7 +73,7 @@ func (uv *UtxoCache) Use(address string, utxoKey string) {
 
 func (uv *UtxoCache) remove(address string, utxoKey string) {
 	if l2, exist := uv.All[address]; exist {
-		cacheItem, _ := l2[utxoKey]
+		cacheItem := l2[utxoKey]
 		if cacheItem != nil {
 			uv.List.Remove(cacheItem.ele)
 			delete(l2, utxoKey)

@@ -66,7 +66,7 @@ func GetTransferTxCmd() *TransferTxCmd {
 func (t *TransferTxCmd) transfer() error {
 	xcli, err := client.NewXchainClient()
 	if err != nil {
-		fmt.Sprintf("grpc dial failed.err:%v\n", err)
+		fmt.Printf("grpc dial failed.err:%v\n", err)
 		return fmt.Errorf("grpc dial failed")
 	}
 	amount, ok := big.NewInt(0).SetString(t.Amount, 10)
@@ -80,19 +80,19 @@ func (t *TransferTxCmd) transfer() error {
 
 	resp, err := xcli.SelectUtxo(amount)
 	if err != nil {
-		fmt.Sprintf("select utxo failed.err:%v", err)
+		fmt.Printf("select utxo failed.err:%v", err)
 		return fmt.Errorf("select utxo failed")
 	}
 	//构造交易
 	tx, err := t.generateTx(resp, amount)
 	if err != nil {
-		fmt.Sprintf("generate tx failed.err:%v", err)
+		fmt.Printf("generate tx failed.err:%v", err)
 		return fmt.Errorf("generate tx failed")
 	}
 	// 提交交易
 	_, err = xcli.SubmitTx(tx)
 	if err != nil {
-		fmt.Sprintf("submit tx failed.err:%v", err)
+		fmt.Printf("submit tx failed.err:%v", err)
 		return fmt.Errorf("submit tx failed")
 	}
 
@@ -126,7 +126,7 @@ func (t *TransferTxCmd) generateTx(utxoRes *xchainpb.SelectUtxoResp, amount *big
 
 	txInputs, deltaOutput, err := t.genTxInputs(utxoRes, amount, addr.Address)
 	if err != nil {
-		fmt.Sprintf("gen tx.err:%v", err)
+		fmt.Printf("gen tx.err:%v", err)
 		return nil, err
 	}
 	tx.TxInputs = txInputs

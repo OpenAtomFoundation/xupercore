@@ -95,7 +95,7 @@ func (t *StateCtx) SetTimerTaskMG(timerTaskMgr timerTask.TimerManager) {
 	t.TimerTaskMgr = timerTaskMgr
 }
 
-//state各个func里尽量调一下判断
+// state各个func里尽量调一下判断
 func (t *StateCtx) IsInit() bool {
 	if t.AclMgr == nil || t.ContractMgr == nil || t.GovernTokenMgr == nil || t.ProposalMgr == nil ||
 		t.TimerTaskMgr == nil || t.Crypt == nil || t.Ledger == nil {

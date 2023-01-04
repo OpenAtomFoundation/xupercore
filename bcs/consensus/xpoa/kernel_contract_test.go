@@ -16,10 +16,6 @@ var (
 		"dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN": 0.5,
 		"WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT": 0.6,
 	}
-	aks3 = map[string]float64{
-		"dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN": 0.4,
-		"WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT": 0.6,
-	}
 )
 
 func NewEditArgs() map[string][]byte {

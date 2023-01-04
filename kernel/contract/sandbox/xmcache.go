@@ -26,7 +26,7 @@ var (
 var (
 	contractUtxoInputKey  = []byte("ContractUtxo.Inputs")
 	contractUtxoOutputKey = []byte("ContractUtxo.Outputs")
-	crossQueryInfosKey    = []byte("CrossQueryInfos")
+	crossQueryInfosKey    = []byte("CrossQueryInfos") //nolint:unused
 	contractEventKey      = []byte("contractEvent")
 )
 
@@ -123,7 +123,8 @@ func (xc *XMCache) getAndSetFromInputsCache(bucket string, key []byte) (*ledger.
 		if err != nil {
 			return nil, err
 		}
-		xc.inputsCache.Put(bucket, key, data)
+		// TODO: deal with error
+		_ = xc.inputsCache.Put(bucket, key, data)
 	}
 	return data, nil
 }
@@ -144,7 +145,7 @@ func (xc *XMCache) Put(bucket string, key []byte, value []byte) error {
 	}
 	if bucket != TransientBucket {
 		// put 前先强制get一下
-		xc.Get(bucket, key)
+		_, _ = xc.Get(bucket, key)
 	}
 	return xc.outputsCache.Put(bucket, key, val)
 }
@@ -228,7 +229,7 @@ func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
 	return xc.utxoSandbox.Transfer(from, to, amount)
 }
 
-//UTXORWSet returns the inputs and outputs of utxo
+// UTXORWSet returns the inputs and outputs of utxo
 func (xc *XMCache) UTXORWSet() *contract.UTXORWSet {
 	return xc.utxoSandbox.GetUTXORWSets()
 }

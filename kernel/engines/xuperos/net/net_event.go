@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/xuperchain/xupercore/kernel/network"
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
@@ -162,7 +163,7 @@ func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 
 	err = t.PostTx(ctx, chain, &tx)
 	if err == nil {
-		go t.engine.Context().Net.SendMessage(ctx, request)
+		go sendMessage(t.engine.Context().Net, ctx, request)
 	}
 }
 
@@ -192,8 +193,7 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 
 	input.Txs = broadcastTx
 	msg := p2p.NewMessage(protos.XuperMessage_BATCHPOSTTX, &input)
-
-	go t.engine.Context().Net.SendMessage(ctx, msg)
+	go sendMessage(t.engine.Context().Net, ctx, msg)
 }
 
 func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
@@ -233,15 +233,16 @@ func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 	}
 
 	net := t.engine.Context().Net
+	var msg *protos.XuperMessage
 	if t.engine.Context().EngCfg.BlockBroadcastMode == common.FullBroadCastMode {
-		go net.SendMessage(ctx, request)
+		msg = request
 	} else {
 		blockID := &lpb.InternalBlock{
 			Blockid: block.Blockid,
 		}
-		msg := p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, p2p.WithBCName(request.Header.Bcname))
-		go net.SendMessage(ctx, msg)
+		msg = p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, p2p.WithBCName(request.Header.Bcname))
 	}
+	go sendMessage(net, ctx, msg)
 }
 
 func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
@@ -261,8 +262,13 @@ func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 		return
 	}
 
-	go t.engine.Context().Net.SendMessage(ctx, request)
-	return
+	go sendMessage(t.engine.Context().Net, ctx, request)
+}
+
+// sendMessage wrapper function which ignore error
+func sendMessage(n network.Network, ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
+	// ignore error
+	_ = n.SendMessage(ctx, msg, of...)
 }
 
 func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
@@ -306,7 +312,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	var input xpb.BlockID
 	var output *xpb.BlockInfo = new(xpb.BlockInfo)
 	defer func(begin time.Time) {
-		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlock").Observe(time.Now().Sub(begin).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlock").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
 	bcName := request.Header.Bcname
@@ -351,7 +357,7 @@ func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 	output := new(xpb.GetBlockHeaderResponse)
 	defer func(begin time.Time) {
-		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockHeaders").Observe(time.Now().Sub(begin).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockHeaders").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
 	bcName := request.Header.Bcname
@@ -437,7 +443,7 @@ func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 
 	output := new(xpb.GetBlockTxsResponse)
 	defer func(begin time.Time) {
-		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockTxs").Observe(time.Now().Sub(begin).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockTxs").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
 	bcName := request.Header.Bcname

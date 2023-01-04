@@ -145,7 +145,8 @@ func (t *State) GetReservedContractRequests(req []*protos.InvokeRequest, isPreEx
 		for k, v := range rc.GetArgs() {
 			buf := new(bytes.Buffer)
 			tpl := template.Must(template.New("value").Parse(string(v)))
-			tpl.Execute(buf, ra)
+			// TODO: deal with error
+			_ = tpl.Execute(buf, ra)
 			rctmp.Args[k] = buf.Bytes()
 		}
 		reservedContracts = append(reservedContracts, &rctmp)

@@ -59,14 +59,11 @@ func (p *P2PServerV1) GetPeer(peerInfo pb.PeerInfo, addr string) []*pb.PeerInfo 
 	return remotePeers
 }
 
-func (p *P2PServerV1) registerConnectHandler() error {
+func (p *P2PServerV1) registerConnectHandler() {
 	err := p.Register(p2p.NewSubscriber(p.ctx, pb.XuperMessage_GET_PEER_INFO, p2p.HandleFunc(p.handleGetPeerInfo)))
 	if err != nil {
 		p.log.Error("registerSubscribe error", "error", err)
-		return err
 	}
-
-	return nil
 }
 
 func (p *P2PServerV1) handleGetPeerInfo(ctx xctx.XContext, request *pb.XuperMessage) (*pb.XuperMessage, error) {

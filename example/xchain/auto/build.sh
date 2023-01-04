@@ -26,15 +26,15 @@ function buildpkg() {
     if [ $? != 0 ]; then
         version="unknow"
     fi
-    
+
     commitId=`git rev-parse --short HEAD`
     if [ $? != 0 ]; then
         commitId="unknow"
     fi
 
     buildTime=$(date "+%Y-%m-%d-%H:%M:%S")
-    
-    
+
+
     # build
     if [ ! -d "$OUTDIR/bin" ]; then
         mkdir "$OUTDIR/bin"

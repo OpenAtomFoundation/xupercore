@@ -64,7 +64,7 @@ message GetBlockHeaderResponse {
 }
 
 message GetBlockTxsRequest {
-    string bcname = 1; 
+    string bcname = 1;
     bytes blockid = 2;
     repeated int32 txs = 3;
 }

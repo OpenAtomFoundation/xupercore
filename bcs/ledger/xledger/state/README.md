@@ -9,5 +9,3 @@ NewState()
 
 RegisterAclMG(t.ctx.Acl)
 RegisterContractMG(t.ctx.Contract)
-
-

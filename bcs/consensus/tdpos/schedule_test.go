@@ -124,19 +124,22 @@ func TestCalHisValidators(t *testing.T) {
 	}
 	s := NewSchedule(tdposCfg, cCtx.XLog, cCtx.Ledger, 1)
 	if s == nil {
-		t.Error("NewSchedule error.")
+		t.Fatal("NewSchedule error.")
 	}
 	// 1. 构造term存储
-	l, _ := s.ledger.(*kmock.FakeLedger)
-	l.Put(kmock.NewBlock(3))
-	l.Put(kmock.NewBlock(4))
-	l.Put(kmock.NewBlock(5))
-	l.Put(kmock.NewBlock(6))
-	l.Put(kmock.NewBlock(7))
-	l.Put(kmock.NewBlock(8))
-	l.Put(kmock.NewBlock(9))
-	l.Put(kmock.NewBlock(10))
-	l.Put(kmock.NewBlock(11))
+	l := s.ledger.(*kmock.FakeLedger)
+	if l == nil {
+		t.Fatal("nil FakeLedger")
+	}
+	_ = l.Put(kmock.NewBlock(3))
+	_ = l.Put(kmock.NewBlock(4))
+	_ = l.Put(kmock.NewBlock(5))
+	_ = l.Put(kmock.NewBlock(6))
+	_ = l.Put(kmock.NewBlock(7))
+	_ = l.Put(kmock.NewBlock(8))
+	_ = l.Put(kmock.NewBlock(9))
+	_ = l.Put(kmock.NewBlock(10))
+	_ = l.Put(kmock.NewBlock(11))
 	// 2. 整理Block的共识存储
 	l.SetConsensusStorage(1, SetTdposStorage(1, nil))
 	l.SetConsensusStorage(2, SetTdposStorage(1, nil))

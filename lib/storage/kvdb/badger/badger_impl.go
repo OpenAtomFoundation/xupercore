@@ -1,5 +1,5 @@
-//badger wrapper plugin
-//so
+// badger wrapper plugin
+// so
 package badgerdb
 
 import (
@@ -44,7 +44,9 @@ func (bdb *BadgerDatabase) Path() string {
 
 func (bdb *BadgerDatabase) Open(path string, options map[string]interface{}) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		os.MkdirAll(path, 0755)
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return err
+		}
 	}
 	logger := log.New("database", path)
 	bdb.fn = path

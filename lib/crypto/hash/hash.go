@@ -6,7 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 
-	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
 )
 
 // UsingSha256 get the hash result of data using SHA256

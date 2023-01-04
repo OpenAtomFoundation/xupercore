@@ -33,7 +33,6 @@ const (
 type SyscallService struct {
 	ctxmgr *ContextManager
 	bridge *XBridge
-	core   contract.ChainCore
 }
 
 // NewSyscallService instances a new SyscallService
@@ -178,7 +177,7 @@ func (c *SyscallService) ContractCall(ctx context.Context, in *pb.ContractCallRe
 		return nil, err
 	}
 	defer func() {
-		vctx.Release()
+		_ = vctx.Release()
 		delete(nctx.ContractSet, in.GetContract())
 	}()
 

@@ -46,12 +46,8 @@ func (t *TdposStatus) GetCurrentTerm() int64 {
 
 // 获取当前矿工信息
 func (t *TdposStatus) GetCurrentValidatorsInfo() []byte {
-	var validators []string
-	for _, a := range t.election.validators {
-		validators = append(validators, a)
-	}
 	v := ValidatorsInfo{
-		Validators:   validators,
+		Validators:   t.election.validators,
 		Curterm:      t.election.curTerm,
 		Miner:        t.election.miner,
 		ContractInfo: "pls invoke getTdposInfos",

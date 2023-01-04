@@ -95,6 +95,6 @@ func (t *txBuilder) Tx() *lpb.Transaction {
 
 func makeRandID() []byte {
 	buf := make([]byte, 32)
-	rand.Read(buf)
+	_, _ = rand.Read(buf)
 	return buf
 }

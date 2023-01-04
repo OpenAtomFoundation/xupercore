@@ -215,7 +215,7 @@ message Block
     // Timestamp of the block
     int64 timestamp = 10;
     // Transactions of the block, only txid stored on kv, the detail information stored in another table
-    repeated string txids = 11; 
+    repeated string txids = 11;
     // The transaction count of the block
     int32 tx_count = 12;
     //下面的属性会动态变化

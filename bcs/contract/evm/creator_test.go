@@ -44,6 +44,9 @@ func TestNewEvmCreator(t *testing.T) {
 		ContractName: "contractName",
 		Method:       "initialize",
 	}, cp)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	instance.Abort("test")
 
@@ -123,6 +126,9 @@ func TestUnpackEventFromAbi(t *testing.T) {
 		t.Error(err)
 	}
 	topics, data, err := abi.PackEvent(eventSpec, in)
+	if err != nil {
+		t.Fatal(err)
+	}
 	log := &exec.LogEvent{}
 	log.Topics = topics
 	log.Data = data

@@ -149,7 +149,8 @@ func (s *Smr) UnRegisterToNetwork() {
 
 // Start used to start smr instance and process msg
 func (s *Smr) Start() {
-	s.RegisterToNetwork()
+	// TODO: deal with error
+	_ = s.RegisterToNetwork()
 	go func() {
 		for {
 			select {
@@ -207,7 +208,8 @@ func (s *Smr) KeepUpWithBlock(block cctx.BlockInterface, justify storage.QuorumC
 		return err
 	}
 	s.qcTree.UpdateCommit(block.GetPreHash())
-	s.pacemaker.AdvanceView(justify)
+	// TODO: deal with error
+	_, _ = s.pacemaker.AdvanceView(justify)
 	s.log.Debug("consensus:smr:KeepUpWithBlock: current parameters: ", "highQC", utils.F(s.getHighQC().GetProposalId()), "blockId", utils.F(block.GetBlockid()),
 		"pacemaker view", s.pacemaker.GetCurrentView(), "QCTree Root", utils.F(s.qcTree.GetRootQC().In.GetProposalId()))
 	return nil
@@ -278,21 +280,20 @@ func (s *Smr) ResetProposerStatus(tipBlock cctx.BlockInterface,
 }
 
 // handleReceivedMsg used to process msg received from network
-func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) error {
+func (s *Smr) handleReceivedMsg(msg *xuperp2p.XuperMessage) {
 	// filter msg from other chain
 	if msg.GetHeader().GetBcname() != s.bcName {
-		return nil
+		return
 	}
 	switch msg.GetHeader().GetType() {
 	case xuperp2p.XuperMessage_CHAINED_BFT_NEW_PROPOSAL_MSG:
 		s.handleReceivedProposal(msg)
 	case xuperp2p.XuperMessage_CHAINED_BFT_VOTE_MSG:
-		s.handleReceivedVoteMsg(msg)
+		// TODO: deal with error
+		_ = s.handleReceivedVoteMsg(msg)
 	default:
 		s.log.Error("smr::handleReceivedMsg receive unknow type msg", "type", msg.GetHeader().GetType())
-		return nil
 	}
-	return nil
 }
 
 // UpdateJustifyQcStatus 用于支持可回滚的账本，生成相同高度的块
@@ -380,7 +381,10 @@ func (s *Smr) ProcessProposal(viewNumber int64, proposalID []byte, parentID []by
 		return ErrP2PInternalErr
 	}
 
-	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(s.removeLocalValidator(validatesIpInfo)))
+	go func() {
+		// ignore send error
+		_ = s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts(s.removeLocalValidator(validatesIpInfo)))
+	}()
 	s.log.Debug("smr::ProcessProposal::proposal", "localAddress", s.address, "validatesIpInfo", validatesIpInfo,
 		"ProposalView", proposal.ProposalView, "ProposalId", utils.F(proposal.ProposalId),
 		"Timestamp", proposal.Timestamp, "JustifyQC", proposal.JustifyQC)
@@ -418,7 +422,8 @@ func (s *Smr) voteToSelf(viewNumber int64, proposalID []byte, parent storage.Quo
 		return
 	}
 	// 更新本地smr状态机
-	s.pacemaker.AdvanceView(selfQC)
+	// TODO: deal with error
+	_, _ = s.pacemaker.AdvanceView(selfQC)
 	s.qcTree.UpdateHighQC(proposalID)
 	s.log.Debug("smr:voteProposal::done local voting", "address", s.address, "proposalID", utils.F(proposalID))
 }
@@ -522,7 +527,10 @@ func (s *Smr) handleReceivedProposal(msg *xuperp2p.XuperMessage) {
 		leader := newProposalMsg.GetSign().GetAddress()
 		// 此处如果失败，仍会执行下层逻辑，因为是多个节点通知该轮Leader，因此若发不出去仍可继续运行
 		if leader != "" && netMsg != nil && leader != s.address {
-			go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{leader}))
+			go func() {
+				// ignore send error
+				_ = s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{leader}))
+			}()
 			s.log.Debug("smr::handleReceivedProposal::proposal", "localAddress", s.address, "leader", leader,
 				"ProposalView", newProposalMsg.ProposalView, "ProposalId", utils.F(newProposalMsg.ProposalId),
 				"Timestamp", newProposalMsg.Timestamp, "JustifyQC", newProposalMsg.JustifyQC)
@@ -604,7 +612,10 @@ func (s *Smr) voteProposal(msg []byte, vote *storage.VoteInfo, ledger *storage.L
 		s.log.Error("smr::ProcessProposal::NewMessage error")
 		return
 	}
-	go s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{voteTo}))
+	go func() {
+		// ignore send error
+		_ = s.p2p.SendMessage(createNewBCtx(), netMsg, p2p.WithAccounts([]string{voteTo}))
+	}()
 	s.log.Debug("smr::voteProposal::vote", "vote to next leader", voteTo, "vote view number", vote.ProposalView)
 }
 
@@ -669,7 +680,8 @@ func (s *Smr) handleReceivedVoteMsg(msg *xuperp2p.XuperMessage) error {
 	}
 
 	// 更新本地pacemaker AdvanceRound
-	s.pacemaker.AdvanceView(voteQC)
+	// TODO: deal with error
+	_, _ = s.pacemaker.AdvanceView(voteQC)
 	s.log.Debug("smr::handleReceivedVoteMsg::FULL VOTES!", "pacemaker view", s.pacemaker.GetCurrentView())
 	// 更新HighQC
 	s.qcTree.UpdateHighQC(voteQC.GetProposalId())

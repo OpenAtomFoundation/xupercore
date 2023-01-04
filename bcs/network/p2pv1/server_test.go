@@ -38,10 +38,8 @@ func startNode1(t *testing.T) {
 	}
 
 	go func(t *testing.T) {
-		select {
-		case msg := <-ch:
-			t.Logf("recv msg: log_id=%v, msgType=%s", msg.GetHeader().GetLogid(), msg.GetHeader().GetType())
-		}
+		msg := <-ch
+		t.Logf("recv msg: log_id=%v, msgType=%s", msg.GetHeader().GetLogid(), msg.GetHeader().GetType())
 	}(t)
 }
 

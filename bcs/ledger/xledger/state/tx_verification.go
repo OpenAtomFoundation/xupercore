@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
@@ -24,22 +26,20 @@ import (
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/golang/protobuf/proto"
 )
 
 // ImmediateVerifyTx verify tx Immediately
 // Transaction verification workflow:
-//   1. verify transaction ID is the same with data hash
-//   2. verify all signatures of initiator and auth requires
-//   3. verify the utxo input, there are three kinds of input validation
-//		1). PKI technology for transferring from address
-//		2). Account ACL for transferring from account
-//		3). Contract logic transferring from contract
-//   4. verify the contract requests' permission
-//   5. verify the permission of contract RWSet (WriteSet could including unauthorized data change)
-//   6. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
-//      operation, keep it at last)
+//  1. verify transaction ID is the same with data hash
+//  2. verify all signatures of initiator and auth requires
+//  3. verify the utxo input, there are three kinds of input validation
+//     1). PKI technology for transferring from address
+//     2). Account ACL for transferring from account
+//     3). Contract logic transferring from contract
+//  4. verify the contract requests' permission
+//  5. verify the permission of contract RWSet (WriteSet could including unauthorized data change)
+//  6. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
+//     operation, keep it at last)
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
 	beginTime := time.Now()
 	code := "InvalidTx"
@@ -76,7 +76,7 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 			t.log.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
 			return false, err
 		}
-		if bytes.Compare(tx.Txid, txid) != 0 {
+		if !bytes.Equal(tx.Txid, txid) {
 			t.log.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
 			return false, fmt.Errorf("Txid verify failed")
 		}
@@ -149,10 +149,10 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 
 // ImmediateVerifyTx verify auto tx Immediately
 // Transaction verification workflow:
-//	 0. 其实可以直接判断二者的txid，相同，则包括读写集在内的内容都相同
-//   1. verify transaction ID is the same with data hash
-//   2. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
-//      operation, keep it at last)
+//  0. 其实可以直接判断二者的txid，相同，则包括读写集在内的内容都相同
+//  1. verify transaction ID is the same with data hash
+//  2. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
+//     operation, keep it at last)
 func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isRootTx bool) (bool, error) {
 	// 获取该区块触发的定时交易
 	autoTx, genErr := t.GetTimerTx(blockHeight)
@@ -188,7 +188,7 @@ func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isR
 			t.log.Warn("ImmediateVerifyTx: call MakeTransactionID failed", "error", err)
 			return false, err
 		}
-		if bytes.Compare(tx.Txid, txid) != 0 {
+		if !bytes.Equal(tx.Txid, txid) {
 			t.log.Warn("ImmediateVerifyTx: txid not match", "tx.Txid", tx.Txid, "txid", txid)
 			return false, fmt.Errorf("Txid verify failed")
 		}
@@ -332,6 +332,7 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 }
 
 // verify utxo inputs, there are three kinds of input validation
+//
 //	1). PKI technology for transferring from address
 //	2). Account ACL for transferring from account
 //	3). Contract logic transferring from contract
@@ -404,7 +405,7 @@ func (t *State) verifyContractOwnerPermission(contractName string, tx *pb.Transa
 		return false, err
 	}
 	pureData := versionData.GetPureData()
-	if pureData == nil || confirmed == false {
+	if pureData == nil || !confirmed {
 		return false, errors.New("pure data is nil or unconfirmed")
 	}
 	accountName := string(pureData.GetValue())
@@ -659,18 +660,21 @@ func (t *State) verifyTxRWSets(tx *pb.Transaction) (bool, error) {
 
 		ctxResponse, ctxErr := ctx.Invoke(tmpReq.MethodName, tmpReq.Args)
 		if ctxErr != nil {
-			ctx.Release()
+			// TODO: deal with error
+			_ = ctx.Release()
 			t.log.Error("verifyTxRWSets Invoke error", "error", ctxErr, "contractName", tmpReq.GetContractName())
 			return false, ctxErr
 		}
 		// 判断合约调用的返回码
 		if ctxResponse.Status >= 400 && i < len(reservedRequests) {
-			ctx.Release()
+			// TODO: deal with error
+			_ = ctx.Release()
 			t.log.Error("verifyTxRWSets Invoke error", "status", ctxResponse.Status, "contractName", tmpReq.GetContractName())
 			return false, errors.New(ctxResponse.Message)
 		}
 
-		ctx.Release()
+		// TODO: deal with error
+		_ = ctx.Release()
 	}
 
 	err = sandBox.Flush()
@@ -716,10 +720,10 @@ func (t *State) verifyAutoTxRWSets(tx, autoTx *pb.Transaction) (bool, error) {
 		return false, err
 	}
 
-	if bytes.Compare(txRsetsBytes, autoRsetsBytes) != 0 {
+	if !bytes.Equal(txRsetsBytes, autoRsetsBytes) {
 		return false, fmt.Errorf("read set not equal")
 	}
-	if bytes.Compare(txWsetsBytes, autoWsetsBytes) != 0 {
+	if !bytes.Equal(txWsetsBytes, autoWsetsBytes) {
 		return false, fmt.Errorf("write set not equal")
 	}
 
@@ -923,30 +927,31 @@ func (t *State) verifyDAGTxs(blockHeight int64, txs []*pb.Transaction, isRootTx 
 		if tx == nil {
 			return errors.New("verifyTx error, tx is nil")
 		}
-		txid := string(tx.GetTxid())
-		if unconfirmToConfirm[txid] == false {
-			if t.verifyAutogenTxValid(tx) {
-				// 校验auto tx
-				if ok, err := t.ImmediateVerifyAutoTx(blockHeight, tx, isRootTx); !ok {
-					t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
-					return errors.New("dotx failed to ImmediateVerifyAutoTx error")
-				}
+		if unconfirmToConfirm[string(tx.GetTxid())] {
+			continue
+		}
+
+		if t.verifyAutogenTxValid(tx) {
+			// 校验auto tx
+			if ok, err := t.ImmediateVerifyAutoTx(blockHeight, tx, isRootTx); !ok {
+				t.log.Warn("dotx failed to ImmediateVerifyAutoTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+				return errors.New("dotx failed to ImmediateVerifyAutoTx error")
 			}
-			if !tx.Autogen && !tx.Coinbase {
-				// 校验用户交易
-				if ok, err := t.ImmediateVerifyTx(tx, isRootTx); !ok {
-					t.log.Warn("dotx failed to ImmediateVerifyTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
-					ok, isRelyOnMarkedTx, err := t.verifyMarked(tx)
-					if isRelyOnMarkedTx {
-						if !ok || err != nil {
-							t.log.Warn("tx verification failed because it is blocked tx", "err", err)
-						} else {
-							t.log.Trace("blocked tx verification succeed")
-						}
-						return err
+		}
+		if !tx.Autogen && !tx.Coinbase {
+			// 校验用户交易
+			if ok, err := t.ImmediateVerifyTx(tx, isRootTx); !ok {
+				t.log.Warn("dotx failed to ImmediateVerifyTx", "txid", fmt.Sprintf("%x", tx.Txid), "err", err)
+				ok, isRelyOnMarkedTx, err := t.verifyMarked(tx)
+				if isRelyOnMarkedTx {
+					if !ok || err != nil {
+						t.log.Warn("tx verification failed because it is blocked tx", "err", err)
+					} else {
+						t.log.Trace("blocked tx verification succeed")
 					}
-					return errors.New("dotx failed to ImmediateVerifyTx error")
+					return err
 				}
+				return errors.New("dotx failed to ImmediateVerifyTx error")
 			}
 		}
 	}

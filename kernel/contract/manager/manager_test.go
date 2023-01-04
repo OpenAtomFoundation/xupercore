@@ -34,7 +34,7 @@ func TestCreateSandbox(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state.Put("test", []byte("key"), []byte("value"))
+	_ = state.Put("test", []byte("key"), []byte("value"))
 	if string(state.RWSet().WSet[0].Value) != "value" {
 		t.Error("unexpected value")
 	}
@@ -62,7 +62,7 @@ type helloContract struct {
 
 func (h *helloContract) Hi(ctx contract.KContext) (*contract.Response, error) {
 	name := ctx.Args()["name"]
-	ctx.Put("test", []byte("k1"), []byte("v1"))
+	_ = ctx.Put("test", []byte("k1"), []byte("v1"))
 	return &contract.Response{
 		Body: []byte("hello " + string(name)),
 	}, nil

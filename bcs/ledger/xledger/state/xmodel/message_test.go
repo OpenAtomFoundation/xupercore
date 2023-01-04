@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	pb "github.com/xuperchain/xupercore/protos"
 )
 

@@ -46,7 +46,6 @@ type xvmInstance struct {
 	bridgeCtx *bridge.Context
 	execCtx   exec.Context
 	desc      protos.WasmCodeDesc
-	syscall   *bridge.SyscallService
 }
 
 func (x *xvmInstance) Exec() error {
@@ -64,9 +63,6 @@ func (x *xvmInstance) Exec() error {
 		return err
 	}
 	_, err = x.execCtx.Exec(function, args)
-	if err != nil {
-		// log.Error("exec contract error", "error", err, "contract", x.bridgeCtx.ContractName)
-	}
 	return err
 }
 
@@ -101,7 +97,8 @@ func (x *xvmInstance) InitDebugWriter(syscall *bridge.SyscallService) {
 			},
 			Entry: str,
 		}
-		syscall.PostLog(context.Background(), request)
+		// TODO: deal with error
+		_, _ = syscall.PostLog(context.Background(), request)
 	}
 	instanceLogWriter := newDebugWriter(flushfunc)
 	debug.SetWriter(x.execCtx, instanceLogWriter)

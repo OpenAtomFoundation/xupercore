@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	"github.com/xuperchain/crypto/core/hash"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type contractManager struct {
@@ -153,8 +153,9 @@ func (c *contractManager) UpgradeContract(kctx contract.KContext) (*contract.Res
 	descbuf, _ := proto.Marshal(desc)
 
 	store := kctx
-	store.Put("contract", ContractCodeDescKey(contractName), descbuf)
-	store.Put("contract", contractCodeKey(contractName), code)
+	// TODO: deal with error
+	_ = store.Put("contract", ContractCodeDescKey(contractName), descbuf)
+	_ = store.Put("contract", contractCodeKey(contractName), code)
 
 	cp := newCodeProviderWithCache(store)
 

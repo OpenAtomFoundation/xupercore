@@ -6,14 +6,11 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
-	"os"
-
-	//"io/ioutil"
 	"math/big"
-	//"os"
+	"os"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
@@ -141,6 +138,9 @@ func TestBasicFunc(t *testing.T) {
 		0,
 		block.Blockid, big.NewInt(0),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("bolock2 id %x", block2.Blockid)
 	confirmStatus = ledger.ConfirmBlock(block2, false)
 	if !confirmStatus.Succ {
@@ -200,6 +200,9 @@ func TestBasicFunc(t *testing.T) {
 		0,
 		block.Blockid, big.NewInt(0),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("bolock3 id %x", block3.Blockid)
 	confirmStatus = ledger.ConfirmBlock(block3, false)
 	if confirmStatus.Succ {
@@ -263,6 +266,9 @@ func TestSplitFunc(t *testing.T) {
 		0,
 		block.Blockid, big.NewInt(0),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("bolock2 id %x", block2.Blockid)
 	confirmStatus = ledger.ConfirmBlock(block2, false)
 	if !confirmStatus.Succ {
@@ -280,13 +286,16 @@ func TestSplitFunc(t *testing.T) {
 		0,
 		block.Blockid, big.NewInt(0),
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("bolock3 id %x", block3.Blockid)
 	confirmStatus = ledger.ConfirmBlock(block3, false)
 	if !confirmStatus.Succ {
 		t.Fatal("confirm block fail 3")
 	}
 
-	block4, err := ledger.FormatBlock([]*pb.Transaction{t1, t2},
+	block4, _ := ledger.FormatBlock([]*pb.Transaction{t1, t2},
 		[]byte("xchain-Miner-222224"),
 		ecdsaPk,
 		2234567999,
@@ -431,7 +440,7 @@ func TestTruncate(t *testing.T) {
 	t2.TxInputs = append(t2.TxInputs, &protos.TxInput{RefTxid: t1.Txid, RefOffset: 0, FromAddr: []byte(AliceAddress)})
 	t2.Txid, _ = txhash.MakeTransactionID(t2)
 	//block2
-	block2, err := ledger.FormatBlock([]*pb.Transaction{t1, t2},
+	block2, _ := ledger.FormatBlock([]*pb.Transaction{t1, t2},
 		[]byte("xchain-Miner-222222"),
 		ecdsaPk,
 		223456789,
@@ -446,7 +455,7 @@ func TestTruncate(t *testing.T) {
 	}
 
 	//block2 <- block3
-	block3, err := ledger.FormatBlock([]*pb.Transaction{&pb.Transaction{Txid: []byte("dummy1")}},
+	block3, _ := ledger.FormatBlock([]*pb.Transaction{&pb.Transaction{Txid: []byte("dummy1")}},
 		[]byte("xchain-Miner-333333"),
 		ecdsaPk,
 		223456790,
@@ -460,7 +469,7 @@ func TestTruncate(t *testing.T) {
 	}
 
 	//block2 <- block4
-	block4, err := ledger.FormatBlock([]*pb.Transaction{&pb.Transaction{Txid: []byte("dummy2")}},
+	block4, _ := ledger.FormatBlock([]*pb.Transaction{&pb.Transaction{Txid: []byte("dummy2")}},
 		[]byte("xchain-Miner-444444"),
 		ecdsaPk,
 		223456791,

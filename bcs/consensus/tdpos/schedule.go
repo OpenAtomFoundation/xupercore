@@ -259,7 +259,7 @@ func (s *tdposSchedule) calTopKNominator(height int64) ([]string, error) {
 		return nil, err
 	}
 	var termBallotSli termBallotsSlice
-	for candidate, _ := range nominateValue {
+	for candidate := range nominateValue {
 		candidateBallot := &termBallots{
 			Address: candidate,
 		}

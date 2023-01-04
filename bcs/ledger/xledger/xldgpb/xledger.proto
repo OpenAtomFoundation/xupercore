@@ -275,4 +275,3 @@ message UtxoOutput {
     // total selected amount
     string totalSelected = 2;
 }
-

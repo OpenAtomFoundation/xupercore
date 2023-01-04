@@ -22,8 +22,6 @@ import (
 	"time"
 )
 
-var errFileOpen = errors.New("leveldb/storage: file still open")
-
 const CacheSize = 500
 
 type OpenOption struct {
@@ -43,11 +41,10 @@ type S3StorageLock struct {
 func (lock *S3StorageLock) Unlock() {
 	log.Println("Unlock")
 	ms := lock.ms
-	ms.objStore.Remove("LOCK")
+	_ = ms.objStore.Remove("LOCK") // error is ignored
 	if ms.slock == lock {
 		ms.slock = nil
 	}
-	return
 }
 
 // S3Storage is a s3-backed storage.

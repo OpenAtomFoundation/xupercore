@@ -28,7 +28,10 @@ func TestUpdateHighQC(t *testing.T) {
 func TestEnforceUpdateHighQC(t *testing.T) {
 	tree := PrepareTree(t)
 	tree.UpdateHighQC([]byte{3})
-	tree.EnforceUpdateHighQC([]byte{1})
+	err := tree.EnforceUpdateHighQC([]byte{1})
+	if err != nil {
+		t.Fatal("tree.EnforceUpdateHighQC() error", "error", err)
+	}
 	if tree.GetHighQC().In.GetProposalView() != 1 {
 		t.Error("enforceUpdateHighQC update highQC error", "height", tree.GetHighQC().In.GetProposalView())
 		return
@@ -72,20 +75,24 @@ func TestUpdateCommit(t *testing.T) {
 }
 
 // TestDFSQueryNode Tree如下
-//           --------------------root ([]byte{0}, 0)-----------------------
-//            		  |       |                          |
-// (([]byte{1}, 1)) node1 node12 ([]byte{2}, 1) orphan4<[]byte{10}, 1>
-//                    |                                  |            \
-//  ([]byte{3}, 2)  node2				        orphan2<[]byte{30}, 2> orphan3<[]byte{35}, 2>
-//														 |
-// 												orphan1<[]byte{40}, 3>
 //
+//	--------------------root ([]byte{0}, 0)-----------------------
+//	 		  |       |                          |
+//
+// (([]byte{1}, 1)) node1 node12 ([]byte{2}, 1) orphan4<[]byte{10}, 1>
+//
+//	                   |                                  |            \
+//	 ([]byte{3}, 2)  node2				        orphan2<[]byte{30}, 2> orphan3<[]byte{35}, 2>
+//															 |
+//													orphan1<[]byte{40}, 3>
 func TestInsertOrphan(t *testing.T) {
 	tree := PrepareTree(t)
 	orphan1 := &storage.ProposalNode{
 		In: MockCreateQC([]byte{40}, 3, []byte{30}, 2),
 	}
-	tree.UpdateQcStatus(orphan1)
+	if err := tree.UpdateQcStatus(orphan1); err != nil {
+		t.Fatal("UpdateQcStatus error", "orphan", orphan1, "error", err)
+	}
 	orphan := tree.MockGetOrphan()
 	e1 := orphan.Front()
 	o1, ok := e1.Value.(*storage.ProposalNode)
@@ -98,7 +105,9 @@ func TestInsertOrphan(t *testing.T) {
 	orphan2 := &storage.ProposalNode{
 		In: MockCreateQC([]byte{30}, 2, []byte{10}, 1),
 	}
-	tree.UpdateQcStatus(orphan2)
+	if err := tree.UpdateQcStatus(orphan2); err != nil {
+		t.Fatal("UpdateQcStatus error", "orphan", orphan2, "error", err)
+	}
 	e1 = orphan.Front()
 	o1, ok = e1.Value.(*storage.ProposalNode)
 	if !ok {
@@ -110,7 +119,9 @@ func TestInsertOrphan(t *testing.T) {
 	orphan3 := &storage.ProposalNode{
 		In: MockCreateQC([]byte{35}, 2, []byte{10}, 1),
 	}
-	tree.UpdateQcStatus(orphan3)
+	if err := tree.UpdateQcStatus(orphan3); err != nil {
+		t.Fatal("UpdateQcStatus error", "orphan", orphan3, "error", err)
+	}
 	e1 = orphan.Front()
 	o1, _ = e1.Value.(*storage.ProposalNode)
 	e2 := e1.Next()
@@ -124,7 +135,9 @@ func TestInsertOrphan(t *testing.T) {
 	orphan4 := &storage.ProposalNode{
 		In: MockCreateQC([]byte{10}, 1, []byte{0}, 0),
 	}
-	tree.UpdateQcStatus(orphan4)
+	if err := tree.UpdateQcStatus(orphan4); err != nil {
+		t.Fatal("UpdateQcStatus error", "orphan", orphan4, "error", err)
+	}
 	if orphan.Len() != 0 {
 		t.Error("OrphanList adopt error!")
 	}

@@ -52,6 +52,8 @@ func NewReqCtx(engine common.Engine, reqId, clientIp string) (ReqCtx, error) {
 }
 
 func WithReqCtx(ctx context.Context, reqCtx ReqCtx) context.Context {
+	// TODO: SA1029
+	//nolint:staticcheck
 	return context.WithValue(ctx, ReqCtxKeyName, reqCtx)
 }
 

@@ -69,7 +69,7 @@ start() {
     echo "start $AppName. cmd:$cmd"
 
     nohup $BinPath startup --conf $ConfPath >"$LogDir/nohup.out" 2>&1 &
-    
+
     # 检查确保经常启动运行
     waitRun
     if [ "$?" != "0" ]; then
@@ -91,7 +91,7 @@ forcestop() {
         echo "force stop failed"
         exit 1
     fi
-    
+
     echo "force stop succ"
 }
 
@@ -102,7 +102,7 @@ stop() {
         echo "stop failed"
         exit 1
     fi
-    
+
     echo "stop succ"
 }
 
@@ -221,4 +221,3 @@ case "$1" in
         echo "$0 $Usage"
         ;;
 esac
-

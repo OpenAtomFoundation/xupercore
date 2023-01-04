@@ -7,7 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	// TODO: update proto
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/patrickmn/go-cache"
@@ -291,7 +292,6 @@ func (p *P2PServerV1) connectBootNodes() {
 	}
 
 	p.log.Trace("connect boot node", "local", p.address, "send", len(addresses), "recv", len(remotePeerInfos), "dynamic", len(p.dynamicNodes))
-	return
 }
 
 func (p *P2PServerV1) connectStaticNodes() {
@@ -325,5 +325,6 @@ func (p *P2PServerV1) connectStaticNodes() {
 		p.staticNodes[def.BlockChain] = allAddresses
 	}
 
-	p.GetPeerInfo(allAddresses)
+	// TODO: deal with error
+	_, _ = p.GetPeerInfo(allAddresses)
 }

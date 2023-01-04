@@ -19,9 +19,9 @@ message XuperMessage {
         // 向邻近确认区块是否为最新状态区块
         CONFIRM_BLOCKCHAINSTATUS = 8;
         CONFIRM_BLOCKCHAINSTATUS_RES = 9;
-        
+
         MSG_TYPE_NONE = 10;
-      
+
         // query RPC port information
         GET_RPC_PORT = 11;
         GET_RPC_PORT_RES = 12;
@@ -43,14 +43,14 @@ message XuperMessage {
         // new node used to add to network automatic
         NEW_NODE = 19;
 
-        /* 消息头同步对(GET_HASHES <-> HASHES), 
-         * 发送方通过GET_HASHES消息询问区间范围内的所有区块哈希信息, 
+        /* 消息头同步对(GET_HASHES <-> HASHES),
+         * 发送方通过GET_HASHES消息询问区间范围内的所有区块哈希信息,
          * 接受方发送HASHES信息, 该消息携带其所知的区间范围内的BlockId列表
          */
         GET_BLOCKIDS = 20;
         GET_BLOCKIDS_RES = 21;
-        /* 消息对(GET_BLOCKS <-> BLOCKS), 
-         * 发送方通过GET_BLOCKS消息询问BlockId列表内的所有对应区块信息, 
+        /* 消息对(GET_BLOCKS <-> BLOCKS),
+         * 发送方通过GET_BLOCKS消息询问BlockId列表内的所有对应区块信息,
          * 接受方发送BLOCKS信息, 该消息携带具体Block
          */
         GET_BLOCKS = 22;
@@ -67,7 +67,7 @@ message XuperMessage {
     }
 
     enum ErrorType {
-        // success 
+        // success
         SUCCESS = 0;
         NONE = 1;
         // common error
@@ -81,7 +81,7 @@ message XuperMessage {
         GET_BLOCK_ERROR = 8;
         CONFIRM_BLOCKCHAINSTATUS_ERROR = 9;
         GET_AUTHENTICATION_ERROR = 10;
-        GET_AUTHENTICATION_NOT_PASS = 11; 
+        GET_AUTHENTICATION_NOT_PASS = 11;
    }
 
     // MessageHeader is the message header of Xuper p2p server
@@ -116,4 +116,3 @@ message PeerInfo {
     string account = 3;
     repeated PeerInfo peer = 4;
 }
-

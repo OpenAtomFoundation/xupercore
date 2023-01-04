@@ -10,7 +10,7 @@ import (
 func (s *XModel) verifyInputs(tx *pb.Transaction) error {
 	//确保tx.TxInputs里面声明的版本和本地model是match的
 	var (
-		verData = new(kledger.VersionedData)
+		verData *kledger.VersionedData
 		err     error
 	)
 	for _, txIn := range tx.TxInputsExt {

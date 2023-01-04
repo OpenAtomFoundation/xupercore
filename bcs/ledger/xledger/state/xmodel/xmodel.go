@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	rb "github.com/xuperchain/xupercore/bcs/ledger/xledger/batch"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
@@ -25,8 +26,7 @@ const (
 )
 
 var (
-	contractUtxoInputKey  = []byte("ContractUtxo.Inputs")
-	contractUtxoOutputKey = []byte("ContractUtxo.Outputs")
+	contractUtxoInputKey = []byte("ContractUtxo.Inputs")
 )
 
 // XModel xmodel data structure
@@ -89,17 +89,15 @@ func (s *XModel) updateExtUtxo(tx *pb.Transaction, batch kvdb.Batch) error {
 		}
 		bucketAndKey := makeRawKey(txOut.Bucket, txOut.Key)
 		valueVersion := MakeVersion(tx.Txid, int32(offset))
+		richBatch := rb.NewRichBatch(batch)
 		if isDelFlag(txOut.Value) {
-			putKey := append([]byte(pb.ExtUtxoDelTablePrefix), bucketAndKey...)
-			delKey := append([]byte(pb.ExtUtxoTablePrefix), bucketAndKey...)
-			batch.Delete(delKey)
-			batch.Put(putKey, []byte(valueVersion))
-			s.logger.Trace("    xmodel put gc", "putkey", string(putKey), "version", valueVersion)
-			s.logger.Trace("    xmodel del", "delkey", string(delKey), "version", valueVersion)
+			// TODO: deal with error
+			_ = richBatch.SoftDeleteExtUtxo(bucketAndKey, valueVersion)
+			s.logger.Trace("    xmodel del", "delkey", bucketAndKey, "version", valueVersion)
 		} else {
-			putKey := append([]byte(pb.ExtUtxoTablePrefix), bucketAndKey...)
-			batch.Put(putKey, []byte(valueVersion))
-			s.logger.Trace("    xmodel put", "putkey", string(putKey), "version", valueVersion)
+			// TODO: deal with error
+			_ = richBatch.PutExtUtxo(bucketAndKey, valueVersion, false)
+			s.logger.Trace("    xmodel put", "putkey", bucketAndKey, "version", valueVersion)
 		}
 		if len(tx.Blockid) > 0 {
 			s.batchCache.Store(string(bucketAndKey), valueVersion)
@@ -146,6 +144,7 @@ func (s *XModel) UndoTx(tx *pb.Transaction, batch kvdb.Batch) error {
 		version := GetVersionOfTxInput(txIn)
 		inputVersionMap[rawKey] = version
 	}
+	richBatch := rb.NewRichBatch(batch)
 	for _, txOut := range tx.TxOutputsExt {
 		if txOut.Bucket == TransientBucket {
 			continue
@@ -153,9 +152,8 @@ func (s *XModel) UndoTx(tx *pb.Transaction, batch kvdb.Batch) error {
 		bucketAndKey := makeRawKey(txOut.Bucket, txOut.Key)
 		previousVersion := inputVersionMap[string(bucketAndKey)]
 		if previousVersion == "" {
-			delKey := append([]byte(pb.ExtUtxoTablePrefix), bucketAndKey...)
-			batch.Delete(delKey)
-			s.logger.Trace("    undo xmodel del", "delkey", string(delKey))
+			richBatch.HardDeleteExtUtxo(bucketAndKey)
+			s.logger.Trace("    undo xmodel del", "delkey", string(bucketAndKey))
 			s.batchCache.Store(string(bucketAndKey), "")
 		} else {
 			verData, err := s.fetchVersionedData(txOut.Bucket, previousVersion)
@@ -163,20 +161,15 @@ func (s *XModel) UndoTx(tx *pb.Transaction, batch kvdb.Batch) error {
 				return err
 			}
 			if isDelFlag(verData.PureData.Value) { //previous version is del
-				putKey := append([]byte(pb.ExtUtxoDelTablePrefix), bucketAndKey...)
-				batch.Put(putKey, []byte(previousVersion))
-				delKey := append([]byte(pb.ExtUtxoTablePrefix), bucketAndKey...)
-				batch.Delete(delKey)
-				s.logger.Trace("    undo xmodel put gc", "putkey", string(putKey), "prever", previousVersion)
-				s.logger.Trace("    undo xmodel del", "del key", string(delKey), "prever", previousVersion)
+				// TODO: deal with error
+				_ = richBatch.SoftDeleteExtUtxo(bucketAndKey, previousVersion)
+				s.logger.Trace("    undo xmodel del",
+					"del key", string(bucketAndKey), "prever", previousVersion)
 			} else {
-				putKey := append([]byte(pb.ExtUtxoTablePrefix), bucketAndKey...)
-				batch.Put(putKey, []byte(previousVersion))
-				s.logger.Trace("    undo xmodel put", "putkey", string(putKey), "prever", previousVersion)
-				if isDelFlag(txOut.Value) { //current version is del
-					delKey := append([]byte(pb.ExtUtxoDelTablePrefix), bucketAndKey...)
-					batch.Delete(delKey) //remove garbage in gc table
-				}
+				// TODO: deal with error
+				_ = richBatch.PutExtUtxo(bucketAndKey, previousVersion, isDelFlag(txOut.Value))
+				s.logger.Trace("    undo xmodel put",
+					"putkey", string(bucketAndKey), "prever", previousVersion)
 			}
 			s.batchCache.Store(string(bucketAndKey), previousVersion)
 		}
@@ -284,13 +277,13 @@ func (s *XModel) Select(bucket string, startKey []byte, endKey []byte) (kledger.
 }
 
 func (s *XModel) queryTx(txid []byte) (*pb.Transaction, bool, error) {
-	unconfirmTx, err := queryUnconfirmTx(txid, s.unconfirmTable)
+	unconfirmedTx, err := queryUnconfirmedTx(txid, s.unconfirmTable)
 	if err != nil {
 		if !kvdb.ErrNotFound(err) {
 			return nil, false, err
 		}
 	} else {
-		return unconfirmTx, false, nil
+		return unconfirmedTx, false, nil
 	}
 	confirmedTx, err := s.ledger.QueryTransaction(txid)
 	if err != nil {
@@ -363,7 +356,7 @@ func (s *XModel) BucketCacheDelete(bucket, version string) {
 func GenWriteKeyWithPrefix(txOutputExt *protos.TxOutputExt) string {
 	bucket := txOutputExt.GetBucket()
 	key := txOutputExt.GetKey()
-	baseWriteSetKey := bucket + fmt.Sprintf("%s", key)
+	baseWriteSetKey := bucket + string(key)
 	return pb.ExtUtxoTablePrefix + baseWriteSetKey
 }
 

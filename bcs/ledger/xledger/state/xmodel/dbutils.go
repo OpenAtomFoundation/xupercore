@@ -8,7 +8,7 @@ import (
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 )
 
 // KVEngineType KV storage type
@@ -34,7 +34,7 @@ func makeRawKey(bucket string, key []byte) []byte {
 	return append(k, key...)
 }
 
-func queryUnconfirmTx(txid []byte, table kvdb.Database) (*pb.Transaction, error) {
+func queryUnconfirmedTx(txid []byte, table kvdb.Database) (*pb.Transaction, error) {
 	pbBuf, findErr := table.Get(txid)
 	if findErr != nil {
 		return nil, findErr
@@ -47,14 +47,13 @@ func queryUnconfirmTx(txid []byte, table kvdb.Database) (*pb.Transaction, error)
 	return tx, nil
 }
 
-func saveUnconfirmTx(tx *pb.Transaction, batch kvdb.Batch) error {
+func saveUnconfirmedTx(tx *pb.Transaction, batch kvdb.Batch) error {
 	buf, err := proto.Marshal(tx)
 	if err != nil {
 		return err
 	}
-	rawKey := append([]byte(pb.UnconfirmedTablePrefix), []byte(tx.Txid)...)
-	batch.Put(rawKey, buf)
-	return nil
+	rawKey := append([]byte(pb.UnconfirmedTablePrefix), tx.Txid...)
+	return batch.Put(rawKey, buf)
 }
 
 // 快速对写集合排序

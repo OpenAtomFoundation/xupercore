@@ -163,7 +163,8 @@ func (c *contractProcess) RpcClient() pbrpc.NativeCodeClient {
 }
 
 func (c *contractProcess) restartProcess() error {
-	c.process.Stop(time.Second)
+	// TOOD: deal with error
+	_ = c.process.Stop(time.Second)
 	return c.start(false)
 }
 
@@ -184,7 +185,8 @@ func (c *contractProcess) start(startMonitor bool) error {
 	err = c.waitReply()
 	if err != nil {
 		// 避免启动失败后产生僵尸进程
-		c.process.Stop(time.Second)
+		// TODO: deal with error
+		_ = c.process.Stop(time.Second)
 		return err
 	}
 	if startMonitor {

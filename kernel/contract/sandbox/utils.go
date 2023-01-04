@@ -18,6 +18,7 @@ func makeRawKey(bucket string, key []byte) []byte {
 	return append(k, key...)
 }
 
+//nolint:unused
 func parseRawKey(rawKey []byte) (string, []byte, error) {
 	idx := bytes.Index(rawKey, []byte(BucketSeperator))
 	if idx < 0 {
@@ -39,7 +40,7 @@ func IsDelFlag(value []byte) bool {
 
 // helper for test
 func putVersionedData(state *MemXModel, bucket string, key []byte, value []byte) {
-	state.Put(bucket, key, &ledger.VersionedData{
+	_ = state.Put(bucket, key, &ledger.VersionedData{
 		RefTxid: []byte("txid"),
 		PureData: &ledger.PureData{
 			Bucket: bucket,

@@ -26,8 +26,3 @@ func getConfFile() string {
 	dir := utils.GetCurFileDir()
 	return filepath.Join(dir, "conf/log.yaml")
 }
-
-func getLogDir() string {
-	dir := utils.GetCurFileDir()
-	return filepath.Join(dir, "logs")
-}

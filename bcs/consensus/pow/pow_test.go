@@ -276,8 +276,12 @@ func TestMining(t *testing.T) {
 		return
 	}
 	powC.targetBits = minTarget
-	powC.Start()
-	defer powC.Stop()
+	if err := powC.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = powC.Stop()
+	}()
 	ps := PoWStorage{
 		TargetBits: minTarget,
 	}
@@ -315,7 +319,7 @@ func TestRefreshDifficulty(t *testing.T) {
 		t.Error("NewBlock error", err)
 		return
 	}
-	l, ok := powC.Ledger.(*kmock.FakeLedger)
+	l := powC.Ledger.(*kmock.FakeLedger)
 	err = l.Put(genesisB)
 	if err != nil {
 		t.Error("TestRefreshDifficulty put genesis err", "err", err)
@@ -409,6 +413,9 @@ func TestCheckMinerMatch(t *testing.T) {
 	}
 	by, _ := json.Marshal(ps)
 	b3, err := bmock.NewBlockWithStorage(3, cCtx.Crypto, cCtx.Address, by)
+	if err != nil {
+		t.Fatal(err)
+	}
 	c := cCtx.BaseCtx
 	_, err = i.CheckMinerMatch(&c, b3)
 	if err != nil {
@@ -423,5 +430,7 @@ func TestCompeteMaster(t *testing.T) {
 		return
 	}
 	i := NewPoWConsensus(*cCtx, getConsensusConf(getPoWConsensusConf()))
-	i.CompeteMaster(3)
+	if _, _, err := i.CompeteMaster(3); err != nil {
+		t.Fatal(err)
+	}
 }

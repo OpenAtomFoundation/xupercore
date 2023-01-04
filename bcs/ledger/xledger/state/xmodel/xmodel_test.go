@@ -108,6 +108,9 @@ func TestBaiscFunc(t *testing.T) {
 		t.Fatal(err)
 	}
 	verData, err := xModel.Get("bucket1", []byte("hello"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !IsEmptyVersionedData(verData) {
 		t.Fatal("unexpected")
 	}
@@ -127,17 +130,14 @@ func TestBaiscFunc(t *testing.T) {
 			},
 		},
 	}
-	batch := ldb.NewBatch()
-	err = xModel.DoTx(tx1, batch)
-	if err != nil {
-		t.Fatal(err)
-	}
-	saveUnconfirmTx(tx1, batch)
-	err = batch.Write()
+	batch, err := writeUnconfirmedTx(xModel, tx1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	verData, err = xModel.Get("bucket1", []byte("hello"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if GetVersion(verData) != fmt.Sprintf("%x_%d", "Tx1", 0) {
 		t.Fatal("unexpected", GetVersion(verData))
 	}
@@ -174,21 +174,21 @@ func TestBaiscFunc(t *testing.T) {
 	}
 	prefix := GenWriteKeyWithPrefix(tx2.TxOutputsExt[0])
 	t.Log("gen prefix succ", "prefix", prefix)
-	batch2 := ldb.NewBatch()
-	err = xModel.DoTx(tx2, batch2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	saveUnconfirmTx(tx2, batch2)
-	err = batch2.Write()
+	_, err = writeUnconfirmedTx(xModel, tx2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	verData, err = xModel.Get("bucket1", []byte("hello"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	if GetVersion(verData) != fmt.Sprintf("%x_%d", "Tx2", 0) {
 		t.Fatal("unexpected", GetVersion(verData))
 	}
 	iter, err := xModel.Select("bucket1", []byte(""), []byte("\xff"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer iter.Close()
 	validKvCount := 0
 	for iter.Next() {
@@ -245,4 +245,15 @@ func TestBaiscFunc(t *testing.T) {
 	}
 
 	ledger.Close()
+}
+
+func writeUnconfirmedTx(xModel *XModel, tx2 *pb.Transaction) (kvdb.Batch, error) {
+	batch := xModel.stateDB.NewBatch()
+	if err := xModel.DoTx(tx2, batch); err != nil {
+		return nil, err
+	}
+	if err := saveUnconfirmedTx(tx2, batch); err != nil {
+		return nil, err
+	}
+	return batch, batch.Write()
 }

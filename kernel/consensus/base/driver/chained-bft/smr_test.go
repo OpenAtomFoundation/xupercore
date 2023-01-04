@@ -127,9 +127,15 @@ func TestSMR(t *testing.T) {
 	pA, ctxA, _ := kmock.NewP2P("nodeA")
 	pB, ctxB, _ := kmock.NewP2P("nodeB")
 	pC, ctxC, _ := kmock.NewP2P("nodeC")
-	pA.Init(ctxA)
-	pB.Init(ctxB)
-	pC.Init(ctxC)
+	if err := pA.Init(ctxA); err != nil {
+		t.Fatal(err)
+	}
+	if err := pB.Init(ctxB); err != nil {
+		t.Fatal(err)
+	}
+	if err := pC.Init(ctxC); err != nil {
+		t.Fatal(err)
+	}
 	sA := NewSMR("nodeA", th.Log, pA, t)
 	sB := NewSMR("nodeB", th.Log, pB, t)
 	sC := NewSMR("nodeC", th.Log, pC, t)

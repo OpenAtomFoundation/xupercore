@@ -131,13 +131,15 @@ func TestMakeCacheBlocking(t *testing.T) {
 	}
 
 	// fill cache
-	cm.GetExecCode("c1", cp)
+	_, _ = cm.GetExecCode("c1", cp)
 	// making a blocking contract for c2
-	go cm.GetExecCode("blocking1", cp)
+	go func() {
+		_, _ = cm.GetExecCode("blocking1", cp)
+	}()
 	c1 := make(chan int)
 	go func() {
 		// c1 should return immediately
-		cm.GetExecCode("c1", cp)
+		_, _ = cm.GetExecCode("c1", cp)
 		close(c1)
 	}()
 	select {
@@ -146,11 +148,13 @@ func TestMakeCacheBlocking(t *testing.T) {
 	case <-c1:
 	}
 
-	go cm.GetExecCode("blocking2", cp)
+	go func() {
+		_, _ = cm.GetExecCode("blocking2", cp)
+	}()
 	c2 := make(chan int)
 	go func() {
 		// c1 should return immediately
-		cm.GetExecCode("blocking2", cp)
+		_, _ = cm.GetExecCode("blocking2", cp)
 		close(c2)
 	}()
 	select {

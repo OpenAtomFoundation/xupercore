@@ -20,7 +20,6 @@ import (
 )
 
 type Conn struct {
-	ctx    *nctx.NetCtx
 	log    logs.Logger
 	config *config.NetConf
 
@@ -96,7 +95,9 @@ func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 		c.log.Error("SendMessage new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return err
 	}
-	defer stream.CloseSend()
+	defer func() {
+		_ = stream.CloseSend()
+	}()
 
 	c.log.Trace("SendMessage", "log_id", msg.GetHeader().GetLogid(),
 		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", c.id)
@@ -112,7 +113,8 @@ func (c *Conn) SendMessage(ctx xctx.XContext, msg *pb.XuperMessage) error {
 	}
 
 	// client等待server收到消息再退出，防止提前退出导致信息发送失败
-	stream.Recv()
+	//TODO: deal with receive error
+	_, _ = stream.Recv()
 
 	return err
 }
@@ -132,7 +134,9 @@ func (c *Conn) SendMessageWithResponse(ctx xctx.XContext, msg *pb.XuperMessage) 
 		c.log.Error("SendMessageWithResponse new stream error", "log_id", msg.GetHeader().GetLogid(), "error", err, "peerID", c.id)
 		return nil, err
 	}
-	defer stream.CloseSend()
+	defer func() {
+		_ = stream.CloseSend()
+	}()
 
 	c.log.Trace("SendMessageWithResponse", "log_id", msg.GetHeader().GetLogid(),
 		"type", msg.GetHeader().GetType(), "checksum", msg.GetHeader().GetDataCheckSum(), "peerID", c.id)

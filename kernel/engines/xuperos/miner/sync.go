@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
@@ -182,6 +182,8 @@ func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
 	if maxHeight <= currentHeight {
 		return 0, nil
 	}
+	// TODO: SA1029
+	//nolint:staticcheck
 	ctx = xctx.WithNewContext(ctx, context.WithValue(ctx, peersKey, []string{peer}))
 	height := currentHeight + 1
 	size := maxHeight - currentHeight
@@ -420,6 +422,9 @@ func (t *Miner) batchConfirmBlocks(ctx xctx.XContext, blocks []*lpb.InternalBloc
 		trace := traceSync()
 		timer := timer.NewXTimer()
 		valid, err := t.ctx.Ledger.VerifyBlock(block, ctx.GetLog().GetLogId())
+		if err != nil {
+			return err
+		}
 		if !valid {
 			ctx.GetLog().Warn("the verification of block failed.",
 				"blockId", utils.F(block.Blockid))

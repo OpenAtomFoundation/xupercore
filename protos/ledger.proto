@@ -42,4 +42,3 @@ message TxOutput {
     // Fronzen height
     int64 frozen_height = 4;
 }
-

@@ -1,9 +1,7 @@
 package consensus
 
 import (
-	"encoding/json"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -17,11 +15,10 @@ import (
 	"github.com/xuperchain/xupercore/lib/utils"
 )
 
-var (
-	_     = Register("fake", NewFakeConsensus)
-	_     = Register("another", NewAnotherConsensus)
-	Miner = "xuper5"
-)
+func init() {
+	Register("another", NewAnotherConsensus)
+	Register("fake", NewFakeConsensus)
+}
 
 type FakeSMRStruct struct{}
 
@@ -71,7 +68,6 @@ func (s *FakeConsensusStatus) GetCurrentTerm() int64 {
 }
 
 type FakeConsensusImp struct {
-	smr    FakeSMRStruct
 	status *FakeConsensusStatus
 }
 
@@ -123,7 +119,6 @@ func (con *FakeConsensusImp) Start() error {
 }
 
 type AnotherConsensusImp struct {
-	smr    FakeSMRStruct
 	status *FakeConsensusStatus
 }
 
@@ -227,79 +222,8 @@ func TestNewPluggableConsensus(t *testing.T) {
 	}
 }
 
-func GetNewConsensusConf() []byte {
-	return []byte("{\"name\":\"another\",\"config\":\"{}\"}")
-}
-
 func GetWrongConsensusConf() []byte {
 	return []byte("{\"name\":\"\",\"config\":\"{}\"}")
-}
-
-func NewUpdateArgs() map[string][]byte {
-	a := make(map[string]interface{})
-	a["name"] = "another"
-	a["config"] = map[string]interface{}{
-		"version": "1",
-		"miner":   "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
-		"period":  "3000",
-	}
-	ab, _ := json.Marshal(&a)
-	r := map[string][]byte{
-		"args":   ab,
-		"height": []byte(strconv.FormatInt(8, 10)),
-	}
-	return r
-}
-
-func NewUpdateM() map[string]map[string][]byte {
-	a := make(map[string]map[string][]byte)
-	return a
-}
-
-func TestUpdateConsensus(t *testing.T) {
-	//l := mock.NewFakeLedger(mock.GetGenesisConsensusConf())
-	//ctx := GetConsensusCtx(l)
-	//pc, _ := NewPluggableConsensus(ctx)
-	//newHeight := l.GetTipBlock().GetHeight() + 1
-	//_, _, err := pc.CompeteMaster(newHeight)
-	//if err != nil {
-	//	t.Error("CompeteMaster error! height = ", newHeight)
-	//	return
-	//}
-	//np, ok := pc.(*PluggableConsensus)
-	//if !ok {
-	//	t.Error("Transfer PluggableConsensus error!")
-	//	return
-	//}
-	//fakeCtx := mock.NewFakeKContext(NewUpdateArgs(), NewUpdateM())
-	//_, err = np.updateConsensus(fakeCtx)
-	//if err.Error() == "check consensus height error" {
-	//	t.Error("check consensus height error", err)
-	//	return
-	//}
-	//status, err := np.GetConsensusStatus()
-	//if err != nil {
-	//	t.Error("GetConsensusStatus error", err)
-	//	return
-	//}
-	//if status.GetConsensusName() != "another" {
-	//	t.Error("GetConsensusName error", err)
-	//	return
-	//}
-	//by, err := fakeCtx.Get(contractBucket, []byte(consensusKey))
-	//if err != nil {
-	//	t.Error("fakeCtx error", err)
-	//	return
-	//}
-	//c := map[int]def.ConsensusConfig{}
-	//err = json.Unmarshal(by, &c)
-	//if err != nil {
-	//	t.Error("unmarshal error", err)
-	//	return
-	//}
-	//if len(c) != 2 {
-	//	t.Error("update error", "len", len(c))
-	//}
 }
 
 func TestCompeteMaster(t *testing.T) {

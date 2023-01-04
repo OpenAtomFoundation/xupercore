@@ -159,12 +159,7 @@ func TestTopSortWithoutCircleCase3(t *testing.T) {
 
 func getStr(start int, end int, order []string) []string {
 	fmt.Println("getStr->", "start->", start, " end->", end)
-	ret := []string{}
-	for _, v := range order[start:end] {
-		ret = append(ret, v)
-	}
-
-	return ret
+	return order[start:end]
 }
 
 func TestTopSortWithoutCircleCase4(t *testing.T) {

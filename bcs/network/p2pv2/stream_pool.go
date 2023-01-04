@@ -126,9 +126,8 @@ func (sp *StreamPool) AddStream(ctx xctx.XContext, stream *Stream) error {
 }
 
 // DelStream delete a stream
-func (sp *StreamPool) DelStream(stream *Stream) error {
+func (sp *StreamPool) DelStream(stream *Stream) {
 	stream.Close()
 	sp.streams.Del(stream.PeerID().Pretty())
 	sp.limit.DelStream(stream.MultiAddr().String())
-	return nil
 }

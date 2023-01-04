@@ -14,7 +14,7 @@ func TestXModelIterator(t *testing.T) {
 	keys := make([]string, N)
 	for i := 0; i < N; i++ {
 		key := make([]byte, 10)
-		rand.Read(key)
+		_, _ = rand.Read(key)
 		keys[i] = big.NewInt(0).SetBytes(key).Text(35)
 	}
 
@@ -47,7 +47,7 @@ func TestXModelRangeIterator(t *testing.T) {
 	keys := make([]string, N)
 	for i := 0; i < N; i++ {
 		key := make([]byte, 10)
-		rand.Read(key)
+		_, _ = rand.Read(key)
 		keys[i] = prefix + big.NewInt(0).SetBytes(key).Text(35)
 	}
 

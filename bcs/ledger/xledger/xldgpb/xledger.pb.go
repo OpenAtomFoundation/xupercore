@@ -5,7 +5,7 @@ package xldgpb
 
 import (
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
+	proto "github.com/golang/protobuf/proto" //nolint:staticcheck
 	protos "github.com/xuperchain/xupercore/protos"
 	math "math"
 )

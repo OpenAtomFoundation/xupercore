@@ -69,7 +69,7 @@ func (iter *BadgerIterator) Value() []byte {
 
 func (iter *BadgerIterator) Next() bool {
 	// last time call the function of Prev, here should renew iterator
-	if iter.direction == true {
+	if iter.direction {
 		key := iter.Key()
 		iter.badgerIter.Close()
 		iter.opts.Reverse = false
@@ -96,9 +96,8 @@ func (iter *BadgerIterator) next() bool {
 		return iter.badgerIter.Valid() && iter.badgerIter.ValidForPrefix(iter.first)
 	}
 	if iter.rangeIter {
-		valid := iter.badgerIter.Valid()
-		if valid == false {
-			return valid
+		if !iter.badgerIter.Valid() {
+			return false
 		}
 		item := iter.badgerIter.Item()
 		return bytes.Compare(item.Key(), iter.last) < 0 && bytes.Compare(item.Key(), iter.first) >= 0
@@ -109,7 +108,7 @@ func (iter *BadgerIterator) next() bool {
 
 func (iter *BadgerIterator) Prev() bool {
 	// first time to call the function of Prev, renew Iterator
-	if iter.direction == false {
+	if !iter.direction {
 		key := iter.Key()
 		iter.badgerIter.Close()
 		//iter.txn.Discard()

@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	bmock "github.com/xuperchain/xupercore/bcs/consensus/mock"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	common "github.com/xuperchain/xupercore/kernel/consensus/base/common"
@@ -50,9 +51,14 @@ func getBFTTdposConsensusConf() string {
 func prepare(config string) (*cctx.ConsensusCtx, error) {
 	l := kmock.NewFakeLedger([]byte(config))
 	cCtx, err := bmock.NewConsensusCtx(l)
+	if err != nil {
+		return nil, err
+	}
 	cCtx.Ledger = l
 	p, ctxN, err := kmock.NewP2P("node")
-	p.Init(ctxN)
+	if err := p.Init(ctxN); err != nil {
+		return nil, err
+	}
 	cCtx.Network = p
 	return cCtx, err
 }
@@ -121,7 +127,8 @@ func TestCheckMinerMatch(t *testing.T) {
 	l.SetConsensusStorage(2, SetTdposStorage(1, nil))
 	l.SetConsensusStorage(3, SetTdposStorage(1, nil))
 	c := cCtx.BaseCtx
-	i.CheckMinerMatch(&c, b3)
+	// TODO: deal with error
+	_, _ = i.CheckMinerMatch(&c, b3)
 }
 
 func TestProcessBeforeMiner(t *testing.T) {
@@ -207,7 +214,9 @@ func TestBFT(t *testing.T) {
 		return
 	}
 	tdpos, _ := i.(*tdposConsensus)
-	tdpos.initBFT()
+	if err := tdpos.initBFT(); err != nil {
+		t.Fatal(err)
+	}
 	l, _ := tdpos.election.ledger.(*kmock.FakeLedger)
 	tdpos.election.address = "dpzuVdosQrF2kmzumhVeFQZa1aYcdgFpN"
 	// 1, 2区块storage修复
@@ -217,14 +226,15 @@ func TestBFT(t *testing.T) {
 	b3 := kmock.NewBlock(3)
 	b3.SetTimestamp(1616481092 * int64(time.Millisecond))
 	b3.SetProposer("TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY")
-	l.Put(b3)
+	_ = l.Put(b3)
 	l.SetConsensusStorage(3, SetTdposStorage(3, justify(3)))
 	b33, _ := l.QueryBlockHeaderByHeight(3)
-	tdpos.CheckMinerMatch(&cCtx.BaseCtx, b33)
-	tdpos.ProcessBeforeMiner(0, 1616481107*int64(time.Millisecond))
+	// TODO: deal with error
+	_, _ = tdpos.CheckMinerMatch(&cCtx.BaseCtx, b33)
+	// TODO: deal with error
+	_, _, _ = tdpos.ProcessBeforeMiner(0, 1616481107*int64(time.Millisecond))
 	err = tdpos.ProcessConfirmBlock(b33)
 	if err != nil {
-		t.Error("ProcessConfirmBlock error", "err", err)
-		return
+		t.Fatal("ProcessConfirmBlock error", "err", err)
 	}
 }

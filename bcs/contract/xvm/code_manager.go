@@ -2,8 +2,6 @@ package xvm
 
 import (
 	"bytes"
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -200,8 +198,6 @@ func (c *codeManager) GetExecCode(name string, cp bridge.ContractCodeProvider) (
 			if err != nil {
 				return nil, err
 			}
-		} else {
-			// log.Debug("contract code hit disk cache", "contract", name)
 		}
 		return c.makeMemCache(name, libpath, desc)
 	})
@@ -216,12 +212,4 @@ func (c *codeManager) RemoveCode(name string) {
 	defer c.mutex.Unlock()
 	delete(c.codes, name)
 	os.RemoveAll(filepath.Join(c.basedir, name))
-}
-
-// not used now
-func makeCacheId(desc *protos.WasmCodeDesc) string {
-	h := sha1.New()
-	h.Write(desc.GetDigest())
-	h.Write([]byte(compile.Version))
-	return hex.EncodeToString(h.Sum(nil))
 }

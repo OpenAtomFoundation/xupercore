@@ -2,10 +2,11 @@ package event
 
 import (
 	"encoding/hex"
-	"github.com/xuperchain/xupercore/protos"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
+	"github.com/xuperchain/xupercore/protos"
 )
 
 func TestRouteBlockTopic(t *testing.T) {

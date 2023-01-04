@@ -308,7 +308,7 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *
 	return bcName, bcData, &bcGroup, nil
 }
 
-//////////// Group ///////////
+// ////////// Group ///////////
 type Group struct {
 	GroupID    string   `json:"name,omitempty"`
 	Admin      []string `json:"admin,omitempty"`
@@ -474,8 +474,5 @@ func GetParaChainGroup(reader kledger.XMSnapshotReader, bcname string) (Group, e
 }
 
 func IsParaChainEnable(g Group) bool {
-	if g.Status == ParaChainStatusStart {
-		return true
-	}
-	return false
+	return g.Status == ParaChainStatusStart
 }

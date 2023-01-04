@@ -6,8 +6,7 @@ import (
 )
 
 func TestEqual(t *testing.T) {
-	var err error
-	err = getError()
+	err := getError()
 	if err != nil {
 		fmt.Println(err)
 		return

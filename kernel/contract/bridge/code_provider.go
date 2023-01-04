@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type stateGetReader interface {

@@ -17,7 +17,7 @@ func parseVersion(version string) ([]byte, int, error) {
 	return txid, offset, nil
 }
 
-//GetTxidFromVersion parse version and fetch txid from version string
+// GetTxidFromVersion parse version and fetch txid from version string
 func GetTxidFromVersion(version string) []byte {
 	txid, _, err := parseVersion(version)
 	if err != nil {

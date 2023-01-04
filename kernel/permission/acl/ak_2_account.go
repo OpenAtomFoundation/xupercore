@@ -85,7 +85,9 @@ func update(ctx contract.KContext, aclJSON []byte, accountName string, method st
 		return nil
 	}
 	acl := &pb.Acl{}
-	json.Unmarshal(aclJSON, acl)
+	if err := json.Unmarshal(aclJSON, acl); err != nil {
+		return err
+	}
 	akSets := acl.GetAkSets()
 	aksWeight := acl.GetAksWeight()
 	permissionRule := acl.GetPm().GetRule()
@@ -98,7 +100,6 @@ func update(ctx contract.KContext, aclJSON []byte, accountName string, method st
 	default:
 		return errors.New("update ak to account reflection failed, permission model is not found")
 	}
-	return nil
 }
 
 func UpdateAK2AccountReflection(ctx contract.KContext, aclOldJSON []byte, aclNewJSON []byte, accountName string) error {

@@ -67,11 +67,10 @@ func TestNative(t *testing.T) {
 			}
 
 			t.Log("pulling image......")
-			pullResp, errPull := exec.Command("docker", "pull", IMAGE_NAME).CombinedOutput()
+			_, errPull := exec.Command("docker", "pull", IMAGE_NAME).CombinedOutput()
 			if errPull != nil {
 				t.Error(err)
 				continue
-				t.Log(string(pullResp))
 			}
 			contractConfig.Native.Docker.Enable = true
 		} else {

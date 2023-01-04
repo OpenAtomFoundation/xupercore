@@ -30,5 +30,5 @@ message ProposalMsg {
 message VoteMsg {
 	bytes VoteInfo = 1;
 	bytes LedgerCommitInfo = 2;
-	repeated QuorumCertSign Signature = 3;    
+	repeated QuorumCertSign Signature = 3;
 }
