@@ -23,4 +23,4 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
-          working-directory: bcs/consensus/single
+          working-directory: kernel/engines/xuperos/xtoken
