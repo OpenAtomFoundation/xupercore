@@ -16,7 +16,7 @@ import (
 
 // ---------- Propose and Vote ----------
 
-func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 	// 1、检查token是否存在
 	args := ctx.Args()
 	tokenName := string(args["tokenName"])
@@ -28,12 +28,12 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 	if len(data) == 0 {
 		return nil, errors.New("data can not be empty")
 	}
-	token, err := x.getToken(ctx, tokenName)
+	token, err := c.getToken(ctx, tokenName)
 	if err != nil {
 		return nil, err
 	}
 	// 2、检查发起提案人账户余额
-	bal, err := x.balanceOf(ctx, tokenName, ctx.Initiator())
+	bal, err := c.balanceOf(ctx, tokenName, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 如果账户有冻结的金额，说明已有参与的进行中提案，包括自己发起的以及投票的。
-	fronzen, err := x.getFrozenBalance(ctx, tokenName, ctx.Initiator())
+	fronzen, err := c.getFrozenBalance(ctx, tokenName, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -51,23 +51,23 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 3、更新提案数据
-	pID, err := x.getLatestProposalID(ctx, tokenName, topic)
+	pID, err := c.getLatestProposalID(ctx, tokenName, topic)
 	if err != nil {
 		return nil, err
 	}
-	if err := x.saveNewProposal(ctx, tokenName, topic, data, pID.Add(pID, big.NewInt(1))); err != nil {
+	if err := c.saveNewProposal(ctx, tokenName, topic, data, pID.Add(pID, big.NewInt(1))); err != nil {
 		return nil, err
 	}
 
-	if err = x.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+	if err = c.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
 		return nil, err
 	}
-	if err = x.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+	if err = c.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
 		return nil, err
 	}
 
 	// 锁定发起人账户余额。
-	err = x.lockProposerToken(ctx, tokenName, topic, ctx.Initiator(), pID)
+	err = c.lockProposerToken(ctx, tokenName, topic, ctx.Initiator(), pID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, Propose)
+	err = c.addFee(ctx, Propose)
 	if err != nil {
 		return nil, err
 	}
@@ -92,15 +92,15 @@ func (x *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 }
 
 // 锁定提案者所有余额
-func (x *Contract) lockProposerToken(ctx contract.KContext, token, topic, address string, pid *big.Int) error {
-	bal, err := x.balanceOf(ctx, token, address)
+func (c *Contract) lockProposerToken(ctx contract.KContext, token, topic, address string, pid *big.Int) error {
+	bal, err := c.balanceOf(ctx, token, address)
 	if err != nil {
 		return err
 	}
-	return x.addVotingProposalByProposer(ctx, token, topic, address, pid, bal)
+	return c.addVotingProposalByProposer(ctx, token, topic, address, pid, bal)
 }
 
-func (x *Contract) checkVoteOption(option string) (int, error) {
+func (c *Contract) checkVoteOption(option string) (int, error) {
 	opt, err := strconv.Atoi(option)
 	if err != nil {
 		return 0, errors.New("invalid vote option")
@@ -112,7 +112,7 @@ func (x *Contract) checkVoteOption(option string) (int, error) {
 	return 0, errors.New("invalid vote option")
 }
 
-func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	// 1、检查参数是否正确（token、proposal 是否存在且提案状态是否为 voting）
 	// 检查投票topic下是否有已经投票的提案，如果有则不允许投票。
 	args := ctx.Args()
@@ -121,7 +121,7 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	proposalID := string(args["proposalID"])
 	value := string(args["value"])
 	option := string(args["option"])
-	opt, err := x.checkVoteOption(option)
+	opt, err := c.checkVoteOption(option)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("invalid proposalID")
 	}
 
-	p, err := x.getProposal(ctx, tokenName, topic, pID)
+	p, err := c.getProposal(ctx, tokenName, topic, pID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 2、检查发起者余额是否大于投票金额
-	bal, err := x.balanceOf(ctx, tokenName, ctx.Initiator())
+	bal, err := c.balanceOf(ctx, tokenName, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,7 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 如果账户有冻结的金额，说明已有参与的进行中提案，包括自己发起的以及投票的。
-	fronzen, err := x.getFrozenBalance(ctx, tokenName, ctx.Initiator())
+	fronzen, err := c.getFrozenBalance(ctx, tokenName, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -167,22 +167,22 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 3、更新投票数据
-	if err := x.saveVote(ctx, tokenName, topic, opt, pID, voteAmount); err != nil {
+	if err := c.saveVote(ctx, tokenName, topic, opt, pID, voteAmount); err != nil {
 		return nil, err
 	}
 
 	// 4、更新投票人的所有voting状态的提案数据
-	if err = x.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+	if err = c.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
 		return nil, err
 	}
-	if err = x.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+	if err = c.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
 		return nil, err
 	}
-	if err := x.addAddressVotingProposal(ctx, tokenName, ctx.Initiator(), topic, pID, voteAmount); err != nil {
+	if err := c.addAddressVotingProposal(ctx, tokenName, ctx.Initiator(), topic, pID, voteAmount); err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, Vote)
+	err = c.addFee(ctx, Vote)
 	if err != nil {
 		return nil, err
 	}
@@ -192,8 +192,8 @@ func (x *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 }
 
 // 投票人数数量少于5k可以使用此接口
-func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) {
-	ok, err := x.checkPermission(ctx, ctx.Initiator())
+func (c *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) {
+	ok, err := c.checkPermission(ctx, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +215,7 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 		return nil, errors.New("invalid proposalID")
 	}
 
-	proposal, err := x.getProposal(ctx, tokenName, topic, pID)
+	proposal, err := c.getProposal(ctx, tokenName, topic, pID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,22 +224,22 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 	}
 
 	// 获取所有此提案的投票数据，包括赞成、反对、弃权，
-	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID, true)
+	agreeCount, err := c.getAgreeVoteAmount(ctx, tokenName, topic, pID, true)
 	if err != nil {
 		return nil, err
 	}
-	opposeCount, err := x.getOpposeVoteAmount(ctx, tokenName, topic, pID, true)
+	opposeCount, err := c.getOpposeVoteAmount(ctx, tokenName, topic, pID, true)
 	if err != nil {
 		return nil, err
 	}
-	waiveCount, err := x.getWaiveVoteAmount(ctx, tokenName, topic, pID, true)
+	waiveCount, err := c.getWaiveVoteAmount(ctx, tokenName, topic, pID, true)
 	if err != nil {
 		return nil, err
 	}
 
 	tmp := big.NewInt(0).Add(agreeCount, opposeCount)
 	totalVote := tmp.Add(tmp, waiveCount)
-	token, err := x.getToken(ctx, tokenName)
+	token, err := c.getToken(ctx, tokenName)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +257,7 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 		}
 	}
 
-	result, err := x.setProposalResult(ctx, proposal, tokenName, agreeCount, opposeCount, waiveCount)
+	result, err := c.setProposalResult(ctx, proposal, tokenName, agreeCount, opposeCount, waiveCount)
 	if err != nil {
 		return nil, err
 	}
@@ -266,7 +266,7 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 	if err != nil {
 		return nil, err
 	}
-	err = x.addFee(ctx, CheckVote)
+	err = c.addFee(ctx, CheckVote)
 	if err != nil {
 		return nil, err
 	}
@@ -277,8 +277,8 @@ func (x *Contract) CheckVote(ctx contract.KContext) (*contract.Response, error) 
 }
 
 // StopVote stop a proposal without returning vote result.
-func (x *Contract) StopVote(ctx contract.KContext) (*contract.Response, error) {
-	ok, err := x.checkPermission(ctx, ctx.Initiator())
+func (c *Contract) StopVote(ctx contract.KContext) (*contract.Response, error) {
+	ok, err := c.checkPermission(ctx, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +300,7 @@ func (x *Contract) StopVote(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("invalid proposalID")
 	}
 
-	proposal, err := x.getProposal(ctx, tokenName, topic, pID)
+	proposal, err := c.getProposal(ctx, tokenName, topic, pID)
 	if err != nil {
 		return nil, err
 	}
@@ -310,12 +310,12 @@ func (x *Contract) StopVote(ctx contract.KContext) (*contract.Response, error) {
 	// 更新提案状态为 stoped，之后不再支持投票。
 	proposal.Status = ProposalStopped
 
-	_, err = x.setProposalResult(ctx, proposal, tokenName, nil, nil, nil)
+	_, err = c.setProposalResult(ctx, proposal, tokenName, nil, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, StopVote)
+	err = c.addFee(ctx, StopVote)
 	if err != nil {
 		return nil, err
 	}
@@ -324,19 +324,19 @@ func (x *Contract) StopVote(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) setProposalResult(ctx contract.KContext, proposal *Proposal, tokenName string, agreeCount, opposeCount, waiveCount *big.Int) (*CheckVoteResult, error) {
-	if err := x.updateProposal(ctx, tokenName, proposal); err != nil {
+func (c *Contract) setProposalResult(ctx contract.KContext, proposal *Proposal, tokenName string, agreeCount, opposeCount, waiveCount *big.Int) (*CheckVoteResult, error) {
+	if err := c.updateProposal(ctx, tokenName, proposal); err != nil {
 		return nil, err
 	}
 	if proposal.Status == ProposalSuccess {
 		// 提案成功则更新投票状态以及topic最新数据
-		if err := x.setTopicData(ctx, tokenName, proposal.Topic, proposal.Data); err != nil {
+		if err := c.setTopicData(ctx, tokenName, proposal.Topic, proposal.Data); err != nil {
 			return nil, err
 		}
 	}
 
 	// 更新proposer下的进行中的提案数据
-	err := x.delVotingProposalByProposer(ctx, tokenName, proposal.Topic, proposal.Proposer, proposal.ID)
+	err := c.delVotingProposalByProposer(ctx, tokenName, proposal.Topic, proposal.Proposer, proposal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +349,7 @@ func (x *Contract) setProposalResult(ctx contract.KContext, proposal *Proposal, 
 	}, nil
 }
 
-func (x *Contract) QueryProposal(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) QueryProposal(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	topic := string(ctx.Args()["topic"])
 	if len(tokenName) == 0 || len(topic) == 0 {
@@ -363,7 +363,7 @@ func (x *Contract) QueryProposal(ctx contract.KContext) (*contract.Response, err
 	if !ok {
 		return nil, errors.New("invalid proposalID")
 	}
-	p, err := x.getProposal(ctx, tokenName, topic, pID)
+	p, err := c.getProposal(ctx, tokenName, topic, pID)
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +371,7 @@ func (x *Contract) QueryProposal(ctx contract.KContext) (*contract.Response, err
 	if err != nil {
 		return nil, err
 	}
-	err = x.addFee(ctx, QueryProposal)
+	err = c.addFee(ctx, QueryProposal)
 	if err != nil {
 		return nil, err
 	}
@@ -382,7 +382,7 @@ func (x *Contract) QueryProposal(ctx contract.KContext) (*contract.Response, err
 	}, nil
 }
 
-func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	topic := string(ctx.Args()["topic"])
 	if len(tokenName) == 0 || len(topic) == 0 {
@@ -397,11 +397,11 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 		return nil, errors.New("invalid proposalID")
 	}
 
-	p, err := x.getProposal(ctx, tokenName, topic, pID)
+	p, err := c.getProposal(ctx, tokenName, topic, pID)
 	if err != nil {
 		return nil, err
 	}
-	t, err := x.getToken(ctx, tokenName)
+	t, err := c.getToken(ctx, tokenName)
 	if err != nil {
 		return nil, err
 	}
@@ -409,19 +409,19 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 	if p.Status == ProposalStopped {
 		// 异步检票流程
 		proposalEffectiveAmount := t.GenesisProposal.ProposalEffectiveAmount
-		return x.getOrCheckVoteAsync(ctx, tokenName, topic, pID, proposalEffectiveAmount)
+		return c.getOrCheckVoteAsync(ctx, tokenName, topic, pID, proposalEffectiveAmount)
 	}
 
 	// 此时说明还是使用 CheckVote 接口，因此都是同步的方式。
-	agreeCount, err := x.getAgreeVoteAmount(ctx, tokenName, topic, pID, false)
+	agreeCount, err := c.getAgreeVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
 	}
-	opposeCount, err := x.getOpposeVoteAmount(ctx, tokenName, topic, pID, false)
+	opposeCount, err := c.getOpposeVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
 	}
-	waiveCount, err := x.getWaiveVoteAmount(ctx, tokenName, topic, pID, false)
+	waiveCount, err := c.getWaiveVoteAmount(ctx, tokenName, topic, pID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +432,7 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 		OpposeCount: opposeCount,
 		WaiveCount:  waiveCount,
 	}
-	err = x.addFee(ctx, QueryProposalVotes)
+	err = c.addFee(ctx, QueryProposalVotes)
 	if err != nil {
 		return nil, err
 	}
@@ -447,18 +447,18 @@ func (x *Contract) QueryProposalVotes(ctx contract.KContext) (*contract.Response
 	}, nil
 }
 
-func (x *Contract) getOrCheckVoteAsync(ctx contract.KContext, token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int) (*contract.Response, error) {
-	if x.lastCheckVoteErr != nil {
+func (c *Contract) getOrCheckVoteAsync(ctx contract.KContext, token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int) (*contract.Response, error) {
+	if c.lastCheckVoteErr != nil {
 		// 如果上一次检票有error直接返回并清空。
-		err := x.lastCheckVoteErr
-		x.lastCheckVoteErr = nil
+		err := c.lastCheckVoteErr
+		c.lastCheckVoteErr = nil
 		return nil, err
 	}
 
 	key := proposalCheckingKey(token, topic, pid.String())
 
 	dbkey := KeyOfProposalResult(token, topic, pid)
-	dbvalue, err := x.contractCtx.ChainCtx.State.GetLDB().Get([]byte(dbkey))
+	dbvalue, err := c.contractCtx.ChainCtx.State.GetLDB().Get([]byte(dbkey))
 	if err != nil && !kvdb.ErrNotFound(err) {
 		return nil, errors.Wrap(err, "query proposal vote result failed from db")
 	}
@@ -475,16 +475,19 @@ func (x *Contract) getOrCheckVoteAsync(ctx contract.KContext, token, topic strin
 	}
 
 	// 如果正在检票，则返回错误，否则标记为检票中且开始检票工作。
-	if _, ok := x.proposalChecking.LoadOrStore(key, true); ok {
+	if _, ok := c.proposalChecking.LoadOrStore(key, true); ok {
 		return nil, errors.New("checking, please try again later")
 	}
 	// 开始检票
 	rc := make(chan *CheckVoteResult, 1)
-	go x.calcVoteResult(token, topic, pid, proposalEffectiveAmount, rc)
+	go c.calcVoteResult(token, topic, pid, proposalEffectiveAmount, rc)
 
 	select {
 	case result := <-rc:
-		v, _ := json.Marshal(result)
+		v, err := json.Marshal(result)
+		if err != nil {
+			return nil, err
+		}
 		return &contract.Response{
 			Status: Success,
 			Body:   v,
@@ -496,25 +499,25 @@ func (x *Contract) getOrCheckVoteAsync(ctx contract.KContext, token, topic strin
 	}
 }
 
-func (x *Contract) calcVoteResult(token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int, resultChan chan *CheckVoteResult) {
+func (c *Contract) calcVoteResult(token, topic string, pid *big.Int, proposalEffectiveAmount *big.Int, resultChan chan *CheckVoteResult) {
 	key := proposalCheckingKey(token, topic, pid.String())
-	defer x.proposalChecking.Delete(key)
-	agreeVoteCount, err := x.getAgreeVoteAmountFromXM(token, topic, pid)
+	defer c.proposalChecking.Delete(key)
+	agreeVoteCount, err := c.getAgreeVoteAmountFromXM(token, topic, pid)
 	if err != nil {
-		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getAgreeVoteAmountFromXM error", err)
-		x.lastCheckVoteErr = err
+		c.contractCtx.XLog.Error("XToken contract", "calcVoteResult getAgreeVoteAmountFromXM error", err)
+		c.lastCheckVoteErr = err
 		return
 	}
-	opposeVoteCount, err := x.getOpposeVoteAmountFromXM(token, topic, pid)
+	opposeVoteCount, err := c.getOpposeVoteAmountFromXM(token, topic, pid)
 	if err != nil {
-		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getOpposeVoteAmountFromXM error", err)
-		x.lastCheckVoteErr = err
+		c.contractCtx.XLog.Error("XToken contract", "calcVoteResult getOpposeVoteAmountFromXM error", err)
+		c.lastCheckVoteErr = err
 		return
 	}
-	waiveVoteCount, err := x.getWaiveVoteAmountFromXM(token, topic, pid)
+	waiveVoteCount, err := c.getWaiveVoteAmountFromXM(token, topic, pid)
 	if err != nil {
-		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult getWaiveVoteAmountFromXM error", err)
-		x.lastCheckVoteErr = err
+		c.contractCtx.XLog.Error("XToken contract", "calcVoteResult getWaiveVoteAmountFromXM error", err)
+		c.lastCheckVoteErr = err
 		return
 	}
 	tmp := big.NewInt(0).Add(agreeVoteCount, opposeVoteCount)
@@ -538,37 +541,42 @@ func (x *Contract) calcVoteResult(token, topic string, pid *big.Int, proposalEff
 		WaiveCount:  waiveVoteCount,
 	}
 	resultChan <- result // 此处不会阻塞
-	value, _ := json.Marshal(result)
+	value, err := json.Marshal(result)
+	if err != nil {
+		c.contractCtx.XLog.Error("XToken contract", "calcVoteResult json marshal failed", err)
+		c.lastCheckVoteErr = err
+	}
 	// 写到数据库
-	db := x.contractCtx.ChainCtx.State.GetLDB()
+	db := c.contractCtx.ChainCtx.State.GetLDB()
 	err = db.Put([]byte(KeyOfProposalResult(token, topic, pid)), value)
 	if err != nil {
-		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult db put CheckVoteResult error", err)
-		x.lastCheckVoteErr = err
+		c.contractCtx.XLog.Error("XToken contract", "calcVoteResult db put CheckVoteResult error", err)
+		c.lastCheckVoteErr = err
 	}
 }
 
 // getAgreeVoteAmountFromXM 从状态机直接遍历赞成票
-func (x *Contract) getAgreeVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
-	return x.getVoteAmountFromXM(token, topic, pid, voteAgreeOption)
+func (c *Contract) getAgreeVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
+	return c.getVoteAmountFromXM(token, topic, pid, voteAgreeOption)
 }
 
 // getOpposeVoteAmountFromXM 从状态机直接遍历反对票
-func (x *Contract) getOpposeVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
-	return x.getVoteAmountFromXM(token, topic, pid, voteOpposeOption)
+func (c *Contract) getOpposeVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
+	return c.getVoteAmountFromXM(token, topic, pid, voteOpposeOption)
 }
 
 // getWaiveVoteAmountFromXM 从状态机直接遍历弃权票
-func (x *Contract) getWaiveVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
-	return x.getVoteAmountFromXM(token, topic, pid, voteWaiveOption)
+func (c *Contract) getWaiveVoteAmountFromXM(token, topic string, pid *big.Int) (*big.Int, error) {
+	return c.getVoteAmountFromXM(token, topic, pid, voteWaiveOption)
 }
 
-func (x *Contract) getVoteAmountFromXM(token, topic string, proposalID *big.Int, option int) (*big.Int, error) {
-	start, _ := x.getVoteKeyPrefix(token, topic, option, proposalID)
-	reader := x.contractCtx.ChainCtx.State.CreateXMReader()
+func (c *Contract) getVoteAmountFromXM(token, topic string, proposalID *big.Int, option int) (*big.Int, error) {
+	// 前面判断过参数，此处不会出现错误。
+	start, _ := c.getVoteKeyPrefix(token, topic, option, proposalID)
+	reader := c.contractCtx.ChainCtx.State.CreateXMReader()
 	it, err := reader.Select(XTokenContract, []byte(start), []byte(start+"~"))
 	if err != nil {
-		x.contractCtx.XLog.Error("XToken contract", "calcVoteResult reader select error", err)
+		c.contractCtx.XLog.Error("XToken contract", "calcVoteResult reader select error", err)
 		return nil, err
 	}
 	defer it.Close()
@@ -584,7 +592,7 @@ func (x *Contract) getVoteAmountFromXM(token, topic string, proposalID *big.Int,
 		voteCount = voteCount.Add(voteCount, voteAmount)
 	}
 	if err := it.Error(); err != nil {
-		x.contractCtx.XLog.Error("XToken contract", "State CreateXMReader iterator error", err)
+		c.contractCtx.XLog.Error("XToken contract", "State CreateXMReader iterator error", err)
 		return nil, err
 	}
 	return voteCount, nil
@@ -594,12 +602,12 @@ func proposalCheckingKey(token, topic, pid string) string {
 	return token + topic + pid
 }
 
-func (x *Contract) setTopicData(ctx contract.KContext, tokenName, topic, data string) error {
+func (c *Contract) setTopicData(ctx contract.KContext, tokenName, topic, data string) error {
 	key := []byte(KeyOfTopicData(tokenName, topic))
 	return ctx.Put(XTokenContract, key, []byte(data))
 }
 
-func (x *Contract) getAddressVotingProposal(ctx contract.KContext, token, address string) (map[string]map[string]*big.Int, error) {
+func (c *Contract) getAddressVotingProposal(ctx contract.KContext, token, address string) (map[string]map[string]*big.Int, error) {
 	key := []byte(KeyOfAddressVotingProposal(token, address))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -615,8 +623,8 @@ func (x *Contract) getAddressVotingProposal(ctx contract.KContext, token, addres
 }
 
 // 查询 address 所有参与投票的提案，根据提案状态更新提案列表。
-func (x *Contract) updateAddressVotingProposal(ctx contract.KContext, token, address string) error {
-	votingProposalMap, err := x.getAddressVotingProposal(ctx, token, address)
+func (c *Contract) updateAddressVotingProposal(ctx contract.KContext, token, address string) error {
+	votingProposalMap, err := c.getAddressVotingProposal(ctx, token, address)
 	if err != nil {
 		return err
 	}
@@ -625,7 +633,7 @@ func (x *Contract) updateAddressVotingProposal(ctx contract.KContext, token, add
 	for topic, pid2amount := range votingProposalMap {
 		for pidstr := range pid2amount {
 			pid, _ := big.NewInt(0).SetString(pidstr, 10)
-			p, err := x.getProposal(ctx, token, topic, pid)
+			p, err := c.getProposal(ctx, token, topic, pid)
 			if err != nil {
 				return err
 			}
@@ -652,8 +660,8 @@ func (x *Contract) updateAddressVotingProposal(ctx contract.KContext, token, add
 }
 
 // 用户的voting状态的提案列表添加一个新的提案ID，用户投票时调用此函数。
-func (x *Contract) addAddressVotingProposal(ctx contract.KContext, token, address, topic string, pID, amount *big.Int) error {
-	proposalMap, err := x.getAddressVotingProposal(ctx, token, address)
+func (c *Contract) addAddressVotingProposal(ctx contract.KContext, token, address, topic string, pID, amount *big.Int) error {
+	proposalMap, err := c.getAddressVotingProposal(ctx, token, address)
 	if err != nil {
 		return err
 	}
@@ -684,8 +692,8 @@ func (x *Contract) addAddressVotingProposal(ctx contract.KContext, token, addres
 }
 
 // 用户的voting状态的提案列表删除结束的提案
-func (x *Contract) delAddressVotingProposal(ctx contract.KContext, token, address, topic string, pID *big.Int) error {
-	proposalMap, err := x.getAddressVotingProposal(ctx, token, address)
+func (c *Contract) delAddressVotingProposal(ctx contract.KContext, token, address, topic string, pID *big.Int) error {
+	proposalMap, err := c.getAddressVotingProposal(ctx, token, address)
 	if err != nil {
 		return err
 	}
@@ -720,7 +728,7 @@ func (x *Contract) delAddressVotingProposal(ctx contract.KContext, token, addres
 	return nil
 }
 
-func (x *Contract) getLatestProposalID(ctx contract.KContext, token, topic string) (*big.Int, error) {
+func (c *Contract) getLatestProposalID(ctx contract.KContext, token, topic string) (*big.Int, error) {
 	key := []byte(KeyOfLatestProposalID(token, topic))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -736,7 +744,7 @@ func (x *Contract) getLatestProposalID(ctx contract.KContext, token, topic strin
 	return latestID, nil
 }
 
-func (x *Contract) saveLatestProposalID(ctx contract.KContext, token, topic string, proposalID *big.Int) error {
+func (c *Contract) saveLatestProposalID(ctx contract.KContext, token, topic string, proposalID *big.Int) error {
 	key := []byte(KeyOfLatestProposalID(token, topic))
 	err := ctx.Put(XTokenContract, key, []byte(proposalID.String()))
 	if err != nil {
@@ -745,7 +753,7 @@ func (x *Contract) saveLatestProposalID(ctx contract.KContext, token, topic stri
 	return nil
 }
 
-func (x *Contract) saveNewProposal(ctx contract.KContext, token, topic, data string, proposalID *big.Int) error {
+func (c *Contract) saveNewProposal(ctx contract.KContext, token, topic, data string, proposalID *big.Int) error {
 	p := &Proposal{
 		Topic:    topic,
 		ID:       proposalID,
@@ -753,11 +761,11 @@ func (x *Contract) saveNewProposal(ctx contract.KContext, token, topic, data str
 		Proposer: ctx.Initiator(),
 		Status:   ProposalVoting,
 	}
-	return x.saveProposal(ctx, token, p)
+	return c.saveProposal(ctx, token, p)
 }
 
 // 保存proposal以及更新最新的proposalID
-func (x *Contract) saveProposal(ctx contract.KContext, token string, p *Proposal) error {
+func (c *Contract) saveProposal(ctx contract.KContext, token string, p *Proposal) error {
 	value, err := json.Marshal(p)
 	if err != nil {
 		return errors.Wrap(err, "json marshal new proposal failed")
@@ -767,7 +775,7 @@ func (x *Contract) saveProposal(ctx contract.KContext, token string, p *Proposal
 	if err != nil {
 		return err
 	}
-	err = x.saveLatestProposalID(ctx, token, p.Topic, p.ID)
+	err = c.saveLatestProposalID(ctx, token, p.Topic, p.ID)
 	if err != nil {
 		return err
 	}
@@ -775,7 +783,7 @@ func (x *Contract) saveProposal(ctx contract.KContext, token string, p *Proposal
 }
 
 // 只保存proposal，不更新最新的proposalID
-func (x *Contract) updateProposal(ctx contract.KContext, token string, p *Proposal) error {
+func (c *Contract) updateProposal(ctx contract.KContext, token string, p *Proposal) error {
 	value, err := json.Marshal(p)
 	if err != nil {
 		return errors.Wrap(err, "json marshal new proposal failed")
@@ -788,7 +796,7 @@ func (x *Contract) updateProposal(ctx contract.KContext, token string, p *Propos
 	return nil
 }
 
-func (x *Contract) getProposal(ctx contract.KContext, token, topic string, proposalID *big.Int) (*Proposal, error) {
+func (c *Contract) getProposal(ctx contract.KContext, token, topic string, proposalID *big.Int) (*Proposal, error) {
 	key := []byte(KeyOfProposalID(token, topic, proposalID))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -804,20 +812,21 @@ func (x *Contract) getProposal(ctx contract.KContext, token, topic string, propo
 	return p, nil
 }
 
-func (x *Contract) getAgreeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
-	return x.getVoteAmount(ctx, token, topic, proposalID, voteAgreeOption, delAddrVotiingProposal)
+func (c *Contract) getAgreeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
+	return c.getVoteAmount(ctx, token, topic, proposalID, voteAgreeOption, delAddrVotiingProposal)
 }
 
-func (x *Contract) getOpposeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
-	return x.getVoteAmount(ctx, token, topic, proposalID, voteOpposeOption, delAddrVotiingProposal)
+func (c *Contract) getOpposeVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
+	return c.getVoteAmount(ctx, token, topic, proposalID, voteOpposeOption, delAddrVotiingProposal)
 }
 
-func (x *Contract) getWaiveVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
-	return x.getVoteAmount(ctx, token, topic, proposalID, voteWaiveOption, delAddrVotiingProposal)
+func (c *Contract) getWaiveVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, delAddrVotiingProposal bool) (*big.Int, error) {
+	return c.getVoteAmount(ctx, token, topic, proposalID, voteWaiveOption, delAddrVotiingProposal)
 }
 
-func (x *Contract) getVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, option int, delAddrVotiingProposal bool) (*big.Int, error) {
-	start, _ := x.getVoteKeyPrefix(token, topic, option, proposalID)
+func (c *Contract) getVoteAmount(ctx contract.KContext, token, topic string, proposalID *big.Int, option int, delAddrVotiingProposal bool) (*big.Int, error) {
+	// 前面判断过参数，此处不会出现错误。
+	start, _ := c.getVoteKeyPrefix(token, topic, option, proposalID)
 	iter, err := ctx.Select(XTokenContract, []byte(start), []byte(start+"~"))
 	if err != nil {
 		return nil, err
@@ -838,7 +847,7 @@ func (x *Contract) getVoteAmount(ctx contract.KContext, token, topic string, pro
 		voteCount = voteCount.Add(voteCount, voteAmount)
 		if delAddrVotiingProposal {
 			// 检票时，此参数为true，查询投票时为false。
-			err = x.delAddressVotingProposal(ctx, token, address, topic, proposalID)
+			err = c.delAddressVotingProposal(ctx, token, address, topic, proposalID)
 			if err != nil {
 				return nil, err
 			}
@@ -847,8 +856,8 @@ func (x *Contract) getVoteAmount(ctx contract.KContext, token, topic string, pro
 	return voteCount, nil
 }
 
-func (x *Contract) saveVote(ctx contract.KContext, token, topic string, option int, proposalID, amount *big.Int) error {
-	key, err := x.getVoteKey(token, topic, ctx.Initiator(), option, proposalID)
+func (c *Contract) saveVote(ctx contract.KContext, token, topic string, option int, proposalID, amount *big.Int) error {
+	key, err := c.getVoteKey(token, topic, ctx.Initiator(), option, proposalID)
 	if err != nil {
 		return err
 	}
@@ -870,7 +879,7 @@ func (x *Contract) saveVote(ctx contract.KContext, token, topic string, option i
 	return nil
 }
 
-func (x *Contract) getVoteKey(token, topic, address string, option int, proposalID *big.Int) (string, error) {
+func (c *Contract) getVoteKey(token, topic, address string, option int, proposalID *big.Int) (string, error) {
 	switch option {
 	case voteAgreeOption:
 		return KeyOfID2AddressAgreeVote(token, topic, address, proposalID), nil
@@ -882,7 +891,7 @@ func (x *Contract) getVoteKey(token, topic, address string, option int, proposal
 		return "", errors.New("invalid vote option")
 	}
 }
-func (x *Contract) getVoteKeyPrefix(token, topic string, option int, proposalID *big.Int) (string, error) {
+func (c *Contract) getVoteKeyPrefix(token, topic string, option int, proposalID *big.Int) (string, error) {
 	switch option {
 	case voteAgreeOption:
 		return KeyOfID2AddressAgreeVotePrefix(token, topic, proposalID), nil
@@ -896,7 +905,7 @@ func (x *Contract) getVoteKeyPrefix(token, topic string, option int, proposalID 
 }
 
 // 查询地址下发起的进行中的提案。
-func (x *Contract) getVotingProposalByProposer(ctx contract.KContext, token, address string) (map[string]map[string]*big.Int, error) {
+func (c *Contract) getVotingProposalByProposer(ctx contract.KContext, token, address string) (map[string]map[string]*big.Int, error) {
 	key := []byte(KeyOfProposer2Proposal(token, address))
 	value, err := ctx.Get(XTokenContract, []byte(key))
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -916,8 +925,8 @@ func (x *Contract) getVotingProposalByProposer(ctx contract.KContext, token, add
 	return result, nil
 }
 
-func (x *Contract) addVotingProposalByProposer(ctx contract.KContext, token, topic, address string, pid, amount *big.Int) error {
-	proposalMap, err := x.getVotingProposalByProposer(ctx, token, address)
+func (c *Contract) addVotingProposalByProposer(ctx contract.KContext, token, topic, address string, pid, amount *big.Int) error {
+	proposalMap, err := c.getVotingProposalByProposer(ctx, token, address)
 	if err != nil {
 		return err
 	}
@@ -943,28 +952,29 @@ func (x *Contract) addVotingProposalByProposer(ctx contract.KContext, token, top
 	return ctx.Put(XTokenContract, key, value)
 }
 
-func (x *Contract) delVotingProposalByProposer(ctx contract.KContext, token, topic, address string, pid *big.Int) error {
-	proposalMap, err := x.getVotingProposalByProposer(ctx, token, address)
+func (c *Contract) delVotingProposalByProposer(ctx contract.KContext, token, topic, address string, pid *big.Int) error {
+	proposalMap, err := c.getVotingProposalByProposer(ctx, token, address)
 	if err != nil {
 		return err
 	}
-	if pidMap, ok := proposalMap[topic]; !ok {
+	pidMap, ok := proposalMap[topic]
+	if !ok {
 		return nil
+	}
+
+	if pidMap == nil {
+		// 不应有此错误，若有说明投票或者检票时数据处理有问题。
+		return errors.New("address voting topic pidMap empty when delete proposal by ID")
+	}
+	if _, ok := pidMap[pid.String()]; !ok {
+		// 不应有此错误，若有说明投票或者检票时数据处理有问题。
+		return errors.New("address voting amount in pidMap empty when delete proposal by ID")
+	}
+	delete(pidMap, pid.String())
+	if len(pidMap) == 0 {
+		delete(proposalMap, topic)
 	} else {
-		if pidMap == nil {
-			// 不应有此错误，若有说明投票或者检票时数据处理有问题。
-			return errors.New("address voting topic pidMap empty when delete proposal by ID")
-		}
-		if _, ok := pidMap[pid.String()]; !ok {
-			// 不应有此错误，若有说明投票或者检票时数据处理有问题。
-			return errors.New("address voting amount in pidMap empty when delete proposal by ID")
-		}
-		delete(pidMap, pid.String())
-		if len(pidMap) == 0 {
-			delete(proposalMap, topic)
-		} else {
-			proposalMap[topic] = pidMap
-		}
+		proposalMap[topic] = pidMap
 	}
 
 	value, err := json.Marshal(proposalMap)
@@ -972,16 +982,12 @@ func (x *Contract) delVotingProposalByProposer(ctx contract.KContext, token, top
 		return err
 	}
 	key := []byte(KeyOfProposer2Proposal(token, address))
-	err = ctx.Put(XTokenContract, key, value)
-	if err != nil {
-		return err
-	}
-	return nil
+	return ctx.Put(XTokenContract, key, value)
 }
 
 // 更新 address 下所有发起的进行中的提案。
-func (x *Contract) updateVotingProposalByProposal(ctx contract.KContext, token, address string) error {
-	votingProposalMap, err := x.getVotingProposalByProposer(ctx, token, address)
+func (c *Contract) updateVotingProposalByProposal(ctx contract.KContext, token, address string) error {
+	votingProposalMap, err := c.getVotingProposalByProposer(ctx, token, address)
 	if err != nil {
 		return err
 	}
@@ -990,7 +996,7 @@ func (x *Contract) updateVotingProposalByProposal(ctx contract.KContext, token, 
 	for topic, pid2amount := range votingProposalMap {
 		for pidstr := range pid2amount {
 			pid, _ := big.NewInt(0).SetString(pidstr, 10)
-			p, err := x.getProposal(ctx, token, topic, pid)
+			p, err := c.getProposal(ctx, token, topic, pid)
 			if err != nil {
 				return err
 			}
@@ -1008,10 +1014,5 @@ func (x *Contract) updateVotingProposalByProposal(ctx contract.KContext, token, 
 		return err
 	}
 	key := []byte(KeyOfProposer2Proposal(token, address))
-	err = ctx.Put(XTokenContract, key, value)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return ctx.Put(XTokenContract, key, value)
 }
