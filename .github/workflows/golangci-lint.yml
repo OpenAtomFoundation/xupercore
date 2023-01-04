@@ -23,4 +23,5 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
+          # TODO: 扩大 go-lint 检查范围
           working-directory: kernel/engines/xuperos/xtoken
