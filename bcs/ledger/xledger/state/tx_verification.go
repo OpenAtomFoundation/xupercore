@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
@@ -24,8 +26,6 @@ import (
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/golang/protobuf/proto" //nolint:staticcheck
 )
 
 // ImmediateVerifyTx verify tx Immediately

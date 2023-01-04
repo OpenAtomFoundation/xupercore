@@ -6,11 +6,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
-	"os"
-
-	//"io/ioutil"
 	"math/big"
-	//"os"
+	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
