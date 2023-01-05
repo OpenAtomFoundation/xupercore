@@ -201,14 +201,16 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 
 		resp, err := context.Invoke(req.MethodName, req.Args)
 		if err != nil {
-			context.Release()
+			// TODO: deal with error
+			_ = context.Release()
 			ctx.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
 			metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").Inc()
 			return nil, common.ErrContractInvokeFailed.More("%v", err)
 		}
 
 		if resp.Status >= 400 && i < len(reservedRequests) {
-			context.Release()
+			// TODO: deal with error
+			_ = context.Release()
 			ctx.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
 			metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").Inc()
 			return nil, common.ErrContractInvokeFailed.More("%v", resp.Message)
@@ -234,7 +236,8 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		responses = append(responses, response)
 		responseBodes = append(responseBodes, resp.Body)
 
-		context.Release()
+		// TODO: deal with error
+		_ = context.Release()
 		metrics.ContractInvokeHistogram.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName).Observe(time.Since(beginTime).Seconds())
 	}
 
@@ -319,7 +322,8 @@ func (t *Chain) ProcBlock(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	}
 
 	log := ctx.GetLog()
-	err := t.miner.ProcBlock(ctx, block)
+	// TODO: replace deprecated method
+	err := t.miner.ProcBlock(ctx, block) //nolint:staticcheck
 	if err != nil {
 		if common.CastError(err).Equal(common.ErrForbidden) {
 			log.Trace("forbidden process block", "blockid", utils.F(block.GetBlockid()), "err", err)

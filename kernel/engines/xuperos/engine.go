@@ -207,7 +207,9 @@ func (t *Engine) loadChains() error {
 				t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
 				return fmt.Errorf("create parachain error")
 			}
-			aw.Start()
+			if err = aw.Start(); err != nil {
+				return err
+			}
 		}
 
 		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
