@@ -198,7 +198,7 @@ func TestRunRevokeVote(t *testing.T) {
 	l.SetSnapshot(tdposBucket, []byte(vote_prefix+"akf7qunmeaqb51Wu418d6TyPKp4jdLdpV"), VoteKey3())
 
 	i := NewTdposConsensus(*cCtx, getConfig(getTdposConsensusConf()))
-	tdpos, _ := i.(*tdposConsensus)
+	tdpos := i.(*tdposConsensus)
 	fakeCtx := mock.NewFakeKContext(NewNominateArgs(), NewM())
 	tdpos.runRevokeVote(fakeCtx)
 }

@@ -12,3 +12,8 @@ repos:
               .*/address
           )$
       - id: trailing-whitespace
+
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v1.50.1
+    hooks:
+      - id: golangci-lint
