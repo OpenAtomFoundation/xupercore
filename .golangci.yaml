@@ -11,4 +11,3 @@ run:
     - kernel/permission
     - kernel/engines/xuperos/event
     - kernel/engines/xuperos/net
-    - kernel/engines/xuperos/parachain
