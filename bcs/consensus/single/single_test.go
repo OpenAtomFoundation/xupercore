@@ -62,9 +62,15 @@ func TestNewSingleConsensus(t *testing.T) {
 	if i := NewSingleConsensus(*cCtx, getWrongConsensusConf()); i != nil {
 		t.Error("NewSingleConsensus check name error")
 	}
-	i.Stop()
-	i.Start()
-	i.ProcessBeforeMiner(0, time.Now().UnixNano())
+	if err := i.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if err := i.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := i.ProcessBeforeMiner(0, time.Now().UnixNano()); err != nil {
+		t.Fatal(err)
+	}
 	cCtx.XLog = nil
 	i = NewSingleConsensus(*cCtx, conf)
 	if i != nil {
