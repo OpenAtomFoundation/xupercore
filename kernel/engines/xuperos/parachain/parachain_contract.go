@@ -301,29 +301,6 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *
 	return bcName, bcData, &bcGroup, nil
 }
 
-// Group 平行链群组
-type Group struct {
-	GroupID    string   `json:"name,omitempty"`       // group name which is the same as its parachain name
-	Admin      []string `json:"admin,omitempty"`      // admin addresses
-	Identities []string `json:"identities,omitempty"` // accessible addresses
-	Status     int      `json:"status,omitempty"`     // parachain status
-}
-
-// hasAccessAuth returns true when address has access to the parachain
-func (g *Group) hasAccessAuth(address string) bool {
-	return contains(g.Admin, address) || contains(g.Identities, address)
-}
-
-// hasAdminAuth returns true when address is one of admin for parachain
-func (g *Group) hasAdminAuth(address string) bool {
-	return contains(g.Admin, address)
-}
-
-// IsParaChainEnable returns true when status is `start`
-func (g *Group) IsParaChainEnable() bool {
-	return g.Status == ParaChainStatusStart
-}
-
 // methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
 func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
@@ -451,16 +428,6 @@ func loadGroupArgs(args map[string][]byte, group *Group) (*Group, error) {
 		return nil, err
 	}
 	return g, nil
-}
-
-// contains returns true when target string item in string list
-func contains(items []string, item string) bool {
-	for _, eachItem := range items {
-		if eachItem == item {
-			return true
-		}
-	}
-	return false
 }
 
 func newContractErrResponse(status int, msg string) *contract.Response {
