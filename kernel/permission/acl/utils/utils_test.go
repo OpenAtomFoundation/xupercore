@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/tmthrgd/go-hex"
+
 	pb "github.com/xuperchain/xupercore/protos"
 )
 
@@ -43,6 +44,7 @@ func TestIdentifyAK(t *testing.T) {
 			name: "nil sign",
 			args: args{
 				akURI: testAk,
+				sign:  nil,
 				msg:   testData,
 			},
 			wantErr: true,
@@ -140,14 +142,14 @@ func TestVerifySign(t *testing.T) {
 
 func TestExtractAkFromAuthRequire(t *testing.T) {
 	tests := []struct {
-		name string
+		name        string
 		authRequire string
-		want string
+		want        string
 	}{
 		{
-			name: "pass",
+			name:        "pass",
 			authRequire: "XC1111111111111111@xuper/TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
-			want: "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
+			want:        "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY",
 		},
 	}
 	for _, tt := range tests {
