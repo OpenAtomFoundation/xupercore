@@ -11,8 +11,8 @@ type ABI struct {
 	spec *abi.Spec
 }
 
-func LoadFile(fpath string) (*ABI, error) {
-	spec, err := abi.LoadPath(fpath)
+func LoadFile(path string) (*ABI, error) {
+	spec, err := abi.LoadPath(path)
 	if err != nil {
 		return nil, err
 	}
@@ -33,6 +33,7 @@ func newABI(spec *abi.Spec) *ABI {
 	}
 }
 
+// Encode ABI encodes a function call
 func (a *ABI) Encode(methodName string, args map[string]interface{}) ([]byte, error) {
 	if methodName == "" {
 		if a.spec.Constructor != nil {
@@ -47,6 +48,7 @@ func (a *ABI) Encode(methodName string, args map[string]interface{}) ([]byte, er
 	return a.encodeMethod(method, args)
 }
 
+// encodeMethod ABI encodes a function call
 func (a *ABI) encodeMethod(method *abi.FunctionSpec, args map[string]interface{}) ([]byte, error) {
 	var inputs []interface{}
 	for _, input := range method.Inputs {
