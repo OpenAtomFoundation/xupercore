@@ -117,7 +117,7 @@ func Test_contains(t *testing.T) {
 			name: "item in list",
 			args: args{
 				items: []string{"a", "b"},
-				item: "a",
+				item:  "a",
 			},
 			want: true,
 		},
@@ -125,7 +125,7 @@ func Test_contains(t *testing.T) {
 			name: "item not in list",
 			args: args{
 				items: []string{"a", "b"},
-				item: "c",
+				item:  "c",
 			},
 			want: false,
 		},
@@ -133,7 +133,7 @@ func Test_contains(t *testing.T) {
 			name: "empty list",
 			args: args{
 				items: []string{},
-				item: "c",
+				item:  "c",
 			},
 			want: false,
 		},
