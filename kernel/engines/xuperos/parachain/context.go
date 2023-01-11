@@ -19,7 +19,11 @@ const (
 	ParaChainStatusStop  = 1
 )
 
-type ParaChainCtx struct {
+// Deprecated
+// use Ctx instead
+type ParaChainCtx = Ctx
+
+type Ctx struct {
 	// 基础上下文
 	xcontext.BaseCtx
 	BcName   string
@@ -27,8 +31,8 @@ type ParaChainCtx struct {
 	ChainCtx *common.ChainCtx
 }
 
-func NewParaChainCtx(bcName string, cctx *common.ChainCtx) (*ParaChainCtx, error) {
-	if bcName == "" || cctx == nil {
+func NewParaChainCtx(bcName string, cCtx *common.ChainCtx) (*Ctx, error) {
+	if bcName == "" || cCtx == nil {
 		return nil, fmt.Errorf("new parachain ctx failed because param error")
 	}
 
@@ -37,12 +41,12 @@ func NewParaChainCtx(bcName string, cctx *common.ChainCtx) (*ParaChainCtx, error
 		return nil, fmt.Errorf("new parachain ctx failed because new logger error. err:%v", err)
 	}
 
-	ctx := new(ParaChainCtx)
+	ctx := new(Ctx)
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
 	ctx.BcName = bcName
-	ctx.Contract = cctx.Contract
-	ctx.ChainCtx = cctx
+	ctx.Contract = cCtx.Contract
+	ctx.ChainCtx = cCtx
 
 	return ctx, nil
 }
