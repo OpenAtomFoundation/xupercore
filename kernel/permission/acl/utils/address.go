@@ -73,7 +73,7 @@ func ValidAccountNumber(number string) error {
 	// check number's digit
 	for _, digit := range number {
 		if digit < '0' || digit > '9' {
-			return fmt.Errorf("invoke NewAccount failed, account nubmer expect continuous %d digits",
+			return fmt.Errorf("invoke NewAccount failed, account number expect continuous %d digits",
 				GetAccountNumberSize())
 		}
 	}
