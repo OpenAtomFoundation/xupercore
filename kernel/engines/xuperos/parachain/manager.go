@@ -13,18 +13,22 @@ const (
 	ConfigName = "engine.yaml"
 )
 
-type ParaChainConfig struct {
+// Deprecated
+// use Config instead
+type ParaChainConfig = Config
+
+type Config struct {
 	MinNewChainAmount string
 	NewChainWhiteList map[string]bool `yaml:"newChainWhiteList,omitempty"` //能创建链的address白名单
 }
 
 // Manager
 type Manager struct {
-	Ctx *ParaChainCtx
+	Ctx *Ctx
 }
 
 // NewParaChainManager create instance of ParaChain
-func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
+func NewParaChainManager(ctx *Ctx) (*Manager, error) {
 	if ctx == nil || ctx.Contract == nil || ctx.BcName == "" {
 		return nil, fmt.Errorf("parachain ctx set error")
 	}
@@ -68,20 +72,20 @@ func NewParaChainManager(ctx *ParaChainCtx) (*Manager, error) {
 	return mg, nil
 }
 
-func loadConfig(fname string) (*ParaChainConfig, error) {
+func loadConfig(file string) (*Config, error) {
 	viperObj := viper.New()
-	viperObj.SetConfigFile(fname)
+	viperObj.SetConfigFile(file)
 	err := viperObj.ReadInConfig()
 	if err != nil {
-		return nil, fmt.Errorf("read config failed.path:%s,err:%v", fname, err)
+		return nil, fmt.Errorf("read config failed.path:%s,err:%v", file, err)
 	}
 
-	cfg := &ParaChainConfig{
+	cfg := &Config{
 		MinNewChainAmount: "100",
 		NewChainWhiteList: map[string]bool{},
 	}
 	if err = viperObj.Unmarshal(&cfg); err != nil {
-		return nil, fmt.Errorf("unmatshal config failed.path:%s,err:%v", fname, err)
+		return nil, fmt.Errorf("unmatshal config failed.path:%s,err:%v", file, err)
 	}
 	return cfg, nil
 }
