@@ -9,5 +9,4 @@ run:
     - kernel/consensus
     - kernel/network
     - kernel/permission
-    - kernel/engines/xuperos/event
     - kernel/engines/xuperos/net

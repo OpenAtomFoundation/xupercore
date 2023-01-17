@@ -2,6 +2,7 @@ package event
 
 import (
 	"encoding/hex"
+
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/contract/sandbox"
 	"github.com/xuperchain/xupercore/protos"
@@ -14,17 +15,8 @@ type filteredBlockIterator struct {
 	filter *blockFilter
 	block  *protos.FilteredBlock
 
-	endBlockNum int64
-
 	closed bool
 	err    error
-}
-
-func newFilteredBlockIterator(iter *BlockIterator, filter *blockFilter) *filteredBlockIterator {
-	return &filteredBlockIterator{
-		biter:  iter,
-		filter: filter,
-	}
 }
 
 func (b *filteredBlockIterator) Next() bool {

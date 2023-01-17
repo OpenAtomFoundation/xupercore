@@ -2,6 +2,7 @@ package event
 
 import (
 	"crypto/rand"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/protos"
@@ -95,6 +96,6 @@ func (t *txBuilder) Tx() *lpb.Transaction {
 
 func makeRandID() []byte {
 	buf := make([]byte, 32)
-	rand.Read(buf)
+	_, _ = rand.Read(buf)
 	return buf
 }
