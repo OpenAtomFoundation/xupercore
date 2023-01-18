@@ -16,11 +16,7 @@ func IdentifyAK(akURI string, sign *pb.SignatureInfo, msg []byte) (bool, error) 
 	if sign == nil {
 		return false, errors.New("sign is nil")
 	}
-	akPath := SplitAccountURI(akURI)
-	if len(akPath) < 1 {
-		return false, errors.New("Invalid address")
-	}
-	ak := akPath[len(akPath)-1]
+	ak := ExtractAddrFromAkURI(akURI)
 	return VerifySign(ak, sign, msg)
 }
 
@@ -120,9 +116,19 @@ func validatePermTree(root *ptree.PermNode, isAccount bool) (bool, error) {
 	return root.Status == ptree.Success, nil
 }
 
-func SplitAccountURI(akURI string) []string {
-	ids := strings.Split(akURI, "/")
-	return ids
+// ExtractAkFromAuthRequire extracts required AK from auth requirement
+// return AK in `Account/AK`
+func ExtractAkFromAuthRequire(authRequire string) string {
+	return ExtractAddrFromAkURI(authRequire)
+}
+
+// ExtractAddrFromAkURI extracts target address from input
+// for AK, return AK itself
+// for Account, return Account itself
+// for auth requirement `Account/AK`， return AK
+func ExtractAddrFromAkURI(akURI string) string {
+	ids := strings.Split(akURI, "/") // len(ids) must be > 1, see strings.Split()
+	return ids[len(ids)-1]
 }
 
 func VerifySign(ak string, si *pb.SignatureInfo, data []byte) (bool, error) {
