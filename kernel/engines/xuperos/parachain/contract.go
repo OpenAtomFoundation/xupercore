@@ -16,7 +16,7 @@ import (
 
 var (
 	ErrGroupNotFound = errors.New("group not found")
-	ErrUnAuthorized  = errors.New("http.StatusForbidden")
+	ErrUnAuthorized  = errors.New("unAuthorized")
 	ErrChainNotFound = errors.New("chain not found")
 	ErrBcNameEmpty   = errors.New("block chain name is empty")
 	ErrBcDataEmpty   = errors.New("first block data is empty")
