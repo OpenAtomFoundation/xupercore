@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/xmodel"
@@ -24,8 +26,6 @@ import (
 	"github.com/xuperchain/xupercore/lib/crypto/client"
 	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/protos"
-
-	"github.com/golang/protobuf/proto"
 )
 
 // ImmediateVerifyTx verify tx Immediately
@@ -272,8 +272,7 @@ func (t *State) verifySignatures(tx *pb.Transaction, digestHash []byte) (bool, m
 
 	// verify authRequire
 	for idx, authReq := range tx.AuthRequire {
-		splitRes := strings.Split(authReq, "/")
-		addr := splitRes[len(splitRes)-1]
+		addr := aclu.ExtractAkFromAuthRequire(authReq)
 		signInfo := tx.AuthRequireSigns[idx]
 		if _, has := verifiedAddr[addr]; has {
 			continue
@@ -295,8 +294,7 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 	addrList := make([]string, 0)
 	addrList = append(addrList, tx.Initiator)
 	for _, authReq := range tx.AuthRequire {
-		splitRes := strings.Split(authReq, "/")
-		addr := splitRes[len(splitRes)-1]
+		addr := aclu.ExtractAkFromAuthRequire(authReq)
 		if uniqueAddrs[addr] {
 			continue
 		}

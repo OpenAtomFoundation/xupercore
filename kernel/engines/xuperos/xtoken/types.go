@@ -7,6 +7,7 @@ const (
 	ProposalSuccess
 	ProposalFailure
 	ProposalInvalid // 参与提案的总票数不足时，提案为此状态。
+	ProposalStopped // 提案投票结束
 )
 
 const (
@@ -31,6 +32,7 @@ const (
 	Propose            = "Propose"
 	Vote               = "Vote"
 	CheckVote          = "CheckVote"
+	StopVote           = "StopVote"
 	QueryProposal      = "QueryProposal"
 	QueryProposalVotes = "QueryProposalVotes"
 	QueryTopic         = "QueryTopic"
@@ -170,4 +172,9 @@ func KeyOfAdmins() string {
 
 func KeyOfFee(method string) string {
 	return "Fee_" + method
+}
+
+// 此数据为异步计票结果得key不是交易生成的，因此为非交易读写集生成的。
+func KeyOfProposalResult(tokenName, topic string, id *big.Int) string {
+	return XTokenContract + "/cache_proposal_" + tokenName + "_" + topic + "_" + id.String()
 }
