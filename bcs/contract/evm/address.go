@@ -16,8 +16,8 @@ import (
 const (
 	evmAddressFiller = "-"
 
-	contractNamePrefixs    = "1111"
-	contractAccountPrefixs = "1112"
+	contractNamePrefix    = "1111"
+	contractAccountPrefix = "1112"
 
 	xchainAddrType      = "xchain"
 	contractNameType    = "contract-name"
@@ -63,7 +63,7 @@ func ContractNameToEVMAddress(contractName string) (crypto.Address, error) {
 		prefixStr += evmAddressFiller
 	}
 	contractName = prefixStr + contractName
-	contractName = contractNamePrefixs + contractName
+	contractName = contractNamePrefix + contractName
 	return crypto.AddressFromBytes([]byte(contractName))
 }
 
@@ -81,7 +81,7 @@ func EVMAddressToContractName(evmAddr crypto.Address) (string, error) {
 // transfer contract account to evm address
 func ContractAccountToEVMAddress(contractAccount string) (crypto.Address, error) {
 	contractAccountValid := contractAccount[2:18]
-	contractAccountValid = contractAccountPrefixs + contractAccountValid
+	contractAccountValid = contractAccountPrefix + contractAccountValid
 	return crypto.AddressFromBytes([]byte(contractAccountValid))
 }
 
@@ -128,7 +128,7 @@ func DetermineContractNameFromEVM(evmAddr crypto.Address) (string, error) {
 
 	evmAddrWithPrefix := evmAddr.Bytes()
 	evmAddrStrWithPrefix := string(evmAddrWithPrefix)
-	if evmAddrStrWithPrefix[0:4] != contractNamePrefixs {
+	if evmAddrStrWithPrefix[0:4] != contractNamePrefix {
 		return "", fmt.Errorf("not a valid contract name from evm")
 	} else {
 		addr, err = EVMAddressToContractName(evmAddr)
@@ -148,11 +148,11 @@ func DetermineEVMAddress(evmAddr crypto.Address) (string, string, error) {
 
 	var addr, addrType string
 	var err error
-	if evmAddrStrWithPrefix[0:4] == contractAccountPrefixs {
+	if evmAddrStrWithPrefix[0:4] == contractAccountPrefix {
 		// 此时 addr 不包括前缀和后缀！
 		addr, err = EVMAddressToContractAccountWithoutPrefixAndSuffix(evmAddr)
 		addrType = contractAccountType
-	} else if evmAddrStrWithPrefix[0:4] == contractNamePrefixs {
+	} else if evmAddrStrWithPrefix[0:4] == contractNamePrefix {
 		addr, err = EVMAddressToContractName(evmAddr)
 		addrType = contractNameType
 	} else {

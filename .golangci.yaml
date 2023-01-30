@@ -1,0 +1,13 @@
+# see: https://golangci-lint.run/usage/configuration/
+run:
+  skip-dirs: # TODO: update after corrected
+    - bcs
+    - example
+    - lib
+    - kernel/contract
+    - kernel/common
+    - kernel/consensus
+    - kernel/network
+    - kernel/permission
+    - kernel/engines/xuperos/event
+    - kernel/engines/xuperos/net

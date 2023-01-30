@@ -2,8 +2,6 @@ package xuperos
 
 import (
 	"fmt"
-	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
-	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"io/ioutil"
 	"path/filepath"
 	"sync"
@@ -15,7 +13,9 @@ import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 	xnet "github.com/xuperchain/xupercore/kernel/engines/xuperos/net"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
 	"github.com/xuperchain/xupercore/lib/logs"
+	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/lib/timer"
 )
 
@@ -207,7 +207,9 @@ func (t *Engine) loadChains() error {
 				t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
 				return fmt.Errorf("create parachain error")
 			}
-			aw.Start()
+			if err = aw.Start(); err != nil {
+				return err
+			}
 		}
 
 		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
@@ -241,7 +243,7 @@ func (t *Engine) loadChains() error {
 			return err
 		}
 
-		if !parachain.IsParaChainEnable(group) {
+		if !group.IsParaChainEnable() {
 			t.log.Debug("para chain stopped", "chain", fInfo.Name())
 			continue
 		}

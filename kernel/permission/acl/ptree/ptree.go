@@ -54,14 +54,14 @@ func (pn *PermNode) FindChild(name string) *PermNode {
 }
 
 // BuildAccountPermTree build PermTree for account
-func BuildAccountPermTree(aclMgr base.AclManager, account string, aksuri []string) (*PermNode, error) {
+func BuildAccountPermTree(aclMgr base.AclManager, account string, akURIs []string) (*PermNode, error) {
 	accountACL, err := aclMgr.GetAccountACL(account)
 	if err != nil {
 		return nil, err
 	}
 
 	root := NewPermNode(account, accountACL)
-	root, err = buildPermTree(root, aclMgr, aksuri, true)
+	root, err = buildPermTree(root, aclMgr, akURIs, true)
 	if err != nil {
 		return nil, err
 	}

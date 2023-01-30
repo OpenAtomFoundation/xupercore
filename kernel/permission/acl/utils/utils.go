@@ -5,42 +5,37 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/ptree"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/rule"
-	crypto_client "github.com/xuperchain/xupercore/lib/crypto/client"
+	"github.com/xuperchain/xupercore/lib/crypto/client"
 	pb "github.com/xuperchain/xupercore/protos"
-
-	"github.com/xuperchain/xupercore/kernel/permission/acl/base"
 )
 
-func IdentifyAK(akuri string, sign *pb.SignatureInfo, msg []byte) (bool, error) {
+func IdentifyAK(akURI string, sign *pb.SignatureInfo, msg []byte) (bool, error) {
 	if sign == nil {
 		return false, errors.New("sign is nil")
 	}
-	akpath := SplitAccountURI(akuri)
-	if len(akpath) < 1 {
-		return false, errors.New("Invalid address")
-	}
-	ak := akpath[len(akpath)-1]
+	ak := ExtractAddrFromAkURI(akURI)
 	return VerifySign(ak, sign, msg)
 }
 
-func IdentifyAccount(aclMgr base.AclManager, account string, aksuri []string) (bool, error) {
+func IdentifyAccount(aclMgr base.AclManager, account string, akURIs []string) (bool, error) {
 	// aks and signs could have zero length for permission rule Null
 	if aclMgr == nil {
 		return false, fmt.Errorf("Invalid Param, aclMgr=%v", aclMgr)
 	}
 
 	// build perm tree
-	pnode, err := ptree.BuildAccountPermTree(aclMgr, account, aksuri)
+	tree, err := ptree.BuildAccountPermTree(aclMgr, account, akURIs)
 	if err != nil {
 		return false, err
 	}
 
-	return validatePermTree(pnode, true)
+	return validatePermTree(tree, true)
 }
 
-func CheckContractMethodPerm(aclMgr base.AclManager, aksuri []string,
+func CheckContractMethodPerm(aclMgr base.AclManager, akURIs []string,
 	contractName, methodName string) (bool, error) {
 
 	// aks and signs could have zero length for permission rule Null
@@ -49,13 +44,13 @@ func CheckContractMethodPerm(aclMgr base.AclManager, aksuri []string,
 	}
 
 	// build perm tree
-	pnode, err := ptree.BuildMethodPermTree(aclMgr, contractName, methodName, aksuri)
+	tree, err := ptree.BuildMethodPermTree(aclMgr, contractName, methodName, akURIs)
 	if err != nil {
 		return false, err
 	}
 
 	// validate perm tree
-	return validatePermTree(pnode, false)
+	return validatePermTree(tree, false)
 }
 
 func validatePermTree(root *ptree.PermNode, isAccount bool) (bool, error) {
@@ -118,32 +113,32 @@ func validatePermTree(root *ptree.PermNode, isAccount bool) (bool, error) {
 			node.Status = ptree.Failed
 		}
 	}
-	return (root.Status == ptree.Success), nil
+	return root.Status == ptree.Success, nil
 }
 
-func SplitAccountURI(akuri string) []string {
-	ids := strings.Split(akuri, "/")
-	return ids
+// ExtractAkFromAuthRequire extracts required AK from auth requirement
+// return AK in `Account/AK`
+func ExtractAkFromAuthRequire(authRequire string) string {
+	return ExtractAddrFromAkURI(authRequire)
 }
 
-// GetAccountACL return account acl
-func GetAccountACL(aclMgr base.AclManager, account string) (*pb.Acl, error) {
-	return aclMgr.GetAccountACL(account)
-}
-
-// GetContractMethodACL return contract method acl
-func GetContractMethodACL(aclMgr base.AclManager, contractName, methodName string) (*pb.Acl, error) {
-	return aclMgr.GetContractMethodACL(contractName, methodName)
+// ExtractAddrFromAkURI extracts target address from input
+// for AK, return AK itself
+// for Account, return Account itself
+// for auth requirement `Account/AK`， return AK
+func ExtractAddrFromAkURI(akURI string) string {
+	ids := strings.Split(akURI, "/") // len(ids) must be > 1, see strings.Split()
+	return ids[len(ids)-1]
 }
 
 func VerifySign(ak string, si *pb.SignatureInfo, data []byte) (bool, error) {
-	bytespk := []byte(si.PublicKey)
-	xcc, err := crypto_client.CreateCryptoClientFromJSONPublicKey(bytespk)
+	pk := []byte(si.PublicKey)
+	xcc, err := client.CreateCryptoClientFromJSONPublicKey(pk)
 	if err != nil {
 		return false, err
 	}
 
-	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJsonStr(string(bytespk[:]))
+	ecdsaKey, err := xcc.GetEcdsaPublicKeyFromJsonStr(string(pk))
 	if err != nil {
 		return false, err
 	}

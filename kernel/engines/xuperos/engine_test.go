@@ -42,13 +42,11 @@ func CreateLedger(conf *xconf.EnvConf) error {
 	return nil
 }
 
-func RemoveLedger(conf *xconf.EnvConf) error {
+func RemoveLedger(conf *xconf.EnvConf) {
 	path := conf.GenDataAbsPath("blockchain")
 	if err := os.RemoveAll(path); err != nil {
 		log.Printf("remove ledger failed.err:%v\n", err)
-		return err
 	}
-	return nil
 }
 
 func MockEngine(path string) (common.Engine, error) {

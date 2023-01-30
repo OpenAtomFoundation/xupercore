@@ -9,7 +9,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+
 	"github.com/xuperchain/xupercore/bcs/consensus/tdpos"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
@@ -46,8 +47,8 @@ func traceSync() func(string) {
 }
 
 // 获取验证人（潜在的矿工节点）列表，除了自己
-func (t *Miner) getValidators(excludeAddr string) ([]string, error) {
-	status, err := t.ctx.Consensus.GetConsensusStatus()
+func (m *Miner) getValidators(excludeAddr string) ([]string, error) {
+	status, err := m.ctx.Consensus.GetConsensusStatus()
 	if err != nil {
 		return nil, err
 	}
@@ -73,8 +74,8 @@ func (t *Miner) getValidators(excludeAddr string) ([]string, error) {
 }
 
 // getMaxBlockHeight 从验证人列表里面获取当前最大的区块高度以及地址
-func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, error) {
-	validators, err := t.getValidators(t.ctx.Address.Address)
+func (m *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, error) {
+	validators, err := m.getValidators(m.ctx.Address.Address)
 	if err != nil {
 		return "", 0, nil, err
 	}
@@ -83,12 +84,12 @@ func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, err
 		return "", 0, nil, nil
 	}
 	opt := []p2p.MessageOption{
-		p2p.WithBCName(t.ctx.BCName),
+		p2p.WithBCName(m.ctx.BCName),
 		// p2p.WithLogId(ctx.GetLog().GetLogId()),
 	}
 	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCKCHAINSTATUS, nil, opt...)
 	ctx.GetLog().Debug("getMaxBlockHeight", "validators", validators)
-	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(t.ctx, msg, p2p.WithAccounts(validators))
+	responses, err := m.ctx.EngCtx.Net.SendMessageWithResponse(m.ctx, msg, p2p.WithAccounts(validators))
 	if err != nil {
 		ctx.GetLog().Warn("get block chain status error", "err", err)
 		return "", 0, nil, err
@@ -106,7 +107,7 @@ func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, err
 		}
 		if status.LedgerMeta.TrunkHeight > maxHeight {
 			// 判断该TipBlockid是否曾经验证出错过
-			if curPeerId, has := t.faultBlockIdCache.Get(string(status.LedgerMeta.TipBlockid)); has {
+			if curPeerId, has := m.faultBlockIdCache.Get(string(status.LedgerMeta.TipBlockid)); has {
 				ctx.GetLog().Debug("faultBlockIdCache blockId hit", "TipBlockid", status.LedgerMeta.TipBlockid, "curPeerId", curPeerId)
 				curPeerIdStr, okConvert := curPeerId.(string)
 				if !okConvert {
@@ -115,19 +116,19 @@ func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, err
 				}
 				// peerId记录不一致则更新peerid信息
 				if curPeerIdStr != response.Header.From {
-					t.faultBlockIdCache.Set(string(status.LedgerMeta.TipBlockid), response.Header.From, faultBlockIdCacheExpired)
+					m.faultBlockIdCache.Set(string(status.LedgerMeta.TipBlockid), response.Header.From, faultBlockIdCacheExpired)
 				}
 				// 增加peerId记录错误次数
-				count, errInc := t.faultPeerIdCache.IncrementInt32(response.Header.From, int32(1))
+				count, errInc := m.faultPeerIdCache.IncrementInt32(response.Header.From, int32(1))
 				if errInc != nil {
 					count = 1
-					t.faultPeerIdCache.Set(response.Header.From, count, faultPeerIdCacheExpired)
+					m.faultPeerIdCache.Set(response.Header.From, count, faultPeerIdCacheExpired)
 				}
 				ctx.GetLog().Debug("faultPeerIdCache Increment count", "curPeerIdStr", curPeerIdStr, "count", count, "errInc", errInc)
 				continue
 			} else {
 				// 检查peerId是否超过故障次数
-				countInterface, hasPeer := t.faultPeerIdCache.Get(response.Header.From)
+				countInterface, hasPeer := m.faultPeerIdCache.Get(response.Header.From)
 				if hasPeer {
 					count, okConvert := countInterface.(int32)
 					if !okConvert {
@@ -153,10 +154,10 @@ func (t *Miner) getMaxBlockHeight(ctx xctx.XContext) (string, int64, []byte, err
 }
 
 // syncWithValidators 向拥有最长链的验证人节点进行区块同步，直到区块高度完全一致，timeout用于设置同步超时时间，超时之后无论是否同步完毕都停止。
-func (t *Miner) syncWithValidators(ctx xctx.XContext, timeout time.Duration) error {
+func (m *Miner) syncWithValidators(ctx xctx.XContext, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		size, err := t.syncWithLongestChain(ctx)
+		size, err := m.syncWithLongestChain(ctx)
 		if err != nil {
 			ctx.GetLog().Warn("syncWithLongestChain error", "error", err)
 			continue
@@ -169,9 +170,9 @@ func (t *Miner) syncWithValidators(ctx xctx.XContext, timeout time.Duration) err
 }
 
 // syncWithLongestChain 向验证人结合进行一次区块同步，返回同步的区块个数
-func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
-	currentHeight := t.ctx.Ledger.GetMeta().TrunkHeight
-	peer, maxHeight, blockId, err := t.getMaxBlockHeight(ctx)
+func (m *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
+	currentHeight := m.ctx.Ledger.GetMeta().TrunkHeight
+	peer, maxHeight, blockId, err := m.getMaxBlockHeight(ctx)
 	if err != nil {
 		ctx.GetLog().Error("getMaxBlockHeight error", "error", err)
 		return 0, err
@@ -182,19 +183,20 @@ func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
 	if maxHeight <= currentHeight {
 		return 0, nil
 	}
-	ctx = xctx.WithNewContext(ctx, context.WithValue(ctx, peersKey, []string{peer}))
+	// TODO: SA1029
+	ctx = xctx.WithNewContext(ctx, context.WithValue(ctx, peersKey, []string{peer})) //nolint:staticcheck
 	height := currentHeight + 1
 	size := maxHeight - currentHeight
 	ctx.GetLog().Info("syncWithLongestChain", "peer", peer, "beginHeight", height, "size", size)
-	realSize, err := t.syncBlockWithHeight(ctx, height, int(size))
+	realSize, err := m.syncBlockWithHeight(ctx, height, int(size))
 	if err != nil {
 		// 同步出错，记录blockId
-		t.faultBlockIdCache.Set(string(blockId), peer, faultBlockIdCacheExpired)
+		m.faultBlockIdCache.Set(string(blockId), peer, faultBlockIdCacheExpired)
 		// 同步出错，记录对应的peerId，增加错误计数
-		count, errInc := t.faultPeerIdCache.IncrementInt32(peer, int32(1))
+		count, errInc := m.faultPeerIdCache.IncrementInt32(peer, int32(1))
 		if errInc != nil {
 			count = 1
-			t.faultPeerIdCache.Set(peer, count, faultPeerIdCacheExpired)
+			m.faultPeerIdCache.Set(peer, count, faultPeerIdCacheExpired)
 		}
 		ctx.GetLog().Warn("syncWithLongestChain syncBlockWithHeight failed", "peer", peer,
 			"beginHeight", height, "size", size, "blockId", blockId, "count", count,
@@ -206,11 +208,11 @@ func (t *Miner) syncWithLongestChain(ctx xctx.XContext) (int, error) {
 }
 
 // syncWithNeighbors 向p2p邻居节点进行区块同步
-func (t *Miner) syncWithNeighbors(ctx xctx.XContext) error {
+func (m *Miner) syncWithNeighbors(ctx xctx.XContext) error {
 	for {
-		currentHeight := t.ctx.Ledger.GetMeta().TrunkHeight
+		currentHeight := m.ctx.Ledger.GetMeta().TrunkHeight
 		height := currentHeight + 1
-		size, err := t.syncBlockWithHeight(ctx, height, batchBlockNumber)
+		size, err := m.syncBlockWithHeight(ctx, height, batchBlockNumber)
 		if err != nil {
 			return err
 		}
@@ -221,10 +223,10 @@ func (t *Miner) syncWithNeighbors(ctx xctx.XContext) error {
 	return nil
 }
 
-func (t *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (int, error) {
+func (m *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (int, error) {
 	ctx.GetLog().Debug("getBlocksByHeight", "height", height, "size", size)
 	trace := traceSync()
-	blocks, err := t.getBlocksByHeight(ctx, height, size)
+	blocks, err := m.getBlocksByHeight(ctx, height, size)
 	if err == ErrNoNewBlock {
 		return 0, nil
 	}
@@ -235,11 +237,11 @@ func (t *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (
 	}
 	trace("getBlockByHeight")
 	ctx.GetLog().Info("getBlocksByHeight return blocks", "height", height, "size", size, "realSize", len(blocks))
-	err = t.batchConfirmBlocks(ctx, blocks)
+	err = m.batchConfirmBlocks(ctx, blocks)
 	if err == ErrHashMissMatch {
 		// 发生了分叉，处理分叉
 		ctx.GetLog().Error("sync peers with fork")
-		err = t.handleFork(ctx)
+		err = m.handleFork(ctx)
 		if err != nil {
 			ctx.GetLog().Error("handle fork error", "error", err)
 			return 0, err
@@ -254,37 +256,35 @@ func (t *Miner) syncBlockWithHeight(ctx xctx.XContext, height int64, size int) (
 }
 
 // getBlocksByHeight 获取指定的区块高度(height)，个数为size的区块头，如果ctx里面有peersKey，则向指定的peer列表发送消息
-func (t *Miner) getBlocksByHeight(ctx xctx.XContext, height int64, size int) ([]*lpb.InternalBlock, error) {
+func (m *Miner) getBlocksByHeight(ctx xctx.XContext, height int64, size int) ([]*lpb.InternalBlock, error) {
 	if size > maxBatchBlockNumber {
 		size = maxBatchBlockNumber
 	}
 
 	input := &xpb.GetBlockHeaderRequest{
-		Bcname: t.ctx.BCName,
+		Bcname: m.ctx.BCName,
 		Height: height,
 		Size:   int64(size),
 	}
 
 	trace := traceSync()
-	opts := []p2p.OptionFunc{
-		// p2p.WithPercent(0.1),
-	}
+	var opts []p2p.OptionFunc
 	if ctx.Value(peersKey) != nil {
 		ctx.GetLog().Debug("sync with peer address", "address", ctx.Value(peersKey))
 		opts = append(opts, p2p.WithPeerIDs(ctx.Value(peersKey).([]string)))
 	} else {
-		switch t.ctx.EngCtx.EngCfg.SyncBlockFilterMode {
+		switch m.ctx.EngCtx.EngCfg.SyncBlockFilterMode {
 		case common.SyncWithNearestBucket:
 			opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.NearestBucketStrategy}))
 		case common.SyncWithFactorBucket:
 			opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.BucketsWithFactorStrategy}),
-				p2p.WithFactor(t.ctx.EngCtx.EngCfg.SyncFactorForFactorBucketMode))
+				p2p.WithFactor(m.ctx.EngCtx.EngCfg.SyncFactorForFactorBucketMode))
 		default:
 			opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.NearestBucketStrategy}))
 		}
 	}
-	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_HEADERS, input, p2p.WithBCName(t.ctx.BCName))
-	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
+	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_HEADERS, input, p2p.WithBCName(m.ctx.BCName))
+	responses, err := m.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
 	if err != nil {
 		ctx.GetLog().Warn("p2p get block header error", "err", err)
 		return nil, err
@@ -304,7 +304,7 @@ func (t *Miner) getBlocksByHeight(ctx xctx.XContext, height int64, size int) ([]
 		return nil, ErrNoNewBlock
 	}
 	for _, block := range blocks {
-		err = t.fillBlockTxs(ctx, block)
+		err = m.fillBlockTxs(ctx, block)
 		if err != nil {
 			return nil, err
 		}
@@ -313,7 +313,7 @@ func (t *Miner) getBlocksByHeight(ctx xctx.XContext, height int64, size int) ([]
 	return blocks, nil
 }
 
-func (t *Miner) fillBlockTxs(ctx xctx.XContext, block *lpb.InternalBlock) error {
+func (m *Miner) fillBlockTxs(ctx xctx.XContext, block *lpb.InternalBlock) error {
 	trace := traceSync()
 	txids := block.GetMerkleTree()[:block.GetTxCount()]
 
@@ -328,7 +328,7 @@ func (t *Miner) fillBlockTxs(ctx xctx.XContext, block *lpb.InternalBlock) error 
 		if blockTxs[idx] != nil {
 			continue
 		}
-		tx, ok := t.ctx.State.GetUnconfirmedTxFromId(txid)
+		tx, ok := m.ctx.State.GetUnconfirmedTxFromId(txid)
 		if !ok {
 			missingTxIdx = append(missingTxIdx, int32(idx))
 			continue
@@ -337,7 +337,7 @@ func (t *Miner) fillBlockTxs(ctx xctx.XContext, block *lpb.InternalBlock) error 
 	}
 	trace("fillUnconfirmed")
 	ctx.GetLog().Info("fillBlockTxs", "total", int(block.GetTxCount()), "missing", len(missingTxIdx))
-	missingTxs, err := t.downloadMissingTxs(ctx, block.Blockid, missingTxIdx)
+	missingTxs, err := m.downloadMissingTxs(ctx, block.Blockid, missingTxIdx)
 	if err != nil {
 		return err
 	}
@@ -352,19 +352,17 @@ func (t *Miner) fillBlockTxs(ctx xctx.XContext, block *lpb.InternalBlock) error 
 	return nil
 }
 
-func (t *Miner) downloadMissingTxs(ctx xctx.XContext, blockid []byte, txidx []int32) ([]*lpb.Transaction, error) {
+func (m *Miner) downloadMissingTxs(ctx xctx.XContext, blockid []byte, txidx []int32) ([]*lpb.Transaction, error) {
 	if len(txidx) == 0 {
 		return nil, nil
 	}
 	input := &xpb.GetBlockTxsRequest{
-		Bcname:  t.ctx.BCName,
+		Bcname:  m.ctx.BCName,
 		Blockid: blockid,
 		Txs:     txidx,
 	}
 
-	opts := []p2p.OptionFunc{
-		// p2p.WithPercent(0.1),
-	}
+	var opts []p2p.OptionFunc
 	if ctx.Value(peersKey) != nil {
 		ctx.GetLog().Info("sync with peer address", "address", ctx.Value(peersKey))
 		opts = append(opts, p2p.WithPeerIDs(ctx.Value(peersKey).([]string)))
@@ -372,8 +370,8 @@ func (t *Miner) downloadMissingTxs(ctx xctx.XContext, blockid []byte, txidx []in
 		opts = append(opts, p2p.WithFilter([]p2p.FilterStrategy{p2p.NearestBucketStrategy}))
 	}
 
-	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_TXS, input, p2p.WithBCName(t.ctx.BCName))
-	responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
+	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_TXS, input, p2p.WithBCName(m.ctx.BCName))
+	responses, err := m.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
 	if err != nil {
 		ctx.GetLog().Warn("confirm block chain status error", "err", err)
 		return nil, err
@@ -411,74 +409,77 @@ func (t *Miner) downloadMissingTxs(ctx xctx.XContext, blockid []byte, txidx []in
 }
 
 // 追加区块到账本中
-func (t *Miner) batchConfirmBlocks(ctx xctx.XContext, blocks []*lpb.InternalBlock) error {
+func (m *Miner) batchConfirmBlocks(ctx xctx.XContext, blocks []*lpb.InternalBlock) error {
 	if len(blocks) < 1 {
 		return nil
 	}
 
 	for _, block := range blocks {
 		trace := traceSync()
-		timer := timer.NewXTimer()
-		valid, err := t.ctx.Ledger.VerifyBlock(block, ctx.GetLog().GetLogId())
+		xTimer := timer.NewXTimer()
+		valid, err := m.ctx.Ledger.VerifyBlock(block, ctx.GetLog().GetLogId())
+		if err != nil {
+			return err
+		}
 		if !valid {
 			ctx.GetLog().Warn("the verification of block failed.",
 				"blockId", utils.F(block.Blockid))
 			return fmt.Errorf("the verification of block failed from ledger")
 		}
-		timer.Mark("VerifyBlock")
+		xTimer.Mark("VerifyBlock")
 		trace("VerifyBlock")
 
-		if !bytes.Equal(t.ctx.Ledger.GetMeta().TipBlockid, block.PreHash) {
-			ctx.GetLog().Error("block.prehash != chunkBlockId",
+		if !bytes.Equal(m.ctx.Ledger.GetMeta().TipBlockid, block.PreHash) {
+			ctx.GetLog().Error("block.PreHash != chunkBlockId",
 				"height", block.Height,
-				"chunk", utils.F(t.ctx.Ledger.GetMeta().TipBlockid),
+				"chunk", utils.F(m.ctx.Ledger.GetMeta().TipBlockid),
 				"block", utils.F(block.Blockid),
-				"block.prehash", utils.F(block.PreHash),
+				"block.PreHash", utils.F(block.PreHash),
 			)
 			return ErrHashMissMatch
 		}
 
 		blockAgent := state.NewBlockAgent(block)
-		isMatch, err := t.ctx.Consensus.CheckMinerMatch(ctx, blockAgent)
+		isMatch, err := m.ctx.Consensus.CheckMinerMatch(ctx, blockAgent)
 		if !isMatch {
 			ctx.GetLog().Warn("consensus check miner match failed",
 				"blockId", utils.F(block.Blockid), "err", err)
 			return errors.New("consensus check miner match failed")
 		}
-		timer.Mark("CheckMinerMatch")
+		xTimer.Mark("CheckMinerMatch")
 		trace("CheckMinerMatch")
 
-		status := t.ctx.Ledger.ConfirmBlock(block, false)
+		status := m.ctx.Ledger.ConfirmBlock(block, false)
 		if !status.Succ {
 			ctx.GetLog().Warn("ledger confirm block failed",
 				"blockId", utils.F(block.Blockid), "err", status.Error)
 			return errors.New("ledger confirm block failed")
 		}
-		timer.Mark("ConfirmBlock")
+		xTimer.Mark("ConfirmBlock")
 		trace("ConfirmBlock")
 
 		// 状态机确认区块
-		err = t.ctx.State.PlayAndRepost(block.Blockid, false, false)
+		err = m.ctx.State.PlayAndRepost(block.Blockid, false, false)
 		if err != nil {
 			ctx.GetLog().Warn("state play error", "error", err, "height", block.Height, "blockId", utils.F(block.Blockid))
 		}
 		trace("PlayAndRepost")
-		timer.Mark("PlayAndRepost")
+		xTimer.Mark("PlayAndRepost")
 
-		err = t.ctx.Consensus.ProcessConfirmBlock(blockAgent)
+		err = m.ctx.Consensus.ProcessConfirmBlock(blockAgent)
 		if err != nil {
 			ctx.GetLog().Warn("consensus process confirm block failed",
 				"blockId", utils.F(block.Blockid), "err", err)
 			return errors.New("consensus process confirm block failed")
 		}
 		trace("ConProcessConfirmBlock")
-		err = t.ctx.Consensus.SwitchConsensus(block.Height)
+		err = m.ctx.Consensus.SwitchConsensus(block.Height)
 		if err != nil {
-			ctx.GetLog().Warn("SwitchConsensus failed", "bcname", t.ctx.BCName,
+			ctx.GetLog().Warn("SwitchConsensus failed", "bcname", m.ctx.BCName,
 				"err", err, "blockId", utils.F(block.GetBlockid()))
 			// todo 这里暂时不返回错误
 		}
-		ctx.GetLog().Info("confirm block finish", "blockId", utils.F(block.Blockid), "height", block.Height, "txCount", block.TxCount, "size", proto.Size(block), "costs", timer.Print())
+		ctx.GetLog().Info("confirm block finish", "blockId", utils.F(block.Blockid), "height", block.Height, "txCount", block.TxCount, "size", proto.Size(block), "costs", xTimer.Print())
 	}
 
 	ctx.GetLog().Trace("batch confirm block to ledger succ", "blockCount", len(blocks))
@@ -563,13 +564,11 @@ func quorumBlocks(responses []*protos.XuperMessage, blockAmount int) []*lpb.Inte
 	return retBlocks
 }
 
-func (t *Miner) findForkPoint(ctx xctx.XContext) (*lpb.InternalBlock, error) {
-	currentHeight := t.ctx.Ledger.GetMeta().TrunkHeight
-	ledger := t.ctx.Ledger
+func (m *Miner) findForkPoint(ctx xctx.XContext) (*lpb.InternalBlock, error) {
+	currentHeight := m.ctx.Ledger.GetMeta().TrunkHeight
+	l := m.ctx.Ledger
 
-	opts := []p2p.OptionFunc{
-		// p2p.WithPercent(0.1),
-	}
+	var opts []p2p.OptionFunc
 	if ctx.Value(peersKey) != nil {
 		ctx.GetLog().Info("sync with peer address", "address", ctx.Value(peersKey))
 		opts = append(opts, p2p.WithPeerIDs(ctx.Value(peersKey).([]string)))
@@ -581,23 +580,23 @@ func (t *Miner) findForkPoint(ctx xctx.XContext) (*lpb.InternalBlock, error) {
 	for {
 		if height == 0 {
 			ctx.GetLog().Error("the genesis block is different",
-				"genesisBlockId", utils.F(ledger.GetMeta().RootBlockid))
+				"genesisBlockId", utils.F(l.GetMeta().RootBlockid))
 			return nil, errors.New("block diff at genesis block")
 		}
 		height -= 1
 
-		currentBlk, err := ledger.QueryBlockHeaderByHeight(height)
+		currentBlk, err := l.QueryBlockHeaderByHeight(height)
 		if err != nil {
 			return nil, err
 		}
 		input := &xpb.GetBlockHeaderRequest{
-			Bcname: t.ctx.BCName,
+			Bcname: m.ctx.BCName,
 			Height: height,
 			Size:   1,
 		}
 
-		msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_HEADERS, input, p2p.WithBCName(t.ctx.BCName))
-		responses, err := t.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
+		msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK_HEADERS, input, p2p.WithBCName(m.ctx.BCName))
+		responses, err := m.ctx.EngCtx.Net.SendMessageWithResponse(ctx, msg, opts...)
 		if err != nil {
 			ctx.GetLog().Warn("query block header error", "err", err)
 			return nil, err

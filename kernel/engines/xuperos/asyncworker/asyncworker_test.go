@@ -143,7 +143,7 @@ func TestCursor(t *testing.T) {
 		t.Errorf("marshal cursor failed when doAsyncTasks, err=%v", err)
 		return
 	}
-	aw.finishTable.Put([]byte(testBcName), cursorBuf)
+	_ = aw.finishTable.Put([]byte(testBcName), cursorBuf)
 	cursor, err = aw.reloadCursor()
 	if err != nil {
 		t.Errorf("reloadCursor err=%v", err)
@@ -153,9 +153,12 @@ func TestCursor(t *testing.T) {
 		t.Errorf("reloadCursor value error")
 		return
 	}
-	aw.storeCursor(asyncWorkerCursor{
+	err = aw.storeCursor(asyncWorkerCursor{
 		BlockHeight: 10,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestDoAsyncTasks(t *testing.T) {
@@ -189,8 +192,10 @@ func TestDoAsyncTasks(t *testing.T) {
 		EventIndex:  int64(0),
 	}
 	cursorBuf, _ := json.Marshal(cursor)
-	aw.finishTable.Put([]byte(testBcName), cursorBuf)
-	aw.doAsyncTasks(newTxs(), 5, cursor)
+	_ = aw.finishTable.Put([]byte(testBcName), cursorBuf)
+	if err := aw.doAsyncTasks(newTxs(), 5, cursor); err != nil {
+		t.Fatal(err)
+	}
 	if cursor.BlockHeight != 5 || cursor.TxIndex != 1 || cursor.EventIndex != 0 {
 		t.Errorf("doAsyncTasks block break cursor error")
 	}
@@ -206,7 +211,8 @@ func TestStartAsyncTask(t *testing.T) {
 	aw.finishTable = th.db
 	aw.log = th.log
 	aw.RegisterHandler("$parachain", "CreateBlockChain", handleCreateChain)
-	aw.Start()
+	// TODO: deal with error
+	_ = aw.Start()
 	aw.Stop()
 }
 
@@ -219,7 +225,7 @@ type TestHelper struct {
 func NewTestHelper() (*TestHelper, error) {
 	basedir, err := ioutil.TempDir("", "asyncworker-test")
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	dir := utils.GetCurFileDir()

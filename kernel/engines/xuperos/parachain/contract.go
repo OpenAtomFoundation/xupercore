@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/utils"
@@ -14,23 +15,15 @@ import (
 )
 
 var (
-	// ErrCreateBlockChain is returned when create block chain error
-	ErrCreateBlockChain = errors.New("create blockChain error")
-	ErrGroupNotFound    = errors.New("group not found")
-	ErrUnAuthorized     = errors.New("unAuthorized")
-	ErrChainNotFound    = errors.New("chain not found")
-	ErrCtxEmpty         = errors.New("chain context is not found")
-	ErrBcNameEmpty      = errors.New("block chain name is empty")
-	ErrBcDataEmpty      = errors.New("first block data is empty")
-	ErrAdminEmpty       = errors.New("no administrator")
+	ErrGroupNotFound = errors.New("group not found")
+	ErrUnAuthorized  = errors.New("unAuthorized")
+	ErrChainNotFound = errors.New("chain not found")
+	ErrBcNameEmpty   = errors.New("block chain name is empty")
+	ErrBcDataEmpty   = errors.New("first block data is empty")
+	ErrAdminEmpty    = errors.New("no administrator")
 )
 
 const (
-	success           = 200
-	unAuthorized      = 403
-	targetNotFound    = 404
-	internalServerErr = 500
-
 	paraChainEventName  = "EditParaGroups"
 	genesisConfigPrefix = "$G_"
 )
@@ -76,9 +69,9 @@ func (p *paraChainContract) handleCreateChain(ctx common.TaskContext) error {
 	if err != nil {
 		return err
 	}
+
 	// 查看当前节点是否有权限创建/获取该平行链
-	haveAccess := isContain(args.Group.Admin, p.ChainCtx.Address.Address) || isContain(args.Group.Identities, p.ChainCtx.Address.Address)
-	if !haveAccess {
+	if !args.Group.hasAccessAuth(p.ChainCtx.Address.Address) {
 		return nil
 	}
 	return p.doCreateChain(args.BcName, args.GenesisConfig)
@@ -125,8 +118,7 @@ func (p *paraChainContract) handleRefreshChain(ctx common.TaskContext) error {
 		return err
 	}
 	// 根据当前节点目前是否有权限获取该链，决定当前是停掉链还是加载链
-	haveAccess := isContain(args.Group.Admin, p.ChainCtx.Address.Address) || isContain(args.Group.Identities, p.ChainCtx.Address.Address)
-	if haveAccess && IsParaChainEnable(args.Group) {
+	if args.Group.hasAccessAuth(p.ChainCtx.Address.Address) && args.Group.IsParaChainEnable() {
 		return p.doCreateChain(args.BcName, args.GenesisConfig)
 	}
 	return p.doStopChain(args.BcName)
@@ -137,7 +129,8 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 		return nil, ErrUnAuthorized
 	}
 	if len(p.NewChainWhiteList) > 0 && !p.NewChainWhiteList[ctx.Initiator()] {
-		return newContractErrResponse(unAuthorized, utils.ErrCreateChainPermission.Error()), utils.ErrCreateChainPermission
+		return newContractErrResponse(http.StatusForbidden, utils.ErrCreateChainPermission.Error()),
+			utils.ErrCreateChainPermission
 	}
 	bcName, bcData, bcGroup, err := p.parseArgs(ctx.Args())
 	if err != nil {
@@ -148,7 +141,7 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	// 确保未创建过该链
 	chainRes, _ := ctx.Get(ParaChainKernelContract, []byte(bcName))
 	if chainRes != nil {
-		return newContractErrResponse(unAuthorized, utils.ErrBlockChainExist.Error()), utils.ErrBlockChainExist
+		return newContractErrResponse(http.StatusForbidden, utils.ErrBlockChainExist.Error()), utils.ErrBlockChainExist
 	}
 	// 创建链时，自动写入Group信息
 	group := &Group{
@@ -162,17 +155,17 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	}
 	rawBytes, err := json.Marshal(group)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 	// 写群组信息
 	if err := ctx.Put(ParaChainKernelContract,
 		[]byte(bcName), rawBytes); err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 	// 写创世块配置信息
 	if err := ctx.Put(ParaChainKernelContract,
 		[]byte(genesisConfigPrefix+bcName), []byte(bcData)); err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	// 2. 群组注册完毕后，再进行异步事件调用
@@ -184,7 +177,7 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	}
 	err = ctx.EmitAsyncTask("CreateBlockChain", message)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	delta := contract.Limits{
@@ -193,7 +186,7 @@ func (p *paraChainContract) createChain(ctx contract.KContext) (*contract.Respon
 	ctx.AddResourceUsed(delta)
 
 	return &contract.Response{
-		Status: success,
+		Status: http.StatusOK,
 		Body:   []byte("CreateBlockChain success"),
 	}, nil
 }
@@ -214,32 +207,32 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 	// 2. 查看是否包含相关群组，确保链已经创建过
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(bcName))
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 	if groupBytes == nil {
-		return newContractErrResponse(unAuthorized, ErrChainNotFound.Error()), ErrChainNotFound
+		return newContractErrResponse(http.StatusForbidden, ErrChainNotFound.Error()), ErrChainNotFound
 	}
 
 	// 3. 查看发起者是否有权限停用
 	chainGroup := Group{}
 	err = json.Unmarshal(groupBytes, &chainGroup)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
-	if !isContain(chainGroup.Admin, ctx.Initiator()) {
-		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+	if !chainGroup.hasAdminAuth(ctx.Initiator()) {
+		return newContractErrResponse(http.StatusForbidden, ErrUnAuthorized.Error()), ErrUnAuthorized
 	}
 
 	// 4. 记录群组运行状态，并写入账本
 	chainGroup.Status = ParaChainStatusStop
 	rawBytes, err := json.Marshal(chainGroup)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	if err := ctx.Put(ParaChainKernelContract,
 		[]byte(bcName), rawBytes); err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	// 5. 将该链停掉
@@ -248,7 +241,7 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 	}
 	err = ctx.EmitAsyncTask("StopBlockChain", message)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	delta := contract.Limits{
@@ -257,7 +250,7 @@ func (p *paraChainContract) stopChain(ctx contract.KContext) (*contract.Response
 	ctx.AddResourceUsed(delta)
 
 	return &contract.Response{
-		Status: success,
+		Status: http.StatusOK,
 		Body:   []byte("StopBlockChain success"),
 	}, nil
 }
@@ -308,35 +301,27 @@ func (p *paraChainContract) parseArgs(args map[string][]byte) (string, string, *
 	return bcName, bcData, &bcGroup, nil
 }
 
-//////////// Group ///////////
-type Group struct {
-	GroupID    string   `json:"name,omitempty"`
-	Admin      []string `json:"admin,omitempty"`
-	Identities []string `json:"identities,omitempty"`
-	Status     int      `json:"status,omitempty"`
-}
-
 // methodEditGroup 控制平行链对应的权限管理，被称为平行链群组or群组，旨在向外提供平行链权限信息
 func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response, error) {
 	group := &Group{}
 	group, err := loadGroupArgs(ctx.Args(), group)
 	if err != nil {
-		return newContractErrResponse(targetNotFound, err.Error()), err
+		return newContractErrResponse(http.StatusNotFound, err.Error()), err
 	}
 	// 1. 查看Group群组是否存在
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
 	if err != nil {
-		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), err
+		return newContractErrResponse(http.StatusNotFound, ErrGroupNotFound.Error()), err
 	}
 
 	// 2. 查看发起者是否有权限修改
 	chainGroup := Group{}
 	err = json.Unmarshal(groupBytes, &chainGroup)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
-	if !isContain(chainGroup.Admin, ctx.Initiator()) {
-		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), ErrUnAuthorized
+	if !chainGroup.hasAdminAuth(ctx.Initiator()) {
+		return newContractErrResponse(http.StatusForbidden, ErrUnAuthorized.Error()), ErrUnAuthorized
 	}
 
 	// 3. 发起修改
@@ -345,10 +330,10 @@ func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response
 	}
 	rawBytes, err := json.Marshal(group)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 	if err := ctx.Put(ParaChainKernelContract, []byte(group.GroupID), rawBytes); err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	// 4. 通知event
@@ -361,8 +346,9 @@ func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response
 	// 5. 发起另一个异步事件，旨在根据不同链的状况停掉链或者加载链
 	genesisConfig, err := ctx.Get(ParaChainKernelContract, []byte(genesisConfigPrefix+group.GroupID))
 	if err != nil {
-		err = fmt.Errorf("get genesis config failed when edit the group, bcName = %s, err = %v", group.GroupID, err)
-		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), err
+		err = fmt.Errorf("get genesis config failed when edit the group, bcName = %s, err = %v",
+			group.GroupID, err)
+		return newContractErrResponse(http.StatusNotFound, ErrGroupNotFound.Error()), err
 	}
 	message := &refreshMessage{
 		BcName:        group.GroupID,
@@ -371,7 +357,7 @@ func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response
 	}
 	err = ctx.EmitAsyncTask("RefreshBlockChain", message)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 
 	delta := contract.Limits{
@@ -379,7 +365,7 @@ func (p *paraChainContract) editGroup(ctx contract.KContext) (*contract.Response
 	}
 	ctx.AddResourceUsed(delta)
 	return &contract.Response{
-		Status: success,
+		Status: http.StatusOK,
 		Body:   []byte("Edit Group success"),
 	}, nil
 }
@@ -389,22 +375,22 @@ func (p *paraChainContract) getGroup(ctx contract.KContext) (*contract.Response,
 	group := &Group{}
 	group, err := loadGroupArgs(ctx.Args(), group)
 	if err != nil {
-		return newContractErrResponse(targetNotFound, err.Error()), err
+		return newContractErrResponse(http.StatusNotFound, err.Error()), err
 	}
 	groupBytes, err := ctx.Get(ParaChainKernelContract, []byte(group.GroupID))
 	if err != nil {
-		return newContractErrResponse(targetNotFound, ErrGroupNotFound.Error()), err
+		return newContractErrResponse(http.StatusNotFound, ErrGroupNotFound.Error()), err
 	}
 	err = json.Unmarshal(groupBytes, group)
 	if err != nil {
-		return newContractErrResponse(internalServerErr, err.Error()), err
+		return newContractErrResponse(http.StatusInternalServerError, err.Error()), err
 	}
 	// 仅群组有权限的节点方可访问该key
-	if !isContain(group.Admin, ctx.Initiator()) && !isContain(group.Identities, ctx.Initiator()) {
-		return newContractErrResponse(unAuthorized, ErrUnAuthorized.Error()), nil
+	if !group.hasAccessAuth(ctx.Initiator()) {
+		return newContractErrResponse(http.StatusForbidden, ErrUnAuthorized.Error()), nil
 	}
 	return &contract.Response{
-		Status: success,
+		Status: http.StatusOK,
 		Body:   groupBytes,
 	}, nil
 }
@@ -444,15 +430,6 @@ func loadGroupArgs(args map[string][]byte, group *Group) (*Group, error) {
 	return g, nil
 }
 
-func isContain(items []string, item string) bool {
-	for _, eachItem := range items {
-		if eachItem == item {
-			return true
-		}
-	}
-	return false
-}
-
 func newContractErrResponse(status int, msg string) *contract.Response {
 	return &contract.Response{
 		Status:  status,
@@ -460,22 +437,12 @@ func newContractErrResponse(status int, msg string) *contract.Response {
 	}
 }
 
-func GetParaChainGroup(reader kledger.XMSnapshotReader, bcname string) (Group, error) {
+func GetParaChainGroup(reader kledger.XMSnapshotReader, bcName string) (Group, error) {
 	group := Group{}
-	val, err := reader.Get(ParaChainKernelContract, []byte(bcname))
+	val, err := reader.Get(ParaChainKernelContract, []byte(bcName))
 	if err != nil {
 		return group, err
 	}
 	err = json.Unmarshal(val, &group)
-	if err != nil {
-		return group, err
-	}
-	return group, nil
-}
-
-func IsParaChainEnable(g Group) bool {
-	if g.Status == ParaChainStatusStart {
-		return true
-	}
-	return false
+	return group, err
 }
