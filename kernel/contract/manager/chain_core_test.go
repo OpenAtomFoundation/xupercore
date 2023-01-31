@@ -24,6 +24,13 @@ const (
 
 func compile(th *mock.TestHelper) ([]byte, error) {
 	target := filepath.Join(th.Basedir(), "counter.bin")
+	goModCmd := exec.Command("go", "mod", "tidy")
+	goModCmd.Dir = "testdata"
+	err := goModCmd.Run()
+	if err != nil {
+		return nil, err
+	}
+
 	cmd := exec.Command("go", "build", "-o", target)
 	cmd.Dir = "testdata"
 	out, err := cmd.CombinedOutput()
