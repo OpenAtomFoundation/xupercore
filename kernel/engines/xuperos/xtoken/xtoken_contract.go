@@ -3,6 +3,8 @@ package xtoken
 import (
 	"encoding/json"
 	"math/big"
+	"strings"
+	"sync"
 
 	"github.com/pkg/errors"
 
@@ -17,6 +19,9 @@ import (
 type Contract struct {
 	Admins map[string]bool  // 创世配置的或者节点配置文件写的，如果通过交易设置admin，此字段会作废。
 	Fees   map[string]int64 // 创世配置的或者节点配置文件写的，如果通过交易设置fee，此字段会作废。
+
+	proposalChecking sync.Map
+	lastCheckVoteErr error
 
 	contractCtx *Context
 }
@@ -39,8 +44,8 @@ func NewContract(admins map[string]bool, fee map[string]int64, ctx *Context) *Co
 
 // ---------- ERC20 ----------
 
-func (x *Contract) NewToken(ctx contract.KContext) (*contract.Response, error) {
-	ok, err := x.checkPermission(ctx, ctx.Initiator())
+func (c *Contract) NewToken(ctx contract.KContext) (*contract.Response, error) {
+	ok, err := c.checkPermission(ctx, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -55,22 +60,22 @@ func (x *Contract) NewToken(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.Wrap(err, "invalid token")
 	}
 	// 1、检查token是否符合要求
-	if err := x.checkTokenData(token, ctx); err != nil {
+	if err := c.checkTokenData(token, ctx); err != nil {
 		return nil, err
 	}
-	x.contractCtx.XLog.Info("XToken", "tokenTotalSupply", token.TotalSupply, "tokenName", token.Name)
+	c.contractCtx.XLog.Info("XToken", "tokenTotalSupply", token.TotalSupply, "tokenName", token.Name)
 
 	// 2、保存token以及初始化提案数据
-	if err := x.saveTokenAndProposal(token, ctx); err != nil {
+	if err := c.saveTokenAndProposal(token, ctx); err != nil {
 		return nil, err
 	}
 	// 3、保存token owner以及账户余额
 	// 4、保存初始分配方案下每个账户的余额
-	if err := x.saveTokenBalance(token, ctx); err != nil {
+	if err := c.saveTokenBalance(token, ctx); err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, NewToken)
+	err = c.addFee(ctx, NewToken)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +84,13 @@ func (x *Contract) NewToken(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) TotalSupply(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) TotalSupply(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := ctx.Args()["tokenName"]
-	token, err := x.getToken(ctx, string(tokenName))
+	token, err := c.getToken(ctx, string(tokenName))
 	if err != nil {
 		return nil, err
 	}
-	err = x.addFee(ctx, TotalSupply)
+	err = c.addFee(ctx, TotalSupply)
 	if err != nil {
 		return nil, err
 	}
@@ -95,13 +100,13 @@ func (x *Contract) TotalSupply(ctx contract.KContext) (*contract.Response, error
 	}, nil
 }
 
-func (x *Contract) BalanceOf(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) BalanceOf(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	address := string(ctx.Args()["address"])
 	if len(tokenName) == 0 || len(address) == 0 {
 		return nil, errors.New("tokenName and address param can not be empty")
 	}
-	fromTotal, err := x.balanceOf(ctx, tokenName, address)
+	fromTotal, err := c.balanceOf(ctx, tokenName, address)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +124,7 @@ func (x *Contract) BalanceOf(ctx contract.KContext) (*contract.Response, error) 
 			Body:   value,
 		}, nil
 	}
-	frozen, err := x.getFrozenBalance(ctx, tokenName, address)
+	frozen, err := c.getFrozenBalance(ctx, tokenName, address)
 	if err != nil {
 		return nil, err
 	}
@@ -129,7 +134,7 @@ func (x *Contract) BalanceOf(ctx contract.KContext) (*contract.Response, error) 
 		return nil, err
 	}
 
-	err = x.addFee(ctx, BalanceOf)
+	err = c.addFee(ctx, BalanceOf)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +144,7 @@ func (x *Contract) BalanceOf(ctx contract.KContext) (*contract.Response, error) 
 	}, nil
 }
 
-func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	to := string(ctx.Args()["to"])
 	valueParam := string(ctx.Args()["value"])
@@ -155,7 +160,7 @@ func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("invalid transfer value")
 	}
 	from := ctx.Initiator()
-	fromTotal, err := x.balanceOf(ctx, tokenName, from)
+	fromTotal, err := c.balanceOf(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +169,7 @@ func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient account balance")
 	}
 
-	frozen, err := x.getFrozenBalance(ctx, tokenName, from)
+	frozen, err := c.getFrozenBalance(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
@@ -175,25 +180,33 @@ func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient account balance transfer")
 	}
 
+	// 更新发起人所参与的提案
+	if err = c.updateAddressVotingProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+	if err = c.updateVotingProposalByProposal(ctx, tokenName, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+
 	// 更新 from 地址余额
 	fromBal := big.NewInt(0).Sub(fromTotal, value)
-	err = x.saveAddressBalance(ctx, tokenName, from, fromBal)
+	err = c.saveAddressBalance(ctx, tokenName, from, fromBal)
 	if err != nil {
 		return nil, err
 	}
 
 	// 更新 to 地址余额
-	toBalOld, err := x.balanceOf(ctx, tokenName, to)
+	toBalOld, err := c.balanceOf(ctx, tokenName, to)
 	if err != nil {
 		return nil, err
 	}
 	toBalNew := big.NewInt(0).Add(toBalOld, value)
-	err = x.saveAddressBalance(ctx, tokenName, to, toBalNew)
+	err = c.saveAddressBalance(ctx, tokenName, to, toBalNew)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, Transfer)
+	err = c.addFee(ctx, Transfer)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +215,7 @@ func (x *Contract) Transfer(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	from := string(ctx.Args()["from"])
 	to := string(ctx.Args()["to"])
@@ -218,7 +231,7 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 		return nil, errors.New("invalid transfer value")
 	}
 	// 1、判断发起人是否有权限使用from的余额
-	approveData, err := x.getApproveData(ctx, tokenName, from)
+	approveData, err := c.getApproveData(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
@@ -232,14 +245,14 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 	}
 
 	// 3、检查from账户可用的余额是否足够本次转账
-	fromBal, err := x.balanceOf(ctx, tokenName, from)
+	fromBal, err := c.balanceOf(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
 	if fromBal.Cmp(value) < 0 {
 		return nil, errors.New("from address insufficient balance")
 	}
-	frozen, err := x.getFrozenBalance(ctx, tokenName, from)
+	frozen, err := c.getFrozenBalance(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
@@ -248,20 +261,27 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 		return nil, errors.New("from address insufficient usable balance")
 	}
 
+	if err = c.updateAddressVotingProposal(ctx, tokenName, from); err != nil {
+		return nil, err
+	}
+	if err = c.updateVotingProposalByProposal(ctx, tokenName, from); err != nil {
+		return nil, err
+	}
+
 	// 4、更新from账户和to账户的余额
 	fromNewBal := big.NewInt(0).Sub(fromBal, value)
-	err = x.saveAddressBalance(ctx, tokenName, from, fromNewBal)
+	err = c.saveAddressBalance(ctx, tokenName, from, fromNewBal)
 	if err != nil {
 		return nil, err
 	}
 
 	// 更新 to 地址余额
-	toBalOld, err := x.balanceOf(ctx, tokenName, to)
+	toBalOld, err := c.balanceOf(ctx, tokenName, to)
 	if err != nil {
 		return nil, err
 	}
 	toBalNew := big.NewInt(0).Add(toBalOld, value)
-	err = x.saveAddressBalance(ctx, tokenName, to, toBalNew)
+	err = c.saveAddressBalance(ctx, tokenName, to, toBalNew)
 	if err != nil {
 		return nil, err
 	}
@@ -269,12 +289,12 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 	// 更新授权的金额
 	newApproveValue := approveValue.Sub(approveValue, value)
 	approveData[ctx.Initiator()] = newApproveValue
-	err = x.saveApproveData(ctx, tokenName, from, approveData)
+	err = c.saveApproveData(ctx, tokenName, from, approveData)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, TransferFrom)
+	err = c.addFee(ctx, TransferFrom)
 	if err != nil {
 		return nil, err
 	}
@@ -284,7 +304,7 @@ func (x *Contract) TransferFrom(ctx contract.KContext) (*contract.Response, erro
 }
 
 // Approve 授权接口
-func (x *Contract) Approve(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) Approve(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	spender := string(ctx.Args()["spender"])
 	valueParam := string(ctx.Args()["value"])
@@ -300,7 +320,7 @@ func (x *Contract) Approve(ctx contract.KContext) (*contract.Response, error) {
 	}
 	from := ctx.Initiator()
 
-	bal, err := x.balanceOf(ctx, tokenName, from)
+	bal, err := c.balanceOf(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
@@ -309,17 +329,17 @@ func (x *Contract) Approve(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient balance for approve, please check approve value")
 	}
 
-	data, err := x.getApproveData(ctx, tokenName, from)
+	data, err := c.getApproveData(ctx, tokenName, from)
 	if err != nil {
 		return nil, err
 	}
 	data[spender] = value
-	err = x.saveApproveData(ctx, tokenName, from, data)
+	err = c.saveApproveData(ctx, tokenName, from, data)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, Approve)
+	err = c.addFee(ctx, Approve)
 	if err != nil {
 		return nil, err
 	}
@@ -328,18 +348,18 @@ func (x *Contract) Approve(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) Allowance(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) Allowance(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	spender := string(ctx.Args()["spender"])
 	if len(tokenName) == 0 || len(spender) == 0 {
 		return nil, errors.New("tokenName and spender can not be empty")
 	}
-	data, err := x.getApproveData(ctx, tokenName, ctx.Initiator())
+	data, err := c.getApproveData(ctx, tokenName, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, Allowance)
+	err = c.addFee(ctx, Allowance)
 	if err != nil {
 		return nil, err
 	}
@@ -357,18 +377,18 @@ func (x *Contract) Allowance(ctx contract.KContext) (*contract.Response, error) 
 	}
 }
 
-func (x *Contract) AddSupply(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) AddSupply(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := ctx.Args()["tokenName"]
 	value := ctx.Args()["value"]
 	if len(tokenName) == 0 || len(value) == 0 {
 		return nil, errors.New("invalid tokenName")
 	}
-	token, err := x.getToken(ctx, string(tokenName))
+	token, err := c.getToken(ctx, string(tokenName))
 	if err != nil {
 		return nil, err
 	}
 
-	if err = x.requireOwner(ctx, string(tokenName)); err != nil {
+	if err = c.requireOwner(ctx, string(tokenName)); err != nil {
 		return nil, err
 	}
 
@@ -395,16 +415,16 @@ func (x *Contract) AddSupply(ctx contract.KContext) (*contract.Response, error) 
 	}
 
 	// 更新 owner 余额。
-	bal, err := x.balanceOf(ctx, token.Name, ctx.Initiator())
+	bal, err := c.balanceOf(ctx, token.Name, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
-	err = x.saveAddressBalance(ctx, token.Name, ctx.Initiator(), bal.Add(bal, add))
+	err = c.saveAddressBalance(ctx, token.Name, ctx.Initiator(), bal.Add(bal, add))
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, AddSupply)
+	err = c.addFee(ctx, AddSupply)
 	if err != nil {
 		return nil, err
 	}
@@ -413,13 +433,13 @@ func (x *Contract) AddSupply(ctx contract.KContext) (*contract.Response, error) 
 	}, nil
 }
 
-func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := ctx.Args()["tokenName"]
 	value := ctx.Args()["value"]
 	if len(tokenName) == 0 || len(value) == 0 {
 		return nil, errors.New("invalid tokenName")
 	}
-	token, err := x.getToken(ctx, string(tokenName))
+	token, err := c.getToken(ctx, string(tokenName))
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +456,7 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("invalid burn value")
 	}
 	// 检查账户余额
-	bal, err := x.balanceOf(ctx, token.Name, ctx.Initiator())
+	bal, err := c.balanceOf(ctx, token.Name, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -445,7 +465,7 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 	}
 
 	// 检查可用的余额
-	frozen, err := x.getFrozenBalance(ctx, token.Name, ctx.Initiator())
+	frozen, err := c.getFrozenBalance(ctx, token.Name, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -454,8 +474,15 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient usalbe balance to burn")
 	}
 
+	if err = c.updateAddressVotingProposal(ctx, token.Name, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+	if err = c.updateVotingProposalByProposal(ctx, token.Name, ctx.Initiator()); err != nil {
+		return nil, err
+	}
+
 	// 更新账户余额
-	err = x.saveAddressBalance(ctx, token.Name, ctx.Initiator(), bal.Sub(bal, burn))
+	err = c.saveAddressBalance(ctx, token.Name, ctx.Initiator(), bal.Sub(bal, burn))
 	if err != nil {
 		return nil, err
 	}
@@ -471,7 +498,7 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.Wrap(err, "save token failed")
 	}
 
-	err = x.addFee(ctx, Burn)
+	err = c.addFee(ctx, Burn)
 	if err != nil {
 		return nil, err
 	}
@@ -480,12 +507,12 @@ func (x *Contract) Burn(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) QueryToken(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) QueryToken(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	if len(tokenName) == 0 {
 		return nil, errors.New("invalid tokenName")
 	}
-	token, err := x.getToken(ctx, tokenName)
+	token, err := c.getToken(ctx, tokenName)
 	if err != nil {
 		return nil, err
 	}
@@ -493,7 +520,7 @@ func (x *Contract) QueryToken(ctx contract.KContext) (*contract.Response, error)
 	if err != nil {
 		return nil, err
 	}
-	err = x.addFee(ctx, QueryToken)
+	err = c.addFee(ctx, QueryToken)
 	if err != nil {
 		return nil, err
 	}
@@ -503,17 +530,17 @@ func (x *Contract) QueryToken(ctx contract.KContext) (*contract.Response, error)
 	}, nil
 }
 
-func (x *Contract) QueryTokenOwner(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) QueryTokenOwner(ctx contract.KContext) (*contract.Response, error) {
 	tokenName := string(ctx.Args()["tokenName"])
 	if len(tokenName) == 0 {
 		return nil, errors.New("invalid tokenName")
 	}
-	owner, err := x.getTokenOwner(ctx, tokenName)
+	owner, err := c.getTokenOwner(ctx, tokenName)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, QueryTokenOwner)
+	err = c.addFee(ctx, QueryTokenOwner)
 	if err != nil {
 		return nil, err
 	}
@@ -523,13 +550,17 @@ func (x *Contract) QueryTokenOwner(ctx contract.KContext) (*contract.Response, e
 	}, nil
 }
 
-func (x *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
+func (c *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
 	value, err := ctx.Get(XTokenContract, []byte(KeyOfToken(token.Name)))
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
 		return err
 	}
 	if len(value) != 0 { // 检查token是否已经存在。
 		return errors.New("token already exist")
+	}
+	if strings.Contains(token.Name, "_") {
+		// 限制 token name 不能有下划线
+		return errors.New("token name cannot contain underscores")
 	}
 	// 检查token相关参数。
 	if token.ConvertibleProportion.Cmp(big.NewInt(0)) < 0 {
@@ -581,7 +612,7 @@ func (x *Contract) checkTokenData(token *XToken, ctx contract.KContext) error {
 	return nil
 }
 
-func (x *Contract) saveTokenAndProposal(token *XToken, ctx contract.KContext) error {
+func (c *Contract) saveTokenAndProposal(token *XToken, ctx contract.KContext) error {
 	value, err := json.Marshal(token)
 	if err != nil {
 		return errors.Wrap(err, "save token json marsha token failed")
@@ -601,10 +632,10 @@ func (x *Contract) saveTokenAndProposal(token *XToken, ctx contract.KContext) er
 	// 保存初始提案数据，如果有。
 	if token.GenesisProposal != nil {
 		for _, p := range token.GenesisProposal.InitialData {
-			if err := x.saveProposal(ctx, token.Name, p); err != nil {
+			if err := c.saveProposal(ctx, token.Name, p); err != nil {
 				return err
 			}
-			if err := x.setTopicData(ctx, token.Name, p.Topic, p.Data); err != nil {
+			if err := c.setTopicData(ctx, token.Name, p.Topic, p.Data); err != nil {
 				return err
 			}
 		}
@@ -612,26 +643,26 @@ func (x *Contract) saveTokenAndProposal(token *XToken, ctx contract.KContext) er
 	return nil
 }
 
-func (x *Contract) saveTokenBalance(token *XToken, ctx contract.KContext) error {
+func (c *Contract) saveTokenBalance(token *XToken, ctx contract.KContext) error {
 	// 保存相关账户余额
 	count := big.NewInt(0)
 	for addr, value := range token.InitialAllocation {
 		count = count.Add(count, value)
-		err := x.saveAddressBalance(ctx, token.Name, addr, value)
+		err := c.saveAddressBalance(ctx, token.Name, addr, value)
 		if err != nil {
 			return err
 		}
 	}
 	ownerBal := big.NewInt(0)
 	ownerBal = ownerBal.Sub(token.TotalSupply, count)
-	err := x.saveAddressBalance(ctx, token.Name, ctx.Initiator(), ownerBal)
+	err := c.saveAddressBalance(ctx, token.Name, ctx.Initiator(), ownerBal)
 	if err != nil {
 		return err
 	}
 
 	return nil
 }
-func (x *Contract) saveAddressBalance(ctx contract.KContext, tokenName, address string, value *big.Int) error {
+func (c *Contract) saveAddressBalance(ctx contract.KContext, tokenName, address string, value *big.Int) error {
 	err := ctx.Put(XTokenContract, []byte(KeyOfAddress2TokenBalance(tokenName, address)), []byte(value.String()))
 	if err != nil {
 		return errors.Wrap(err, "save address balance failed")
@@ -643,7 +674,7 @@ func (x *Contract) saveAddressBalance(ctx contract.KContext, tokenName, address 
 	return nil
 }
 
-func (x *Contract) getApproveData(ctx contract.KContext, token, address string) (map[string]*big.Int, error) {
+func (c *Contract) getApproveData(ctx contract.KContext, token, address string) (map[string]*big.Int, error) {
 	key := []byte(KeyOfAllowances(token, address))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -661,7 +692,7 @@ func (x *Contract) getApproveData(ctx contract.KContext, token, address string) 
 
 }
 
-func (x *Contract) saveApproveData(ctx contract.KContext, token, address string, data map[string]*big.Int) error {
+func (c *Contract) saveApproveData(ctx contract.KContext, token, address string, data map[string]*big.Int) error {
 	value, err := json.Marshal(data)
 	if err != nil {
 		return err
@@ -670,8 +701,9 @@ func (x *Contract) saveApproveData(ctx contract.KContext, token, address string,
 	return ctx.Put(XTokenContract, key, value)
 }
 
-func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address string) (*big.Int, error) {
-	votingProposalMap, err := x.getAddressVotingProposal(ctx, tokenName, address)
+// 查询余额时，需要根据提案的状态过滤真正冻结的金额
+func (c *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address string) (*big.Int, error) {
+	votingProposalMap, err := c.getAddressVotingProposal(ctx, tokenName, address)
 	if err != nil {
 		return nil, err
 	}
@@ -679,33 +711,47 @@ func (x *Contract) getFrozenBalance(ctx contract.KContext, tokenName, address st
 	// 此函数的复杂度On^2，实际上一个地址参与的不同类型下的不同提案且为voting状态的不会很多。
 	// 所以复杂度中的n为一个地址在一个token下，所有参与的提案topic下所有状态为voting的提案的个数。
 	// 并且实际业务场景中，大多数一个地址参与的不同类型的提案不会很多，且同时为voting状态的提案也不会很多。
-	for _, pid2amount := range votingProposalMap {
-		for _, amount := range pid2amount {
-			if amount.Cmp(max) > 0 {
+	for topic, pid2amount := range votingProposalMap {
+		for pidstr, amount := range pid2amount {
+			if amount.Cmp(max) <= 0 {
+				continue
+			}
+			pid, _ := big.NewInt(0).SetString(pidstr, 10)
+			p, err := c.getProposal(ctx, tokenName, topic, pid)
+			if err != nil {
+				return nil, err
+			}
+			if p.Status == ProposalVoting {
 				max = amount
 			}
 		}
 	}
 
 	// 查询是否有因为发起提案锁定的余额。
-	pid2amount, err := x.getVotingProposalByProposer(ctx, tokenName, address)
+	proposerProposalMap, err := c.getVotingProposalByProposer(ctx, tokenName, address)
 	if err != nil {
 		return nil, errors.Wrap(err, "getVotingProposalByProposer failed")
 	}
 
-	for _, amount := range pid2amount {
-		amountInt, ok := big.NewInt(0).SetString(amount, 10)
-		if !ok {
-			return nil, errors.New("invalid getVotingProposalByProposer value")
-		}
-		if amountInt.Cmp(max) > 0 {
-			max = amountInt
+	for topic, pid2amount := range proposerProposalMap {
+		for pidstr, amount := range pid2amount {
+			if amount.Cmp(max) <= 0 {
+				continue
+			}
+			pid, _ := big.NewInt(0).SetString(pidstr, 10)
+			p, err := c.getProposal(ctx, tokenName, topic, pid)
+			if err != nil {
+				return nil, err
+			}
+			if p.Status == ProposalVoting {
+				max = amount
+			}
 		}
 	}
 	return max, nil
 }
 
-func (x *Contract) getToken(ctx contract.KContext, tokenName string) (*XToken, error) {
+func (c *Contract) getToken(ctx contract.KContext, tokenName string) (*XToken, error) {
 	value, err := ctx.Get(XTokenContract, []byte(KeyOfToken(string(tokenName))))
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
 		return nil, errors.Wrap(err, "get token failed")
@@ -721,7 +767,7 @@ func (x *Contract) getToken(ctx contract.KContext, tokenName string) (*XToken, e
 	return token, nil
 }
 
-func (x *Contract) getTokenOwner(ctx contract.KContext, tokenName string) (string, error) {
+func (c *Contract) getTokenOwner(ctx contract.KContext, tokenName string) (string, error) {
 	value, err := ctx.Get(XTokenContract, []byte(KeyOfTokenOwner(string(tokenName))))
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
 		return "", errors.Wrap(err, "get token owner failed")
@@ -732,8 +778,8 @@ func (x *Contract) getTokenOwner(ctx contract.KContext, tokenName string) (strin
 	return string(value), nil
 }
 
-func (x *Contract) requireOwner(ctx contract.KContext, tokenName string) error {
-	owner, err := x.getTokenOwner(ctx, string(tokenName))
+func (c *Contract) requireOwner(ctx contract.KContext, tokenName string) error {
+	owner, err := c.getTokenOwner(ctx, string(tokenName))
 	if err != nil {
 		return err
 	}
@@ -743,7 +789,7 @@ func (x *Contract) requireOwner(ctx contract.KContext, tokenName string) error {
 	return nil
 }
 
-func (x *Contract) balanceOf(ctx contract.KContext, token, address string) (*big.Int, error) {
+func (c *Contract) balanceOf(ctx contract.KContext, token, address string) (*big.Int, error) {
 	key := []byte(KeyOfToken2AddressBalance(token, address))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -760,7 +806,7 @@ func (x *Contract) balanceOf(ctx contract.KContext, token, address string) (*big
 	return bal, nil
 }
 
-func (x *Contract) addFee(ctx contract.KContext, method string) error {
+func (c *Contract) addFee(ctx contract.KContext, method string) error {
 	key := []byte(KeyOfFee(method))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -770,7 +816,7 @@ func (x *Contract) addFee(ctx contract.KContext, method string) error {
 	if len(value) == 0 {
 		// 如果数据库中没有，则从配置中读取。
 		// 配置中没有则为0。
-		fee = x.Fees[method]
+		fee = c.Fees[method]
 	} else {
 		// 如果数据库中有，则以数据库中为主。
 

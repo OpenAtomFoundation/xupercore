@@ -11,9 +11,9 @@ import (
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
-func (x *Contract) AddAdmins(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) AddAdmins(ctx contract.KContext) (*contract.Response, error) {
 	// 如果想添加admin，前提时创世文件或者配置文件中设置了admin。
-	ok, err := x.checkPermissionWithMustHasAdmin(ctx, ctx.Initiator())
+	ok, err := c.checkPermissionWithMustHasAdmin(ctx, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +34,7 @@ func (x *Contract) AddAdmins(ctx contract.KContext) (*contract.Response, error) 
 		return nil, errors.New("addrs param empty")
 	}
 
-	admins, err := x.getAdmins(ctx)
+	admins, err := c.getAdmins(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +45,12 @@ func (x *Contract) AddAdmins(ctx contract.KContext) (*contract.Response, error) 
 		admins[addr] = true
 	}
 	// 如果参数中的地址都已经存在，此交易也会成功，但是没有修改任何数据。
-	err = x.setAdmins(ctx, admins)
+	err = c.setAdmins(ctx, admins)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, AddAdmins)
+	err = c.addFee(ctx, AddAdmins)
 	if err != nil {
 		return nil, err
 	}
@@ -59,9 +59,9 @@ func (x *Contract) AddAdmins(ctx contract.KContext) (*contract.Response, error) 
 	}, nil
 }
 
-func (x *Contract) DelAdmins(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) DelAdmins(ctx contract.KContext) (*contract.Response, error) {
 	// 如果想删除admin，前提时创世文件或者配置文件中设置了admin。
-	ok, err := x.checkPermissionWithMustHasAdmin(ctx, ctx.Initiator())
+	ok, err := c.checkPermissionWithMustHasAdmin(ctx, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func (x *Contract) DelAdmins(ctx contract.KContext) (*contract.Response, error) 
 		return nil, errors.New("addrs param empty")
 	}
 
-	admins, err := x.getAdmins(ctx)
+	admins, err := c.getAdmins(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -90,12 +90,12 @@ func (x *Contract) DelAdmins(ctx contract.KContext) (*contract.Response, error) 
 		delete(admins, addr)
 	}
 	// 如果参数中的地址都不存在，此交易也会成功，但是没有修改任何数据。
-	err = x.setAdmins(ctx, admins)
+	err = c.setAdmins(ctx, admins)
 	if err != nil {
 		return nil, err
 	}
 
-	err = x.addFee(ctx, DelAdmins)
+	err = c.addFee(ctx, DelAdmins)
 	if err != nil {
 		return nil, err
 	}
@@ -104,8 +104,8 @@ func (x *Contract) DelAdmins(ctx contract.KContext) (*contract.Response, error) 
 	}, nil
 }
 
-func (x *Contract) QueryAdmins(ctx contract.KContext) (*contract.Response, error) {
-	admins, err := x.getAdmins(ctx)
+func (c *Contract) QueryAdmins(ctx contract.KContext) (*contract.Response, error) {
+	admins, err := c.getAdmins(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -117,8 +117,8 @@ func (x *Contract) QueryAdmins(ctx contract.KContext) (*contract.Response, error
 		}
 		result = value
 	} else {
-		if len(x.Admins) > 0 {
-			value, err := json.Marshal(x.Admins)
+		if len(c.Admins) > 0 {
+			value, err := json.Marshal(c.Admins)
 			if err != nil {
 				return nil, err
 			}
@@ -126,7 +126,7 @@ func (x *Contract) QueryAdmins(ctx contract.KContext) (*contract.Response, error
 		}
 	}
 
-	err = x.addFee(ctx, QueryAdmins)
+	err = c.addFee(ctx, QueryAdmins)
 	if err != nil {
 		return nil, err
 	}
@@ -136,9 +136,9 @@ func (x *Contract) QueryAdmins(ctx contract.KContext) (*contract.Response, error
 	}, nil
 }
 
-func (x *Contract) SetFee(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) SetFee(ctx contract.KContext) (*contract.Response, error) {
 	// 如果想修改手续费，前提时创世文件或者配置文件中设置了admin。
-	ok, err := x.checkPermissionWithMustHasAdmin(ctx, ctx.Initiator())
+	ok, err := c.checkPermissionWithMustHasAdmin(ctx, ctx.Initiator())
 	if err != nil {
 		return nil, err
 	}
@@ -156,11 +156,11 @@ func (x *Contract) SetFee(ctx contract.KContext) (*contract.Response, error) {
 	if !ok {
 		return nil, errors.New("invalid fee")
 	}
-	err = x.setFee(ctx, method, fee)
+	err = c.setFee(ctx, method, fee)
 	if err != nil {
 		return nil, err
 	}
-	err = x.addFee(ctx, SetFee)
+	err = c.addFee(ctx, SetFee)
 	if err != nil {
 		return nil, err
 	}
@@ -169,16 +169,16 @@ func (x *Contract) SetFee(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) GetFee(ctx contract.KContext) (*contract.Response, error) {
+func (c *Contract) GetFee(ctx contract.KContext) (*contract.Response, error) {
 	method := ctx.Args()["method"]
 	if len(method) == 0 {
 		return nil, errors.New("method param can not be empty")
 	}
-	fee, err := x.getFee(ctx, string(method))
+	fee, err := c.getFee(ctx, string(method))
 	if err != nil {
 		return nil, err
 	}
-	err = x.addFee(ctx, GetFee)
+	err = c.addFee(ctx, GetFee)
 	if err != nil {
 		return nil, err
 	}
@@ -188,39 +188,39 @@ func (x *Contract) GetFee(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
-func (x *Contract) checkPermissionWithMustHasAdmin(ctx contract.KContext, address string) (bool, error) {
-	admins, err := x.getAdmins(ctx)
+func (c *Contract) checkPermissionWithMustHasAdmin(ctx contract.KContext, address string) (bool, error) {
+	admins, err := c.getAdmins(ctx)
 	if err != nil {
 		return false, err
 	}
 	if len(admins) == 0 {
-		if len(x.Admins) == 0 {
+		if len(c.Admins) == 0 {
 			// 如果账本中没有设置admins，同时配置文件也没有设置，那么返回false。
 			return false, nil
 		}
-		return x.Admins[address], nil
+		return c.Admins[address], nil
 	}
 	return admins[address], nil
 }
 
 // 如果address在admins列表则返回true。
-func (x *Contract) checkPermission(ctx contract.KContext, address string) (bool, error) {
-	admins, err := x.getAdmins(ctx)
+func (c *Contract) checkPermission(ctx contract.KContext, address string) (bool, error) {
+	admins, err := c.getAdmins(ctx)
 	if err != nil {
 		return false, err
 	}
 	if len(admins) == 0 {
 		// 如果没有通过交易设置admin，则根据配置文件获取。
-		if len(x.Admins) == 0 {
+		if len(c.Admins) == 0 {
 			// 如果配置文件也没设置，则说明不加权限设置。
 			return true, nil
 		}
-		return x.Admins[address], nil
+		return c.Admins[address], nil
 	}
 	return admins[address], nil
 }
 
-func (x *Contract) getFee(ctx contract.KContext, method string) (*big.Int, error) {
+func (c *Contract) getFee(ctx contract.KContext, method string) (*big.Int, error) {
 	key := []byte(KeyOfFee(method))
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -236,7 +236,7 @@ func (x *Contract) getFee(ctx contract.KContext, method string) (*big.Int, error
 	return feeBig, nil
 }
 
-func (x *Contract) setFee(ctx contract.KContext, method string, fee *big.Int) error {
+func (c *Contract) setFee(ctx contract.KContext, method string, fee *big.Int) error {
 	key := []byte(KeyOfFee(method))
 	err := ctx.Put(XTokenContract, key, []byte(fee.String()))
 	if err != nil {
@@ -245,7 +245,7 @@ func (x *Contract) setFee(ctx contract.KContext, method string, fee *big.Int) er
 	return nil
 }
 
-func (x *Contract) getAdmins(ctx contract.KContext) (map[string]bool, error) {
+func (c *Contract) getAdmins(ctx contract.KContext) (map[string]bool, error) {
 	key := []byte(KeyOfAdmins())
 	value, err := ctx.Get(XTokenContract, key)
 	if err != nil && !kvdb.ErrNotFound(err) && !errors.Is(err, sandbox.ErrHasDel) {
@@ -261,7 +261,7 @@ func (x *Contract) getAdmins(ctx contract.KContext) (map[string]bool, error) {
 	return *addrs, nil
 }
 
-func (x *Contract) setAdmins(ctx contract.KContext, addrs map[string]bool) error {
+func (c *Contract) setAdmins(ctx contract.KContext, addrs map[string]bool) error {
 	value, err := json.Marshal(addrs)
 	if err != nil {
 		return err
