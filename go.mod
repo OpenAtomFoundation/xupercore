@@ -19,8 +19,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hyperledger/burrow v0.30.5
-	github.com/ipfs/go-ipfs-addr v0.0.1
-	github.com/libp2p/go-libp2p v0.24.1
+	github.com/libp2p/go-libp2p v0.22.0
 	github.com/libp2p/go-libp2p-kad-dht v0.19.0
 	github.com/libp2p/go-libp2p-kbucket v0.5.0
 	github.com/libp2p/go-libp2p-record v0.2.0

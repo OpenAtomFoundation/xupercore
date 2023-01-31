@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	ipfsAddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	record "github.com/libp2p/go-libp2p-record"
@@ -410,15 +409,9 @@ func (p *P2PServerV2) connectPeerByAddress(addresses []string) int {
 func (p *P2PServerV2) getAddrInfos(addresses []string) []peer.AddrInfo {
 	addrInfos := make([]peer.AddrInfo, 0, len(addresses))
 	for _, addr := range addresses {
-		peerAddr, err := ipfsAddr.ParseString(addr)
+		addrInfo, err := peer.AddrInfoFromString(addr)
 		if err != nil {
-			p.log.Error("p2p: parse peer address error", "peerAddr", peerAddr, "error", err)
-			continue
-		}
-
-		addrInfo, err := peer.AddrInfoFromP2pAddr(peerAddr.Multiaddr())
-		if err != nil {
-			p.log.Error("p2p: get peer node info error", "peerAddr", peerAddr, "error", err)
+			p.log.Error("p2p: get peer node info error", "peerAddr", addr, "error", err)
 			continue
 		}
 
