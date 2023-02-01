@@ -20,7 +20,6 @@ import (
 
 const (
 	ledgerPath = "../../../../example/xchain/conf/ledger.yaml"
-	logPath    = "../../../../example/xchain/conf/log.yaml"
 
 	testBcName = "parachain"
 )
