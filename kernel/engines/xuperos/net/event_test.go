@@ -2,12 +2,12 @@ package net
 
 import (
 	"errors"
-	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
-	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"testing"
 
+	xconf "github.com/xuperchain/xupercore/kernel/common/xconfig"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/protos"
