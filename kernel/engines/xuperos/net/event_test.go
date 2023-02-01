@@ -1,4 +1,4 @@
-package xuperos
+package net
 
 import (
 	"errors"
@@ -134,7 +134,7 @@ func TestNetEvent_sendMessage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e := &NetEvent{
+			e := &Event{
 				log:      tt.fields.log,
 				engine:   tt.fields.engine,
 				msgChan:  tt.fields.msgChan,

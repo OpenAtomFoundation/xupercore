@@ -1,4 +1,4 @@
-package xuperos
+package net
 
 import (
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"

@@ -1,4 +1,4 @@
-package xuperos
+package net
 
 import (
 	"bytes"
@@ -32,19 +32,19 @@ const (
 // AsyncMsgHandle 异步消息处理handle类型
 type AsyncMsgHandle func(xctx.XContext, *protos.XuperMessage)
 
-type NetEvent struct {
+type Event struct {
 	log      logs.Logger
 	engine   common.Engine
 	msgChan  chan *protos.XuperMessage
 	exitChan chan bool
 }
 
-func NewNetEvent(engine common.Engine) (*NetEvent, error) {
+func NewEvent(engine common.Engine) (*Event, error) {
 	if engine == nil {
 		return nil, fmt.Errorf("new net event failed because param error")
 	}
 
-	obj := &NetEvent{
+	obj := &Event{
 		log:      engine.Context().XLog,
 		engine:   engine,
 		msgChan:  make(chan *protos.XuperMessage, DefMsgChanBufSize),
@@ -61,17 +61,17 @@ func NewNetEvent(engine common.Engine) (*NetEvent, error) {
 }
 
 // Start 阻塞
-func (e *NetEvent) Start() {
+func (e *Event) Start() {
 	// 启动等待处理消息循环
 	e.procMsgLoop()
 }
 
-func (e *NetEvent) Stop() {
+func (e *Event) Stop() {
 	// 通知退出循环
 	e.exitChan <- true
 }
 
-func (e *NetEvent) Subscriber() error {
+func (e *Event) Subscriber() error {
 	// 走异步处理的网络消息列表
 	var AsyncMsgList = []protos.XuperMessage_MessageType{
 		protos.XuperMessage_POSTTX,
@@ -113,7 +113,7 @@ func (e *NetEvent) Subscriber() error {
 }
 
 // 阻塞等待chan中消息，直到收到退出信号
-func (e *NetEvent) procMsgLoop() {
+func (e *Event) procMsgLoop() {
 	for {
 		select {
 		case request := <-e.msgChan:
@@ -125,7 +125,7 @@ func (e *NetEvent) procMsgLoop() {
 	}
 }
 
-func (e *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
+func (e *Event) procAsyncMsg(request *protos.XuperMessage) {
 	var AsyncMsgList = map[protos.XuperMessage_MessageType]AsyncMsgHandle{
 		protos.XuperMessage_POSTTX:      e.handlePostTx,
 		protos.XuperMessage_SENDBLOCK:   e.handleSendBlock,
@@ -151,7 +151,7 @@ func (e *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 	}
 }
 
-func (e *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *Event) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage) {
 	var tx lpb.Transaction
 	if err := p2p.Unmarshal(request, &tx); err != nil {
 		ctx.GetLog().Warn("handlePostTx Unmarshal request error", "error", err)
@@ -170,7 +170,7 @@ func (e *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 	}
 }
 
-func (e *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *Event) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMessage) {
 	var input xpb.Transactions
 	if err := p2p.Unmarshal(request, &input); err != nil {
 		ctx.GetLog().Warn("handleBatchPostTx Unmarshal request error", "error", err)
@@ -200,7 +200,7 @@ func (e *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	go e.sendMessage(ctx, msg)
 }
 
-func (e *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
+func (e *Event) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
 	if err := validatePostTx(tx); err != nil {
 		ctx.GetLog().Trace("PostTx validate param error", "error", err)
 		return common.CastError(err)
@@ -219,7 +219,7 @@ func (e *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transac
 	return chain.SubmitTx(ctx, tx)
 }
 
-func (e *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *Event) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessage) {
 	var block lpb.InternalBlock
 	if err := p2p.Unmarshal(request, &block); err != nil {
 		ctx.GetLog().Warn("handleSendBlock Unmarshal request error", "error", err)
@@ -248,7 +248,7 @@ func (e *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 	go e.sendMessage(ctx, msg)
 }
 
-func (e *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *Event) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
 	chain, err := e.engine.Get(request.Header.Bcname)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
@@ -269,11 +269,11 @@ func (e *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 }
 
 // sendMessage wrapper function which ignore error
-func (e *NetEvent) sendMessage(ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
+func (e *Event) sendMessage(ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
 	_ = e.net().SendMessage(ctx, msg, of...)
 }
 
-func (e *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
+func (e *Event) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
 	if err := validateSendBlock(in); err != nil {
 		ctx.GetLog().Trace("SendBlock validate param error", "error", err)
 		return err
@@ -309,7 +309,7 @@ func (e *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	return nil
 }
 
-func (e *NetEvent) handleGetBlock(ctx xctx.XContext,
+func (e *Event) handleGetBlock(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 
 	var input xpb.BlockID
@@ -356,7 +356,7 @@ func (e *NetEvent) handleGetBlock(ctx xctx.XContext,
 	return response(nil)
 }
 
-func (e *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
+func (e *Event) handleGetBlockHeaders(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 
 	output := new(xpb.GetBlockHeaderResponse)
@@ -442,7 +442,7 @@ func (e *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 	return response(nil)
 }
 
-func (e *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
+func (e *Event) handleGetBlockTxs(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 
 	output := new(xpb.GetBlockTxsResponse)
@@ -498,7 +498,7 @@ func (e *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 	return response(nil)
 }
 
-func (e *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
+func (e *Event) handleGetChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
 	var output *xpb.ChainStatus
 
 	bcName := request.GetHeader().GetBcname()
@@ -528,7 +528,7 @@ func (e *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 	return response(nil)
 }
 
-func (e *NetEvent) handleConfirmChainStatus(ctx xctx.XContext,
+func (e *Event) handleConfirmChainStatus(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 
 	var input lpb.InternalBlock
@@ -575,6 +575,6 @@ func (e *NetEvent) handleConfirmChainStatus(ctx xctx.XContext,
 }
 
 // net gets Net object in engine context
-func (e *NetEvent) net() network.Network {
+func (e *Event) net() network.Network {
 	return e.engine.Context().Net
 }
