@@ -8,7 +8,7 @@ import (
 	"github.com/xuperchain/xupercore/protos"
 )
 
-func (t *NetEvent) GetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*lpb.InternalBlock, error) {
+func (e *NetEvent) GetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*lpb.InternalBlock, error) {
 	var block lpb.InternalBlock
 	if err := p2p.Unmarshal(request, &block); err != nil {
 		ctx.GetLog().Warn("handleNewBlockID Unmarshal request error", "error", err)
@@ -20,7 +20,7 @@ func (t *NetEvent) GetBlock(ctx xctx.XContext, request *protos.XuperMessage) (*l
 		p2p.WithLogId(request.Header.Bcname),
 	}
 	msg := p2p.NewMessage(protos.XuperMessage_GET_BLOCK, &block, msgOpts...)
-	responses, err := t.engine.Context().Net.SendMessageWithResponse(ctx, msg, p2p.WithPeerIDs([]string{request.GetHeader().GetFrom()}))
+	responses, err := e.net().SendMessageWithResponse(ctx, msg, p2p.WithPeerIDs([]string{request.GetHeader().GetFrom()}))
 	if err != nil {
 		return nil, common.ErrSendMessageFailed
 	}

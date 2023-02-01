@@ -7,27 +7,29 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto" //nolint:staticcheck
+	"golang.org/x/sync/errgroup"
+
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/reader"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xpb"
+	"github.com/xuperchain/xupercore/kernel/network"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/metrics"
 	"github.com/xuperchain/xupercore/lib/timer"
 	"github.com/xuperchain/xupercore/lib/utils"
 	"github.com/xuperchain/xupercore/protos"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
-	// 默认消息队列buf大小
+	// DefMsgChanBufSize 默认消息队列buf大小
 	DefMsgChanBufSize = 50000
 )
 
-// 异步消息处理handle类型
+// AsyncMsgHandle 异步消息处理handle类型
 type AsyncMsgHandle func(xctx.XContext, *protos.XuperMessage)
 
 type NetEvent struct {
@@ -58,18 +60,18 @@ func NewNetEvent(engine common.Engine) (*NetEvent, error) {
 	return obj, nil
 }
 
-// 阻塞
-func (t *NetEvent) Start() {
+// Start 阻塞
+func (e *NetEvent) Start() {
 	// 启动等待处理消息循环
-	t.procMsgLoop()
+	e.procMsgLoop()
 }
 
-func (t *NetEvent) Stop() {
+func (e *NetEvent) Stop() {
 	// 通知退出循环
-	t.exitChan <- true
+	e.exitChan <- true
 }
 
-func (t *NetEvent) Subscriber() error {
+func (e *NetEvent) Subscriber() error {
 	// 走异步处理的网络消息列表
 	var AsyncMsgList = []protos.XuperMessage_MessageType{
 		protos.XuperMessage_POSTTX,
@@ -80,19 +82,19 @@ func (t *NetEvent) Subscriber() error {
 
 	// 走同步处理的网络消息句柄
 	var SyncMsgHandle = map[protos.XuperMessage_MessageType]p2p.HandleFunc{
-		protos.XuperMessage_GET_BLOCK:                t.handleGetBlock,
-		protos.XuperMessage_GET_BLOCKCHAINSTATUS:     t.handleGetChainStatus,
-		protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS: t.handleConfirmChainStatus,
-		protos.XuperMessage_GET_BLOCK_HEADERS:        t.handleGetBlockHeaders,
-		protos.XuperMessage_GET_BLOCK_TXS:            t.handleGetBlockTxs,
+		protos.XuperMessage_GET_BLOCK:                e.handleGetBlock,
+		protos.XuperMessage_GET_BLOCKCHAINSTATUS:     e.handleGetChainStatus,
+		protos.XuperMessage_CONFIRM_BLOCKCHAINSTATUS: e.handleConfirmChainStatus,
+		protos.XuperMessage_GET_BLOCK_HEADERS:        e.handleGetBlockHeaders,
+		protos.XuperMessage_GET_BLOCK_TXS:            e.handleGetBlockTxs,
 	}
 
-	net := t.engine.Context().Net
+	net := e.net()
 	// 订阅异步处理消息
 	for _, msgType := range AsyncMsgList {
 		// 注册订阅
-		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, t.msgChan)); err != nil {
-			t.log.Error("register subscriber error", "type", msgType, "error", err)
+		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, e.msgChan)); err != nil {
+			e.log.Error("register subscriber error", "type", msgType, "error", err)
 			return fmt.Errorf("register subscriber failed")
 		}
 	}
@@ -101,34 +103,34 @@ func (t *NetEvent) Subscriber() error {
 	for msgType, handle := range SyncMsgHandle {
 		// 注册订阅
 		if err := net.Register(p2p.NewSubscriber(net.Context(), msgType, handle)); err != nil {
-			t.log.Error("register subscriber error", "type", msgType, "error", err)
+			e.log.Error("register subscriber error", "type", msgType, "error", err)
 			return fmt.Errorf("register subscriber failed")
 		}
 	}
 
-	t.log.Trace("register subscriber succ")
+	e.log.Trace("register subscriber succ")
 	return nil
 }
 
 // 阻塞等待chan中消息，直到收到退出信号
-func (t *NetEvent) procMsgLoop() {
+func (e *NetEvent) procMsgLoop() {
 	for {
 		select {
-		case request := <-t.msgChan:
-			go t.procAsyncMsg(request)
-		case <-t.exitChan:
-			t.log.Trace("wait for the processing message loop to end")
+		case request := <-e.msgChan:
+			go e.procAsyncMsg(request)
+		case <-e.exitChan:
+			e.log.Trace("wait for the processing message loop to end")
 			return
 		}
 	}
 }
 
-func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
+func (e *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 	var AsyncMsgList = map[protos.XuperMessage_MessageType]AsyncMsgHandle{
-		protos.XuperMessage_POSTTX:      t.handlePostTx,
-		protos.XuperMessage_SENDBLOCK:   t.handleSendBlock,
-		protos.XuperMessage_BATCHPOSTTX: t.handleBatchPostTx,
-		protos.XuperMessage_NEW_BLOCKID: t.handleNewBlockID,
+		protos.XuperMessage_POSTTX:      e.handlePostTx,
+		protos.XuperMessage_SENDBLOCK:   e.handleSendBlock,
+		protos.XuperMessage_BATCHPOSTTX: e.handleBatchPostTx,
+		protos.XuperMessage_NEW_BLOCKID: e.handleNewBlockID,
 	}
 
 	// 处理任务
@@ -140,40 +142,42 @@ func (t *NetEvent) procAsyncMsg(request *protos.XuperMessage) {
 	if handle, ok := AsyncMsgList[request.GetHeader().GetType()]; ok {
 		beginTime := time.Now()
 		handle(ctx, request)
-		metrics.CallMethodHistogram.WithLabelValues(request.Header.Bcname, request.Header.Type.String()).Observe(time.Since(beginTime).Seconds())
+		metrics.CallMethodHistogram.
+			WithLabelValues(request.Header.Bcname, request.Header.Type.String()).
+			Observe(time.Since(beginTime).Seconds())
 	} else {
 		log.Warn("received unregister request", "type", request.GetHeader().GetType())
 		return
 	}
 }
 
-func (t *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage) {
 	var tx lpb.Transaction
 	if err := p2p.Unmarshal(request, &tx); err != nil {
 		ctx.GetLog().Warn("handlePostTx Unmarshal request error", "error", err)
 		return
 	}
 
-	chain, err := t.engine.Get(request.Header.Bcname)
+	chain, err := e.engine.Get(request.Header.Bcname)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
-	err = t.PostTx(ctx, chain, &tx)
+	err = e.PostTx(ctx, chain, &tx)
 	if err == nil {
-		go t.engine.Context().Net.SendMessage(ctx, request)
+		go e.sendMessage(ctx, request)
 	}
 }
 
-func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMessage) {
 	var input xpb.Transactions
 	if err := p2p.Unmarshal(request, &input); err != nil {
 		ctx.GetLog().Warn("handleBatchPostTx Unmarshal request error", "error", err)
 		return
 	}
 
-	chain, err := t.engine.Get(request.Header.Bcname)
+	chain, err := e.engine.Get(request.Header.Bcname)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
@@ -181,7 +185,7 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 
 	broadcastTx := make([]*lpb.Transaction, 0, len(input.Txs))
 	for _, tx := range input.Txs {
-		err := t.PostTx(ctx, chain, tx)
+		err := e.PostTx(ctx, chain, tx)
 		if err != nil {
 			ctx.GetLog().Warn("post tx error", "bcName", request.GetHeader().GetBcname(), "error", err)
 			return
@@ -193,12 +197,12 @@ func (t *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	input.Txs = broadcastTx
 	msg := p2p.NewMessage(protos.XuperMessage_BATCHPOSTTX, &input)
 
-	go t.engine.Context().Net.SendMessage(ctx, msg)
+	go e.sendMessage(ctx, msg)
 }
 
-func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
+func (e *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
 	if err := validatePostTx(tx); err != nil {
-		ctx.GetLog().Trace("PostTx validate param errror", "error", err)
+		ctx.GetLog().Trace("PostTx validate param error", "error", err)
 		return common.CastError(err)
 	}
 
@@ -215,57 +219,61 @@ func (t *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transac
 	return chain.SubmitTx(ctx, tx)
 }
 
-func (t *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessage) {
+func (e *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessage) {
 	var block lpb.InternalBlock
 	if err := p2p.Unmarshal(request, &block); err != nil {
 		ctx.GetLog().Warn("handleSendBlock Unmarshal request error", "error", err)
 		return
 	}
 
-	chain, err := t.engine.Get(request.Header.Bcname)
+	chain, err := e.engine.Get(request.Header.Bcname)
 	if chain == nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
-	if err := t.SendBlock(ctx, chain, &block); err != nil {
+	if err := e.SendBlock(ctx, chain, &block); err != nil {
 		return
 	}
 
-	net := t.engine.Context().Net
-	if t.engine.Context().EngCfg.BlockBroadcastMode == common.FullBroadCastMode {
-		go net.SendMessage(ctx, request)
+	var msg *protos.XuperMessage
+	if e.engine.Context().EngCfg.BlockBroadcastMode == common.FullBroadCastMode {
+		msg = request
 	} else {
 		blockID := &lpb.InternalBlock{
 			Blockid: block.Blockid,
 		}
-		msg := p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, p2p.WithBCName(request.Header.Bcname))
-		go net.SendMessage(ctx, msg)
+		msg = p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, p2p.WithBCName(request.Header.Bcname))
 	}
+	go e.sendMessage(ctx, msg)
 }
 
-func (t *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
-	chain, err := t.engine.Get(request.Header.Bcname)
+func (e *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
+	chain, err := e.engine.Get(request.Header.Bcname)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return
 	}
 
-	block, err := t.GetBlock(ctx, request)
+	block, err := e.GetBlock(ctx, request)
 	if err != nil {
 		ctx.GetLog().Warn("GetBlock error", "error", err, "blockId", block.Blockid)
 		return
 	}
 
-	if err := t.SendBlock(ctx, chain, block); err != nil {
+	if err := e.SendBlock(ctx, chain, block); err != nil {
 		return
 	}
 
-	go t.engine.Context().Net.SendMessage(ctx, request)
-	return
+	go e.sendMessage(ctx, request)
 }
 
-func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
+// sendMessage wrapper function which ignore error
+func (e *NetEvent) sendMessage(ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
+	_ = e.net().SendMessage(ctx, msg, of...)
+}
+
+func (e *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
 	if err := validateSendBlock(in); err != nil {
 		ctx.GetLog().Trace("SendBlock validate param error", "error", err)
 		return err
@@ -301,12 +309,13 @@ func (t *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.Inte
 	return nil
 }
 
-func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
+func (e *NetEvent) handleGetBlock(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+
 	var input xpb.BlockID
-	var output *xpb.BlockInfo = new(xpb.BlockInfo)
+	var output = new(xpb.BlockInfo)
 	defer func(begin time.Time) {
-		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlock").Observe(time.Now().Sub(begin).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlock").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
 	bcName := request.Header.Bcname
@@ -326,7 +335,7 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 		return response(common.ErrParameter)
 	}
 
-	chain, err := t.engine.Get(bcName)
+	chain, err := e.engine.Get(bcName)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
 		return response(common.ErrChainNotExist)
@@ -347,11 +356,12 @@ func (t *NetEvent) handleGetBlock(ctx xctx.XContext,
 	return response(nil)
 }
 
-func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
+func (e *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+
 	output := new(xpb.GetBlockHeaderResponse)
 	defer func(begin time.Time) {
-		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockHeaders").Observe(time.Now().Sub(begin).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockHeaders").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
 	bcName := request.Header.Bcname
@@ -372,7 +382,7 @@ func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 		return response(common.ErrParameter)
 	}
 
-	chain, err := t.engine.Get(bcName)
+	chain, err := e.engine.Get(bcName)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
 		return response(common.ErrChainNotExist)
@@ -406,8 +416,8 @@ func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 			block := *blkInfo.Block
 			// 取coinbase交易
 			if block.TxCount > 0 {
-				txid := block.MerkleTree[0]
-				coinbaseTx, err := ledgerReader.QueryTx(txid)
+				txID := block.MerkleTree[0]
+				coinbaseTx, err := ledgerReader.QueryTx(txID)
 				if err == nil {
 					// 避免修改Transactions结构
 					block.Transactions = []*lpb.Transaction{coinbaseTx.GetTx()}
@@ -432,12 +442,12 @@ func (t *NetEvent) handleGetBlockHeaders(ctx xctx.XContext,
 	return response(nil)
 }
 
-func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
+func (e *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 	request *protos.XuperMessage) (*protos.XuperMessage, error) {
 
 	output := new(xpb.GetBlockTxsResponse)
 	defer func(begin time.Time) {
-		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockTxs").Observe(time.Now().Sub(begin).Seconds())
+		metrics.CallMethodHistogram.WithLabelValues("sync", "p2pGetBlockTxs").Observe(time.Since(begin).Seconds())
 	}(time.Now())
 
 	bcName := request.Header.Bcname
@@ -458,7 +468,7 @@ func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 		return response(common.ErrParameter)
 	}
 
-	chain, err := t.engine.Get(bcName)
+	chain, err := e.engine.Get(bcName)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", bcName)
 		return response(common.ErrChainNotExist)
@@ -471,13 +481,13 @@ func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 		if err != nil {
 			return response(err)
 		}
-		blockTxids := header.GetMerkleTree()[:header.GetTxCount()]
+		blockTxIDs := header.GetMerkleTree()[:header.GetTxCount()]
 		for _, idx := range input.Txs {
-			if int(idx) >= len(blockTxids) {
-				return response(fmt.Errorf("bad tx index, got:%d, max:%d, count:%d", idx, len(blockTxids)-1, header.TxCount))
+			if int(idx) >= len(blockTxIDs) {
+				return response(fmt.Errorf("bad tx index, got:%d, max:%d, count:%d", idx, len(blockTxIDs)-1, header.TxCount))
 			}
-			txid := blockTxids[idx]
-			tx, err := ledger.QueryTransaction(txid)
+			txID := blockTxIDs[idx]
+			tx, err := ledger.QueryTransaction(txID)
 			if err != nil {
 				return response(err)
 			}
@@ -488,7 +498,7 @@ func (t *NetEvent) handleGetBlockTxs(ctx xctx.XContext,
 	return response(nil)
 }
 
-func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
+func (e *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
 	var output *xpb.ChainStatus
 
 	bcName := request.GetHeader().GetBcname()
@@ -502,7 +512,7 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 		return resp, nil
 	}
 
-	chain, err := t.engine.Get(bcName)
+	chain, err := e.engine.Get(bcName)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return response(common.ErrChainNotExist)
@@ -518,7 +528,9 @@ func (t *NetEvent) handleGetChainStatus(ctx xctx.XContext, request *protos.Xuper
 	return response(nil)
 }
 
-func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.XuperMessage) (*protos.XuperMessage, error) {
+func (e *NetEvent) handleConfirmChainStatus(ctx xctx.XContext,
+	request *protos.XuperMessage) (*protos.XuperMessage, error) {
+
 	var input lpb.InternalBlock
 	var output *xpb.TipStatus
 
@@ -539,7 +551,7 @@ func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.X
 		return response(common.ErrParameter)
 	}
 
-	chain, err := t.engine.Get(bcName)
+	chain, err := e.engine.Get(bcName)
 	if err != nil {
 		ctx.GetLog().Warn("chain not exist", "error", err, "bcName", request.Header.Bcname)
 		return response(common.ErrChainNotExist)
@@ -560,4 +572,9 @@ func (t *NetEvent) handleConfirmChainStatus(ctx xctx.XContext, request *protos.X
 	}
 
 	return response(nil)
+}
+
+// net gets Net object in engine context
+func (e *NetEvent) net() network.Network {
+	return e.engine.Context().Net
 }
