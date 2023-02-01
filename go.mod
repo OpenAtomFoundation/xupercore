@@ -36,6 +36,7 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/viper v1.6.2
 	github.com/syndtr/goleveldb v1.0.1-0.20200815110645-5c35d600f0ca
+	github.com/tmthrgd/go-hex v0.0.0-20190303111820-0bdcb15db631
 	github.com/xuperchain/crypto v0.0.0-20211221122406-302ac826ac90
 	github.com/xuperchain/log15 v0.0.0-20190620081506-bc88a9198230
 	github.com/xuperchain/xvm v0.0.0-20210126142521-68fd016c56d7
