@@ -12,32 +12,31 @@ type Router struct {
 	topics map[pb.SubscribeType]Topic
 }
 
-// NewRounterFromChainMG instance Router from ChainManager
-func NewRounterFromChainMG(chainmg ChainManager) *Router {
-	blockTopic := NewBlockTopic(chainmg)
-	r := &Router{
-		topics: make(map[pb.SubscribeType]Topic),
+// NewRouterFromChainMgr instance Router from ChainManager
+func NewRouterFromChainMgr(manager ChainManager) *Router {
+	blockTopic := NewBlockTopic(manager)
+	return &Router{
+		topics: map[pb.SubscribeType]Topic{
+			pb.SubscribeType_BLOCK: blockTopic,
+		},
 	}
-	r.topics[pb.SubscribeType_BLOCK] = blockTopic
-
-	return r
 }
 
-// NewRounterFromChainMG instance Router from common.Engine
+// NewRouter instance Router from common.Engine
 func NewRouter(engine common.Engine) *Router {
-	return NewRounterFromChainMG(NewChainManager(engine))
+	return NewRouterFromChainMgr(NewChainManager(engine))
 }
 
 // EncodeFunc encodes event payload
 type EncodeFunc func(x interface{}) ([]byte, error)
 
 // Subscribe route events from pb.SubscribeType and filter buffer
-func (r *Router) Subscribe(tp pb.SubscribeType, filterbuf []byte) (EncodeFunc, Iterator, error) {
+func (r *Router) Subscribe(tp pb.SubscribeType, filterBuf []byte) (EncodeFunc, Iterator, error) {
 	topic, ok := r.topics[tp]
 	if !ok {
 		return nil, nil, fmt.Errorf("subscribe type %s unsupported", tp)
 	}
-	filter, err := topic.ParseFilter(filterbuf)
+	filter, err := topic.ParseFilter(filterBuf)
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse filter error: %s", err)
 	}

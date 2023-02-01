@@ -50,13 +50,13 @@ func (m *mockBlockStore) QueryBlockByHeight(height int64) (*lpb.InternalBlock, e
 func (m *mockBlockStore) AppendBlock(block *lpb.InternalBlock) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	nblock := *block
-	nblock.Height = int64(len(m.blocks))
-	m.blocks = append(m.blocks, &nblock)
-	m.heightNotifier.UpdateHeight(nblock.Height)
+
+	block.Height = int64(len(m.blocks))
+	m.blocks = append(m.blocks, block)
+	m.heightNotifier.UpdateHeight(block.Height)
 }
 
-// GetBlockStore get BlockStore base bcname(the name of block chain)
-func (m *mockBlockStore) GetBlockStore(bcname string) (BlockStore, error) {
+// GetBlockStore get BlockStore based on blockchain name
+func (m *mockBlockStore) GetBlockStore(_ string) (BlockStore, error) {
 	return m, nil
 }
