@@ -166,7 +166,7 @@ func (e *NetEvent) handlePostTx(ctx xctx.XContext, request *protos.XuperMessage)
 
 	err = e.PostTx(ctx, chain, &tx)
 	if err == nil {
-		go sendMessage(e.net(), ctx, request)
+		go e.sendMessage(ctx, request)
 	}
 }
 
@@ -197,7 +197,7 @@ func (e *NetEvent) handleBatchPostTx(ctx xctx.XContext, request *protos.XuperMes
 	input.Txs = broadcastTx
 	msg := p2p.NewMessage(protos.XuperMessage_BATCHPOSTTX, &input)
 
-	go sendMessage(e.net(), ctx, msg)
+	go e.sendMessage(ctx, msg)
 }
 
 func (e *NetEvent) PostTx(ctx xctx.XContext, chain common.Chain, tx *lpb.Transaction) error {
@@ -245,7 +245,7 @@ func (e *NetEvent) handleSendBlock(ctx xctx.XContext, request *protos.XuperMessa
 		}
 		msg = p2p.NewMessage(protos.XuperMessage_NEW_BLOCKID, blockID, p2p.WithBCName(request.Header.Bcname))
 	}
-	go sendMessage(e.net(), ctx, msg)
+	go e.sendMessage(ctx, msg)
 }
 
 func (e *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMessage) {
@@ -265,13 +265,12 @@ func (e *NetEvent) handleNewBlockID(ctx xctx.XContext, request *protos.XuperMess
 		return
 	}
 
-	go sendMessage(e.net(), ctx, request)
+	go e.sendMessage(ctx, request)
 }
 
 // sendMessage wrapper function which ignore error
-func sendMessage(n network.Network, ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
-	// ignore error
-	_ = n.SendMessage(ctx, msg, of...)
+func (e *NetEvent) sendMessage(ctx xctx.XContext, msg *protos.XuperMessage, of ...p2p.OptionFunc) {
+	_ = e.net().SendMessage(ctx, msg, of...)
 }
 
 func (e *NetEvent) SendBlock(ctx xctx.XContext, chain common.Chain, in *lpb.InternalBlock) error {
