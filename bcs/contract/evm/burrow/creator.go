@@ -1,9 +1,12 @@
-package evm
+package burrow
 
 import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	xabi "github.com/xuperchain/xupercore/bcs/contract/evm/burrow/abi"
+	"github.com/xuperchain/xupercore/bcs/contract/evm/burrow/address"
+	"github.com/xuperchain/xupercore/lib/crypto/hash"
 	"math/big"
 	"reflect"
 
@@ -14,7 +17,6 @@ import (
 	"github.com/hyperledger/burrow/execution/evm/abi"
 	"github.com/hyperledger/burrow/execution/exec"
 
-	xabi "github.com/xuperchain/xupercore/bcs/contract/evm/abi"
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge/pb"
@@ -102,16 +104,16 @@ func (i *evmInstance) Exec() error {
 	}
 
 	var caller crypto.Address
-	if IsContractAccount(i.state.ctx.Initiator) {
-		caller, err = ContractAccountToEVMAddress(i.state.ctx.Initiator)
+	if address.IsContractAccount(i.state.ctx.Initiator) {
+		caller, err = address.ContractAccountToEVMAddress(i.state.ctx.Initiator)
 	} else {
-		caller, err = XchainToEVMAddress(i.state.ctx.Initiator)
+		caller, err = address.XchainToEVMAddress(i.state.ctx.Initiator)
 	}
 	if err != nil {
 		return err
 	}
 
-	callee, err := ContractNameToEVMAddress(i.ctx.ContractName)
+	callee, err := address.ContractNameToEVMAddress(i.ctx.ContractName)
 	if err != nil {
 		return err
 	}
@@ -186,7 +188,7 @@ func (i *evmInstance) Call(call *exec.CallEvent, exception *errors.Exception) er
 }
 
 func (i *evmInstance) Log(log *exec.LogEvent) error {
-	contractName, _, err := DetermineEVMAddress(log.Address)
+	contractName, _, err := address.DetermineEVMAddress(log.Address)
 	if err != nil {
 		return err
 	}
@@ -242,16 +244,16 @@ func unpackEventFromAbi(abiByte []byte, contractName string, log *exec.LogEvent)
 func (i *evmInstance) deployContract() error {
 	var caller crypto.Address
 	var err error
-	if IsContractAccount(i.state.ctx.Initiator) {
-		caller, err = ContractAccountToEVMAddress(i.state.ctx.Initiator)
+	if address.IsContractAccount(i.state.ctx.Initiator) {
+		caller, err = address.ContractAccountToEVMAddress(i.state.ctx.Initiator)
 	} else {
-		caller, err = XchainToEVMAddress(i.state.ctx.Initiator)
+		caller, err = address.XchainToEVMAddress(i.state.ctx.Initiator)
 	}
 	if err != nil {
 		return err
 	}
 
-	callee, err := ContractNameToEVMAddress(i.ctx.ContractName)
+	callee, err := address.ContractNameToEVMAddress(i.ctx.ContractName)
 	if err != nil {
 		return err
 	}
@@ -269,6 +271,10 @@ func (i *evmInstance) deployContract() error {
 			return err
 		}
 	}
+	fmt.Printf("i.code: %+v\n", input)
+	fmt.Printf("i.code.length: %d\n", len(input))
+	fmt.Printf("hash.DoubleSha256(i.code): %s\n", hex.EncodeToString(hash.UsingRipemd160(input)))
+
 
 	params := engine.CallParams{
 		CallType: exec.CallTypeCode,

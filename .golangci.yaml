@@ -9,3 +9,5 @@ run:
     - kernel/consensus
     - kernel/network
     - kernel/permission
+    - .autogen
+    - .compile_cache
