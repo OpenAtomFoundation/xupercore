@@ -123,7 +123,7 @@ func ContractNameToEVMAddress(contractName string) (EVMAddress, error) {
 	for i := 0; i < binary.Word160Length-contractNameLength-utils.GetContractNameMinSize(); i++ {
 		prefixStr += evmAddressFiller
 	}
-	contractName = contractNamePrefix +prefixStr + contractName
+	contractName = contractNamePrefix + prefixStr + contractName
 	return newEVMAddressFromBytes([]byte(contractName))
 }
 

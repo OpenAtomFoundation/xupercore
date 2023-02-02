@@ -275,7 +275,6 @@ func (i *evmInstance) deployContract() error {
 	fmt.Printf("i.code.length: %d\n", len(input))
 	fmt.Printf("hash.DoubleSha256(i.code): %s\n", hex.EncodeToString(hash.UsingRipemd160(input)))
 
-
 	params := engine.CallParams{
 		CallType: exec.CallTypeCode,
 		Origin:   caller,

@@ -72,8 +72,8 @@ func Test_evmInstance_Exec(t *testing.T) {
 						Tracer: &mockEVMLogger{},
 					}),
 				ctx: &bridge.Context{
-					Initiator: "XC1111111111111111@xuper",
-					Method:    "getOwner",
+					Initiator:    "XC1111111111111111@xuper",
+					Method:       "getOwner",
 					ContractName: "storage",
 				},
 				cp: mockContractCodeProvider{},
@@ -94,8 +94,8 @@ func Test_evmInstance_Exec(t *testing.T) {
 						Tracer: &mockEVMLogger{},
 					}),
 				ctx: &bridge.Context{
-					Initiator: "XC1111111111111111@xuper",
-					Method:    "nonExistMethod",
+					Initiator:    "XC1111111111111111@xuper",
+					Method:       "nonExistMethod",
 					ContractName: "nonExistContract",
 				},
 				cp: mockContractCodeProvider{},

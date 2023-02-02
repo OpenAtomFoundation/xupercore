@@ -67,7 +67,7 @@ func CleanProduceMap(isProduce map[int64]bool, period int64) {
 	}
 }
 
-///////////////////// lpb兼容逻辑 /////////////////////
+// /////////////////// lpb兼容逻辑 /////////////////////
 // 历史共识存储字段
 type ConsensusStorage struct {
 	Justify     *lpb.QuorumCert `json:"justify,omitempty"`

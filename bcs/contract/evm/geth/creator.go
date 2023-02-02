@@ -1,4 +1,6 @@
-/* package geth
+/*
+	package geth
+
 This package will be extracted (and build) as a plugin to avoid license issue.
 Notice: you'd better not to depend on the package in xupercore repo which is outside this package
 */
@@ -14,7 +16,6 @@ import (
 	gaddr "github.com/xuperchain/xupercore/bcs/contract/evm/geth/address"
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 )
-
 
 const (
 	evmInput = "input"
@@ -34,7 +35,7 @@ func newEvmCreator(_ *bridge.InstanceCreatorConfig) (bridge.InstanceCreator, err
 	return &evmCreator{
 		blockCtx: vm.BlockContext{
 			CanTransfer: canTransfer,
-			Transfer: transfer,
+			Transfer:    transfer,
 		},
 		chainCfg: new(params.ChainConfig),
 		vmConfig: vm.Config{
@@ -50,7 +51,7 @@ func (e *evmCreator) CreateInstance(ctx *bridge.Context, cp bridge.ContractCodeP
 		return nil, err
 	}
 	txCtx := vm.TxContext{
-		Origin: origin.Address(),
+		Origin:   origin.Address(),
 		GasPrice: big.NewInt(1),
 	}
 	evm := vm.NewEVM(e.blockCtx, txCtx, newStateDB(ctx, cp), e.chainCfg, e.vmConfig)

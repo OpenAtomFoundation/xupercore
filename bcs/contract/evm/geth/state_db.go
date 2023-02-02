@@ -1,10 +1,10 @@
 package geth
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
-	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
