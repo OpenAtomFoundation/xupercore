@@ -25,7 +25,7 @@ func (m mockContractCodeProvider) GetContractCode(name string) ([]byte, error) {
 }
 
 func (m mockContractCodeProvider) GetContractAbi(name string) ([]byte, error) {
-	panic("implement me")
+	return nil, nil
 }
 
 func (m mockContractCodeProvider) GetContractCodeFromCache(name string) ([]byte, error) {

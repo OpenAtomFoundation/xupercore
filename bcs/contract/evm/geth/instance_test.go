@@ -74,7 +74,7 @@ func Test_evmInstance_Exec(t *testing.T) {
 				ctx: &bridge.Context{
 					Initiator:    "XC1111111111111111@xuper",
 					Method:       "getOwner",
-					ContractName: "storage",
+					ContractName: "counter",
 				},
 				cp: mockContractCodeProvider{},
 			},
