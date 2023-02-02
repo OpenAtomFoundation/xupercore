@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/hyperledger/burrow/binary"
 	"github.com/hyperledger/burrow/crypto"
+	"github.com/tmthrgd/go-hex"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
@@ -70,6 +71,10 @@ func (a EVMAddress) Address() common.Address {
 	return common.Address(a)
 }
 
+func (a EVMAddress) String() string {
+	return hex.EncodeUpperToString(a[:])
+}
+
 func (a EVMAddress) XchainAccount(bcName string) (string, error) {
 	addr, addrType, err := DetermineEVMAddress(a.Address())
 	if err != nil {
@@ -79,16 +84,6 @@ func (a EVMAddress) XchainAccount(bcName string) (string, error) {
 		addr = "XC" + addr + "@" + bcName
 	}
 	return addr, nil
-}
-
-// transfer xchain address to evm address
-func XchainAKToEVMAddress(addr string) (crypto.Address, error) {
-	rawAddr := base58.Decode(addr)
-	if len(rawAddr) < 21 {
-		return crypto.ZeroAddress, fmt.Errorf("%s is not a valid address", addr)
-	}
-	ripemd160Hash := rawAddr[1:21]
-	return crypto.AddressFromBytes(ripemd160Hash)
 }
 
 // transfer evm address to xchain address
@@ -115,9 +110,8 @@ func EVMAddressToXchainAK(evmAddress common.Address) (string, error) {
 	return base58.Encode(slice), nil
 }
 
-// TODO
-// transfer contract name to evm address
-func ContractNameToEVMAddress(contractName string) (EVMAddress, error) {
+// NewEVMAddressFromContractName transfers contract name to evm address
+func NewEVMAddressFromContractName(contractName string) (EVMAddress, error) {
 	contractNameLength := len(contractName)
 	var prefixStr string
 	for i := 0; i < binary.Word160Length-contractNameLength-utils.GetContractNameMinSize(); i++ {
@@ -159,21 +153,9 @@ func EVMAddressToContractAccountWithoutPrefixAndSuffix(evmAddr common.Address) (
 	return contractNameStrWithPrefix[4:], nil
 }
 
-// Deprecating, use IsContractAccount instead
-func DetermineContractAccount(account string) bool {
-	return IsContractAccount(account)
-}
-
 // IsContractAccount returns true for a contract account
 func IsContractAccount(account string) bool {
 	return utils.IsAccount(account) && strings.Contains(account, "@")
-}
-
-// Deprecating
-// if error of incorrect name is needed, use `contract.ValidContractName`
-// otherwise, use IsContractName
-func DetermineContractName(contractName string) error {
-	return contract.ValidContractName(contractName)
 }
 
 // IsContractName determine whether it is a contract name
@@ -228,17 +210,17 @@ func DetermineEVMAddress(evmAddr common.Address) (string, string, error) {
 
 // determine an xchain address
 func DetermineXchainAddress(xAddr string) (string, string, error) {
-	var addr crypto.Address
+	var addr EVMAddress
 	var addrType string
 	var err error
 	if IsContractAccount(xAddr) {
-		addr, err = ContractAccountToEVMAddress(xAddr)
+		addr, err = NewEVMAddressFromContractAccount(xAddr)
 		addrType = ContractAccountType
 	} else if IsContractName(xAddr) {
-		//addr, err = ContractNameToEVMAddress(xAddr)
+		addr, err = NewEVMAddressFromContractName(xAddr)
 		addrType = ContractNameType
 	} else {
-		addr, err = XchainAKToEVMAddress(xAddr)
+		addr, err = NewEVMAddressFromXchainAK(xAddr)
 		addrType = XchainAddrType
 	}
 	if err != nil {

@@ -86,7 +86,7 @@ func (i *evmInstance) Exec() error {
 	}
 
 	// get callee
-	callee, err := gaddr.ContractNameToEVMAddress(i.ctx.ContractName)
+	callee, err := gaddr.NewEVMAddressFromContractName(i.ctx.ContractName)
 	if err != nil {
 		return err
 	}
