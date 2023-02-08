@@ -392,7 +392,7 @@ func (pow *PoWConsensus) refreshDifficulty(tipHash []byte, nextHeight int64) (ui
 	return newTargetBits, nil
 }
 
-//IsProofed check workload proof
+// IsProofed check workload proof
 func (pow *PoWConsensus) IsProofed(blockID []byte, targetBits uint32) bool {
 	hash := new(big.Int)
 	hash.SetBytes(blockID)

@@ -1,5 +1,5 @@
-//badger wrapper plugin
-//so
+// badger wrapper plugin
+// so
 package badgerdb
 
 import (

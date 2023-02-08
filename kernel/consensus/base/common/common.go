@@ -45,7 +45,7 @@ func AddressEqual(a []string, b []string) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	for i, _ := range a {
+	for i := range a {
 		if a[i] != b[i] {
 			return false
 		}
@@ -60,14 +60,14 @@ func CleanProduceMap(isProduce map[int64]bool, period int64) {
 	}
 	t := time.Now().UnixNano() / int64(time.Millisecond)
 	key := t / period
-	for k, _ := range isProduce {
+	for k := range isProduce {
 		if k <= key-int64(MaxMapSize) {
 			delete(isProduce, k)
 		}
 	}
 }
 
-///////////////////// lpb兼容逻辑 /////////////////////
+// /////////////////// lpb兼容逻辑 /////////////////////
 // 历史共识存储字段
 type ConsensusStorage struct {
 	Justify     *lpb.QuorumCert `json:"justify,omitempty"`

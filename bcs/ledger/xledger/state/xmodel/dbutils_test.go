@@ -15,24 +15,24 @@ func TestEqual(t *testing.T) {
 		"testEqual": {
 			expect: true,
 			pd: []*kledger.PureData{
-				&kledger.PureData{
+				{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&kledger.PureData{
+				{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
 				},
 			},
 			vpd: []*kledger.PureData{
-				&kledger.PureData{
+				{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&kledger.PureData{
+				{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
@@ -42,24 +42,24 @@ func TestEqual(t *testing.T) {
 		"testNotEqual": {
 			expect: false,
 			pd: []*kledger.PureData{
-				&kledger.PureData{
+				{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&kledger.PureData{
+				{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
 				},
 			},
 			vpd: []*kledger.PureData{
-				&kledger.PureData{
+				{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&kledger.PureData{
+				{
 					Bucket: "bucket3",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
@@ -69,24 +69,24 @@ func TestEqual(t *testing.T) {
 		"testNotEqual2": {
 			expect: false,
 			pd: []*kledger.PureData{
-				&kledger.PureData{
+				{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&kledger.PureData{
+				{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value2"),
 				},
 			},
 			vpd: []*kledger.PureData{
-				&kledger.PureData{
+				{
 					Bucket: "bucket1",
 					Key:    []byte("key1"),
 					Value:  []byte("value1"),
 				},
-				&kledger.PureData{
+				{
 					Bucket: "bucket2",
 					Key:    []byte("key2"),
 					Value:  []byte("value3"),

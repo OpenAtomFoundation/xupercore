@@ -114,13 +114,13 @@ func TestBaiscFunc(t *testing.T) {
 	tx1 := &pb.Transaction{
 		Txid: []byte("Tx1"),
 		TxInputsExt: []*protos.TxInputExt{
-			&protos.TxInputExt{
+			{
 				Bucket: "bucket1",
 				Key:    []byte("hello"),
 			},
 		},
 		TxOutputsExt: []*protos.TxOutputExt{
-			&protos.TxOutputExt{
+			{
 				Bucket: "bucket1",
 				Key:    []byte("hello"),
 				Value:  []byte("you are the best!"),
@@ -144,24 +144,24 @@ func TestBaiscFunc(t *testing.T) {
 	tx2 := &pb.Transaction{
 		Txid: []byte("Tx2"),
 		TxInputsExt: []*protos.TxInputExt{
-			&protos.TxInputExt{
+			{
 				Bucket:    "bucket1",
 				Key:       []byte("hello"),
 				RefTxid:   []byte("Tx1"),
 				RefOffset: 0,
 			},
-			&protos.TxInputExt{
+			{
 				Bucket: "bucket1",
 				Key:    []byte("world"),
 			},
 		},
 		TxOutputsExt: []*protos.TxOutputExt{
-			&protos.TxOutputExt{
+			{
 				Bucket: "bucket1",
 				Key:    []byte("hello"),
 				Value:  []byte("\x00"),
 			},
-			&protos.TxOutputExt{
+			{
 				Bucket: "bucket1",
 				Key:    []byte("world"),
 				Value:  []byte("world is full of love!"),
@@ -225,7 +225,7 @@ func TestBaiscFunc(t *testing.T) {
 	GetTxInputs(vDatas)
 
 	pds := []*kledger.PureData{
-		&kledger.PureData{
+		{
 			Bucket: "bucket1",
 			Key:    []byte("key1"),
 			Value:  []byte("value1"),

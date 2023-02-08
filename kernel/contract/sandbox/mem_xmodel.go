@@ -30,7 +30,7 @@ func NewMemXModel() *MemXModel {
 	}
 }
 
-//读取一个key的值，返回的value就是有版本的data
+// 读取一个key的值，返回的value就是有版本的data
 func (m *MemXModel) Get(bucket string, key []byte) (*ledger.VersionedData, error) {
 	buKey := makeRawKey(bucket, key)
 	v, ok := m.tree.Get(buKey)

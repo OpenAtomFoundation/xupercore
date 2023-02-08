@@ -8,11 +8,6 @@ import (
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 )
 
-var (
-//ldbp = pprof.NewProfile("ldb")
-//pcounter int64
-)
-
 // LDBDatabase define data structure of storage
 type LDBDatabase struct {
 	fn string      // filename of db

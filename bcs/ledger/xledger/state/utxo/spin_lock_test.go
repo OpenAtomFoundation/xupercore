@@ -14,25 +14,25 @@ func TestSpinLock(t *testing.T) {
 	tx1 := &pb.Transaction{
 		Txid: []byte("tx1"),
 		TxInputs: []*protos.TxInput{
-			&protos.TxInput{
+			{
 				RefTxid: []byte("tx0"),
 			},
-			&protos.TxInput{
+			{
 				RefTxid:   []byte("tx3"),
 				RefOffset: 1,
 			},
 		},
 		TxOutputs: []*protos.TxOutput{
-			&protos.TxOutput{},
+			{},
 		},
 		TxInputsExt: []*protos.TxInputExt{
-			&protos.TxInputExt{
+			{
 				Bucket: "bk2",
 				Key:    []byte("key2"),
 			},
 		},
 		TxOutputsExt: []*protos.TxOutputExt{
-			&protos.TxOutputExt{
+			{
 				Bucket: "bk1",
 				Key:    []byte("key1"),
 			},
@@ -40,13 +40,13 @@ func TestSpinLock(t *testing.T) {
 	}
 	tx2 := &pb.Transaction{
 		TxInputsExt: []*protos.TxInputExt{
-			&protos.TxInputExt{
+			{
 				Bucket: "bk2",
 				Key:    []byte("key2"),
 			},
 		},
 		TxInputs: []*protos.TxInput{
-			&protos.TxInput{
+			{
 				RefTxid: []byte("tx3"),
 			},
 		},

@@ -278,9 +278,10 @@ func (uv *UtxoVM) clearExpiredLocks() {
 }
 
 // NewUtxoVM 构建一个UtxoVM对象
-//   @param ledger 账本对象
-//   @param store path, utxo 数据的保存路径
-//   @param xlog , 日志handler
+//
+//	@param ledger 账本对象
+//	@param store path, utxo 数据的保存路径
+//	@param xlog , 日志handler
 func NewUtxo(sctx *context.StateCtx, metaHandle *meta.Meta, stateDB kvdb.Database) (*UtxoVM, error) {
 	return MakeUtxo(sctx, metaHandle, UTXOCacheSize, UTXOLockExpiredSecond, stateDB)
 }
@@ -360,9 +361,9 @@ func (uv *UtxoVM) SelectUtxo(fromAddr string, totalNeed *big.Int, needLock, excl
 	return uv.SelectUtxos(fromAddr, totalNeed, needLock, excludeUnconfirmed)
 }
 
-//SelectUtxos 选择足够的utxo
-//输入: 转账人地址、公钥、金额、是否需要锁定utxo
-//输出：选出的utxo、utxo keys、实际构成的金额(可能大于需要的金额)、错误码
+// SelectUtxos 选择足够的utxo
+// 输入: 转账人地址、公钥、金额、是否需要锁定utxo
+// 输出：选出的utxo、utxo keys、实际构成的金额(可能大于需要的金额)、错误码
 func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, excludeUnconfirmed bool) ([]*protos.TxInput, [][]byte, *big.Int, error) {
 	if totalNeed.Cmp(big.NewInt(0)) == 0 {
 		return nil, nil, big.NewInt(0), nil
@@ -520,7 +521,7 @@ func (uv *UtxoVM) SubBalance(addr []byte, delta *big.Int) {
 	}
 }
 
-//获得一个账号的余额，inLock表示在调用此函数时已经对uv.mutex加过锁了
+// 获得一个账号的余额，inLock表示在调用此函数时已经对uv.mutex加过锁了
 func (uv *UtxoVM) GetBalance(addr string) (*big.Int, error) {
 	cachedBalance, ok := uv.BalanceCache.Get(addr)
 	if ok {

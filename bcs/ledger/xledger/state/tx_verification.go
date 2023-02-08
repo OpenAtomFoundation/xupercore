@@ -30,16 +30,16 @@ import (
 
 // ImmediateVerifyTx verify tx Immediately
 // Transaction verification workflow:
-//   1. verify transaction ID is the same with data hash
-//   2. verify all signatures of initiator and auth requires
-//   3. verify the utxo input, there are three kinds of input validation
-//		1). PKI technology for transferring from address
-//		2). Account ACL for transferring from account
-//		3). Contract logic transferring from contract
-//   4. verify the contract requests' permission
-//   5. verify the permission of contract RWSet (WriteSet could including unauthorized data change)
-//   6. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
-//      operation, keep it at last)
+//  1. verify transaction ID is the same with data hash
+//  2. verify all signatures of initiator and auth requires
+//  3. verify the utxo input, there are three kinds of input validation
+//     1). PKI technology for transferring from address
+//     2). Account ACL for transferring from account
+//     3). Contract logic transferring from contract
+//  4. verify the contract requests' permission
+//  5. verify the permission of contract RWSet (WriteSet could including unauthorized data change)
+//  6. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
+//     operation, keep it at last)
 func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, error) {
 	beginTime := time.Now()
 	code := "InvalidTx"
@@ -149,10 +149,10 @@ func (t *State) ImmediateVerifyTx(tx *pb.Transaction, isRootTx bool) (bool, erro
 
 // ImmediateVerifyTx verify auto tx Immediately
 // Transaction verification workflow:
-//	 0. 其实可以直接判断二者的txid，相同，则包括读写集在内的内容都相同
-//   1. verify transaction ID is the same with data hash
-//   2. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
-//      operation, keep it at last)
+//  0. 其实可以直接判断二者的txid，相同，则包括读写集在内的内容都相同
+//  1. verify transaction ID is the same with data hash
+//  2. run contract requests and verify if the RWSet result is the same with preExed RWSet (heavy
+//     operation, keep it at last)
 func (t *State) ImmediateVerifyAutoTx(blockHeight int64, tx *pb.Transaction, isRootTx bool) (bool, error) {
 	// 获取该区块触发的定时交易
 	autoTx, genErr := t.GetTimerTx(blockHeight)
@@ -330,6 +330,7 @@ func (t *State) verifyXuperSign(tx *pb.Transaction, digestHash []byte) (bool, ma
 }
 
 // verify utxo inputs, there are three kinds of input validation
+//
 //	1). PKI technology for transferring from address
 //	2). Account ACL for transferring from account
 //	3). Contract logic transferring from contract

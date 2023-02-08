@@ -216,7 +216,7 @@ func (t *Meta) LoadReservedContracts() ([]*protos.InvokeRequest, error) {
 	return nil, findErr
 }
 
-//when to register to kernel method
+// when to register to kernel method
 func (t *Meta) UpdateReservedContracts(params []*protos.InvokeRequest, batch kvdb.Batch) error {
 	if params == nil {
 		return fmt.Errorf("invalid reservered contract requests")

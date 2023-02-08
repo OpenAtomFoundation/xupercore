@@ -71,15 +71,17 @@ func TestUpdateCommit(t *testing.T) {
 	}
 }
 
-// TestDFSQueryNode Tree如下
-//           --------------------root ([]byte{0}, 0)-----------------------
-//            		  |       |                          |
-// (([]byte{1}, 1)) node1 node12 ([]byte{2}, 1) orphan4<[]byte{10}, 1>
-//                    |                                  |            \
-//  ([]byte{3}, 2)  node2				        orphan2<[]byte{30}, 2> orphan3<[]byte{35}, 2>
-//														 |
-// 												orphan1<[]byte{40}, 3>
-//
+/*
+TestDFSQueryNode Tree如下
+
+		--------------------root ([]byte{0}, 0)-----------------------
+		                  |       |                          |
+	   (([]byte{1}, 1)) node1   node12 ([]byte{2}, 1) orphan4<[]byte{10}, 1>
+	                      |                                  |               \
+	    ([]byte{3}, 2)  node2				          orphan2<[]byte{30}, 2>  orphan3<[]byte{35}, 2>
+															 |
+													  orphan1<[]byte{40}, 3>
+*/
 func TestInsertOrphan(t *testing.T) {
 	tree := PrepareTree(t)
 	orphan1 := &storage.ProposalNode{
