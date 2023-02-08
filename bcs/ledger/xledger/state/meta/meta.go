@@ -476,7 +476,7 @@ func (t *Meta) LoadGasPrice() (*protos.GasPrice, error) {
 				return nil, ErrProposalParamsIsNegativeNumber
 			}
 			// To be compatible with the old version v3.3
-			// If GasPrice configuration is missing or value euqals 0, support a default value
+			// If GasPrice configuration is missing or value equals 0, support a default value
 			if cpuRate == 0 && memRate == 0 && diskRate == 0 && xfeeRate == 0 {
 				gasPrice = &protos.GasPrice{
 					CpuRate:  1000,
