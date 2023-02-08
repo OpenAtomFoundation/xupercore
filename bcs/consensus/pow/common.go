@@ -10,9 +10,9 @@ import (
 // PoWConfig pow需要解析的创始块解析格式
 //
 //	 根据Bitcoin推荐
-//	   AdjustHeightGap: 2016,
-//		  MaxTarget: 0x1d00FFFF,
-//	   DefaultTarget: 0x207FFFFF
+//		AdjustHeightGap: 2016,
+//		MaxTarget: 0x1d00FFFF,
+//		DefaultTarget: 0x207FFFFF
 type PoWConfig struct {
 	DefaultTarget        uint32 `json:"defaultTarget"`
 	AdjustHeightGap      int32  `json:"adjustHeightGap"`

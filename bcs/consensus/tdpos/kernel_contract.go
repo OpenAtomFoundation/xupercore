@@ -179,8 +179,8 @@ func (tp *tdposConsensus) runRevokeCandidate(contractCtx contract.KContext) (*co
 }
 
 // runVote 执行投票
-// Args: candidate::候选人钱包地址
-//
+// Args:
+//	candidate::候选人钱包地址
 //	amount::投票者票数
 func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Response, error) {
 	// 1.1 验证合约参数是否正确
@@ -253,8 +253,8 @@ func (tp *tdposConsensus) runVote(contractCtx contract.KContext) (*contract.Resp
 
 // runRevokeVote 执行选票撤销
 // 重构后的候选人撤销
-// Args: candidate::候选人钱包地址
-//
+// Args:
+//	candidate::候选人钱包地址
 //	amount: 投票数
 func (tp *tdposConsensus) runRevokeVote(contractCtx contract.KContext) (*contract.Response, error) {
 	// 1.1 验证合约参数
