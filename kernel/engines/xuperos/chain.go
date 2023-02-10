@@ -2,6 +2,7 @@ package xuperos
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -115,24 +116,18 @@ func (t *Chain) Context() *common.ChainCtx {
 }
 
 // 交易预执行
-func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string, authRequires []string) (*protos.InvokeResponse, error) {
+func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string,
+	authRequires []string) (*protos.InvokeResponse, error) {
+
 	if ctx == nil || ctx.GetLog() == nil {
 		return nil, common.ErrParameter
 	}
 
-	reservedRequests, err := t.ctx.State.GetReservedContractRequests(reqs, true)
+	reqCtx, err := t.reqContext(ctx, reqs)
 	if err != nil {
-		t.log.Error("PreExec get reserved contract request error", "error", err)
-		return nil, common.ErrParameter.More("%v", err)
+		return nil, err
 	}
-
-	transContractName, transAmount, err := tx.ParseContractTransferRequest(reqs)
-	if err != nil {
-		return nil, common.ErrParameter.More("%v", err)
-	}
-
-	reqs = append(reservedRequests, reqs...)
-	if len(reqs) <= 0 {
+	if len(reqCtx.requests) <= 0 {
 		return &protos.InvokeResponse{}, nil
 	}
 
@@ -146,7 +141,7 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		return nil, common.ErrContractNewSandboxFailed
 	}
 
-	contextConfig := &contract.ContextConfig{
+	contractCtx := &contract.ContextConfig{
 		State:          sandbox,
 		Initiator:      initiator,
 		AuthRequire:    authRequires,
@@ -154,91 +149,9 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 		ChainName:      t.ctx.BCName,
 	}
 
-	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
-	gasUsed := int64(0)
-	responseBodes := make([][]byte, 0, len(reqs))
-	requests := make([]*protos.InvokeRequest, 0, len(reqs))
-	responses := make([]*protos.ContractResponse, 0, len(reqs))
-	for i, req := range reqs {
-		if req == nil {
-			continue
-		}
-
-		if req.ModuleName == "" && req.ContractName == "" && req.MethodName == "" {
-			ctx.GetLog().Warn("PreExec req empty", "req", req)
-			continue
-		}
-		if req.ModuleName == "" {
-			// 如果请求中不指定 module，根据合约名字查询对应 module。
-			// 系统合约仍然需要指定 module，例如部署合约、创建合约账户等，因为系统合约查询不到 module。
-			desc, err := t.ctx.State.GetContractDesc(req.ContractName)
-			if err != nil {
-				return nil, err
-			}
-			contextConfig.Module = desc.GetContractType()
-		} else {
-			contextConfig.Module = req.ModuleName
-		}
-
-		beginTime := time.Now()
-
-		contextConfig.ContractName = req.ContractName
-		if transContractName == req.ContractName {
-			contextConfig.TransferAmount = transAmount.String()
-		} else {
-			contextConfig.TransferAmount = ""
-		}
-
-		context, err := t.ctx.Contract.NewContext(contextConfig)
-		if err != nil {
-			ctx.GetLog().Error("PreExec NewContext error", "error", err, "contractName", req.ContractName)
-			if i < len(reservedRequests) && strings.HasSuffix(err.Error(), "not found") {
-				requests = append(requests, req)
-				continue
-			}
-			return nil, common.ErrContractNewCtxFailed.More("%v", err)
-		}
-
-		resp, err := context.Invoke(req.MethodName, req.Args)
-		if err != nil {
-			// TODO: deal with error
-			_ = context.Release()
-			ctx.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
-			metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").Inc()
-			return nil, common.ErrContractInvokeFailed.More("%v", err)
-		}
-
-		if resp.Status >= 400 && i < len(reservedRequests) {
-			// TODO: deal with error
-			_ = context.Release()
-			ctx.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
-			metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").Inc()
-			return nil, common.ErrContractInvokeFailed.More("%v", resp.Message)
-		}
-
-		metrics.ContractInvokeCounter.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "OK").Inc()
-		resourceUsed := context.ResourceUsed()
-		if i >= len(reservedRequests) {
-			gasUsed += resourceUsed.TotalGas(gasPrice)
-		}
-
-		// request
-		request := *req
-		request.ResourceLimits = contract.ToPbLimits(resourceUsed)
-		requests = append(requests, &request)
-
-		// response
-		response := &protos.ContractResponse{
-			Status:  int32(resp.Status),
-			Message: resp.Message,
-			Body:    resp.Body,
-		}
-		responses = append(responses, response)
-		responseBodes = append(responseBodes, resp.Body)
-
-		// TODO: deal with error
-		_ = context.Release()
-		metrics.ContractInvokeHistogram.WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName).Observe(time.Since(beginTime).Seconds())
+	invokeResp, err := t.preExecWithReservedReqs(reqCtx, contractCtx)
+	if err != nil {
+		return nil, err
 	}
 
 	err = sandbox.Flush()
@@ -248,18 +161,119 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 	rwSet := sandbox.RWSet()
 	utxoRWSet := sandbox.UTXORWSet()
 
-	invokeResponse := &protos.InvokeResponse{
-		GasUsed:     gasUsed,
-		Response:    responseBodes,
-		Inputs:      xmodel.GetTxInputs(rwSet.RSet),
-		Outputs:     xmodel.GetTxOutputs(rwSet.WSet),
-		Requests:    requests,
-		Responses:   responses,
-		UtxoInputs:  utxoRWSet.Rset,
-		UtxoOutputs: utxoRWSet.WSet,
+	invokeResp.Inputs = xmodel.GetTxInputs(rwSet.RSet)
+	invokeResp.Outputs = xmodel.GetTxOutputs(rwSet.WSet)
+	invokeResp.UtxoInputs = utxoRWSet.Rset
+	invokeResp.UtxoOutputs = utxoRWSet.WSet
+
+	return invokeResp, nil
+}
+
+func (t *Chain) preExecWithReservedReqs(reqCtx *reqContext,
+	contractCtx *contract.ContextConfig) (*protos.InvokeResponse, error) {
+
+	reqCnt := len(reqCtx.requests)
+	invokeResp := &protos.InvokeResponse{
+		Response:  make([][]byte, 0, reqCnt),
+		Requests:  make([]*protos.InvokeRequest, 0, reqCnt),
+		Responses: make([]*protos.ContractResponse, 0, reqCnt),
+	}
+	logger := reqCtx.logger
+
+	for idx, req := range reqCtx.requests {
+		if req == nil {
+			continue
+		}
+
+		if req.ModuleName == "" && req.ContractName == "" && req.MethodName == "" {
+			logger.GetLog().Warn("PreExec req empty", "req", req)
+			continue
+		}
+		if req.ModuleName == "" {
+			// 如果请求中不指定 module，根据合约名字查询对应 module。
+			// 系统合约仍然需要指定 module，例如部署合约、创建合约账户等，因为系统合约查询不到 module。
+			desc, err := t.ctx.State.GetContractDesc(req.ContractName)
+			if err != nil {
+				return nil, err
+			}
+			contractCtx.Module = desc.GetContractType()
+		} else {
+			contractCtx.Module = req.ModuleName
+		}
+
+		contractCtx.ContractName = req.ContractName
+		contractCtx.TransferAmount = reqCtx.GetTransAmount(req.ContractName)
+		isReservedReq := reqCtx.IsReservedReq(idx)
+
+		err := t.preExecOnce(logger, contractCtx, req, isReservedReq, invokeResp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return invokeResp, nil
+}
+
+// preExecOnce preExec one request with metrics
+func (t *Chain) preExecOnce(logger xctx.XContext, contractCtx *contract.ContextConfig,
+	req *protos.InvokeRequest, isReservedReq bool, invokeResp *protos.InvokeResponse) error {
+
+	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
+	beginTime := time.Now()
+
+	context, err := t.ctx.Contract.NewContext(contractCtx)
+	if err != nil {
+		logger.GetLog().Error("PreExec NewContext error", "error", err, "contractName", req.ContractName)
+		if isReservedReq && strings.HasSuffix(err.Error(), "not found") {
+			invokeResp.Requests = append(invokeResp.Requests, req)
+			return nil
+		}
+		return common.ErrContractNewCtxFailed.More("%v", err)
+	}
+	defer func() { _ = context.Release() }() // TODO: deal with error
+
+	resp, err := context.Invoke(req.MethodName, req.Args)
+	if err != nil {
+		logger.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
+		metrics.ContractInvokeCounter.
+			WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").
+			Inc()
+		return common.ErrContractInvokeFailed.More("%v", err)
 	}
 
-	return invokeResponse, nil
+	if resp.HasError() && isReservedReq {
+		logger.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
+		metrics.ContractInvokeCounter.
+			WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").
+			Inc()
+		return common.ErrContractInvokeFailed.More("%v", resp.Message)
+	}
+
+	metrics.ContractInvokeCounter.
+		WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "OK").
+		Inc()
+	resourceUsed := context.ResourceUsed()
+	if !isReservedReq {
+		invokeResp.GasUsed += resourceUsed.TotalGas(gasPrice)
+	}
+
+	// request
+	request := *req
+	request.ResourceLimits = contract.ToPbLimits(resourceUsed)
+	invokeResp.Requests = append(invokeResp.Requests, &request)
+
+	// response
+	response := &protos.ContractResponse{
+		Status:  int32(resp.Status),
+		Message: resp.Message,
+		Body:    resp.Body,
+	}
+	invokeResp.Responses = append(invokeResp.Responses, response)
+	invokeResp.Response = append(invokeResp.Response, resp.Body)
+
+	metrics.ContractInvokeHistogram.
+		WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName).
+		Observe(time.Since(beginTime).Seconds())
+	return nil
 }
 
 // 提交交易到交易池(xuperos引擎同时更新到状态机和交易池)
@@ -473,4 +487,56 @@ func (t *Chain) CreateParaChain() error {
 		return fmt.Errorf("create parachain instance failed.err:%v", err)
 	}
 	return nil
+}
+
+// reqContext is context for PreExec requests
+type reqContext struct {
+
+	// trans info
+
+	transContractName string
+	transAmount       *big.Int
+
+	// requests contains [reservedReqs..., preExecReqs...]
+	requests       []*protos.InvokeRequest
+	reservedReqCnt int
+
+	logger xctx.XContext
+}
+
+// GetTransAmount get trans amount by contranct name
+func (c *reqContext) GetTransAmount(contractName string) string {
+	if contractName == c.transContractName {
+		return c.transAmount.String()
+	}
+	return ""
+}
+
+// IsReservedReq judges reserved request by index
+func (c *reqContext) IsReservedReq(index int) bool {
+	return index < c.reservedReqCnt
+}
+
+// reqContext creates context with chain reserved requests and PreExec requests
+func (t *Chain) reqContext(logger xctx.XContext, reqs []*protos.InvokeRequest) (*reqContext, error) {
+	reqCtx := new(reqContext)
+	var err error
+
+	// parse trans info from PreExec requests
+	reqCtx.transContractName, reqCtx.transAmount, err = tx.ParseContractTransferRequest(reqs)
+	if err != nil {
+		return nil, common.ErrParameter.More("%v", err)
+	}
+
+	// pack reserved requests and PreExec requests
+	reservedRequests, err := t.ctx.State.GetReservedContractRequests(reqs, true)
+	if err != nil {
+		t.log.Error("PreExec get reserved contract request error", "error", err)
+		return nil, common.ErrParameter.More("%v", err)
+	}
+	reqCtx.reservedReqCnt = len(reservedRequests)
+	reqCtx.requests = append(reservedRequests, reqs...)
+
+	reqCtx.logger = logger
+	return reqCtx, nil
 }
