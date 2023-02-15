@@ -8,4 +8,4 @@ txidCacheExpiredTime: 3m
 txIdCacheGCInterval: 10m
 
 # 只有在 single 共识下生效，true：不创建空区块
-DisableEmyptBlocks: false
+disableEmptyBlocks: false

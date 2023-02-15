@@ -31,7 +31,7 @@ type EngineConf struct {
 	SyncBlockFilterMode int `yaml:"syncBlockFilterMode,omitempty"`
 	// SyncFactorForFactorBucketMode only use for SyncWithFactorBucket mode of SyncBlockFilterMode configuration item
 	SyncFactorForFactorBucketMode float64 `yaml:"SyncFactorForFactorBucketMode,omitempty"`
-	DisableEmyptBlocks            bool    `yaml:"DisableEmyptBlocks,omitempty"`
+	DisableEmptyBlocks            bool    `yaml:"disableEmptyBlocks,omitempty"`
 }
 
 func LoadEngineConf(cfgFile string) (*EngineConf, error) {

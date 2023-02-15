@@ -29,6 +29,7 @@ const (
 
 	statusFollowing = 0
 	statusMining    = 1
+	ConsensusSingle = "single"
 )
 
 const (
@@ -206,13 +207,13 @@ func (m *Miner) step() error {
 			trace("syncUpValidators")
 		}
 		m.status = statusMining
-		if m.ctx.EngCtx.EngCfg.DisableEmyptBlocks && !m.ctx.State.HasUnconfirmTx() {
+		if m.ctx.EngCtx.EngCfg.DisableEmptyBlocks && !m.ctx.State.HasUnconfirmTx() {
 			consensusStatus, err := m.ctx.Consensus.GetConsensusStatus()
 			if err != nil {
 				return err
 			}
 			// 目前不出空块配置只在 single 共识下生效
-			if consensusStatus.GetConsensusName() == "single" {
+			if consensusStatus.GetConsensusName() == ConsensusSingle {
 				return nil
 			}
 		}
