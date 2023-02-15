@@ -541,9 +541,9 @@ func Test_reqContext_GetTransAmount(t *testing.T) {
 		contractName string
 	}
 	tests := []struct {
-		name   string
-		args   args
-		want   string
+		name string
+		args args
+		want string
 	}{
 		{
 			name: "target contract",
@@ -575,9 +575,9 @@ func Test_reqContext_IsReservedReq(t *testing.T) {
 		index int
 	}
 	tests := []struct {
-		name   string
-		args   args
-		want   bool
+		name string
+		args args
+		want bool
 	}{
 		{
 			name: "reversed req",
