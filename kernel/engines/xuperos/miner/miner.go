@@ -206,7 +206,16 @@ func (m *Miner) step() error {
 			trace("syncUpValidators")
 		}
 		m.status = statusMining
-
+		if m.ctx.EngCtx.EngCfg.DisableEmyptBlocks && !m.ctx.State.HasUnconfirmTx() {
+			consensusStatus, err := m.ctx.Consensus.GetConsensusStatus()
+			if err != nil {
+				return err
+			}
+			// 目前不出空块配置只在 single 共识下生效
+			if consensusStatus.GetConsensusName() == "single" {
+				return nil
+			}
+		}
 		// 开始挖矿
 		err = m.mining(ctx)
 		if err != nil {
