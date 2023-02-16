@@ -4,16 +4,20 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/agiledragon/gomonkey/v2"
 	"github.com/patrickmn/go-cache"
+
+	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/utxo/txhash"
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
@@ -247,7 +251,11 @@ func setup(t *testing.T) *gomonkey.Patches {
 		}
 		return exec.LookPath(arg)
 	}
-	patch := gomonkey.ApplyFunc(exec.LookPath, mockLookPath)
+	patch := gomonkey.
+		ApplyFunc(exec.LookPath, mockLookPath).
+		ApplyMethod(reflect.TypeOf(new(state.State)),
+			"GetReservedContractRequests",
+			mockGetReservedContractRequests)
 	return patch
 }
 
@@ -289,12 +297,36 @@ func TestChain_PreExec(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "normal",
+			name: "req without reserved contract",
 			args: args{
 				ctx:  &mockXContext{logger: new(mockLogger)},
 				reqs: []*protos.InvokeRequest{mockReq("kernel")},
 			},
 			want: &protos.InvokeResponse{GasUsed: 1000},
+		},
+		{
+			name: "req with abnormal reserved contract",
+			args: args{
+				ctx:  &mockXContext{logger: new(mockLogger)},
+				reqs: []*protos.InvokeRequest{mockReq("req with abnormal reserved contract")},
+			},
+			wantErr: true,
+		},
+		{
+			name: "req with normal reserved contract",
+			args: args{
+				ctx:  &mockXContext{logger: new(mockLogger)},
+				reqs: []*protos.InvokeRequest{mockReq("req with normal reserved contract")},
+			},
+			want: &protos.InvokeResponse{GasUsed: 1000},
+		},
+		{
+			name: "abnormal req with normal reserved contract",
+			args: args{
+				ctx:  &mockXContext{logger: new(mockLogger)},
+				reqs: []*protos.InvokeRequest{mockReq("abnormal req with normal reserved contract")},
+			},
+			wantErr: true,
 		},
 		{
 			name: "contract method with invalid args",
@@ -400,47 +432,6 @@ func TestChain_preExecWithReservedReqs(t *testing.T) {
 	}
 }
 
-func TestChain_preExecOnce(t *testing.T) {
-	type fields struct {
-		ctx       *common.ChainCtx
-		log       logs.Logger
-		miner     *miner.Miner
-		relyAgent common.ChainRelyAgent
-		txIdCache *cache.Cache
-	}
-	type args struct {
-		logger        xctx.XContext
-		contractCtx   *contract.ContextConfig
-		req           *protos.InvokeRequest
-		isReservedReq bool
-		invokeResp    *protos.InvokeResponse
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tr := &Chain{
-				ctx:       tt.fields.ctx,
-				log:       tt.fields.log,
-				miner:     tt.fields.miner,
-				relyAgent: tt.fields.relyAgent,
-				txIdCache: tt.fields.txIdCache,
-			}
-			if err := tr.preExecOnce(tt.args.logger, tt.args.contractCtx, tt.args.req, tt.args.isReservedReq, tt.args.invokeResp); (err != nil) != tt.wantErr {
-				t.Errorf("Chain.preExecOnce() error = %v\n"+
-					"\twantErr %v",
-					err, tt.wantErr)
-			}
-		})
-	}
-}
-
 type mockXContext struct {
 	logger logs.Logger
 }
@@ -523,51 +514,56 @@ func mockReq(req string) *protos.InvokeRequest {
 			MethodName:   "NewAccount",
 			Args:         nil,
 		}
+	case "reserved contract":
+		return &protos.InvokeRequest{
+			ModuleName:   "wasm",
+			ContractName: "unified_check",
+			MethodName:   "verify",
+			Args: map[string][]byte{
+				"contract": []byte("$acl"),
+			},
+		}
+	case "req with abnormal reserved contract":
+		return &protos.InvokeRequest{
+			ModuleName:   "xkernel",
+			ContractName: "$acl",
+			MethodName:   "NewAccount",
+			Args:         mockKernelContractArgs("invalid args"),
+		}
+	case "req with normal reserved contract":
+		return &protos.InvokeRequest{
+			ModuleName:   "xkernel",
+			ContractName: "$acl",
+			MethodName:   "NewAccount",
+			Args:         mockKernelContractArgs("normal contract"),
+		}
+	case "abnormal req with normal reserved contract":
+		return &protos.InvokeRequest{
+			ModuleName:   "xkernel",
+			ContractName: "$acl",
+			MethodName:   "NewAccount",
+			Args:         mockKernelContractArgs("normal contract"),
+		}
 	default:
 		return &protos.InvokeRequest{
 			ModuleName:   "xkernel",
 			ContractName: "$acl",
 			MethodName:   "NewAccount",
-			Args: map[string][]byte{
-				"account_name": []byte("1234567890123456"),
-				"acl":          []byte(`{"pm": {"rule": 1,"acceptValue": 1.0},"aksWeight": {"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY": 1}}`),
-			},
+			Args:         mockKernelContractArgs(""),
 		}
 	}
 }
 
-func Test_reqContext_GetTransAmount(t *testing.T) {
-	type args struct {
-		contractName string
+func mockKernelContractArgs(reservedContractName string) map[string][]byte {
+	accountNumber := int64(rand.Uint32()) + 1234560000000000
+	args := map[string][]byte{
+		"account_name": []byte(strconv.FormatInt(accountNumber, 10)),
+		"acl":          []byte(`{"pm": {"rule": 1,"acceptValue": 1.0},"aksWeight": {"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY": 1}}`),
 	}
-	tests := []struct {
-		name string
-		args args
-		want string
-	}{
-		{
-			name: "target contract",
-			args: args{
-				contractName: "transfer",
-			},
-			want: "100",
-		},
-		{
-			name: "not target contract",
-			args: args{
-				contractName: "reserved",
-			},
-			want: "",
-		},
+	if reservedContractName != "" {
+		args["reserved"] = []byte(reservedContractName)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			c := mockReqCtx()
-			if got := c.GetTransAmount(tt.args.contractName); got != tt.want {
-				t.Errorf("reqContext.GetTransAmount() = %v, want %v", got, tt.want)
-			}
-		})
-	}
+	return args
 }
 
 func Test_reqContext_IsReservedReq(t *testing.T) {
@@ -606,8 +602,6 @@ func Test_reqContext_IsReservedReq(t *testing.T) {
 
 func mockReqCtx() *reqContext {
 	return &reqContext{
-		transContractName: "transfer",
-		transAmount:       big.NewInt(100),
 		requests: []*protos.InvokeRequest{
 			{
 				ContractName: "reversed",
@@ -618,4 +612,16 @@ func mockReqCtx() *reqContext {
 		},
 		reservedReqCnt: 1,
 	}
+}
+
+func mockGetReservedContractRequests(s *state.State, req []*protos.InvokeRequest,
+	isPreExec bool) ([]*protos.InvokeRequest, error) {
+	if len(req) > 0 && req[0].Args != nil {
+		mockReservedContrctName, ok := req[0].Args["reserved"]
+		if ok {
+			mockReq := mockReq(string(mockReservedContrctName))
+			return []*protos.InvokeRequest{mockReq}, nil
+		}
+	}
+	return nil, nil
 }

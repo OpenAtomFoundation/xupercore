@@ -2,7 +2,6 @@ package xuperos
 
 import (
 	"fmt"
-	"math/big"
 	"strings"
 	"time"
 
@@ -119,10 +118,6 @@ func (t *Chain) Context() *common.ChainCtx {
 func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiator string,
 	authRequires []string) (*protos.InvokeResponse, error) {
 
-	if ctx == nil || ctx.GetLog() == nil {
-		return nil, common.ErrParameter
-	}
-
 	reqCtx, err := t.reqContext(ctx, reqs)
 	if err != nil {
 		return nil, err
@@ -172,13 +167,15 @@ func (t *Chain) PreExec(ctx xctx.XContext, reqs []*protos.InvokeRequest, initiat
 func (t *Chain) preExecWithReservedReqs(reqCtx *reqContext,
 	contractCtx *contract.ContextConfig) (*protos.InvokeResponse, error) {
 
-	reqCnt := len(reqCtx.requests)
-	invokeResp := &protos.InvokeResponse{
-		Response:  make([][]byte, 0, reqCnt),
-		Requests:  make([]*protos.InvokeRequest, 0, reqCnt),
-		Responses: make([]*protos.ContractResponse, 0, reqCnt),
-	}
-	logger := reqCtx.logger
+	var (
+		log        = reqCtx.logger
+		reqCnt     = len(reqCtx.requests)
+		invokeResp = &protos.InvokeResponse{
+			Response:  make([][]byte, 0, reqCnt),
+			Requests:  make([]*protos.InvokeRequest, 0, reqCnt),
+			Responses: make([]*protos.ContractResponse, 0, reqCnt),
+		}
+	)
 
 	for idx, req := range reqCtx.requests {
 		if req == nil {
@@ -186,7 +183,7 @@ func (t *Chain) preExecWithReservedReqs(reqCtx *reqContext,
 		}
 
 		if req.ModuleName == "" && req.ContractName == "" && req.MethodName == "" {
-			logger.GetLog().Warn("PreExec req empty", "req", req)
+			log.Warn("PreExec req empty", "req", req)
 			continue
 		}
 		if req.ModuleName == "" {
@@ -202,10 +199,10 @@ func (t *Chain) preExecWithReservedReqs(reqCtx *reqContext,
 		}
 
 		contractCtx.ContractName = req.ContractName
-		contractCtx.TransferAmount = reqCtx.GetTransAmount(req.ContractName)
+		contractCtx.TransferAmount = req.Amount
 		isReservedReq := reqCtx.IsReservedReq(idx)
 
-		err := t.preExecOnce(logger, contractCtx, req, isReservedReq, invokeResp)
+		err := t.preExecOnce(contractCtx, req, isReservedReq, invokeResp, log)
 		if err != nil {
 			return nil, err
 		}
@@ -214,15 +211,14 @@ func (t *Chain) preExecWithReservedReqs(reqCtx *reqContext,
 }
 
 // preExecOnce preExec one request with metrics
-func (t *Chain) preExecOnce(logger xctx.XContext, contractCtx *contract.ContextConfig,
-	req *protos.InvokeRequest, isReservedReq bool, invokeResp *protos.InvokeResponse) error {
+func (t *Chain) preExecOnce(contractCtx *contract.ContextConfig, req *protos.InvokeRequest, isReservedReq bool, invokeResp *protos.InvokeResponse, log logs.Logger) error {
 
 	gasPrice := t.ctx.State.GetMeta().GetGasPrice()
 	beginTime := time.Now()
 
 	context, err := t.ctx.Contract.NewContext(contractCtx)
 	if err != nil {
-		logger.GetLog().Error("PreExec NewContext error", "error", err, "contractName", req.ContractName)
+		log.Error("PreExec NewContext error", "error", err, "contractName", req.ContractName)
 		if isReservedReq && strings.HasSuffix(err.Error(), "not found") {
 			invokeResp.Requests = append(invokeResp.Requests, req)
 			return nil
@@ -233,7 +229,7 @@ func (t *Chain) preExecOnce(logger xctx.XContext, contractCtx *contract.ContextC
 
 	resp, err := context.Invoke(req.MethodName, req.Args)
 	if err != nil {
-		logger.GetLog().Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
+		log.Error("PreExec Invoke error", "error", err, "contractName", req.ContractName)
 		metrics.ContractInvokeCounter.
 			WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").
 			Inc()
@@ -241,7 +237,7 @@ func (t *Chain) preExecOnce(logger xctx.XContext, contractCtx *contract.ContextC
 	}
 
 	if resp.HasError() && isReservedReq {
-		logger.GetLog().Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
+		log.Error("PreExec Invoke error", "status", resp.Status, "contractName", req.ContractName)
 		metrics.ContractInvokeCounter.
 			WithLabelValues(t.ctx.BCName, req.ModuleName, req.ContractName, req.MethodName, "InvokeError").
 			Inc()
@@ -492,24 +488,11 @@ func (t *Chain) CreateParaChain() error {
 // reqContext is context for PreExec requests
 type reqContext struct {
 
-	// trans info
-
-	transContractName string
-	transAmount       *big.Int
-
 	// requests contains [reservedReqs..., preExecReqs...]
 	requests       []*protos.InvokeRequest
 	reservedReqCnt int
 
-	logger xctx.XContext
-}
-
-// GetTransAmount get trans amount by contranct name
-func (c *reqContext) GetTransAmount(contractName string) string {
-	if contractName == c.transContractName {
-		return c.transAmount.String()
-	}
-	return ""
+	logger logs.Logger
 }
 
 // IsReservedReq judges reserved request by index
@@ -518,12 +501,18 @@ func (c *reqContext) IsReservedReq(index int) bool {
 }
 
 // reqContext creates context with chain reserved requests and PreExec requests
-func (t *Chain) reqContext(logger xctx.XContext, reqs []*protos.InvokeRequest) (*reqContext, error) {
+func (t *Chain) reqContext(ctx xctx.XContext, reqs []*protos.InvokeRequest) (*reqContext, error) {
 	reqCtx := new(reqContext)
 	var err error
 
-	// parse trans info from PreExec requests
-	reqCtx.transContractName, reqCtx.transAmount, err = tx.ParseContractTransferRequest(reqs)
+	// check logger
+	if ctx == nil || ctx.GetLog() == nil {
+		return nil, common.ErrParameter
+	}
+	reqCtx.logger = ctx.GetLog()
+
+	// check transfer info from PreExec requests
+	_, _, err = tx.ParseContractTransferRequest(reqs)
 	if err != nil {
 		return nil, common.ErrParameter.More("%v", err)
 	}
@@ -537,6 +526,5 @@ func (t *Chain) reqContext(logger xctx.XContext, reqs []*protos.InvokeRequest) (
 	reqCtx.reservedReqCnt = len(reservedRequests)
 	reqCtx.requests = append(reservedRequests, reqs...)
 
-	reqCtx.logger = logger
 	return reqCtx, nil
 }
