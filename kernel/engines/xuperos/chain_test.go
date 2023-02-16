@@ -457,7 +457,7 @@ func (m mockXContext) Err() error {
 	panic("implement me")
 }
 
-func (m mockXContext) Value(key any) any {
+func (m mockXContext) Value(_ interface{}) interface{} {
 	panic("implement me")
 }
 
