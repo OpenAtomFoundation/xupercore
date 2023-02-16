@@ -163,33 +163,30 @@ func (t *Engine) GetChains() []string {
 	return t.chainM.GetChains()
 }
 
-/* 从本地存储加载链
+/*
+	从本地存储加载链
+
 Default directories:
-   data
-   └── blockchain
-       ├── <root chain>
-       ├── <para chain 1>
-       │   ...
-       └── <para chain n>
+
+	data
+	└── blockchain
+	    ├── <root chain>
+	    ├── <para chain 1>
+	    │   ...
+	    └── <para chain n>
 */
 func (t *Engine) loadChains() error {
 	envCfg := t.engCtx.EnvCfg
-	ChainsDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
-	t.log.Trace("start load chains from blockchain data dir", "dir", ChainsDir)
+	chainsDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
+	t.log.Trace("start load chains from blockchain data dir", "dir", chainsDir)
 
 	// 优先加载主链
-	if err := t.loadRootChain(ChainsDir); err != nil {
+	if err := t.loadRootChain(chainsDir); err != nil {
 		return err
 	}
 
 	// 加载平行链
-	paraChainCnt, err := t.loadParaChains(ChainsDir)
-	if err != nil {
-		return err
-	}
-
-	t.log.Trace("load chain from data dir succeeded", "chainCnt", 1+paraChainCnt)
-	return nil
+	return t.loadParaChains(chainsDir)
 }
 
 // loadRootChain loads root chain from given directory
@@ -230,34 +227,31 @@ func (t *Engine) loadRootChain(chainsDir string) error {
 		return err
 	}
 
-	t.log.Trace("load chain succeeded", "chain", rootChain, "dir", chainDir)
+	t.log.Trace("load root chain succeeded", "chain", rootChain, "dir", chainDir)
 	return nil
 }
 
 // loadParaChains loads non-root chains from given directory
-// Returns:
-//
-//	int: loaded ParaChain count
-func (t *Engine) loadParaChains(chainsDir string) (int, error) {
+func (t *Engine) loadParaChains(chainsDir string) error {
 	// prepare root chain reader
 	// root链必须存在
 	rootChain := t.engCtx.EngCfg.RootChain
 	rootChainHandle, err := t.chainM.Get(rootChain)
 	if err != nil {
 		t.log.Error("root chain not exist, please create it first", "rootChain", rootChain)
-		return 0, fmt.Errorf("root chain not exist")
+		return fmt.Errorf("root chain not exist")
 	}
 	rootChainReader, err := rootChainHandle.Context().State.GetTipXMSnapshotReader()
 	if err != nil {
 		t.log.Error("root chain get tip reader failed", "err", err.Error())
-		return 0, err
+		return err
 	}
 
 	// load ParaChains
 	dirs, err := os.ReadDir(chainsDir)
 	if err != nil {
 		t.log.Error("read blockchain data dir failed", "error", err, "dir", chainsDir)
-		return 0, fmt.Errorf("read blockchain data dir failed")
+		return fmt.Errorf("read blockchain data dir failed")
 	}
 
 	chainCnt := 0
@@ -268,13 +262,15 @@ func (t *Engine) loadParaChains(chainsDir string) (int, error) {
 
 		loaded, err := t.tryLoadParaChain(chainsDir, fInfo.Name(), rootChainReader)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if loaded {
 			chainCnt++
 		}
 	}
-	return chainCnt, nil
+
+	t.log.Trace("load para chain succeeded", "chainCnt", chainCnt)
+	return nil
 }
 
 // tryLoadParaChain try to load a given ParaChain from given directory, checked by root chain info.
