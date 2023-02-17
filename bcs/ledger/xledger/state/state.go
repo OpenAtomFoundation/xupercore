@@ -1169,7 +1169,7 @@ func (t *State) undoPayFee(tx *pb.Transaction, batch kvdb.Batch, block *pb.Inter
 	return nil
 }
 
-//批量执行区块
+// 批量执行区块
 func (t *State) procTodoBlkForWalk(todoBlocks []*pb.InternalBlock) (err error) {
 	var todoBlk *pb.InternalBlock
 	var showBlkId string
@@ -1369,8 +1369,8 @@ func (t *State) collectDelayedTxs(interval time.Duration) {
 	}
 }
 
-//执行一个block的时候, 处理本地未确认交易
-//返回：被确认的txid集合、err
+// 执行一个block的时候, 处理本地未确认交易
+// 返回：被确认的txid集合、err
 // 目的：把 mempool（准确来说是未确认交易池）中与区块中交易有冲突的交易（双花等），状态机回滚这些交易同时从 mempool 删除。
 func (t *State) processUnconfirmTxs(block *pb.InternalBlock, batch kvdb.Batch, needRepost bool) ([]*pb.Transaction, map[string]bool, map[string]bool, error) {
 	if !bytes.Equal(block.PreHash, t.latestBlockid) {

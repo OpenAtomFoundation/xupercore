@@ -133,7 +133,7 @@ func (d *dispatcher) Dispatch(msg *pb.XuperMessage, stream Stream) error {
 	}
 
 	var wg sync.WaitGroup
-	for sub, _ := range d.mc[msg.GetHeader().GetType()] {
+	for sub := range d.mc[msg.GetHeader().GetType()] {
 		if !sub.Match(msg) {
 			continue
 		}

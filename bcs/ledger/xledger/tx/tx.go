@@ -293,7 +293,7 @@ func (t *Tx) SortUnconfirmedTx(sizeLimit int) ([]*pb.Transaction, []*pb.Transact
 	return result, delayedTxs, nil
 }
 
-//从disk还原unconfirm表到内存, 初始化的时候
+// 从disk还原unconfirm表到内存, 初始化的时候
 func (t *Tx) LoadUnconfirmedTxFromDisk() error {
 	iter := t.ldb.NewIteratorWithPrefix([]byte(pb.UnconfirmedTablePrefix))
 	defer iter.Release()

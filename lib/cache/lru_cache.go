@@ -54,10 +54,11 @@ func NewLRUCache(capacity int) *LRUCache {
 
 // Get get cached value from LRU cache
 // Params:
-//     - key: cache key
+//   - key: cache key
+//
 // Return:
-//     - value: cache value
-//     - ok   : true if found, false if not
+//   - value: cache value
+//   - ok   : true if found, false if not
 func (c *LRUCache) Get(key interface{}) (interface{}, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -70,10 +71,11 @@ func (c *LRUCache) Get(key interface{}) (interface{}, bool) {
 
 // Add add a key-value pair to LRU cache
 // Params:
-//     - key  : cache key
-//     - value: cache value
+//   - key  : cache key
+//   - value: cache value
+//
 // Return:
-//     - evictOrNot: true if eviction occurs, false if not
+//   - evictOrNot: true if eviction occurs, false if not
 func (c *LRUCache) Add(key interface{}, value interface{}) bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -107,7 +109,7 @@ func (c *LRUCache) evict() {
 
 // Del delete cached value from cache
 // Params:
-//     - key: cache key
+//   - key: cache key
 func (c *LRUCache) Del(key interface{}) {
 	c.lock.Lock()
 	defer c.lock.Unlock()

@@ -351,7 +351,7 @@ func (l *Ledger) formatBlock(txList []*pb.Transaction,
 	return block, nil
 }
 
-//保存一个区块（只包括区块头）
+// 保存一个区块（只包括区块头）
 // 注：只是打包到一个leveldb batch write对象中
 func (l *Ledger) saveBlock(block *pb.InternalBlock, batchWrite kvdb.Batch) error {
 	header := *block
@@ -379,7 +379,7 @@ func (l *Ledger) fetchBlockForModify(blockid []byte) (*pb.InternalBlock, error) 
 	return &blk, nil
 }
 
-//根据blockid获取一个Block, 只包含区块头
+// 根据blockid获取一个Block, 只包含区块头
 func (l *Ledger) fetchBlock(blockid []byte) (*pb.InternalBlock, error) {
 	blkInCache, cacheHit := l.blkHeaderCache.Get(string(blockid))
 	if cacheHit {
@@ -403,7 +403,7 @@ func (l *Ledger) fetchBlock(blockid []byte) (*pb.InternalBlock, error) {
 	return block, nil
 }
 
-//当发生主干切换后，确保最长路径上的block的tx的blockid指向它
+// 当发生主干切换后，确保最长路径上的block的tx的blockid指向它
 func (l *Ledger) correctTxsBlockid(blockID []byte, batchWrite kvdb.Batch) error {
 	block, err := l.queryBlock(blockID, true)
 	if err != nil {
@@ -426,11 +426,15 @@ func (l *Ledger) correctTxsBlockid(blockID []byte, batchWrite kvdb.Batch) error 
 	return nil
 }
 
-//处理分叉
-// P---->P---->P---->P (old tip)
-//       |
-//       +---->Q---->Q--->NewTip
-// 处理完后，会返回分叉点的block
+/*
+处理分叉
+
+	P--->P---->P---->P (old tip) \
+	     |
+	     +---->Q---->Q--->NewTip
+
+处理完后，会返回分叉点的block
+*/
 func (l *Ledger) handleFork(oldTip []byte, newTipPre []byte, nextHash []byte, batchWrite kvdb.Batch) (*pb.InternalBlock, error) {
 	p := oldTip
 	q := newTipPre

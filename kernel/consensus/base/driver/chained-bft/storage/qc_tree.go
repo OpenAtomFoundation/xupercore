@@ -345,14 +345,16 @@ func (t *QCPendingTree) insert(node *ProposalNode) error {
 	return nil
 }
 
-// insertOrphan为向孤儿数组插入孤儿节点的逻辑
-// 若该node的父节点不存在在slice中，则查看该node的是否为slice中节点的父节点，若是则代替该节点反转挂上，若否继续查看
-// 若该node的父节点存在在sli中，则直接挂在父节点下，如否则在sli中追加节点
-// [A1,   B1,  C1,  D1 ...]
-//  ｜    ||
-//  A2  B2 B2'
-//  |
-//  A3
+/*
+	 insertOrphan为向孤儿数组插入孤儿节点的逻辑
+	 若该node的父节点不存在在slice中，则查看该node的是否为slice中节点的父节点，若是则代替该节点反转挂上，若否继续查看
+	 若该node的父节点存在在sli中，则直接挂在父节点下，如否则在sli中追加节点
+	   [A1,   B1,  C1,  D1 ...]
+		｜    ||
+		A2  B2 B2'
+		|
+		A3
+*/
 func (t *QCPendingTree) insertOrphan(node *ProposalNode) error {
 	if _, ok := t.orphanMap[utils.F(node.In.GetProposalId())]; ok {
 		return nil // 重复退出

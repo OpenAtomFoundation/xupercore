@@ -365,7 +365,7 @@ func (tp *tdposConsensus) initBFT() error {
 // 共识实例的挂起逻辑, 另: 若共识实例发现绑定block结构有误，会直接停掉当前共识实例并panic
 func (tp *tdposConsensus) Stop() error {
 	// 注销合约方法
-	for method, _ := range tp.kMethod {
+	for method := range tp.kMethod {
 		// 若有历史句柄，删除老句柄
 		tp.contract.GetKernRegistry().UnregisterKernMethod(tp.election.bindContractBucket, method)
 	}

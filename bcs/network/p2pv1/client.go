@@ -227,7 +227,7 @@ func (p *P2PServerV1) GetPeerIdByAccount(account string) (string, error) {
 		delete(addresses, addr)
 	}
 	var retryPeers []string
-	for k, _ := range addresses {
+	for k := range addresses {
 		retryPeers = append(retryPeers, k)
 	}
 	p.GetPeerInfo(retryPeers)

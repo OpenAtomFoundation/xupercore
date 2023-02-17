@@ -8,10 +8,11 @@ import (
 )
 
 // PoWConfig pow需要解析的创始块解析格式
-//  根据Bitcoin推荐
-//    AdjustHeightGap: 2016,
-//	  MaxTarget: 0x1d00FFFF,
-//    DefaultTarget: 0x207FFFFF
+//
+//	 根据Bitcoin推荐
+//		AdjustHeightGap: 2016,
+//		MaxTarget: 0x1d00FFFF,
+//		DefaultTarget: 0x207FFFFF
 type PoWConfig struct {
 	DefaultTarget        uint32 `json:"defaultTarget"`
 	AdjustHeightGap      int32  `json:"adjustHeightGap"`
@@ -99,14 +100,14 @@ func unmarshalPowConfig(input []byte) (*PoWConfig, error) {
 		"defaultTarget": 0,
 		"maxTarget":     0,
 	}
-	for k, _ := range int32Map {
+	for k := range int32Map {
 		value, err := strconv.ParseInt(consCfg[k].(string), 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("marshal consensus config failed key %s set error", k)
 		}
 		int32Map[k] = int32(value)
 	}
-	for k, _ := range uint32Map {
+	for k := range uint32Map {
 		value, err := strconv.ParseInt(consCfg[k].(string), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("marshal consensus config failed key %s set error", k)

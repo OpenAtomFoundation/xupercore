@@ -228,7 +228,7 @@ func (xc *XMCache) Transfer(from, to string, amount *big.Int) error {
 	return xc.utxoSandbox.Transfer(from, to, amount)
 }
 
-//UTXORWSet returns the inputs and outputs of utxo
+// UTXORWSet returns the inputs and outputs of utxo
 func (xc *XMCache) UTXORWSet() *contract.UTXORWSet {
 	return xc.utxoSandbox.GetUTXORWSets()
 }

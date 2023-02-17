@@ -4,13 +4,15 @@ import (
 	pb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 )
 
-//交易依赖关系图
+// 交易依赖关系图
 type TxGraph map[string][]string
 
-//TopSortDFS 对依赖关系图进行拓扑排序
+// TopSortDFS 对依赖关系图进行拓扑排序
 // 输入：依赖关系图，就是个map
-// 输出: order: 排序后的有序数组，依赖者排在前面，被依赖的排在后面
-//       cyclic: 如果发现有环形依赖关系则输出这个数组
+// 输出:
+//
+//	order: 排序后的有序数组，依赖者排在前面，被依赖的排在后面
+//	cyclic: 如果发现有环形依赖关系则输出这个数组
 //
 // 实现参考： https://rosettacode.org/wiki/Topological_sort#Go
 // 在我们映射中，RefTx是边的源点

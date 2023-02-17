@@ -446,7 +446,7 @@ func TestTruncate(t *testing.T) {
 	}
 
 	//block2 <- block3
-	block3, err := ledger.FormatBlock([]*pb.Transaction{&pb.Transaction{Txid: []byte("dummy1")}},
+	block3, err := ledger.FormatBlock([]*pb.Transaction{{Txid: []byte("dummy1")}},
 		[]byte("xchain-Miner-333333"),
 		ecdsaPk,
 		223456790,
@@ -460,7 +460,7 @@ func TestTruncate(t *testing.T) {
 	}
 
 	//block2 <- block4
-	block4, err := ledger.FormatBlock([]*pb.Transaction{&pb.Transaction{Txid: []byte("dummy2")}},
+	block4, err := ledger.FormatBlock([]*pb.Transaction{{Txid: []byte("dummy2")}},
 		[]byte("xchain-Miner-444444"),
 		ecdsaPk,
 		223456791,

@@ -114,7 +114,7 @@ func buildConfigs(input []byte) (*tdposConfig, error) {
 		"block_num":          0,
 		"timestamp":          0,
 	}
-	for k, _ := range int64Map {
+	for k := range int64Map {
 		if _, ok := consCfg[k]; !ok {
 			if k == "version" {
 				continue
