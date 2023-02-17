@@ -22,7 +22,6 @@ import (
 	lpb "github.com/xuperchain/xupercore/bcs/ledger/xledger/xldgpb"
 	"github.com/xuperchain/xupercore/kernel/common/xaddress"
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
-	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/miner"
 	"github.com/xuperchain/xupercore/lib/logs"
@@ -292,7 +291,7 @@ func TestChain_PreExec(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		// don't care much about the specific content returned, so simply judge gasUsed
+		// we don't care much about the specific content returned, so simply judge gasUsed
 		want    *protos.InvokeResponse
 		wantErr bool
 	}{
@@ -385,48 +384,6 @@ func TestChain_PreExec(t *testing.T) {
 				t.Errorf("Chain.PreExec() = %v\n"+
 					"\twant %v",
 					got, tt.want)
-			}
-		})
-	}
-}
-
-func TestChain_preExecWithReservedReqs(t *testing.T) {
-	type fields struct {
-		ctx       *common.ChainCtx
-		log       logs.Logger
-		miner     *miner.Miner
-		relyAgent common.ChainRelyAgent
-		txIdCache *cache.Cache
-	}
-	type args struct {
-		reqCtx      *reqContext
-		contractCtx *contract.ContextConfig
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		want    *protos.InvokeResponse
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tr := &Chain{
-				ctx:       tt.fields.ctx,
-				log:       tt.fields.log,
-				miner:     tt.fields.miner,
-				relyAgent: tt.fields.relyAgent,
-				txIdCache: tt.fields.txIdCache,
-			}
-			got, err := tr.preExecWithReservedReqs(tt.args.reqCtx, tt.args.contractCtx)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Chain.preExecWithReservedReqs() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("Chain.preExecWithReservedReqs() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -541,10 +498,11 @@ func mockReq(req string) *protos.InvokeRequest {
 		return &protos.InvokeRequest{
 			ModuleName:   "xkernel",
 			ContractName: "$acl",
-			MethodName:   "NewAccount",
+			MethodName:   "notExist", // method not exist
 			Args:         mockKernelContractArgs("normal contract"),
 		}
 	default:
+		// normal contract
 		return &protos.InvokeRequest{
 			ModuleName:   "xkernel",
 			ContractName: "$acl",
@@ -561,7 +519,7 @@ func mockKernelContractArgs(reservedContractName string) map[string][]byte {
 		"acl":          []byte(`{"pm": {"rule": 1,"acceptValue": 1.0},"aksWeight": {"TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY": 1}}`),
 	}
 	if reservedContractName != "" {
-		args["reserved"] = []byte(reservedContractName)
+		args[mockKeyReserved] = []byte(reservedContractName)
 	}
 	return args
 }
@@ -614,12 +572,17 @@ func mockReqCtx() *reqContext {
 	}
 }
 
-func mockGetReservedContractRequests(s *state.State, req []*protos.InvokeRequest,
-	isPreExec bool) ([]*protos.InvokeRequest, error) {
+// mockKeyReserved key for test case arguments to implement mockGetReservedContractRequests
+// which denote reserved contract test data to be used in its test case
+const mockKeyReserved = "reserved"
+
+func mockGetReservedContractRequests(_ *state.State, req []*protos.InvokeRequest,
+	_ bool) ([]*protos.InvokeRequest, error) {
+
 	if len(req) > 0 && req[0].Args != nil {
-		mockReservedContrctName, ok := req[0].Args["reserved"]
+		mockReservedContractName, ok := req[0].Args[mockKeyReserved]
 		if ok {
-			mockReq := mockReq(string(mockReservedContrctName))
+			mockReq := mockReq(string(mockReservedContractName))
 			return []*protos.InvokeRequest{mockReq}, nil
 		}
 	}
