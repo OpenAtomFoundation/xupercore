@@ -182,6 +182,7 @@ func (c *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	}, nil
 }
 
+// HasVoted check initiator voted, true: voted
 func (c *Contract) HasVoted(ctx contract.KContext, token, topic string, pID *big.Int) (bool, error) {
 	votingMap, err := c.getAddressVotingProposal(ctx, token, ctx.Initiator())
 	if err != nil {
@@ -192,12 +193,8 @@ func (c *Contract) HasVoted(ctx contract.KContext, token, topic string, pID *big
 		// 当前用户没有参与过 topic 下的提案投票
 		return false, nil
 	}
-	_, ok = pid2amount[pID.String()]
-	if !ok {
-		// 当前用户没有参与过当前提案的投票
-		return false, nil
-	}
-	return true, nil
+	_, voted := pid2amount[pID.String()]
+	return voted, nil
 }
 
 // 投票人数数量少于5k可以使用此接口
