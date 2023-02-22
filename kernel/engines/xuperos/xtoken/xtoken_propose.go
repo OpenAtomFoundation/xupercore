@@ -41,15 +41,6 @@ func (c *Contract) Propose(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient balance to initiate a proposal")
 	}
 
-	// 如果账户有冻结的金额，说明已有参与的进行中提案，包括自己发起的以及投票的。
-	fronzen, err := c.getFrozenBalance(ctx, tokenName, ctx.Initiator())
-	if err != nil {
-		return nil, err
-	}
-	if fronzen.Cmp(big.NewInt(0)) > 0 {
-		return nil, errors.New("there are already participating proposals")
-	}
-
 	// 3、更新提案数据
 	pID, err := c.getLatestProposalID(ctx, tokenName, topic)
 	if err != nil {
@@ -157,13 +148,13 @@ func (c *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 		return nil, errors.New("insufficient balance to vote")
 	}
 
-	// 如果账户有冻结的金额，说明已有参与的进行中提案，包括自己发起的以及投票的。
-	fronzen, err := c.getFrozenBalance(ctx, tokenName, ctx.Initiator())
+	// 判断是否已经投票
+	voted, err := c.HasVoted(ctx, tokenName, topic, pID)
 	if err != nil {
 		return nil, err
 	}
-	if fronzen.Cmp(big.NewInt(0)) > 0 {
-		return nil, errors.New("there are already participating proposals")
+	if voted {
+		return nil, errors.New("this address has voted this proposal")
 	}
 
 	// 3、更新投票数据
@@ -189,6 +180,21 @@ func (c *Contract) Vote(ctx contract.KContext) (*contract.Response, error) {
 	return &contract.Response{
 		Status: Success,
 	}, nil
+}
+
+// HasVoted check initiator voted, true: voted
+func (c *Contract) HasVoted(ctx contract.KContext, token, topic string, pID *big.Int) (bool, error) {
+	votingMap, err := c.getAddressVotingProposal(ctx, token, ctx.Initiator())
+	if err != nil {
+		return false, err
+	}
+	pid2amount, ok := votingMap[topic]
+	if !ok {
+		// 当前用户没有参与过 topic 下的提案投票
+		return false, nil
+	}
+	_, voted := pid2amount[pID.String()]
+	return voted, nil
 }
 
 // 投票人数数量少于5k可以使用此接口
