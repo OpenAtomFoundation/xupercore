@@ -101,7 +101,7 @@ func TestAccountBucket_SetAccountACL(t *testing.T) {
 				t.Errorf("AccountBucket.SetAccountACL() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			got := b.DB.(mockContext).Account
-			if !tt.wantErr && !reflect.DeepEqual(got, tt.want){
+			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("AccountBucket.SetAccountACL(), DB = %v, want %v", got, tt.want)
 			}
 		})

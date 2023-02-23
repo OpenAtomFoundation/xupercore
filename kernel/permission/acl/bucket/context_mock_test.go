@@ -70,7 +70,7 @@ func (m mockContext) Put(bucket string, key, value []byte) error {
 		}
 		m.Account[k] = value
 	case utils.GetContractBucket():
-		if strings.HasPrefix(k,"Contract_put_error") {
+		if strings.HasPrefix(k, "Contract_put_error") {
 			return errors.New(k)
 		}
 		m.Contract[k] = value
