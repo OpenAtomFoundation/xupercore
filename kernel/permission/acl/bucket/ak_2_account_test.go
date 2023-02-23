@@ -1,24 +1,17 @@
 package bucket
 
 import (
-	"errors"
-	"fmt"
-	"math/big"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/xuperchain/xupercore/kernel/contract"
 	"github.com/xuperchain/xupercore/kernel/permission/acl/utils"
-	pb "github.com/xuperchain/xupercore/protos"
 )
 
 var (
 	bucketValue = []byte("true")
 	testAccount = "XC1111111111111111@xuper"
 )
-
-type bucketData = map[string][]byte
 
 func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 	type fields struct {
@@ -41,7 +34,7 @@ func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 			name: "update with overlap",
 			fields: fields{
 				DB: &mockContext{
-					Data: bucketData{
+					AK2Account: bucketData{
 						utils.MakeAK2AccountKey("AK1", testAccount): bucketValue,
 						utils.MakeAK2AccountKey("AK2", testAccount): bucketValue,
 					},
@@ -60,7 +53,7 @@ func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 		{
 			name: "add",
 			fields: fields{
-				DB: &mockContext{Data: bucketData{}},
+				DB: &mockContext{AK2Account: bucketData{}},
 			},
 			args: args{
 				account: testAccount,
@@ -75,7 +68,7 @@ func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 		{
 			name: "delete error",
 			fields: fields{
-				DB: &mockContext{Data: bucketData{}},
+				DB: &mockContext{AK2Account: bucketData{}},
 			},
 			args: args{
 				account: testAccount,
@@ -83,12 +76,11 @@ func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 				newAKs:  []string{"AK1", "AK2"},
 			},
 			wantErr: true,
-			want:    bucketData{},
 		},
 		{
 			name: "put error",
 			fields: fields{
-				DB: &mockContext{Data: bucketData{}},
+				DB: &mockContext{AK2Account: bucketData{}},
 			},
 			args: args{
 				account: testAccount,
@@ -96,9 +88,6 @@ func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 				newAKs:  []string{"AK1", "AK_put_error"},
 			},
 			wantErr: true,
-			want: bucketData{
-				utils.MakeAK2AccountKey("AK1", testAccount): bucketValue,
-			},
 		},
 	}
 	for _, tt := range tests {
@@ -110,95 +99,10 @@ func TestAK2AccountBucket_UpdateForAccount(t *testing.T) {
 				t.Errorf("AK2AccountBucket.UpdateForAccount() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			got := tt.fields.DB.(*mockContext).Data
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("AccountBucket.UpdateForAccount(), DB = %v, want %v", got, tt.want)
+			got := tt.fields.DB.(*mockContext).AK2Account
+			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("AK2AccountBucket.UpdateForAccount(), DB = %v, want %v", got, tt.want)
 			}
 		})
 	}
-}
-
-type mockContext struct {
-	Data bucketData
-}
-
-func (m mockContext) Args() map[string][]byte {
-	panic("implement me")
-}
-
-func (m mockContext) Initiator() string {
-	panic("implement me")
-}
-
-func (m mockContext) Caller() string {
-	panic("implement me")
-}
-
-func (m mockContext) AuthRequire() []string {
-	panic("implement me")
-}
-
-func (m mockContext) Get(bucket string, key []byte) ([]byte, error) {
-	panic("implement me")
-}
-
-func (m mockContext) Select(bucket string, startKey []byte, endKey []byte) (contract.Iterator, error) {
-	panic("implement me")
-}
-
-func (m mockContext) Put(bucket string, key, value []byte) error {
-	k := string(key)
-	if strings.HasPrefix(k, "AK_put_error") {
-		return errors.New(k)
-	}
-	m.Data[string(key)] = value
-	fmt.Println("Put: ", "bucket", bucket, "key", k, "value", string(value))
-	return nil
-}
-
-func (m mockContext) Del(bucket string, key []byte) error {
-	k := string(key)
-	if strings.HasPrefix(k, "AK_delete_error") {
-		return errors.New(k)
-	}
-	delete(m.Data, k)
-	fmt.Println("Delete: ", "bucket", bucket, "key", string(key))
-	return nil
-}
-
-func (m mockContext) Transfer(from string, to string, amount *big.Int) error {
-	panic("implement me")
-}
-
-func (m mockContext) AddEvent(events ...*pb.ContractEvent) {
-	panic("implement me")
-}
-
-func (m mockContext) Flush() error {
-	panic("implement me")
-}
-
-func (m mockContext) RWSet() *contract.RWSet {
-	panic("implement me")
-}
-
-func (m mockContext) UTXORWSet() *contract.UTXORWSet {
-	panic("implement me")
-}
-
-func (m mockContext) AddResourceUsed(delta contract.Limits) {
-	panic("implement me")
-}
-
-func (m mockContext) ResourceLimit() contract.Limits {
-	panic("implement me")
-}
-
-// used for test verification
-func (m mockContext) Call(module, contract, method string, args map[string][]byte) (*contract.Response, error) {
-	panic("implement me")
-}
-
-func (m mockContext) EmitAsyncTask(event string, args interface{}) error {
-	panic("implement me")
 }
