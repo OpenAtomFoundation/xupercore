@@ -12,6 +12,7 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines"
+	updateConfigBase "github.com/xuperchain/xupercore/kernel/engines/xuperos/update_config/base"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken/base"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/kernel/network"
@@ -63,6 +64,7 @@ type ChainRelyAgent interface {
 	CreateProposal() (propose.ProposeManager, error)
 	CreateTimerTask() (timerTask.TimerManager, error)
 	CreateXToken() (base.XTokenManager, error)
+	CreateUpdateConfig() (updateConfigBase.UpdateCfgManger, error)
 }
 
 type ChainManager interface {

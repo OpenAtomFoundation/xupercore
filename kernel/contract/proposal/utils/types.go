@@ -18,11 +18,12 @@ const (
 )
 
 const (
-	GovernTokenKernelContract = "$govern_token"
-	ProposalKernelContract    = "$proposal"
-	TimerTaskKernelContract   = "$timer_task"
-	TDPOSKernelContract       = "$tdpos"
-	XPOSKernelContract        = "$xpos"
+	GovernTokenKernelContract  = "$govern_token"
+	ProposalKernelContract     = "$proposal"
+	TimerTaskKernelContract    = "$timer_task"
+	TDPOSKernelContract        = "$tdpos"
+	XPOSKernelContract         = "$xpos"
+	UpdateConfigKernelContract = "$updateConfig"
 )
 
 // Govern Token Balance

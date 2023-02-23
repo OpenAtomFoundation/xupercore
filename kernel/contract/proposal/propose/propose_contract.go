@@ -411,6 +411,7 @@ func (t *KernMethod) Trigger(ctx contract.KContext) (*contract.Response, error) 
 	triggerTxArgs["height"] = []byte(strconv.FormatInt(proposal.Trigger.Height, 10))
 	_, err = ctx.Call(proposal.Trigger.Module, proposal.Trigger.Contract, proposal.Trigger.Method, triggerTxArgs)
 	if err != nil {
+		fmt.Printf("call proposal err: %v", err)
 		proposal.Status = utils.ProposalStatusCompletedAndFailure
 	} else {
 		proposal.Status = utils.ProposalStatusCompletedAndSuccess

@@ -19,6 +19,8 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	updateConfig "github.com/xuperchain/xupercore/kernel/engines/xuperos/update_config"
+	updateConfigBase "github.com/xuperchain/xupercore/kernel/engines/xuperos/update_config/base"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken"
 	xtokenInter "github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken/base"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
@@ -237,4 +239,19 @@ func (t *ChainRelyAgentImpl) CreateXToken() (xtokenInter.XTokenManager, error) {
 		return nil, err
 	}
 	return mgr, err
+}
+
+func (t *ChainRelyAgentImpl) CreateUpdateConfig() (updateConfigBase.UpdateCfgManger, error) {
+	ctx := t.chain.Context()
+	legAgent := NewLedgerAgent(ctx)
+	ctx.Ledger = legAgent.chainCtx.Ledger
+	UpCfgCtx, err := updateConfig.NewUpdateConfigCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mgr, err := updateConfig.NewUpdateConfigManager(UpCfgCtx)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, nil
 }

@@ -40,6 +40,5 @@ func NewProposeCtx(bcName string, leg LedgerRely, contract contract.Manager) (*P
 	ctx.BcName = bcName
 	ctx.Ledger = leg
 	ctx.Contract = contract
-
 	return ctx, nil
 }

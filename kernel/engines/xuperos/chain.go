@@ -459,6 +459,13 @@ func (t *Chain) initChainCtx() error {
 		return err
 	}
 	t.log.Trace("create xtoken succ", "bcName", t.ctx.BCName)
+
+	// update_config
+	_, err = t.relyAgent.CreateUpdateConfig()
+	if err != nil {
+		return err
+	}
+	t.log.Trace("create UpdateConfig succ", "bcName", t.ctx.BCName)
 	return nil
 }
 
