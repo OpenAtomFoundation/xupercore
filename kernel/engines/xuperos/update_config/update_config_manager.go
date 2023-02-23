@@ -12,12 +12,12 @@ type Manager struct {
 
 func NewUpdateConfigManager(ctx *UpdateConfigCtx) (*Manager, error) {
 	if ctx == nil || ctx.Contract == nil || ctx.BcName == "" {
-		return nil, fmt.Errorf("acl ctx set error")
+		return nil, fmt.Errorf("update config ctx set error")
 	}
 	t := NewKernMethod(ctx)
 	register := ctx.Contract.GetKernRegistry()
 	register.RegisterKernMethod(utils.UpdateConfigKernelContract, updateGasPriceMethod, t.updateGasPrice)
-	register.RegisterKernMethod(utils.UpdateConfigKernelContract, getGasPriceMethod, t.getGasPrice)
+	register.RegisterKernMethod(utils.UpdateConfigKernelContract, updateMaxBlockSize, t.updateMaxBlockSize)
 	mg := &Manager{
 		Ctx: ctx,
 	}

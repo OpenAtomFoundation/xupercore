@@ -1504,3 +1504,11 @@ func (t *State) GetContractDesc(contractName string) (*protos.WasmCodeDesc, erro
 	}
 	return valDesc, err
 }
+
+func (t *State) UpdateGasPrice(nextGasPrice *protos.GasPrice, batch kvdb.Batch) error {
+	return t.meta.UpdateGasPrice(nextGasPrice, batch)
+}
+
+func (t *State) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
+	return t.meta.UpdateMaxBlockSize(maxBlockSize, batch)
+}
