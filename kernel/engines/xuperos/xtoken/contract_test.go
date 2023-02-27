@@ -30,7 +30,11 @@ func TestNewToken(t *testing.T) {
 			ProposalEffectiveAmount: big.NewInt(2),
 		},
 	}
-	value, _ := json.Marshal(token)
+	value, err := json.Marshal(token)
+	if err != nil {
+		t.Fatal("json marshal failed", err)
+		return
+	}
 	args := map[string][]byte{
 		"token": value,
 	}
@@ -38,7 +42,7 @@ func TestNewToken(t *testing.T) {
 
 	cc := &Context{}
 	contract := NewContract(nil, nil, cc)
-	_, err := contract.NewToken(ctx)
+	_, err = contract.NewToken(ctx)
 	if err != nil {
 		t.Fatal("NewToken test failed", err)
 		return
@@ -210,7 +214,11 @@ func TestQuery(t *testing.T) {
 	}
 
 	actualToken := new(XToken)
-	json.Unmarshal(resp.Body, actualToken)
+	err = json.Unmarshal(resp.Body, actualToken)
+	if err != nil {
+		t.Fatal("json marshal failed", err)
+		return
+	}
 	if actualToken.Name != "test" {
 		t.Fatal("QueryToken test assert failed")
 		return
@@ -238,7 +246,11 @@ func TestProposeCheckVote(t *testing.T) {
 		ProposalID *big.Int
 	}
 	proposalResult := new(ProposalResult)
-	json.Unmarshal(resp.Body, proposalResult)
+	err = json.Unmarshal(resp.Body, proposalResult)
+	if err != nil {
+		t.Fatal("json unmarshal failed", err)
+		return
+	}
 	if proposalResult.ProposalID.String() != "1" {
 		t.Fatal("Propose test assert failed")
 		return
@@ -323,7 +335,11 @@ func TestProposeStopVote(t *testing.T) {
 		ProposalID *big.Int
 	}
 	proposalResult := new(ProposalResult)
-	json.Unmarshal(resp.Body, proposalResult)
+	err = json.Unmarshal(resp.Body, proposalResult)
+	if err != nil {
+		t.Fatal("json unmarshal failed", err)
+		return
+	}
 	if proposalResult.ProposalID.String() != "1" {
 		t.Fatal("Propose test assert failed")
 		return
@@ -385,12 +401,16 @@ func TestPermission(t *testing.T) {
 		newTokenCtx.initiator,
 		"bob",
 	}
-	value, _ := json.Marshal(addrs)
+	value, err := json.Marshal(addrs)
+	if err != nil {
+		t.Fatal("json marshal failed", err)
+		return
+	}
 	args := map[string][]byte{
 		"addrs": value,
 	}
 	newTokenCtx.args = args
-	_, err := contractIns.AddAdmins(newTokenCtx)
+	_, err = contractIns.AddAdmins(newTokenCtx)
 	if err != nil {
 		t.Fatal("AddAdmins test failed", err)
 		return
@@ -403,7 +423,11 @@ func TestPermission(t *testing.T) {
 	}
 
 	admins := new(map[string]bool)
-	json.Unmarshal(resp.Body, admins)
+	err = json.Unmarshal(resp.Body, admins)
+	if err != nil {
+		t.Fatal("json unmarshal failed", err)
+		return
+	}
 	if len(*admins) != 2 {
 		t.Fatal("QueryAdmins test assert failed", err)
 	}
@@ -519,7 +543,10 @@ func newTokenForTest() {
 			},
 		},
 	}
-	value, _ := json.Marshal(token)
+	value, err := json.Marshal(token)
+	if err != nil {
+		panic(err)
+	}
 	args := map[string][]byte{
 		"token": value,
 	}
@@ -527,7 +554,7 @@ func newTokenForTest() {
 
 	cc := &Context{}
 	contractIns = NewContract(map[string]bool{newTokenCtx.initiator: true}, nil, cc)
-	_, err := contractIns.NewToken(newTokenCtx)
+	_, err = contractIns.NewToken(newTokenCtx)
 	if err != nil {
 		panic(err)
 	}
