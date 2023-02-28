@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/patrickmn/go-cache"
 	"github.com/xuperchain/xupercore/lib/metrics"
 
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
@@ -302,6 +301,7 @@ func (p *P2PServerV2) GetPeerIdByAccount(account string) (peer.ID, error) {
 		return "", fmt.Errorf("address error: %s, address=%s", err, value)
 	}
 
-	p.accounts.Set(key, peerID, cache.NoExpiration)
+	// 当前节点缓存 account=>peerID 1小时，dht 中默认是 36h，如果超过 36h 可能导致节点重启时不能参与共识。
+	p.accounts.Set(key, peerID, time.Hour*1)
 	return peerID, nil
 }
