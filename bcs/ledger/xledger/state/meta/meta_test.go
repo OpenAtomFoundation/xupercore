@@ -1,15 +1,16 @@
 package meta
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/kernel/mock"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/protos"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"testing"
 
 	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
@@ -190,7 +191,7 @@ func TestMetaGetFunc(t *testing.T) {
 		DiskRate: 1,
 		XfeeRate: 1,
 	}
-	err = metaHadler.UpdateGasPrice(gasPrice, batch)
+	err = metaHadler.UpdateGasPrice(metaHadler.GetGasPrice(), gasPrice, batch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +199,7 @@ func TestMetaGetFunc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = metaHadler.UpdateMaxBlockSize(64, batch)
+	err = metaHadler.UpdateMaxBlockSize(metaHadler.GetMaxBlockSize(), 64, batch)
 	if err != nil {
 		t.Fatal(err)
 	}

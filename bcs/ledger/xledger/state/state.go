@@ -28,6 +28,7 @@ import (
 	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
+	proposeUtils "github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -1011,6 +1012,14 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 		t.log.Warn("xmodel.UndoTx failed", "err", err)
 		return ErrRWSetInvalid
 	}
+	// Timer 交易回滚
+	if tx.Autogen {
+		outPutsExt := tx.GetTxOutputsExt()
+		err = t.rollBackTimerTx(outPutsExt, batch)
+		if err != nil {
+			return err
+		}
+	}
 
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
@@ -1056,7 +1065,6 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 			t.utxo.UpdateUtxoTotal(delta, batch, false)
 		}
 	}
-
 	return nil
 }
 
@@ -1505,10 +1513,57 @@ func (t *State) GetContractDesc(contractName string) (*protos.WasmCodeDesc, erro
 	return valDesc, err
 }
 
-func (t *State) UpdateGasPrice(nextGasPrice *protos.GasPrice, batch kvdb.Batch) error {
-	return t.meta.UpdateGasPrice(nextGasPrice, batch)
+func (t *State) UpdateGasPrice(oldGasPrice, nextGasPrice *protos.GasPrice, batch kvdb.Batch) error {
+	return t.meta.UpdateGasPrice(oldGasPrice, nextGasPrice, batch)
 }
 
-func (t *State) UpdateMaxBlockSize(maxBlockSize int64, batch kvdb.Batch) error {
-	return t.meta.UpdateMaxBlockSize(maxBlockSize, batch)
+func (t *State) UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize int64, batch kvdb.Batch) error {
+	return t.meta.UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize, batch)
+}
+
+func (t *State) rollBackTimerTx(outPutsExt []*protos.TxOutputExt, batch kvdb.Batch) error {
+	for _, output := range outPutsExt {
+		if output.Bucket == "proposal" {
+			proposalStr := output.Value
+			proposal, err := proposeUtils.Parse(string(proposalStr))
+			if err != nil {
+				return err
+			}
+			switch proposal.Trigger.Method {
+			case "updateMaxBlockSize":
+				return t.rollbackUpdateMaxBlocsSize(batch)
+			case "updateGasPrice":
+				return t.rollbackUpdateGasPrice(batch)
+			}
+		}
+	}
+	return nil
+}
+
+func (t *State) rollbackUpdateGasPrice(batch kvdb.Batch) error {
+	oldGasPrice := t.meta.GetGasPrice()
+	gasPriceBuf, finderr := t.meta.MetaTable.Get([]byte(ledger.OldGasPriceKey))
+	if finderr == nil {
+		utxoMeta := &pb.UtxoMeta{}
+		err := proto.Unmarshal(gasPriceBuf, utxoMeta)
+		if err != nil {
+			return err
+		}
+		return t.meta.UpdateGasPrice(oldGasPrice, utxoMeta.GetGasPrice(), batch)
+	}
+	return finderr
+}
+
+func (t *State) rollbackUpdateMaxBlocsSize(batch kvdb.Batch) error {
+	oldMaxBlockSize := t.meta.GetMaxBlockSize()
+	maxBlockSizeBuf, findErr := t.meta.MetaTable.Get([]byte(ledger.OldBlockSizeKey))
+	if findErr == nil {
+		utxoMeta := &pb.UtxoMeta{}
+		err := proto.Unmarshal(maxBlockSizeBuf, utxoMeta)
+		if err != nil {
+			return err
+		}
+		return t.meta.UpdateMaxBlockSize(oldMaxBlockSize, utxoMeta.GetMaxBlockSize(), batch)
+	}
+	return findErr
 }

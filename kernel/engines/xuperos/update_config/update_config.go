@@ -34,9 +34,8 @@ func (k *KernMethod) updateGasPrice(contractCtx contract.KContext) (*contract.Re
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal ctxArgs err: %v", err)
 	}
-
 	var nextGasPrice protos.GasPrice
-	gasPriceMap, ok := args["gasprice"].(map[string]interface{})
+	gasPriceMap, ok := args["gas_price"].(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("gasPriceMap err, gasPriceMap %v", args["gasprice"])
 	}
@@ -51,7 +50,7 @@ func (k *KernMethod) updateGasPrice(contractCtx contract.KContext) (*contract.Re
 	k.Context.XLog.Debug("args: %s", nextGasPrice)
 	// 调用方法
 	batch := k.Context.ChainCtx.State.NewBatch()
-	err = k.Context.ChainCtx.State.UpdateGasPrice(&nextGasPrice, batch)
+	err = k.Context.ChainCtx.State.UpdateGasPrice(k.Context.OldGasPrice, &nextGasPrice, batch)
 	if err != nil {
 		return nil, fmt.Errorf("update gas price err: %v", err)
 	}
@@ -70,7 +69,7 @@ func (k *KernMethod) updateMaxBlockSize(contractCtx contract.KContext) (*contrac
 		return nil, fmt.Errorf("unmarshal ctxArgs err: %v", err)
 	}
 	batch := k.Context.ChainCtx.State.NewBatch()
-	err = k.Context.ChainCtx.State.UpdateMaxBlockSize(args["maxBlockSize"], batch)
+	err = k.Context.ChainCtx.State.UpdateMaxBlockSize(k.Context.OldMaxBlockSize, args["maxBlockSize"], batch)
 	if err != nil {
 		return nil, fmt.Errorf("update max block size err: %v", err)
 	}
