@@ -28,7 +28,7 @@ type Engine struct {
 	// 链管理成员
 	chainM ChainManagerImpl
 	// p2p网络事件处理
-	netEvent *xnet.NetEvent
+	netEvent *xnet.Event
 	// 依赖代理组件
 	relyAgent common.EngineRelyAgent
 	// 确保Exit调用幂等
@@ -91,7 +91,7 @@ func (t *Engine) Init(envCfg *xconf.EnvConf) error {
 	t.log.Trace("load all chain succeeded")
 
 	// 初始化P2P网络事件
-	netEvent, err := xnet.NewNetEvent(t)
+	netEvent, err := xnet.NewEvent(t)
 	if err != nil {
 		t.log.Error("new net event failed", "err", err)
 		return common.ErrNewNetEventFailed

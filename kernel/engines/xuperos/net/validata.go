@@ -1,4 +1,4 @@
-package xuperos
+package net
 
 import (
 	"errors"
