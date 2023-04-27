@@ -1,4 +1,4 @@
-package update_config
+package chain_config
 
 import (
 	"fmt"
@@ -7,17 +7,17 @@ import (
 )
 
 type Manager struct {
-	Ctx *UpdateConfigCtx
+	Ctx *ChainConfigCtx
 }
 
-func NewUpdateConfigManager(ctx *UpdateConfigCtx) (*Manager, error) {
+func NewChainConfigManager(ctx *ChainConfigCtx) (*Manager, error) {
 	if ctx == nil || ctx.Contract == nil || ctx.BcName == "" {
 		return nil, fmt.Errorf("update config ctx set error")
 	}
 	t := NewKernMethod(ctx)
 	register := ctx.Contract.GetKernRegistry()
-	register.RegisterKernMethod(utils.UpdateConfigKernelContract, updateGasPriceMethod, t.updateGasPrice)
-	register.RegisterKernMethod(utils.UpdateConfigKernelContract, updateMaxBlockSize, t.updateMaxBlockSize)
+	register.RegisterKernMethod(utils.ChainConfigKernelContract, utils.GetUpdateGasPriceMethod(), t.updateGasPrice)
+	register.RegisterKernMethod(utils.ChainConfigKernelContract, utils.GetUpdateMaxBlockSizeMethod(), t.updateMaxBlockSize)
 	mg := &Manager{
 		Ctx: ctx,
 	}

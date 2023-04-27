@@ -1,4 +1,4 @@
-package update_config
+package chain_config
 
 import (
 	"encoding/json"
@@ -9,17 +9,12 @@ import (
 	"github.com/xuperchain/xupercore/protos"
 )
 
-const (
-	updateGasPriceMethod = "updateGasPrice"
-	updateMaxBlockSize   = "updateMaxBlockSize"
-)
-
 type KernMethod struct {
 	BcName  string
-	Context *UpdateConfigCtx
+	Context *ChainConfigCtx
 }
 
-func NewKernMethod(ctx *UpdateConfigCtx) *KernMethod {
+func NewKernMethod(ctx *ChainConfigCtx) *KernMethod {
 	t := &KernMethod{
 		BcName:  ctx.BcName,
 		Context: ctx,
@@ -47,8 +42,15 @@ func (k *KernMethod) updateGasPrice(contractCtx contract.KContext) (*contract.Re
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal gasPriceByte err: %v", err)
 	}
-	k.Context.XLog.Debug("args: %s", nextGasPrice)
 	// 调用方法
+	if k.Context.ChainCtx == nil {
+		// 单测时 chainctx == nil
+		return &contract.Response{
+			Status:  utils.StatusOK,
+			Message: "success",
+			Body:    nil,
+		}, nil
+	}
 	batch := k.Context.ChainCtx.State.NewBatch()
 	err = k.Context.ChainCtx.State.UpdateGasPrice(k.Context.OldGasPrice, &nextGasPrice, batch)
 	if err != nil {
@@ -67,6 +69,14 @@ func (k *KernMethod) updateMaxBlockSize(contractCtx contract.KContext) (*contrac
 	err := json.Unmarshal(ctxArgs["args"], &args)
 	if err != nil {
 		return nil, fmt.Errorf("unmarshal ctxArgs err: %v", err)
+	}
+	if k.Context.ChainCtx == nil {
+		// 单测时 chainctx == nil
+		return &contract.Response{
+			Status:  utils.StatusOK,
+			Message: "success",
+			Body:    nil,
+		}, nil
 	}
 	batch := k.Context.ChainCtx.State.NewBatch()
 	err = k.Context.ChainCtx.State.UpdateMaxBlockSize(k.Context.OldMaxBlockSize, args["maxBlockSize"], batch)

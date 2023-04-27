@@ -1523,16 +1523,16 @@ func (t *State) UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize int64, batch kv
 
 func (t *State) rollBackTimerTx(outPutsExt []*protos.TxOutputExt, batch kvdb.Batch) error {
 	for _, output := range outPutsExt {
-		if output.Bucket == "proposal" {
+		if output.Bucket == proposeUtils.GetProposalBucket() {
 			proposalStr := output.Value
 			proposal, err := proposeUtils.Parse(string(proposalStr))
 			if err != nil {
 				return err
 			}
 			switch proposal.Trigger.Method {
-			case "updateMaxBlockSize":
+			case proposeUtils.GetUpdateMaxBlockSizeMethod():
 				return t.rollbackUpdateMaxBlocsSize(batch)
-			case "updateGasPrice":
+			case proposeUtils.GetUpdateGasPriceMethod():
 				return t.rollbackUpdateGasPrice(batch)
 			}
 		}

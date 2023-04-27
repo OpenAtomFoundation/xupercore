@@ -1,4 +1,4 @@
-package update_config
+package chain_config
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ type LedgerRely interface {
 	GetTipXMSnapshotReader() (ledger.XMSnapshotReader, error)
 }
 
-type UpdateConfigCtx struct {
+type ChainConfigCtx struct {
 	xcontext.BaseCtx
 	BcName          string
 	Contract        contract.Manager
@@ -26,17 +26,17 @@ type UpdateConfigCtx struct {
 	OldMaxBlockSize int64
 }
 
-func NewUpdateConfigCtx(chainCtx *common.ChainCtx) (*UpdateConfigCtx, error) {
+func NewChainConfigCtx(chainCtx *common.ChainCtx) (*ChainConfigCtx, error) {
 	if chainCtx.BCName == "" || chainCtx.Contract == nil {
-		return nil, NewUpdateConfigCtxErr
+		return nil, NewChainConfigCtxErr
 	}
 
-	log, err := logs.NewLogger("", utils.UpdateConfigKernelContract)
+	log, err := logs.NewLogger("", utils.ChainConfigKernelContract)
 	if err != nil {
 		return nil, fmt.Errorf("new updateConfig ctx faild because new logger error. err: %v", err)
 	}
 	meta := chainCtx.State.GetMeta()
-	ctx := new(UpdateConfigCtx)
+	ctx := new(ChainConfigCtx)
 	ctx.XLog = log
 	ctx.Timer = timer.NewXTimer()
 	ctx.BcName = chainCtx.BCName

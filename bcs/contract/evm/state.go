@@ -109,7 +109,6 @@ func (s *stateManager) Transfer(from, to crypto.Address, amount *big.Int) error 
 		// 构造完整的合约账户
 		toAddr = "XC" + toAddr + "@" + s.ctx.ChainName
 	}
-
 	return s.ctx.State.Transfer(fromAddr, toAddr, amount)
 }
 

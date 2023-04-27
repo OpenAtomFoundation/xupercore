@@ -176,37 +176,25 @@ func (t *Meta) MaxTxSizePerBlock() (int, error) {
 	return int(float64(maxBlkSize) * TxSizePercent), nil
 }
 
-func (t *Meta) UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize int64, batch kvdb.Batch) error {
-	if maxBlockSize <= 0 {
+func (t *Meta) UpdateMaxBlockSize(oldMaxBlockSize, newMaxBlockSize int64, batch kvdb.Batch) error {
+	if newMaxBlockSize <= 0 {
 		return ErrProposalParamsIsNotPositiveNumber
 	}
 	tmpMeta := &pb.UtxoMeta{}
 	newMeta := proto.Clone(tmpMeta).(*pb.UtxoMeta)
 
 	// 记录old max block size
-	newMeta.MaxBlockSize = oldMaxBlockSize
-	oldMaxBlockSizeBuf, pbErr := proto.Marshal(newMeta)
-	if pbErr != nil {
-		t.log.Warn("failed to marshal pb meta for oldMaxblockSize")
-		return pbErr
-	}
-
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.OldBlockSizeKey), oldMaxBlockSizeBuf)
+	err := putMaxBlockSizeInBatch(batch, newMeta, []byte(pb.MetaTablePrefix+ledger.OldBlockSizeKey), oldMaxBlockSize)
 	if err != nil {
+		t.log.Warn("batch write err: ", err)
 		return err
 	}
-
-	newMeta.MaxBlockSize = maxBlockSize
-	maxBlockSizeBuf, pbErr := proto.Marshal(newMeta)
-	if pbErr != nil {
-		t.log.Warn("failed to marshal pb meta")
-		return pbErr
-	}
-	err = batch.Put([]byte(pb.MetaTablePrefix+ledger.MaxBlockSizeKey), maxBlockSizeBuf)
+	// 记录new max block size
+	err = putMaxBlockSizeInBatch(batch, newMeta, []byte(pb.MetaTablePrefix+ledger.MaxBlockSizeKey), newMaxBlockSize)
 	if err != nil {
+		t.log.Warn("batch write err: ", err)
 		return err
 	}
-
 	err = batch.Write()
 	if err != nil {
 		t.log.Warn("batch write err: ", err)
@@ -215,7 +203,7 @@ func (t *Meta) UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize int64, batch kvd
 
 	t.MutexMeta.Lock()
 	defer t.MutexMeta.Unlock()
-	t.MetaTmp.MaxBlockSize = maxBlockSize
+	t.MetaTmp.MaxBlockSize = newMaxBlockSize
 	return err
 }
 
@@ -525,24 +513,13 @@ func (t *Meta) UpdateGasPrice(oldGasPrice, nextGasPrice *protos.GasPrice, batch 
 	tmpMeta := &pb.UtxoMeta{}
 	newMeta := proto.Clone(tmpMeta).(*pb.UtxoMeta)
 
-	// 先保存旧的数据
-	newMeta.GasPrice = oldGasPrice
-	gasPriceBuf, pbErr := proto.Marshal(newMeta)
-	if pbErr != nil {
-		t.log.Warn("failed to marshal pb meta")
-		return pbErr
-	}
-	err := batch.Put([]byte(pb.MetaTablePrefix+ledger.OldGasPriceKey), gasPriceBuf)
+	// 先保存上一轮数据
+	err := putGasPriceInBatch(batch, newMeta, []byte(pb.MetaTablePrefix+ledger.OldGasPriceKey), oldGasPrice)
 	if err != nil {
 		return err
 	}
-	newMeta.GasPrice = nextGasPrice
-	gasPriceBuf, pbErr = proto.Marshal(newMeta)
-	if pbErr != nil {
-		t.log.Warn("failed to marshal pb meta")
-		return pbErr
-	}
-	err = batch.Put([]byte(pb.MetaTablePrefix+ledger.GasPriceKey), gasPriceBuf)
+	// 保存下一轮数据
+	err = putGasPriceInBatch(batch, newMeta, []byte(pb.MetaTablePrefix+ledger.GasPriceKey), nextGasPrice)
 	if err != nil {
 		return err
 	}
@@ -555,5 +532,32 @@ func (t *Meta) UpdateGasPrice(oldGasPrice, nextGasPrice *protos.GasPrice, batch 
 	t.MutexMeta.Lock()
 	defer t.MutexMeta.Unlock()
 	t.MetaTmp.GasPrice = nextGasPrice
+	return nil
+}
+
+func putGasPriceInBatch(batch kvdb.Batch, tmpMeta *pb.UtxoMeta, key []byte, gasPrice *protos.GasPrice) error {
+	tmpMeta.GasPrice = gasPrice
+	gasPriceBuf, pbErr := proto.Marshal(tmpMeta)
+	if pbErr != nil {
+		return pbErr
+	}
+	err := batch.Put(key, gasPriceBuf)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func putMaxBlockSizeInBatch(batch kvdb.Batch, tmpMeta *pb.UtxoMeta, key []byte, maxBlockSize int64) error {
+	tmpMeta.MaxBlockSize = maxBlockSize
+	maxBlockSizeBuf, pbErr := proto.Marshal(tmpMeta)
+	if pbErr != nil {
+		return pbErr
+	}
+
+	err := batch.Put(key, maxBlockSizeBuf)
+	if err != nil {
+		return err
+	}
 	return nil
 }
