@@ -26,6 +26,8 @@ type Conn struct {
 
 	id   string // addr:"IP:Port"
 	conn *grpc.ClientConn
+
+	mu sync.Mutex
 }
 
 // NewConn create new connection with addr
@@ -48,15 +50,55 @@ func (c *Conn) newClient() (pb.P2PServiceClient, error) {
 	state := c.conn.GetState()
 	if state == connectivity.TransientFailure || state == connectivity.Shutdown {
 		c.log.Error("newClient conn state not ready", "id", c.id, "state", state.String())
-		c.Close()
-		err := c.newConn()
+		err := c.conn.Close()
+		if err != nil {
+			c.log.Error("newClient conn close error", "id", c.id, "state", state.String(), "error", err)
+			return nil, err
+		}
+
+		err = c.newConn()
 		if err != nil {
 			c.log.Error("newClient newGrpcConn error", "id", c.id, "error", err)
 			return nil, err
 		}
+		// 重试相关参数,避免状态异常重复创建
+		maxRetries := 5
+		retryInterval := time.Second
+
+		for i := 0; i < maxRetries; i++ {
+			// 退避策略：指数退避
+			backoffDuration := time.Duration(i) * retryInterval
+			time.Sleep(backoffDuration)
+
+			err := c.retryNewConn()
+			if err == nil {
+				return pb.NewP2PServiceClient(c.conn), nil
+			}
+
+			c.log.Error("newClient retryNewConn error", "id", c.id, "error", err)
+		}
+
+		return nil, errors.New("failed to create new gRPC connection")
 	}
 
 	return pb.NewP2PServiceClient(c.conn), nil
+}
+
+func (c *Conn) retryNewConn() error {
+	// 加锁创建
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// 再次检查连接状态
+	state := c.conn.GetState()
+	if state == connectivity.TransientFailure || state == connectivity.Shutdown {
+		err := c.newConn()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (c *Conn) newConn() error {
