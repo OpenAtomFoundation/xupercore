@@ -30,6 +30,7 @@ const (
 	statusFollowing = 0
 	statusMining    = 1
 	ConsensusSingle = "single"
+	ConsensusTDPoS  = "tdpos"
 )
 
 const (
@@ -213,7 +214,7 @@ func (m *Miner) step() error {
 				return err
 			}
 			// 目前不出空块配置只在 single 共识下生效
-			if consensusStatus.GetConsensusName() == ConsensusSingle {
+			if consensusStatus.GetConsensusName() == ConsensusTDPoS {
 				return nil
 			}
 		}
