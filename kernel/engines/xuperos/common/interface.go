@@ -18,6 +18,8 @@ import (
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	cryptoBase "github.com/xuperchain/xupercore/lib/crypto/client/base"
 	"github.com/xuperchain/xupercore/protos"
+
+	xevidenceInter "github.com/xuperchain/xupercore/kernel/engines/xuperos/xevidence/base"
 )
 
 type Chain interface {
@@ -63,6 +65,7 @@ type ChainRelyAgent interface {
 	CreateProposal() (propose.ProposeManager, error)
 	CreateTimerTask() (timerTask.TimerManager, error)
 	CreateXToken() (base.XTokenManager, error)
+	CreateXEvidence() (xevidenceInter.XEvidenceManager, error)
 }
 
 type ChainManager interface {

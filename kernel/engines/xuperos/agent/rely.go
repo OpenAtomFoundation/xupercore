@@ -19,6 +19,8 @@ import (
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
+	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xevidence"
+	xevidenceInter "github.com/xuperchain/xupercore/kernel/engines/xuperos/xevidence/base"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken"
 	xtokenInter "github.com/xuperchain/xupercore/kernel/engines/xuperos/xtoken/base"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
@@ -233,6 +235,19 @@ func (t *ChainRelyAgentImpl) CreateXToken() (xtokenInter.XTokenManager, error) {
 		return nil, err
 	}
 	mgr, err := xtoken.NewManager(xctx)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, err
+}
+
+func (t *ChainRelyAgentImpl) CreateXEvidence() (xevidenceInter.XEvidenceManager, error) {
+	ctx := t.chain.Context()
+	xctx, err := xevidence.NewXEvidenceCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mgr, err := xevidence.NewManager(xctx)
 	if err != nil {
 		return nil, err
 	}

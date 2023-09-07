@@ -458,6 +458,13 @@ func (t *Chain) initChainCtx() error {
 	if err != nil {
 		return err
 	}
+
+	// 11.xevidence创建，存证系统合约
+	_, err = t.relyAgent.CreateXEvidence()
+	if err != nil {
+		return err
+	}
+
 	t.log.Trace("create xtoken succ", "bcName", t.ctx.BCName)
 	return nil
 }
