@@ -83,10 +83,6 @@ func NewManager(ctx *Context) (*Manager, error) {
 		}
 	}
 
-	if len(cfg.XEvidenceAdmins) == 0 {
-		return nil, errors.New("xevidence admins requiered")
-	}
-
 	fmt.Println("XEvidence Config Loaded:", *cfg)
 
 	x := NewContract(ctx, cfg)
