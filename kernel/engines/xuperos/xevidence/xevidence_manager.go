@@ -13,7 +13,7 @@ const (
 )
 
 const (
-	XEvidence = "XEvidence"
+	XEvidence = "$XEvidence"
 
 	Success = 200
 
@@ -87,13 +87,6 @@ func NewManager(ctx *Context) (*Manager, error) {
 		return nil, errors.New("xevidence admins requiered")
 	}
 
-	if cfg.XEvidenceSaveMethodFeeConfig.LengthThreshold <= 0 ||
-		cfg.XEvidenceSaveMethodFeeConfig.FeeForLengthThreshold <= 0 ||
-		cfg.XEvidenceSaveMethodFeeConfig.LengthIncrement < 0 ||
-		cfg.XEvidenceSaveMethodFeeConfig.FeeIncrement < 0 ||
-		cfg.XEvidenceSaveMethodFeeConfig.MaxLength <= 0 {
-		return nil, errors.New("length threshold or fee threshold or length increment or fee increment or max length must be set")
-	}
 	fmt.Println("XEvidence Config Loaded:", *cfg)
 
 	x := NewContract(ctx, cfg)
@@ -113,6 +106,7 @@ func NewManager(ctx *Context) (*Manager, error) {
 	}
 
 	for method, f := range kMethods {
+		// 系统合约名字前缀为$
 		if _, err := register.GetKernMethod(XEvidence, method); err != nil {
 			register.RegisterKernMethod(XEvidence, method, f)
 		}

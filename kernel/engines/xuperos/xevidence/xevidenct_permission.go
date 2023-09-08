@@ -253,23 +253,6 @@ func (c *Contract) checkPermissionWithMustHasAdmin(ctx contract.KContext, addres
 	return admins[address], nil
 }
 
-// 如果address在admins列表则返回true。
-func (c *Contract) checkPermission(ctx contract.KContext, address string) (bool, error) {
-	admins, err := c.getAdmins(ctx)
-	if err != nil {
-		return false, err
-	}
-	if len(admins) == 0 {
-		// 如果没有通过交易设置admin，则根据配置文件获取。
-		if len(c.cfg.XEvidenceAdmins) == 0 {
-			// 如果配置文件也没设置，则说明不加权限设置。
-			return true, nil
-		}
-		return c.cfg.XEvidenceAdmins[address], nil
-	}
-	return admins[address], nil
-}
-
 func (c *Contract) getFee(ctx contract.KContext, method string) (*big.Int, error) {
 	key := []byte(KeyOfFee(method))
 	value, err := ctx.Get(XEvidence, key)
