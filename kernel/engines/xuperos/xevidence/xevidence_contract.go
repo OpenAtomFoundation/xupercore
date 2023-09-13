@@ -50,9 +50,6 @@ func (c *Contract) Save(ctx contract.KContext) (*contract.Response, error) {
 	if len(desc) > 256 {
 		return nil, fmt.Errorf("desc length too long")
 	}
-	if int64(len(content)) > c.cfg.XEvidenceSaveMethodFeeConfig.MaxLength {
-		return nil, fmt.Errorf("content length too long")
-	}
 
 	evidenceExit, err := getEvidenceByHash(ctx, hash)
 	if err != nil {
@@ -152,6 +149,10 @@ func addSaveFee(ctx contract.KContext, cfg *SaveMethodFeeConfig, content string)
 		}
 	} else {
 		saveCfg = cfg
+	}
+
+	if len(content) > int(saveCfg.MaxLength) {
+		return fmt.Errorf("content length too long")
 	}
 
 	fee := saveCfg.FeeForLengthThreshold

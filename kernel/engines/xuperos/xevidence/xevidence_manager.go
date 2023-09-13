@@ -83,7 +83,7 @@ func NewManager(ctx *Context) (*Manager, error) {
 		}
 	}
 
-	fmt.Println("XEvidence Config Loaded:", *cfg)
+	ctx.XLog.Debug("XEvidence Config Loaded:", *cfg)
 
 	x := NewContract(ctx, cfg)
 
