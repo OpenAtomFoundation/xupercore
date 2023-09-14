@@ -59,6 +59,18 @@ type RootConfig struct {
 	XTokenAdmins map[string]bool `json:"xtoken_admins"`
 	// XToken fee
 	XTokenFee map[string]int64 `json:"xtoken_fee"`
+	// XEvidence 存证系统合约创世配置
+	XEvidence struct {
+		XEvidenceAdmins map[string]bool `json:"xevidence_admins"`
+		// MethodFee 不应该包括 Save 接口，Save 接口 fee 通过其他字段配置
+		XEvidenceMethodFee map[string]int64 `json:"xevidence_method_fee"`
+		// 以下字段为 Save 接口 fee 配置
+		LengthThreshold       int64 `json:"length_threshold"`
+		FeeForLengthThreshold int64 `json:"fee_for_length_threshold"`
+		LengthIncrement       int64 `json:"length_increment"`
+		FeeIncrement          int64 `json:"fee_increment"`
+		MaxLength             int64 `json:"max_length"`
+	} `json:"xevidence"`
 }
 
 // GasPrice define gas rate for utxo
