@@ -1,6 +1,7 @@
-package evm
+package burrow
 
 import (
+	evmaddr "github.com/xuperchain/xupercore/bcs/contract/evm/burrow/address"
 	"math/big"
 	"time"
 
@@ -24,13 +25,13 @@ func newStateManager(ctx *bridge.Context) *stateManager {
 
 // Get an account by its address return nil if it does not exist (which should not be an error)
 func (s *stateManager) GetAccount(address crypto.Address) (*acm.Account, error) {
-	addr, addrType, err := DetermineEVMAddress(address)
+	addr, addrType, err := evmaddr.DetermineEVMAddress(address)
 	if err != nil {
 		return nil, nil
 	}
 
 	var evmCode []byte
-	if addrType == contractNameType {
+	if addrType == evmaddr.ContractNameType {
 		v, err := s.ctx.State.Get("contract", evmCodeKey(addr))
 		if err != nil {
 			return nil, nil
@@ -38,10 +39,6 @@ func (s *stateManager) GetAccount(address crypto.Address) (*acm.Account, error) 
 		evmCode = v
 	}
 
-	// balance, err := s.ctx.Core.GetBalance(addr)
-	// if err != nil {
-	// return nil, nil
-	// }
 	var balance *big.Int
 	return &acm.Account{
 		Address:     address,
@@ -55,7 +52,7 @@ func (s *stateManager) GetAccount(address crypto.Address) (*acm.Account, error) 
 // error if address does not
 func (s *stateManager) GetStorage(address crypto.Address, key binary.Word256) ([]byte, error) {
 	//log.Debug("get storage for evm", "contract", s.ctx.ContractName, "address", address.String(), "key", key.String())
-	contractName, err := DetermineContractNameFromEVM(address)
+	contractName, err := evmaddr.DetermineContractNameFromEVM(address)
 	if err != nil {
 		return nil, nil
 	}
@@ -80,7 +77,7 @@ func (s *stateManager) RemoveAccount(address crypto.Address) error {
 // Store a 32-byte value at key for the account at address, setting to Zero256 removes the key
 func (s *stateManager) SetStorage(address crypto.Address, key binary.Word256, value []byte) error {
 	//log.Debug("set storage for evm", "contract", s.ctx.ContractName, "address", address.String(), "key", key.String())
-	contractName, err := DetermineContractNameFromEVM(address)
+	contractName, err := evmaddr.DetermineContractNameFromEVM(address)
 	if err != nil {
 		return err
 	}
@@ -89,23 +86,23 @@ func (s *stateManager) SetStorage(address crypto.Address, key binary.Word256, va
 
 // Transfer native token
 func (s *stateManager) Transfer(from, to crypto.Address, amount *big.Int) error {
-	fromAddr, addrType, err := DetermineEVMAddress(from)
+	fromAddr, addrType, err := evmaddr.DetermineEVMAddress(from)
 	if err != nil {
 		return err
 	}
 
 	// return directly when from is xchain address or contract account
 	// only transfer from a contract name works
-	if addrType == contractAccountType || addrType == xchainAddrType {
+	if addrType == evmaddr.ContractAccountType || addrType == evmaddr.XchainAddrType {
 		return nil
 	}
 
-	toAddr, addrType, err := DetermineEVMAddress(to)
+	toAddr, addrType, err := evmaddr.DetermineEVMAddress(to)
 	if err != nil {
 		return err
 	}
 
-	if addrType == contractAccountType {
+	if addrType == evmaddr.ContractAccountType {
 		// 构造完整的合约账户
 		toAddr = "XC" + toAddr + "@" + s.ctx.ChainName
 	}
@@ -127,32 +124,16 @@ func newBlockStateManager(ctx *bridge.Context) *blockStateManager {
 func (s *blockStateManager) LastBlockHeight() uint64 {
 	// TODO
 	return 0
-	//block, err := s.ctx.Core.QueryLastBlock()
-	//if err != nil {
-	//	return 0
-	//}
-	//return uint64(block.GetHeight())
 }
 
 // LastBlockTime
 func (s *blockStateManager) LastBlockTime() time.Time {
 	// TODO
 	return time.Time{}
-	//block, err := s.ctx.Core.QueryLastBlock()
-	//if err != nil {
-	//	return time.Time{}
-	//}
-	//timestamp := block.GetTimestamp()
-	//return time.Unix(timestamp/1e9, timestamp%1e9)
 }
 
 // LastBlockHeight
 func (s *blockStateManager) BlockHash(height uint64) ([]byte, error) {
-	return nil, nil
 	// TODO
-	//block, err := s.ctx.Core.QueryBlockByHeight(int64(height))
-	//if err != nil {
-	//	return nil, err
-	//}
-	//return block.GetBlockid(), nil
+	return nil, nil
 }

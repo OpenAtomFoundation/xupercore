@@ -2,7 +2,6 @@ package asyncworker
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -222,7 +221,7 @@ type TestHelper struct {
 }
 
 func NewTestHelper() (*TestHelper, error) {
-	basedir, err := ioutil.TempDir("", "asyncworker-test")
+	basedir, err := os.MkdirTemp("", "asyncworker-test")
 	if err != nil {
 		return nil, err
 	}

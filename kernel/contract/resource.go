@@ -3,7 +3,7 @@ package contract
 import "github.com/xuperchain/xupercore/protos"
 
 const (
-	maxResourceLimit = 0xFFFFFFFF
+	maxResourceLimit = 0xFFFFFFF0
 )
 
 // Limits describes the usage or limit of resources

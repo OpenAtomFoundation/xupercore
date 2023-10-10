@@ -2,7 +2,7 @@ package xuperos
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -168,7 +168,7 @@ func (t *Engine) loadChains() error {
 	dataDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
 
 	t.log.Trace("start load chain from blockchain data dir", "dir", dataDir)
-	dir, err := ioutil.ReadDir(dataDir)
+	dir, err := os.ReadDir(dataDir)
 	if err != nil {
 		t.log.Error("read blockchain data dir failed", "error", err, "dir", dataDir)
 		return fmt.Errorf("read blockchain data dir failed")

@@ -1,4 +1,4 @@
-package evm
+package address
 
 import (
 	"fmt"
@@ -96,8 +96,8 @@ func TestDetermineEVMAddress(t *testing.T) {
 	if "XC"+contractAccountFromEVMAddr+"@xuper" != contractAccount {
 		t.Errorf("expect %s got %s", contractAccount, contractAccountFromEVMAddr)
 	}
-	if addrType != contractAccountType {
-		t.Errorf("expect %s got %s", contractAccountType, addrType)
+	if addrType != ContractAccountType {
+		t.Errorf("expect %s got %s", ContractAccountType, addrType)
 	}
 
 	// contract name
@@ -112,8 +112,8 @@ func TestDetermineEVMAddress(t *testing.T) {
 	if contractNameFromEVMAddr != contractName {
 		t.Errorf("expect %s got %s", contractName, contractNameFromEVMAddr)
 	}
-	if addrType != contractNameType {
-		t.Errorf("expect %s got %s", contractNameType, addrType)
+	if addrType != ContractNameType {
+		t.Errorf("expect %s got %s", ContractNameType, addrType)
 	}
 
 	// xchain addr
@@ -128,8 +128,8 @@ func TestDetermineEVMAddress(t *testing.T) {
 	if xchainFromEVMAddr != xchainAddr {
 		t.Errorf("expect %s got %s", xchainAddr, xchainFromEVMAddr)
 	}
-	if addrType != xchainAddrType {
-		t.Errorf("expect %s got %s", xchainAddrType, addrType)
+	if addrType != XchainAddrType {
+		t.Errorf("expect %s got %s", XchainAddrType, addrType)
 	}
 }
 
@@ -145,8 +145,8 @@ func TestDetermineXchainAddress(t *testing.T) {
 	if contractAccountFromXchain != evmAddrHex {
 		t.Errorf("expect %s got %s", evmAddrHex, contractAccountFromXchain)
 	}
-	if addrType != contractAccountType {
-		t.Errorf("expect %s got %s", contractAccountType, addrType)
+	if addrType != ContractAccountType {
+		t.Errorf("expect %s got %s", ContractAccountType, addrType)
 	}
 
 	// contract name
@@ -160,8 +160,8 @@ func TestDetermineXchainAddress(t *testing.T) {
 	if contractNameFromXchain != evmAddrHex {
 		t.Errorf("expect %s got %s", evmAddrHex, contractNameFromXchain)
 	}
-	if addrType != contractNameType {
-		t.Errorf("expect %s got %s", contractNameType, addrType)
+	if addrType != ContractNameType {
+		t.Errorf("expect %s got %s", ContractNameType, addrType)
 	}
 
 	// xchain addr
@@ -175,8 +175,8 @@ func TestDetermineXchainAddress(t *testing.T) {
 	if xchainFromXchain != evmAddrHex {
 		t.Errorf("expect %s got %s", evmAddrHex, xchainFromXchain)
 	}
-	if addrType != xchainAddrType {
-		t.Errorf("expect %s got %s", xchainAddrType, addrType)
+	if addrType != XchainAddrType {
+		t.Errorf("expect %s got %s", XchainAddrType, addrType)
 	}
 }
 

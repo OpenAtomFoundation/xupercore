@@ -43,5 +43,6 @@ function installNode() {
 installNode "node1"
 installNode "node2"
 installNode "node3"
+cp -r "$HOMEDIR/example/xchain/auto/control_all.sh" "$INSTALLDIR/"
 
 echo "install done!"
