@@ -2,7 +2,7 @@ package xuperos
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -14,6 +14,7 @@ import (
 	engconf "github.com/xuperchain/xupercore/kernel/engines/xuperos/config"
 	xnet "github.com/xuperchain/xupercore/kernel/engines/xuperos/net"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/parachain"
+	"github.com/xuperchain/xupercore/kernel/ledger"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/lib/timer"
@@ -162,61 +163,79 @@ func (t *Engine) GetChains() []string {
 	return t.chainM.GetChains()
 }
 
-// 从本地存储加载链
+/*
+	从本地存储加载链
+
+Default directories:
+
+	data
+	└── blockchain
+	    ├── <root chain>
+	    ├── <para chain 1>
+	    │   ...
+	    └── <para chain n>
+*/
 func (t *Engine) loadChains() error {
 	envCfg := t.engCtx.EnvCfg
-	dataDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
-
-	t.log.Trace("start load chain from blockchain data dir", "dir", dataDir)
-	dir, err := ioutil.ReadDir(dataDir)
-	if err != nil {
-		t.log.Error("read blockchain data dir failed", "error", err, "dir", dataDir)
-		return fmt.Errorf("read blockchain data dir failed")
-	}
-
-	chainCnt := 0
-	rootChain := t.engCtx.EngCfg.RootChain
+	chainsDir := envCfg.GenDataAbsPath(envCfg.ChainDir)
+	t.log.Trace("start load chains from blockchain data dir", "dir", chainsDir)
 
 	// 优先加载主链
-	for _, fInfo := range dir {
-		if !fInfo.IsDir() || fInfo.Name() != rootChain {
-			continue
-		}
-		chainDir := filepath.Join(dataDir, fInfo.Name())
-		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
-		chain, err := LoadChain(t.engCtx, fInfo.Name())
-		if err != nil {
-			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
-			return err
-		}
-		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
-
-		// 记录链实例
-		t.chainM.Put(fInfo.Name(), chain)
-
-		// 启动异步任务worker
-		if fInfo.Name() == rootChain {
-			aw, err := asyncworker.NewAsyncWorkerImpl(fInfo.Name(), t, chain.ctx.State.GetLDB())
-			if err != nil {
-				t.log.Error("create asyncworker error", "bcName", rootChain, "err", err)
-				return err
-			}
-			chain.ctx.Asyncworker = aw
-			err = chain.CreateParaChain()
-			if err != nil {
-				t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
-				return fmt.Errorf("create parachain error")
-			}
-			if err = aw.Start(); err != nil {
-				return err
-			}
-		}
-
-		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
-		chainCnt++
+	if err := t.loadRootChain(chainsDir); err != nil {
+		return err
 	}
 
+	// 加载平行链
+	return t.loadParaChains(chainsDir)
+}
+
+// loadRootChain loads root chain from given directory
+func (t *Engine) loadRootChain(chainsDir string) error {
+	rootChain := t.engCtx.EngCfg.RootChain
+	chainDir := filepath.Join(chainsDir, rootChain)
+
+	// check root chain dir
+	if fi, err := os.Stat(chainDir); err != nil {
+		return err
+	} else if !fi.IsDir() {
+		return fmt.Errorf("load root chain fail: %s is not dir", chainDir)
+	}
+
+	// load chain
+	t.log.Trace("start load chain", "chain", rootChain, "dir", chainDir)
+	chain, err := LoadChain(t.engCtx, rootChain)
+	if err != nil {
+		t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
+		return err
+	}
+	t.chainM.Put(rootChain, chain)
+	t.log.Trace("load chain from data dir succ", "chain", rootChain)
+
+	// start async worker
+	aw, err := asyncworker.NewAsyncWorkerImpl(rootChain, t, chain.ctx.State.GetLDB())
+	if err != nil {
+		t.log.Error("create asyncworker error", "bcName", rootChain, "err", err)
+		return err
+	}
+	chain.ctx.Asyncworker = aw
+	err = chain.CreateParaChain()
+	if err != nil {
+		t.log.Error("create parachain mgmt error", "bcName", rootChain, "err", err)
+		return fmt.Errorf("create parachain error")
+	}
+	if err = aw.Start(); err != nil {
+		return err
+	}
+
+	t.log.Trace("load root chain succeeded", "chain", rootChain, "dir", chainDir)
+	return nil
+}
+
+// loadParaChains loads non-root chains from given directory
+func (t *Engine) loadParaChains(chainsDir string) error {
+	// prepare root chain reader
 	// root链必须存在
+	rootChain := t.engCtx.EngCfg.RootChain
 	rootChainHandle, err := t.chainM.Get(rootChain)
 	if err != nil {
 		t.log.Error("root chain not exist, please create it first", "rootChain", rootChain)
@@ -227,46 +246,68 @@ func (t *Engine) loadChains() error {
 		t.log.Error("root chain get tip reader failed", "err", err.Error())
 		return err
 	}
-	// 加载平行链
-	for _, fInfo := range dir {
+
+	// load ParaChains
+	dirs, err := os.ReadDir(chainsDir)
+	if err != nil {
+		t.log.Error("read blockchain data dir failed", "error", err, "dir", chainsDir)
+		return fmt.Errorf("read blockchain data dir failed")
+	}
+
+	chainCnt := 0
+	for _, fInfo := range dirs {
 		if !fInfo.IsDir() || fInfo.Name() == rootChain {
 			continue
 		}
 
-		// 通过主链的平行链账本状态，确认是否可以加载该平行链
-		group, err := parachain.GetParaChainGroup(rootChainReader, fInfo.Name())
+		loaded, err := t.tryLoadParaChain(chainsDir, fInfo.Name(), rootChainReader)
 		if err != nil {
-			t.log.Error("get para chain group failed", "chain", fInfo.Name(), "err", err.Error())
-			if !kvdb.ErrNotFound(err) {
-				continue
-			}
 			return err
 		}
-
-		if !group.IsParaChainEnable() {
-			t.log.Debug("para chain stopped", "chain", fInfo.Name())
-			continue
+		if loaded {
+			chainCnt++
 		}
-
-		chainDir := filepath.Join(dataDir, fInfo.Name())
-		t.log.Trace("start load chain", "chain", fInfo.Name(), "dir", chainDir)
-		chain, err := LoadChain(t.engCtx, fInfo.Name())
-		if err != nil {
-			t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
-			// 平行链加载失败时可以忽略直接跳过运行
-			continue
-		}
-		t.log.Trace("load chain from data dir succ", "chain", fInfo.Name())
-
-		// 记录链实例
-		t.chainM.Put(fInfo.Name(), chain)
-
-		t.log.Trace("load chain succeeded", "chain", fInfo.Name(), "dir", chainDir)
-		chainCnt++
 	}
 
-	t.log.Trace("load chain from data dir succeeded", "chainCnt", chainCnt)
+	t.log.Trace("load para chain succeeded", "chainCnt", chainCnt)
 	return nil
+}
+
+// tryLoadParaChain try to load a given ParaChain from given directory, checked by root chain info.
+// Returns:
+//
+//	bool: true when a ParaChain is loaded
+func (t *Engine) tryLoadParaChain(chainsDir, chainName string,
+	rootChainReader ledger.XMSnapshotReader) (bool, error) {
+
+	// 通过主链的平行链账本状态，确认是否可以加载该平行链
+	group, err := parachain.GetParaChainGroup(rootChainReader, chainName)
+	if err != nil {
+		t.log.Error("get para chain group failed", "chain", chainName, "err", err.Error())
+		if !kvdb.ErrNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	if !group.IsParaChainEnable() {
+		t.log.Debug("para chain stopped", "chain", chainName)
+		return false, nil
+	}
+
+	chainDir := filepath.Join(chainsDir, chainName)
+	t.log.Trace("start load chain", "chain", chainName, "dir", chainDir)
+	chain, err := LoadChain(t.engCtx, chainName)
+	if err != nil {
+		t.log.Error("load chain from data dir failed", "error", err, "dir", chainDir)
+		// 平行链加载失败时可以忽略直接跳过运行
+		return false, nil
+	}
+	// 记录链实例
+	t.chainM.Put(chainName, chain)
+
+	t.log.Trace("load chain succeeded", "chain", chainName, "dir", chainDir)
+	return true, nil
 }
 
 func (t *Engine) createEngCtx(envCfg *xconf.EnvConf) (*common.EngineCtx, error) {
