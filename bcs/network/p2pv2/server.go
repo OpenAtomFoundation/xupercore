@@ -15,7 +15,8 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p-core/routing"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	record "github.com/libp2p/go-libp2p-record"
 	secIO "github.com/libp2p/go-libp2p-secio"
 	"github.com/multiformats/go-multiaddr"
@@ -90,6 +91,9 @@ type P2PServerV2 struct {
 	// accounts store remote peer account: key:account => v:peer.ID
 	// accounts as cache, store in dht
 	accounts *cache.Cache
+
+	// peerIDs store peer.ID: key:peer.ID => v:account(address)
+	peerIDs *cache.Cache
 }
 
 var _ p2p.Server = &P2PServerV2{}
@@ -152,6 +156,7 @@ func (p *P2PServerV2) Init(ctx *netCtx.NetCtx) error {
 	}
 
 	p.accounts = cache.New(cache.NoExpiration, cache.NoExpiration)
+	p.peerIDs = cache.New(cache.NoExpiration, cache.NoExpiration)
 
 	// dispatcher
 	p.dispatcher = p2p.NewDispatcher(ctx)
@@ -232,14 +237,15 @@ func (p *P2PServerV2) setKdhtValue() {
 	// store: account => address
 	account := GenAccountKey(p.account)
 	address := p.getMultiAddr(p.host.ID(), p.host.Addrs())
-	err := p.kdht.PutValue(context.Background(), account, []byte(address))
+	// routing.Expired： p2p 默认存储36h，避免超时查询不到数据
+	err := p.kdht.PutValue(context.Background(), account, []byte(address), routing.Expired)
 	if err != nil {
 		p.log.Error("dht put account=>address value error", "error", err)
 	}
 
 	// store: peer.ID => account
 	id := GenPeerIDKey(p.id)
-	err = p.kdht.PutValue(context.Background(), id, []byte(p.account))
+	err = p.kdht.PutValue(context.Background(), id, []byte(p.account), routing.Expired)
 	if err != nil {
 		p.log.Error("dht put id=>account value error", "error", err)
 	}
@@ -366,16 +372,27 @@ func (p *P2PServerV2) PeerInfo() pb.PeerInfo {
 	peerStore := p.host.Peerstore()
 	for _, peerID := range p.kdht.RoutingTable().ListPeers() {
 		key := GenPeerIDKey(peerID)
-		account, err := p.kdht.GetValue(context.Background(), key)
-		if err != nil {
-			p.log.Warn("get account error", "peerID", peerID)
+		var accountStr string
+		// 先查询缓存
+		if value, ok := p.peerIDs.Get(key); ok {
+			accountStr = value.(string)
+		} else {
+			// 缓存中没有，再通过网络查询
+			account, err := p.kdht.GetValue(context.Background(), key)
+			if err != nil {
+				p.log.Warn("get account error", "peerID", peerID, "error", err)
+			} else {
+				accountStr = string(account)
+				// 更新缓存，过期时间设置为4小时
+				p.peerIDs.Set(key, accountStr, time.Hour*4)
+			}
 		}
 
 		addrInfo := peerStore.PeerInfo(peerID)
 		remotePeerInfo := &pb.PeerInfo{
 			Id:      peerID.String(),
 			Address: p.getMultiAddr(addrInfo.ID, addrInfo.Addrs),
-			Account: string(account),
+			Account: accountStr,
 		}
 		peerInfo.Peer = append(peerInfo.Peer, remotePeerInfo)
 	}
