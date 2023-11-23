@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -132,6 +133,7 @@ func (p *P2PServerV2) Init(ctx *netCtx.NetCtx) error {
 
 	// dht
 	dhtOpts := []dht.Option{
+		dht.MaxRecordAge(math.MaxInt64), // record never expire, default 36 hours.
 		dht.Mode(dht.ModeServer),
 		dht.RoutingTableRefreshPeriod(10 * time.Second),
 		dht.ProtocolPrefix(protocol.ID(prefix)),
@@ -383,8 +385,8 @@ func (p *P2PServerV2) PeerInfo() pb.PeerInfo {
 				p.log.Warn("get account error", "peerID", peerID, "error", err)
 			} else {
 				accountStr = string(account)
-				// 更新缓存，过期时间设置为4小时
-				p.peerIDs.Set(key, accountStr, time.Hour*4)
+				// 更新缓存，缓存数据不过期
+				p.peerIDs.Set(key, accountStr, cache.NoExpiration)
 			}
 		}
 
