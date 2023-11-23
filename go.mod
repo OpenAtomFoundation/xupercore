@@ -1,13 +1,12 @@
 module github.com/xuperchain/xupercore
 
-go 1.14
+go 1.16
 
 require (
-	github.com/ChainSafe/go-schnorrkel v0.0.0-20200626160457-b38283118816 // indirect
+	github.com/agiledragon/gomonkey/v2 v2.9.0
 	github.com/aws/aws-sdk-go v1.32.4
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/dgraph-io/badger/v3 v3.2103.1
-	github.com/docker/go-connections v0.4.1-0.20180821093606-97c2040d34df // indirect
 	github.com/docker/go-units v0.4.0
 	github.com/emirpasic/gods v1.12.1-0.20201118132343-79df803e554c
 	github.com/fsouza/go-dockerclient v1.6.0
@@ -15,7 +14,6 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.4.3
 	github.com/golang/snappy v0.0.3
-	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.2.2
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/hyperledger/burrow v0.30.5
@@ -43,6 +41,12 @@ require (
 	golang.org/x/crypto v0.0.0-20210322153248-0c34fe9e7dc2
 	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	google.golang.org/grpc v1.35.0
+)
+
+require (
+	github.com/ChainSafe/go-schnorrkel v0.0.0-20200626160457-b38283118816 // indirect
+	github.com/docker/go-connections v0.4.1-0.20180821093606-97c2040d34df // indirect
+	github.com/google/gofuzz v1.1.1-0.20200604201612-c04b05f3adfa // indirect
 )
 
 replace github.com/hyperledger/burrow => github.com/xuperchain/burrow v0.30.6-0.20211229032028-fbee6a05ab0f

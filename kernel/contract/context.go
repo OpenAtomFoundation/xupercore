@@ -26,6 +26,11 @@ type Response struct {
 	Body []byte `json:"body"`
 }
 
+// HasError checked by status
+func (r *Response) HasError() bool {
+	return r.Status >= StatusErrorThreshold
+}
+
 // ContextConfig define the config of context
 type ContextConfig struct {
 	State StateSandbox
