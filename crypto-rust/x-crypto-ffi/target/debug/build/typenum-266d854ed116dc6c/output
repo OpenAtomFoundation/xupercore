@@ -1,3 +1,0 @@
-cargo:rerun-if-changed=build/main.rs
-cargo:rustc-env=TYPENUM_BUILD_CONSTS=/Users/liminglei02/go/src/github.com/xuperchain/yogurt-chain/crypto-rust/x-crypto-ffi/target/debug/build/typenum-266d854ed116dc6c/out/consts.rs
-cargo:rustc-env=TYPENUM_BUILD_OP=/Users/liminglei02/go/src/github.com/xuperchain/yogurt-chain/crypto-rust/x-crypto-ffi/target/debug/build/typenum-266d854ed116dc6c/out/op.rs
