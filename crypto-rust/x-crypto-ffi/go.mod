@@ -1,3 +1,3 @@
-module github.com/xuperchain/yogurt-chain/crypto-rust/x-crypto-ffi
+module github.com/OpenAtomFoundation/xupercore/crypto-rust/x-crypto-ffi
 
 go 1.19
