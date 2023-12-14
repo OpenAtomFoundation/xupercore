@@ -3,7 +3,7 @@ module github.com/OpenAtomFoundation/xupercore/crypto-dll-go
 go 1.19
 
 require (
-	github.com/OpenAtomFoundation/xupercore/crypto-rust/x-crypto-ffi v0.0.0-20230608061311-2c9ce40cd564
+	github.com/OpenAtomFoundation/xupercore/crypto-rust/x-crypto-ffi v0.0.0-00010101000000-000000000000
 	github.com/stretchr/testify v1.8.4
 )
 
