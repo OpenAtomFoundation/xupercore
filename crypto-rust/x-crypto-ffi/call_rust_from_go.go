@@ -15,7 +15,7 @@ import (
 	"log"
 	"unsafe"
 
-	g "github.com/xuperchain/yogurt-chain/crypto-rust/x-crypto-ffi/go-struct"
+	g "github.com/OpenAtomFoundation/xupercore/crypto-rust/x-crypto-ffi/go-struct"
 )
 
 func main() {
