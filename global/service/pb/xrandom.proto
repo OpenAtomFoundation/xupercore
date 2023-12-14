@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+import "xchain.proto";
+
+package pb;
+
+service Random {
+  // 管理节点
+  rpc AddNode(AddNodeRequest) returns (AddNodeResponse) {}
+  rpc DeleteNode(DeleteNodeRequest) returns (DeleteNodeResponse) {}
+
+  // 提交新随机数
+  rpc SubmitRandomNumber(SubmitRandomNumberRequest) returns (SubmitRandomNumberResponse) {}
+  // 查询随机数（限高度）
+  rpc QueryRandomNumber(QueryRandomNumberRequest) returns (QueryRandomNumberResponse) {}
+}
+
+// 添加节点请求
+message AddNodeRequest {
+  // 节点地址
+  string node_address = 1;
+  // 节点公钥
+  string node_public_key = 2;
+}
+
+// 添加节点响应
+message AddNodeResponse {
+  // 添加成功标志
+  bool success = 1;
+  // 错误信息（如果发生错误）
+  string error_message = 2;
+  // 错误代码
+  int32 error_code = 3;
+}
+
+// 删除节点请求
+message DeleteNodeRequest {
+  // 节点公钥
+  string node_public_key = 1;
+}
+
+// 删除节点响应
+message DeleteNodeResponse {
+  // 删除成功标志
+  bool success = 1;
+  // 错误信息（如果发生错误）
+  string error_message = 2;
+  // 错误代码
+  int32 error_code = 3;
+}
+
+// 提交随机数请求
+message SubmitRandomNumberRequest {
+  // 随机数
+  string random_number = 1;
+  // 高度
+  uint64 height = 2;
+  // 证明
+  Proof proof = 3;
+}
+
+// 提交随机数响应
+message SubmitRandomNumberResponse {
+  // 提交成功标志
+  bool success = 1;
+  // 错误信息（如果发生错误）
+  string error_message = 2;
+  // 错误代码
+  int32 error_code = 3;
+}
+
+// 查询随机数请求
+message QueryRandomNumberRequest {
+  // header
+  Header header = 1;
+  // 高度
+  uint64 height = 2;
+  // 节点公钥
+  string node_public_key = 3;
+  // 签名
+  bytes sign = 4;
+}
+
+// 查询随机数响应
+message QueryRandomNumberResponse {
+  // 随机数
+
+  string random_number = 1;
+  // 证明
+  Proof proof = 2;
+  // 错误信息（如果发生错误）
+  string error_message = 3;
+  // 错误代码
+  int32 error_code = 4;
+  // 消息签名：对随机数进行签名，用于执行层公钥校验
+  bytes sign = 5;
+}
+
+// 证明
+message Proof {
+  // 消息
+  bytes message = 1;
+  // 参与签名的公钥和
+  bytes part_public_key_sum = 2;
+  // 编号列表
+  repeated string indexes = 3;
+  // Group 组合公钥
+  bytes p_prime = 4;
+}

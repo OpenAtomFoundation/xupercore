@@ -1,0 +1,38 @@
+[package]
+name = "x_crypto"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-bigint = "0.4.3"
+num-traits = "0.2.15"
+sha2 = "0.10.5"
+rand = "0.8.5"
+rust-crypto = "0.2.36"
+# 0.11及以上版本才能支持ecies
+#p256 = { version = "0.12", features = ["pem", "ecdh", "arithmetic"] }
+#p256 = { version = "0.11", features = ["pem", "ecdh", "arithmetic"] }
+# 0.10版本不能支持ecies，但可以使用1.3.0的低版本zeroize，兼容matrix编译
+p256 = { version = "0.10", features = ["pem", "ecdh", "arithmetic"] }
+# json = "0.12.4"
+serde_json = "1.0.81"
+#serde = "1.0.137"
+serde = { version = "1.0.137", features = ["derive"] }
+base58 = "0.2.0"
+#ecdsa = { version = "0.14.3", features = ["arithmetic"] }
+#ecdsa = { version = "0.13", features = ["arithmetic"] }
+#rand_core = "0.6.4"
+#openssl = "0.10.41"
+#openssl = { version = "0.10", features = ["vendored"] }
+aes-gcm = "0.10.1"
+typenum = "1.15.0"
+generic-array = "0.14.5"
+sec1 = "0.3.0"
+#elliptic-curve = { version = "0.12", features = ["sec1", "pkcs8"] }
+#elliptic-curve = { version = "0.11", features = ["sec1", "pkcs8"] }
+subtle = "2.4.1"
+hex = "0.4"
+bls12_381 = "0.8.0"
+ff = "0.13.0"

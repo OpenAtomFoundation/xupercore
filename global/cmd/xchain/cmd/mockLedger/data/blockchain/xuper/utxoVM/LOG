@@ -1,0 +1,75 @@
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.414634 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.415884 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.415946 db@open opening
+10:23:59.428785 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.471649 db@janitor F·6 G·0
+10:23:59.471699 db@open done T·55.719166ms
+10:23:59.476310 db@close closing
+10:23:59.476548 db@close done T·237.168µs
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.550847 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.551343 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.551395 db@open opening
+10:23:59.551580 journal@recovery F·1
+10:23:59.555017 journal@recovery recovering @329
+10:23:59.567506 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.624567 db@janitor F·6 G·0
+10:23:59.624602 db@open done T·73.193224ms
+10:23:59.626727 db@close closing
+10:23:59.626920 db@close done T·190.931µs
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.701844 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.702345 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.702392 db@open opening
+10:23:59.702565 journal@recovery F·1
+10:23:59.705513 journal@recovery recovering @331
+10:23:59.708913 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.770336 db@janitor F·6 G·0
+10:23:59.770379 db@open done T·67.972489ms
+10:23:59.772086 db@close closing
+10:23:59.772471 db@close done T·381.076µs
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.846048 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.847355 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:23:59.847471 db@open opening
+10:23:59.847924 journal@recovery F·1
+10:23:59.852881 journal@recovery recovering @333
+10:23:59.879387 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.006667 db@janitor F·6 G·0
+10:24:00.006771 db@open done T·159.260717ms
+10:24:00.008940 db@close closing
+10:24:00.009348 db@close done T·404.387µs
+=============== Dec 15, 2022 (CST) ===============
+10:24:00.179389 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:24:00.180255 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.180367 db@open opening
+10:24:00.180688 journal@recovery F·1
+10:24:00.184149 journal@recovery recovering @335
+10:24:00.205723 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.306727 db@janitor F·6 G·0
+10:24:00.325938 db@open done T·145.543813ms
+10:24:00.327631 db@close closing
+10:24:00.345333 db@close done T·17.698845ms
+=============== Dec 15, 2022 (CST) ===============
+10:24:00.519718 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:24:00.538439 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.538556 db@open opening
+10:24:00.539028 journal@recovery F·1
+10:24:00.561888 journal@recovery recovering @337
+10:24:00.566314 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.643770 db@janitor F·6 G·0
+10:24:00.643868 db@open done T·105.274653ms
+10:24:00.646519 db@close closing
+10:24:00.646928 db@close done T·403.312µs
+=============== Dec 15, 2022 (CST) ===============
+10:24:00.727010 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:24:00.728060 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.728157 db@open opening
+10:24:00.728521 journal@recovery F·1
+10:24:00.731977 journal@recovery recovering @339
+10:24:00.737201 version@stat F·[3 1] S·835KiB[746KiB 89KiB] Sc·[0.75 0.00]
+10:24:00.796643 db@janitor F·6 G·0
+10:24:00.796708 db@open done T·68.518572ms
+10:24:00.799341 db@close closing
+10:24:00.799725 db@close done T·380.493µs
