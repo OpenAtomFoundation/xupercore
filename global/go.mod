@@ -3,7 +3,7 @@ module github.com/OpenAtomFoundation/xupercore/global
 go 1.19
 
 require (
-	github.com/OpenAtomFoundation/xupercore/crypto-dll-go v0.0.0-00010101000000-000000000000
+	github.com/OpenAtomFoundation/xupercore/crypto-dll-go v0.0.0-20231214063800-d385e2c4dd24
 	github.com/aws/aws-sdk-go v1.32.4
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/dgraph-io/badger/v3 v3.2103.5
@@ -54,7 +54,7 @@ require (
 	github.com/ChainSafe/go-schnorrkel v0.0.0-20200626160457-b38283118816 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/OneOfOne/xxhash v1.2.8 // indirect
-	github.com/OpenAtomFoundation/xupercore/crypto-rust/x-crypto-ffi v0.0.0-00010101000000-000000000000 // indirect
+	github.com/OpenAtomFoundation/xupercore/crypto-rust/x-crypto-ffi v0.0.0-20231214063800-d385e2c4dd24 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/btcsuite/btcd v0.20.1-beta // indirect
