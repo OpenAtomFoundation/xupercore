@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package pb;
+
+service bls {
+  // 交换公钥
+  rpc BroadcastPublicKey(BroadcastPublicKeyRequest) returns (BroadcastPublicKeyResponse) {}
+
+  // 交换成员签名碎片
+  rpc SendMemberSign(SendMemberSignRequest) returns (SendMemberSignResponse) {}
+
+  // 交换消息签名碎片
+  rpc BroadcastMessageSign(BroadcastMessageSignRequest) returns (BroadcastMessageSignResponse) {}
+}
+
+// 交换公钥请求
+message BroadcastPublicKeyRequest {
+  // 编号
+  string index = 1;
+  // 公钥
+  bytes public_key = 2;
+  // 组：成员P2P ID
+  repeated string group = 3;
+}
+
+// 交换公钥响应
+message BroadcastPublicKeyResponse {
+  // 成功标志
+  bool success = 1;
+  // 错误信息（如果发生错误）
+  string error_message = 2;
+  // 错误代码
+  int32 error_code = 3;
+  // 编号
+  string index = 4;
+  // 公钥
+  bytes public_key = 5;
+}
+
+// 交换成员签名碎片请求
+message SendMemberSignRequest {
+  // 编号
+  string index = 1;
+  // 签名碎片
+  bytes member_sign = 2;
+}
+
+// 交换成员签名碎片响应
+message SendMemberSignResponse {
+  // 成功标志
+  bool success = 1;
+  // 错误信息（如果发生错误）
+  string error_message = 2;
+  // 错误代码
+  int32 error_code = 3;
+  // 编号
+  string index = 4;
+  // 签名碎片
+  bytes member_sign = 5;
+}
+
+// 交换消息签名碎片请求
+message BroadcastMessageSignRequest {
+  // 编号
+  string index = 1;
+  // 消息
+  string message = 2;
+  // 签名碎片
+  bytes message_sign = 3;
+  // 高度
+  uint64 height = 4;
+}
+
+// 交换消息签名碎片响应
+message BroadcastMessageSignResponse {
+  // 成功标志
+  bool success = 1;
+  // 错误信息（如果发生错误）
+  bytes error_message = 2;
+  // 错误代码
+  int32 error_code = 3;
+  // 编号
+  string index = 4;
+  // 消息
+  string message = 5;
+  // 签名碎片
+  bytes message_sign = 6;
+  // 高度
+  uint64 height = 7;
+}

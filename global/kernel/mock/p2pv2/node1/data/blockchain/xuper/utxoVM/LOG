@@ -1,0 +1,20 @@
+=============== Feb 17, 2023 (CST) ===============
+10:41:56.294782 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:41:56.337520 db@open opening
+10:41:56.339878 version@stat F·[] S·0B[] Sc·[]
+10:41:56.379067 db@janitor F·2 G·0
+10:41:56.379133 db@open done T·41.524418ms
+10:41:56.380870 db@close closing
+10:41:56.381089 db@close done T·216.851µs
+=============== Feb 17, 2023 (CST) ===============
+10:41:56.481338 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:41:56.482564 version@stat F·[] S·0B[] Sc·[]
+10:41:56.482669 db@open opening
+10:41:56.483096 journal@recovery F·1
+10:41:56.505116 journal@recovery recovering @1
+10:41:56.525920 memdb@flush created L0@2 N·3 S·386B "Mpointer,v3":"UTe..e_0,v1"
+10:41:56.543708 version@stat F·[1] S·386B[386B] Sc·[0.25]
+10:41:56.602964 db@janitor F·3 G·0
+10:41:56.603036 db@open done T·120.335366ms
+10:42:10.617104 db@close closing
+10:42:10.617735 db@close done T·628.842µs

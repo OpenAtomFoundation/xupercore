@@ -1,11 +1,11 @@
 # Project specific files
-plugins/
-output/
-test/
-testnet/
-logs/
-.compile_cache
-.autogen
+global/plugins/
+global/output/
+global/test/
+global/testnet/
+global/logs/
+global/.compile_cache
+global/.autogen
 
 # Compiled source
 *.com

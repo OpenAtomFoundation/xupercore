@@ -1,0 +1,20 @@
+[package]
+name = "x_crypto_ffi"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "xcrypto"
+crate_type = ["dylib"]
+
+[dependencies]
+libc = "0.1"
+x_crypto = { path = "../x-crypto", version = "0.1.0" }
+serde = {version = "1.0", features = ["derive"]}
+serde_bytes = "0.11.9"
+serde_json = "1.0"
+num-bigint = "0.4.3"
+bls12_381 = "0.8.0"
+base64 = "0.21.0"

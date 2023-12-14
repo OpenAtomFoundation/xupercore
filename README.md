@@ -1,109 +1,236 @@
-# XuperCore
+# Yogurt
 
-开放原子超级链内核XuperCore，定位为广域适用、高可扩展、超高性能、高度易用，并且完全自由开放的区块链通用内核框架。基于自主研发的“动态内核技术”，实现无内核代码侵入的自由扩展内核核心组件和轻量级的扩展订制内核引擎，满足面向各类场景的区块链实现的需要；并且提供了全面的、高性能的标准内核组件和引擎实现。全面降低区块链研发成本，实现非常轻量级的订制满足特定场景的区块链实现。XuperCore是超级链XuperChain的基础内核，基于XuperCore构建的区块链标准发行版XuperChain，在多行业、多场景得到了落地应用验证。
+Yogurt 分为三个部分，BLS、信标链和执行层链。使用时需要根据需要编译所需部分。
 
-## 特点
+## 编译部署
 
-#### 1. 广域适用
- 
-XuperCore通过极致的可扩展性，做到“广域场景适用”的区块链技术。基于XuperCore可以多纬度的自由扩展订制，非常便捷、快速的构建起适用于各类场景的区块链。开发者可以根据自己实际场景的需要，非常自由、多纬度的扩展。可选择对部分内核组件做订制；也可以基于标准组件订制自己的区块链引擎；也可以基于标准引擎，轻量级的订制自己的区块链实现。从而满足开发者的各纬度的需要，做到广域场景适用。
- 
-#### 2. 高可扩展
+### 环境准备
 
-XuperCore通过“动态内核技术”，做到了区块链内核核心流程和核心组件，都可以没有内核框架代码侵入的自由扩展替换，支持多纬度的自由扩展，让整个内核具备极好的可扩展性。通过对共识、账本、合约等这些内核组件做抽象，制定了区块链内核组件编程规范，这些规范就像主板上的插槽，起到承上启下的作用，让内核各核心组件可以自由的扩展替换，同时让引擎订制变得非常的轻量级。再在内核核心组件编程规范的基础上，设计了多引擎架构，让内核核心处理流程和技术选型也可以无内核代码侵入的自由扩展替换。
+* **golang 环境 go1.20.10 及以上**
+* **gcc   g++  4.8.5 及以上**
+* **rust 1.63.0**
 
-#### 3. 超高性能
+### 编译
 
-XuperCore在架构上做到高可扩展的同时，还提供了超高性能的内核组件和标准区块链引擎的实现。比如：通过XuperCore提供的智能合约和账本标准组件，就可以实现智能合约的并行预执行、和并行的验证，可以很好的提升智能合约的性能。
+#### 执行层
 
-#### 4. 高度易用
+https://github.com/xuperchain/yogurt-chain?tab=readme-ov-file#%E6%89%A7%E8%A1%8C%E5%B1%82
 
-XuperCore提供了非常完备的内核标准组件实现和易用性工具，可以做到一键生成完整区块链实现，对开发者屏蔽区块链技术的核心复杂度，实现自由组装区块链系统。XuperCore还提供了区块链代码自动生成工具、编译工具、测试网络部署工具，非常轻量级就可以开发一套全新区块链系统。
+#### 信标链层
 
-## 架构
+信标链层作为 Yogurt 网络的共识基础层，需要编译 BLS 以及 ychain：
 
-<img width="641" alt="image" src="https://user-images.githubusercontent.com/61530942/183580026-ddc19777-a731-4b66-8353-f9e8287c2317.png">
+BLS 动态链接库编译：
 
-# 快速试用
-
-## 环境配置
-
-- 操作系统：支持Linux以及Mac OS
-- 开发语言：Go 1.16.x及以上
-- 编译器：GCC 4.8.x及以上
-- 版本控制工具：Git
-
-## 十分钟构建自己的区块链，并搭建测试网络
-
-XuperCore提供了自动生成区块链发行版代码框架的工具，可以通过该工具一键生成发行版代码。
-
-```
-// clone项目
-git clone https://github.com/xuperchain/xupercore.git
-
-// 生成发行版代码框架，第一个参数是新链名，第二个参数是输出代码库保存目录
-sh ./tools/autogen_chain.sh -n turbo -r bob -o /home/rd/gopath/src
-
-// 去新生成的代码仓库做订制升级，完了编译
-cd /home/rd/gopath/src/github.com/xuperchain/turbo
-make all
-
-// 部署测试网络，对网络做测试验证
-sh ./auto/deploy_testnet.sh
-
-// 进入testnet目录逐节点启动
-sh ./control.sh start
-
+```shell
+cd crypto-rust/x-crypto-ffi
+go mod tidy
+make
 ```
 
-可参考基于XuperCore实现的标准发行版[XuperChain](https://github.com/xuperchain/xuperchain)项目。
+编译成功后将在 crypto-rust/x-crypto-ffi/lib 下看到 libxcrypto.so 或 libxcrypto.dylib，将此文件拷贝到 /usr/local/lib 目录下。
 
-## 部署测试网络
+linux 下可能需要配置动态链接库路径（根据本地环境按需配置）
 
-XuperCore也提供了示例链（example/xchain）实现，初次尝试可以通过该链便捷部署测试网络体验。
+示例：
 
-```
-// clone项目
-git clone https://github.com/xuperchain/xupercore.git
-
-// 进入工程目录
-cd xupercore
-
-// 编译工程
-make all
-
-// 部署测试网络
-sh ./tools/deploy_testnet.sh
-
-// 分别启动三个节点（请确保使用到的端口未被占用）
-cd ./testnet/node1
-sh ./control.sh start
-cd ../node2
-sh ./control.sh start
-cd ../node3
-sh ./control.sh start
-
-// 观察每个节点状态
-./bin/xchain-cli chain status -H 127.0.0.1:36101
-./bin/xchain-cli chain status -H 127.0.0.1:36102
-./bin/xchain-cli chain status -H 127.0.0.1:36103
-
+```bash
+vim /etc/ld.so.conf.d/libc.conf
 ```
 
-# 参与贡献
+添加如下内容：
 
-XuperCore在持续建设阶段，欢迎感兴趣的同学一起参与贡献，可参考[设计揭秘](https://mp.weixin.qq.com/s/pLQq_Qw8XyXJihEOXWv8Gg)。
+```bash
+# libc default configuration
+/usr/local/lib 
+```
 
-如果你遇到问题或需要新功能，欢迎创建[issue](https://github.com/xuperchain/xupercore/issues)。
+推出 vim 后执行：
 
-如果你可以解决某个issue, 欢迎发送PR。
+```bash
+ldconfig
+```
 
-如项目对您有帮助，欢迎star支持，项目源码[xupercore](https://github.com/xuperchain/xupercore)。
+检查是否生效：
 
-# 开源许可
+```bash
+ldconfig -p  |grep 'libxcrypto.so'
 
-XuperCore使用的Apache 2.0开源协议，目前已捐赠到了开放原子开源基金会。
+# 成功应看到类似如下输出
+# libxcrypto.so (libc6,x86-64) => /usr/local/lib/libxcrypto.so
+```
 
-# 联系我们
+然后编译 ychain
 
-Email：xchain-help@baidu.com，如果你对XuperCore开源技术及应用感兴趣，欢迎关注"百度超级链"公众号。
+```shell
+cd ychain
+go mod tidy
+make
+```
+
+成功后应看到类似如下内容：
+
+```bash
+tree ./output/bin/
+./output/bin/
+├── wasm2c
+├── ychain
+└── ychain-cli
+```
+
+
+
+### 部署测试网络
+
+**以下示例为本地测试网络搭建，如果部署正式环境需重新生成节点的公私钥、账户地址等。**
+
+整个网络包括信标链网络以及执行层网络，信标链网络有多个 ychain 节点组成，执行层网络由多个 geth 网络组成，同时两个网络之间需要配置相关公钥、地址等。
+
+#### 部署信标链测试网络
+
+执行如下命令生成三个测试网络节点：
+
+```bash
+make testnet
+```
+
+应看到如下内容：
+
+```bash
+tree ./testnet/ -L 2
+
+./testnet/
+├── control_all.sh
+├── node1
+│   ├── bin
+│   ├── conf
+│   ├── control.sh
+│   └── data
+├── node2
+│   ├── bin
+│   ├── conf
+│   ├── control.sh
+│   └── data
+└── node3
+    ├── bin
+    ├── conf
+    ├── control.sh
+    └── data
+```
+
+在node1目录生成所需账户：
+
+```
+cd testnet/node1
+./bin/ychain-cli ethAccount./bin/ychain-cli ethAccount generate
+```
+
+输出内容类似如下：
+
+```bash
+Saved private key to file:  ./data/keys/eth.account
+Address: 0x6Fa4322CfF52265b3049e823C388797Ef1308cb9
+Public key: 041d7519bca41832866aa501215e6fc0a6cd4153c0cfe54a91468a446df246763a12941fa75c9dc4e974c2670e45deddcb8b9702c44dcf5812bc934a823fd21b20
+Compress public key: 0x021d7519bca41832866aa501215e6fc0a6cd4153c0cfe54a91468a446df246763a
+```
+
+记录好输出信息，Compress public key 后面会用到。
+
+将生成的 eth.account 拷贝到 node2 和 node3 目录下：
+
+```
+# 在node1目录下执行
+cp ./data/keys/eth.account ../node2/data/keys/
+cp ./data/keys/eth.account ../node3/data/keys/
+```
+
+启动三个节点：
+
+```bash
+# 回到 testnet 目录
+cd ..
+
+# 启动网络
+sh control_all.sh start
+
+# 查看网络状态
+./bin/ychain-cli  status -H :37101
+```
+
+#### 部署执行层网络
+
+执行层网络基于 geth，其他使用方式请参考：https://geth.ethereum.org/docs
+
+先进入 geth 代码库目录下：
+
+```
+# 先从 testnet 目录退出后进入 geth 目录
+cd ../../geth/build/
+```
+
+geth 网络搭建可以参考 Clique 共识网络搭建：https://geth.ethereum.org/docs/fundamentals/private-network
+
+不同点在于创世文件需改成如下：
+
+```json
+{
+	"config": {
+		"chainId": 88681,
+		"homesteadBlock": 0,
+		"eip150Block": 0,
+		"eip155Block": 0,
+		"eip158Block": 0,
+		"byzantiumBlock": 0,
+		"constantinopleBlock": 0,
+		"petersburgBlock": 0,
+		"istanbulBlock": 0,
+		"berlinBlock": 0,
+		"yogurt": {
+			"period": 5,
+			"epoch": 30000,
+			"beaconURL": "127.0.0.1:37101",
+			"beaconPubKey": "0x03af2e5f5d303c40c14abe4dd7640a3d72cd2626d4416d16980bf137b8007798e3"
+		}
+	}, 
+  "difficulty": "1",
+	"gasLimit": "8000000",
+	"extradata": "0x00000000000000000000000000000000000000000000000000000000000000005594CffB7Ce2fbeA1e1A780dcD1171f4b260912Df6dbE76a457a90Dd5fB5e99338B0Bd2fc09141550000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+	"alloc": {
+		"5594CffB7Ce2fbeA1e1A780dcD1171f4b260912D": {
+			"balance": "900000000000000000000000"
+		},
+		"f6dbE76a457a90Dd5fB5e99338B0Bd2fc0914155": {
+			"balance": "800000000000000000000000"
+		}
+	}
+}
+```
+
+和 Clique 不同配置说明：
+
+* yogurt.beaconURL 为执行层节点地址，例如：127.0.0.1:37101
+* yogurt.beaconPubKey 为执行层公钥，即在node1 目录使用 `./bin/ychain-cli ethAccount./bin/ychain-cli ethAccount generate ` 生成的公钥，每次生成的都不一样，需要根据本地生成为主，将 Compress public key 配置到此处。
+
+其他步骤参考 https://geth.ethereum.org/docs/fundamentals/private-network 
+
+#### 信标链配置执行层节点
+
+执行层启动前，需要将执行层节点矿工的地址配置到信标链网络，因此在搭建执行此网络时，需要记录矿工的地址。
+
+然后执行如下命令：
+
+```
+# 在测试网络node1目录下执行，yogurt-chain/ychain/testnet/node1 目录
+./bin/ychain-cli xkernel invoke 'XRandom' --method AddNode -a '{"node_address":"0x5594CffB7Ce2fbeA1e1A780dcD1171f4b260912D"}'  -H :37101
+# 其中 0x5594CffB7Ce2fbeA1e1A780dcD1171f4b260912D 修改为你的执行层网络矿工地址，这里只是示例。
+# 如果有多个节点需多次执行此命令
+
+# 查看结果
+./bin/ychain-cli xkernel query 'XRandom' --method QueryAccessList   -H :37101
+contract response: ["0x5594CffB7Ce2fbeA1e1A780dcD1171f4b260912D","0xf6dbE76a457a90Dd5fB5e99338B0Bd2fc0914155"]
+```
+
+执行成功后，启动执行层 geth 节点即可。
+
+转账、部署合约、调用合约等交易都需要发送到执行层网络，可以使用 metamask、remix 等工具操作。
+

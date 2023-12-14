@@ -1,0 +1,75 @@
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.339559 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.340649 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.340694 db@open opening
+10:23:59.341726 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.410176 db@janitor F·5 G·0
+10:23:59.410233 db@open done T·69.5201ms
+10:23:59.476661 db@close closing
+10:23:59.476898 db@close done T·235.286µs
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.477862 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.478299 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.478343 db@open opening
+10:23:59.478528 journal@recovery F·1
+10:23:59.479273 journal@recovery recovering @333
+10:23:59.492777 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.549695 db@janitor F·5 G·0
+10:23:59.549735 db@open done T·71.375585ms
+10:23:59.626993 db@close closing
+10:23:59.627122 db@close done T·127.568µs
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.627841 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.628214 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.628262 db@open opening
+10:23:59.628420 journal@recovery F·1
+10:23:59.640834 journal@recovery recovering @335
+10:23:59.641894 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.700729 db@janitor F·5 G·0
+10:23:59.700762 db@open done T·72.486878ms
+10:23:59.772624 db@close closing
+10:23:59.772942 db@close done T·297.464µs
+=============== Dec 15, 2022 (CST) ===============
+10:23:59.774291 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:23:59.774972 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.775041 db@open opening
+10:23:59.775275 journal@recovery F·1
+10:23:59.778708 journal@recovery recovering @337
+10:23:59.783026 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:23:59.843485 db@janitor F·5 G·0
+10:23:59.843547 db@open done T·68.487253ms
+10:24:00.009588 db@close closing
+10:24:00.009963 db@close done T·372.236µs
+=============== Dec 15, 2022 (CST) ===============
+10:24:00.011879 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:24:00.031386 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:24:00.031467 db@open opening
+10:24:00.050457 journal@recovery F·1
+10:24:00.053320 journal@recovery recovering @339
+10:24:00.085001 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:24:00.177903 db@janitor F·5 G·0
+10:24:00.177938 db@open done T·127.850158ms
+10:24:00.345407 db@close closing
+10:24:00.345519 db@close done T·111.332µs
+=============== Dec 15, 2022 (CST) ===============
+10:24:00.346274 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:24:00.346733 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:24:00.346789 db@open opening
+10:24:00.346956 journal@recovery F·1
+10:24:00.349859 journal@recovery recovering @341
+10:24:00.363149 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:24:00.516850 db@janitor F·5 G·0
+10:24:00.516958 db@open done T·170.150016ms
+10:24:00.647129 db@close closing
+10:24:00.647436 db@close done T·305.687µs
+=============== Dec 15, 2022 (CST) ===============
+10:24:00.649318 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:24:00.650385 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:24:00.650488 db@open opening
+10:24:00.650869 journal@recovery F·1
+10:24:00.654784 journal@recovery recovering @343
+10:24:00.664527 version@stat F·[2 1] S·2MiB[1MiB 1MiB] Sc·[0.50 0.02]
+10:24:00.724769 db@janitor F·5 G·0
+10:24:00.724854 db@open done T·74.334442ms
+10:24:00.800067 db@close closing
+10:24:00.800364 db@close done T·296.702µs
