@@ -1504,3 +1504,7 @@ func (t *State) GetContractDesc(contractName string) (*protos.WasmCodeDesc, erro
 	}
 	return valDesc, err
 }
+
+func (t *State) HasUnconfirmTx() bool {
+	return t.tx.Mempool.GetTxCounnt() != 0
+}
