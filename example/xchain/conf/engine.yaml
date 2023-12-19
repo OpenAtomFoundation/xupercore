@@ -6,3 +6,5 @@ blockBroadcastMode: 0
 txidCacheExpiredTime: 3m 
 # txIdCacheGCInterval set clean up interval for tx cache
 txIdCacheGCInterval: 10m
+# disableEmptyBlocks is the flag for disable empty block, supprot consensus: tdpos/single, not support chainedBFT
+disableEmptyBlocks: false
