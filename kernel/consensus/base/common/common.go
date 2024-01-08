@@ -81,7 +81,7 @@ type ConsensusStorage struct {
 // ParseOldQCStorage 将有Justify结构的老共识结构解析出来
 func ParseOldQCStorage(storage []byte) (*ConsensusStorage, error) {
 	old := &ConsensusStorage{}
-	if err := json.Unmarshal(storage, &old); err != nil {
+	if err := json.Unmarshal(storage, old); err != nil {
 		return nil, err
 	}
 	return old, nil

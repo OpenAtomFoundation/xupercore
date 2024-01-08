@@ -302,6 +302,8 @@ func (p *P2PServerV2) GetPeerIdByAccount(account string) (peer.ID, error) {
 		return "", fmt.Errorf("address error: %s, address=%s", err, value)
 	}
 
+	// 此处设置不过期，在 putValue 时设置过期时间为最大值及不会过期
+	// 即使重启程序，也不会影响从网络中查询数据。
 	p.accounts.Set(key, peerID, cache.NoExpiration)
 	return peerID, nil
 }

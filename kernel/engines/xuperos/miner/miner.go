@@ -207,6 +207,18 @@ func (m *Miner) step() error {
 		}
 		m.status = statusMining
 
+		if m.ctx.EngCtx.EngCfg.DisableEmptyBlocks && !m.ctx.State.HasUnconfirmTx() {
+			consensusStatus, err := m.ctx.Consensus.GetConsensusStatus()
+			if err != nil {
+				return err
+			}
+
+			if consensusStatus.GetConsensusName() == "single" ||
+				consensusStatus.GetConsensusName() == "tdpos" {
+				return nil
+			}
+		}
+
 		// 开始挖矿
 		err = m.mining(ctx)
 		if err != nil {
