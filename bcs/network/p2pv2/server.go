@@ -458,6 +458,7 @@ func (p *P2PServerV2) connectPeer(addrInfos []peer.AddrInfo) int {
 	for retry > 0 {
 		for _, addrInfo := range addrInfos {
 			if err := p.host.Connect(p.ctx, addrInfo); err != nil {
+				p.log.Error("p2p: connection with peer node error", "addrInfo", addrInfo)
 				p.log.Error("p2p: connection with peer node error", "error", err)
 				continue
 			}

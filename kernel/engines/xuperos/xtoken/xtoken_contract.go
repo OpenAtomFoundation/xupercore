@@ -63,7 +63,9 @@ func (c *Contract) NewToken(ctx contract.KContext) (*contract.Response, error) {
 	if err := c.checkTokenData(token, ctx); err != nil {
 		return nil, err
 	}
-	c.contractCtx.XLog.Info("XToken", "tokenTotalSupply", token.TotalSupply, "tokenName", token.Name)
+	if c.contractCtx != nil && c.contractCtx.XLog != nil {
+		c.contractCtx.XLog.Info("XToken", "tokenTotalSupply", token.TotalSupply, "tokenName", token.Name)
+	}
 
 	// 2、保存token以及初始化提案数据
 	if err := c.saveTokenAndProposal(token, ctx); err != nil {
