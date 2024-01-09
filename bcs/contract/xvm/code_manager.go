@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -125,7 +124,7 @@ func (c *codeManager) lookupDiskCache(name string, desc *protos.WasmCodeDesc) (s
 		return "", false
 	}
 	var localDesc protos.WasmCodeDesc
-	descbuf, err := ioutil.ReadFile(descpath)
+	descbuf, err := os.ReadFile(descpath)
 	if err != nil {
 		return "", false
 	}
@@ -157,7 +156,7 @@ func (c *codeManager) makeDiskCache(name string, desc *protos.WasmCodeDesc, code
 	localDesc := *desc
 	localDesc.VmCompiler = compile.Version
 	descbuf, _ := json.Marshal(&localDesc)
-	err = ioutil.WriteFile(descpath, descbuf, 0600)
+	err = os.WriteFile(descpath, descbuf, 0600)
 	if err != nil {
 		os.RemoveAll(basedir)
 		return "", err

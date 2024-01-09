@@ -1,15 +1,15 @@
 package meta
 
 import (
+	"os"
+	"path/filepath"
+	"testing"
+
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/kernel/mock"
 	"github.com/xuperchain/xupercore/lib/logs"
 	"github.com/xuperchain/xupercore/lib/storage/kvdb"
 	"github.com/xuperchain/xupercore/protos"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"testing"
 
 	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
@@ -59,7 +59,7 @@ var GenesisConf = []byte(`
     `)
 
 func TestMetaGetFunc(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}

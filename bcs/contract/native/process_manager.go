@@ -2,7 +2,6 @@ package native
 
 import (
 	"encoding/hex"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -47,7 +46,7 @@ func (p *processManager) makeProcess(name string, desc *protos.WasmCodeDesc, cod
 	}
 	contractFile := nativeCodeFileName(desc)
 	processBin := filepath.Join(processDir, contractFile)
-	err = ioutil.WriteFile(processBin, code, 0755)
+	err = os.WriteFile(processBin, code, 0755)
 	if err != nil {
 		return nil, err
 	}

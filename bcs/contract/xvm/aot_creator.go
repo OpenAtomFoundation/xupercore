@@ -2,7 +2,6 @@ package xvm
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
@@ -62,21 +61,21 @@ func newXVMCreator(creatorConfig *bridge.InstanceCreatorConfig) (bridge.Instance
 }
 
 func cpfile(dest, src string) error {
-	buf, err := ioutil.ReadFile(src)
+	buf, err := os.ReadFile(src)
 	if err != nil {
 		return err
 	}
-	return ioutil.WriteFile(dest, buf, 0700)
+	return os.WriteFile(dest, buf, 0700)
 }
 
 func (x *xvmCreator) CompileCode(buf []byte, outputPath string) error {
-	tmpdir, err := ioutil.TempDir("", "xvm-compile")
+	tmpdir, err := os.MkdirTemp("", "xvm-compile")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(tmpdir)
 	wasmpath := filepath.Join(tmpdir, "code.wasm")
-	err = ioutil.WriteFile(wasmpath, buf, 0600)
+	err = os.WriteFile(wasmpath, buf, 0600)
 	if err != nil {
 		return err
 	}

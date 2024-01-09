@@ -2,7 +2,7 @@ package txhash
 
 import (
 	"encoding/hex"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -17,7 +17,7 @@ var (
 )
 
 func readTxFile(tb testing.TB, name string) *pb.Transaction {
-	buf, err := ioutil.ReadFile(filepath.Join("testdata", name))
+	buf, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		tb.Fatal(err)
 	}

@@ -5,12 +5,8 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
-	"os"
-
-	//"io/ioutil"
 	"math/big"
-	//"os"
+	"os"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -27,7 +23,7 @@ const AliceAddress = "TeyyPLpp9L7QAcxHangtcHTu7HUZ6iydY"
 const BobAddress = "WNWk3ekXeM5M2232dY2uCJmEqWhfQiDYT"
 
 func openLedger() (*Ledger, error) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		return nil, dirErr
 	}

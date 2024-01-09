@@ -1,7 +1,7 @@
 package xvm
 
 import (
-	"io/ioutil"
+	"os"
 
 	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 	"github.com/xuperchain/xvm/exec"
@@ -28,11 +28,11 @@ func newXVMInterpCreator(creatorConfig *bridge.InstanceCreatorConfig) (bridge.In
 }
 
 func (x *xvmInterpCreator) compileCode(buf []byte, outputPath string) error {
-	return ioutil.WriteFile(outputPath, buf, 0600)
+	return os.WriteFile(outputPath, buf, 0600)
 }
 
 func (x *xvmInterpCreator) makeExecCode(codepath string) (exec.Code, error) {
-	codebuf, err := ioutil.ReadFile(codepath)
+	codebuf, err := os.ReadFile(codepath)
 	if err != nil {
 		return nil, err
 	}
