@@ -9,3 +9,10 @@ run:
     - kernel/consensus
     - kernel/network
     - kernel/permission
+    - kernel/engines/xuperos/event
+    - kernel/engines/xuperos/net
+    - kernel/engines/xuperos/xtoken
+    - kernel/engines/xuperos/asyncworker
+    - kernel/engines/xuperos/parachain
+    - .autogen
+    - .compile_cache

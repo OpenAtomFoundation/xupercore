@@ -41,7 +41,7 @@ func (uv *UtxoVM) SelectUtxosBySize(fromAddr string, needLock, excludeUnconfirme
 			continue
 		}
 		// check if the utxo item has been frozen
-		if utxoItem.FrozenHeight > uv.ledger.GetMeta().GetTrunkHeight() || utxoItem.FrozenHeight == -1 {
+		if utxoItem.IsFrozen(uv.ledger.GetMeta().GetTrunkHeight()) {
 			uv.log.Debug("utxo still frozen, skipped", "key", key)
 			continue
 		}

@@ -273,10 +273,9 @@ func (t *State) GetFrozenBalance(addr string) (*big.Int, error) {
 		if uErr != nil {
 			return nil, uErr
 		}
-		if uItem.FrozenHeight <= curHeight && uItem.FrozenHeight != -1 {
-			continue
+		if uItem.IsFrozen(curHeight) {
+			utxoFrozen.Add(utxoFrozen, uItem.Amount) // utxo累加
 		}
-		utxoFrozen.Add(utxoFrozen, uItem.Amount) // utxo累加
 	}
 	if it.Error() != nil {
 		return nil, it.Error()
@@ -284,7 +283,7 @@ func (t *State) GetFrozenBalance(addr string) (*big.Int, error) {
 	return utxoFrozen, nil
 }
 
-// GetFrozenBalance 查询Address的被冻结的余额 / 未冻结的余额
+// GetBalanceDetail 查询Address的被冻结的余额 / 未冻结的余额
 func (t *State) GetBalanceDetail(addr string) ([]*pb.BalanceDetailInfo, error) {
 	addrPrefix := fmt.Sprintf("%s%s_", pb.UTXOTablePrefix, addr)
 	utxoFrozen := big.NewInt(0)
@@ -299,11 +298,13 @@ func (t *State) GetBalanceDetail(addr string) ([]*pb.BalanceDetailInfo, error) {
 		if uErr != nil {
 			return nil, uErr
 		}
-		if uItem.FrozenHeight <= curHeight && uItem.FrozenHeight != -1 {
-			utxoUnFrozen.Add(utxoUnFrozen, uItem.Amount) // utxo累加
-			continue
+
+		// utxo累加
+		if uItem.IsFrozen(curHeight) {
+			utxoFrozen.Add(utxoFrozen, uItem.Amount)
+		} else {
+			utxoUnFrozen.Add(utxoUnFrozen, uItem.Amount)
 		}
-		utxoFrozen.Add(utxoFrozen, uItem.Amount) // utxo累加
 	}
 	if it.Error() != nil {
 		return nil, it.Error()
@@ -877,14 +878,11 @@ func (t *State) doTxInternal(tx *pb.Transaction, batch kvdb.Batch, cacheFiller *
 			continue
 		}
 		utxoKey := utxo.GenUtxoKeyWithPrefix(addr, tx.Txid, int32(offset))
-		uItem := &utxo.UtxoItem{}
-		uItem.Amount = big.NewInt(0)
-		uItem.Amount.SetBytes(txOutput.Amount)
+		uItem := utxo.NewUtxoItem(txOutput.Amount, txOutput.FrozenHeight)
 		// 输出是0,忽略
-		if uItem.Amount.Cmp(big.NewInt(0)) == 0 {
+		if uItem.Amount.Sign() == 0 {
 			continue
 		}
-		uItem.FrozenHeight = txOutput.FrozenHeight
 		uItemBinary, uErr := uItem.Dumps()
 		if uErr != nil {
 			return uErr
@@ -1016,12 +1014,8 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 		addr := txInput.FromAddr
 		txid := txInput.RefTxid
 		offset := txInput.RefOffset
-		amount := txInput.Amount
 		utxoKey := utxo.GenUtxoKeyWithPrefix(addr, txid, offset)
-		uItem := &utxo.UtxoItem{}
-		uItem.Amount = big.NewInt(0)
-		uItem.Amount.SetBytes(amount)
-		uItem.FrozenHeight = txInput.FrozenHeight
+		uItem := utxo.NewUtxoItem(txInput.Amount, txInput.FrozenHeight)
 		t.utxo.UtxoCache.Insert(string(addr), utxoKey, uItem)
 		uBinary, uErr := uItem.Dumps()
 		if uErr != nil {

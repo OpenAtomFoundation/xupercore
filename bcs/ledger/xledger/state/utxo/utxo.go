@@ -153,31 +153,27 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction, batch kvdb.Batch) er
 			return ErrUTXODuplicated
 		}
 		utxoDedup[utxoKey] = true
-		var amountBytes []byte
-		var frozenHeight int64
+		utxo := &UtxoItem{}
 		uv.UtxoCache.Lock()
 		if l2Cache, exist := uv.UtxoCache.All[string(addr)]; exist {
 			uItem := l2Cache[pb.UTXOTablePrefix+utxoKey]
 			if uItem != nil {
-				amountBytes = uItem.Amount.Bytes()
-				frozenHeight = uItem.FrozenHeight
+				utxo = &uItem.UtxoItem
 			}
 		}
 		uv.UtxoCache.Unlock()
 
-		if amountBytes == nil && batch != nil && batch == uv.lastBatch {
+		if utxo.IsEmpty() && batch != nil && batch == uv.lastBatch {
 			// 如果 utxo cache 查找不到，从 batch cache 查找，如果此处查不到再去数据库查。
 			// 目的是解决同步一个区块时，utxo cache 不能缓存所有的 utxo 导致区块执行失败。
 			// 此处缓存为同一个区块内交易的 utxo 缓存。
 			value, ok := uv.batchCache.Load(GenUtxoKeyWithPrefix(addr, txid, offset))
 			if ok {
-				uItem := value.(*UtxoItem)
-				amountBytes = uItem.Amount.Bytes()
-				frozenHeight = uItem.FrozenHeight
+				utxo = value.(*UtxoItem)
 			}
 		}
 
-		if amountBytes == nil {
+		if utxo.IsEmpty() {
 			uBinary, findErr := uv.utxoTable.Get([]byte(utxoKey))
 			if findErr != nil {
 				if def.NormalizedKVError(findErr) == def.ErrKVNotFound {
@@ -187,28 +183,23 @@ func (uv *UtxoVM) CheckInputEqualOutput(tx *pb.Transaction, batch kvdb.Batch) er
 				uv.log.Warn("unexpected leveldb error when do checkInputEqualOutput", "findErr", findErr)
 				return findErr
 			}
-			uItem := &UtxoItem{}
-			uErr := uItem.Loads(uBinary)
+			uErr := utxo.Loads(uBinary)
 			if uErr != nil {
 				return uErr
 			}
-			amountBytes = uItem.Amount.Bytes()
-			frozenHeight = uItem.FrozenHeight
 		}
-		amount := big.NewInt(0)
-		amount.SetBytes(amountBytes)
-		if !bytes.Equal(amountBytes, txInput.Amount) {
+		if !bytes.Equal(utxo.Amount.Bytes(), txInput.Amount) {
 			txInputAmount := big.NewInt(0)
 			txInputAmount.SetBytes(txInput.Amount)
-			uv.log.Warn("unexpected error, txInput amount missmatch utxo amount",
-				"in_utxo", amount, "txInputAmount", txInputAmount, "txid", utils.F(tx.Txid), "reftxid", utils.F(txid))
+			uv.log.Warn("unexpected error, txInput amount mismatch utxo amount",
+				"in_utxo", utxo.Amount, "txInputAmount", txInputAmount, "txid", utils.F(tx.Txid), "reftxid", utils.F(txid))
 			return ErrUnexpected
 		}
-		if frozenHeight > curLedgerHeight || frozenHeight == -1 {
-			uv.log.Warn("this utxo still be frozen", "frozenHeight", frozenHeight, "ledgerHeight", curLedgerHeight)
+		if utxo.IsFrozen(curLedgerHeight) {
+			uv.log.Warn("this utxo still be frozen", "frozenHeight", utxo.FrozenHeight, "ledgerHeight", curLedgerHeight)
 			return ErrUTXOFrozen
 		}
-		inputSum.Add(inputSum, amount)
+		inputSum.Add(inputSum, utxo.Amount)
 	}
 	if inputSum.Cmp(outputSum) == 0 {
 		return nil
@@ -378,7 +369,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 	uv.UtxoCache.Lock()
 	if l2Cache, exist := uv.UtxoCache.Available[fromAddr]; exist {
 		for uKey, uItem := range l2Cache {
-			if uItem.FrozenHeight > curLedgerHeight || uItem.FrozenHeight == -1 {
+			if uItem.IsFrozen(curLedgerHeight) {
 				uv.log.Trace("utxo still frozen, skip it", "uKey", uKey, " fheight", uItem.FrozenHeight)
 				continue
 			}
@@ -442,7 +433,7 @@ func (uv *UtxoVM) SelectUtxos(fromAddr string, totalNeed *big.Int, needLock, exc
 			if _, inCache := cacheKeys[string(key)]; inCache {
 				continue // cache已经命中了，跳过
 			}
-			if uItem.FrozenHeight > curLedgerHeight || uItem.FrozenHeight == -1 {
+			if uItem.IsFrozen(curLedgerHeight) {
 				uv.log.Trace("utxo still frozen, skip it", "key", string(key), "fheight", uItem.FrozenHeight)
 				continue
 			}
@@ -658,7 +649,7 @@ func (uv *UtxoVM) QueryUtxoRecord(accountName string, displayCount int64) (*pb.U
 			}
 			continue
 		}
-		if utxoItem.FrozenHeight > uv.ledger.GetMeta().GetTrunkHeight() || utxoItem.FrozenHeight == -1 {
+		if utxoItem.IsFrozen(uv.ledger.GetMeta().GetTrunkHeight()) {
 			frozenUtxoCount.Add(frozenUtxoCount, big.NewInt(1))
 			frozenUtxoAmount.Add(frozenUtxoAmount, utxoItem.Amount)
 			if displayCount > 0 {
