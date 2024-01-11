@@ -87,7 +87,7 @@ func (c *contractProcess) makeNativeProcess() (Process, error) {
 
 // wait the subprocess to be ready
 func (c *contractProcess) waitReply() error {
-	const waitTimeout = 3 * time.Second
+	const waitTimeout = 2 * time.Second
 	ctx, cancel := context.WithTimeout(context.TODO(), waitTimeout)
 	defer cancel()
 	for {
@@ -105,7 +105,7 @@ func (c *contractProcess) waitReply() error {
 }
 
 func (c *contractProcess) heartBeat() error {
-	ctx, cancel := context.WithTimeout(context.TODO(), 4*time.Second)
+	ctx, cancel := context.WithTimeout(context.TODO(), 3*time.Second)
 	defer cancel()
 	_, err := c.rpcClient.Ping(ctx, new(pb.PingRequest))
 	return err
