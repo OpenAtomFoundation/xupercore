@@ -458,6 +458,12 @@ func (t *Chain) initChainCtx() error {
 	if err != nil {
 		return err
 	}
+	// update_config
+	_, err = t.relyAgent.CreateUpdateConfig()
+	if err != nil {
+		return err
+	}
+	t.log.Trace("create UpdateConfig succ", "bcName", t.ctx.BCName)
 
 	// 11.xevidence创建，存证系统合约
 	_, err = t.relyAgent.CreateXEvidence()

@@ -59,6 +59,7 @@ const (
 	BlockCacheSize              = 1000   // block counts in lru cache
 	TxCacheSize                 = 100000 // tx counts in lru cache
 	MaxBlockSizeKey             = "MaxBlockSize"
+	OldBlockSizeKey             = "OldMaxBlockSize"
 	ReservedContractsKey        = "ReservedContracts"
 	ForbiddenContractKey        = "ForbiddenContract"
 	NewAccountResourceAmountKey = "NewAccountResourceAmount"
@@ -66,6 +67,7 @@ const (
 	IrreversibleBlockHeightKey = "IrreversibleBlockHeight"
 	IrreversibleSlideWindowKey = "IrreversibleSlideWindow"
 	GasPriceKey                = "GasPrice"
+	OldGasPriceKey             = "OldGasPrice"
 	GroupChainContractKey      = "GroupChainContract"
 )
 

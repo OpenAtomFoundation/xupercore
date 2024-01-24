@@ -18,6 +18,8 @@ import (
 	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
+	chainConfig "github.com/xuperchain/xupercore/kernel/engines/xuperos/chain_config"
+	chainConfigBase "github.com/xuperchain/xupercore/kernel/engines/xuperos/chain_config/base"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/common"
 	"github.com/xuperchain/xupercore/kernel/engines/xuperos/xevidence"
 	xevidenceInter "github.com/xuperchain/xupercore/kernel/engines/xuperos/xevidence/base"
@@ -239,6 +241,21 @@ func (t *ChainRelyAgentImpl) CreateXToken() (xtokenInter.XTokenManager, error) {
 		return nil, err
 	}
 	return mgr, err
+}
+
+func (t *ChainRelyAgentImpl) CreateUpdateConfig() (chainConfigBase.UpdateCfgManger, error) {
+	ctx := t.chain.Context()
+	legAgent := NewLedgerAgent(ctx)
+	ctx.Ledger = legAgent.chainCtx.Ledger
+	UpCfgCtx, err := chainConfig.NewChainConfigCtx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	mgr, err := chainConfig.NewChainConfigManager(UpCfgCtx)
+	if err != nil {
+		return nil, err
+	}
+	return mgr, nil
 }
 
 func (t *ChainRelyAgentImpl) CreateXEvidence() (xevidenceInter.XEvidenceManager, error) {

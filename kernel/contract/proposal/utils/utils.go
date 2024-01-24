@@ -17,10 +17,20 @@ const (
 	separator = "_"
 	prefixEnd = "~"
 
-	proposalBucket  = "proposal"
-	proposalIDKey   = "id"
-	proposalLockKey = "lock"
+	proposalBucket           = "proposal"
+	proposalIDKey            = "id"
+	proposalLockKey          = "lock"
+	updateGasPriceMethod     = "updateGasPrice"
+	updateMaxBlockSizeMethod = "updateMaxBlockSize"
 )
+
+func GetUpdateGasPriceMethod() string {
+	return updateGasPriceMethod
+}
+
+func GetUpdateMaxBlockSizeMethod() string {
+	return updateMaxBlockSizeMethod
+}
 
 // GetGovernTokenBucket return the govern token bucket name
 func GetGovernTokenBucket() string {

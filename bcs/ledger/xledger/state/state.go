@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/state/context"
@@ -28,6 +27,7 @@ import (
 	governToken "github.com/xuperchain/xupercore/kernel/contract/proposal/govern_token"
 	"github.com/xuperchain/xupercore/kernel/contract/proposal/propose"
 	timerTask "github.com/xuperchain/xupercore/kernel/contract/proposal/timer"
+	proposeUtils "github.com/xuperchain/xupercore/kernel/contract/proposal/utils"
 	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 	aclBase "github.com/xuperchain/xupercore/kernel/permission/acl/base"
 	"github.com/xuperchain/xupercore/lib/cache"
@@ -1011,7 +1011,14 @@ func (t *State) undoTxInternal(tx *pb.Transaction, batch kvdb.Batch) error {
 		t.log.Warn("xmodel.UndoTx failed", "err", err)
 		return ErrRWSetInvalid
 	}
-
+	// Timer 交易回滚
+	if tx.Autogen {
+		outPutsExt := tx.GetTxOutputsExt()
+		err = t.rollBackTimerTx(outPutsExt, batch)
+		if err != nil {
+			return err
+		}
+	}
 	for _, txInput := range tx.TxInputs {
 		addr := txInput.FromAddr
 		txid := txInput.RefTxid
@@ -1503,6 +1510,60 @@ func (t *State) GetContractDesc(contractName string) (*protos.WasmCodeDesc, erro
 		t.log.Error("GetContractDesc", "name", contractName, "protoUnmarshalErr", err)
 	}
 	return valDesc, err
+}
+func (t *State) UpdateGasPrice(oldGasPrice, nextGasPrice *protos.GasPrice, batch kvdb.Batch) error {
+	return t.meta.UpdateGasPrice(oldGasPrice, nextGasPrice, batch)
+}
+
+func (t *State) UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize int64, batch kvdb.Batch) error {
+	return t.meta.UpdateMaxBlockSize(oldMaxBlockSize, maxBlockSize, batch)
+}
+
+func (t *State) rollBackTimerTx(outPutsExt []*protos.TxOutputExt, batch kvdb.Batch) error {
+	for _, output := range outPutsExt {
+		if output.Bucket == proposeUtils.GetProposalBucket() {
+			proposalStr := output.Value
+			proposal, err := proposeUtils.Parse(string(proposalStr))
+			if err != nil {
+				return err
+			}
+			switch proposal.Trigger.Method {
+			case proposeUtils.GetUpdateMaxBlockSizeMethod():
+				return t.rollbackUpdateMaxBlocsSize(batch)
+			case proposeUtils.GetUpdateGasPriceMethod():
+				return t.rollbackUpdateGasPrice(batch)
+			}
+		}
+	}
+	return nil
+}
+
+func (t *State) rollbackUpdateGasPrice(batch kvdb.Batch) error {
+	oldGasPrice := t.meta.GetGasPrice()
+	gasPriceBuf, finderr := t.meta.MetaTable.Get([]byte(ledger.OldGasPriceKey))
+	if finderr == nil {
+		utxoMeta := &pb.UtxoMeta{}
+		err := proto.Unmarshal(gasPriceBuf, utxoMeta)
+		if err != nil {
+			return err
+		}
+		return t.meta.UpdateGasPrice(oldGasPrice, utxoMeta.GetGasPrice(), batch)
+	}
+	return finderr
+}
+
+func (t *State) rollbackUpdateMaxBlocsSize(batch kvdb.Batch) error {
+	oldMaxBlockSize := t.meta.GetMaxBlockSize()
+	maxBlockSizeBuf, findErr := t.meta.MetaTable.Get([]byte(ledger.OldBlockSizeKey))
+	if findErr == nil {
+		utxoMeta := &pb.UtxoMeta{}
+		err := proto.Unmarshal(maxBlockSizeBuf, utxoMeta)
+		if err != nil {
+			return err
+		}
+		return t.meta.UpdateMaxBlockSize(oldMaxBlockSize, utxoMeta.GetMaxBlockSize(), batch)
+	}
+	return findErr
 }
 
 func (t *State) HasUnconfirmTx() bool {
