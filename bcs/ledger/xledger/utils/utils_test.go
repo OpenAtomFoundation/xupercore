@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,7 +10,7 @@ import (
 )
 
 func TestCreateLedger(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}

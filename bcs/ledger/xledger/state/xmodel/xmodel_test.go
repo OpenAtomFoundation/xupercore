@@ -2,11 +2,11 @@ package xmodel
 
 import (
 	"fmt"
-	kledger "github.com/xuperchain/xupercore/kernel/ledger"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	kledger "github.com/xuperchain/xupercore/kernel/ledger"
 
 	"github.com/xuperchain/xupercore/bcs/ledger/xledger/def"
 	ledger_pkg "github.com/xuperchain/xupercore/bcs/ledger/xledger/ledger"
@@ -54,7 +54,7 @@ var GenesisConf = []byte(`
     `)
 
 func TestBaiscFunc(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}

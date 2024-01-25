@@ -4,8 +4,8 @@ package manager
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math/big"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -37,7 +37,7 @@ func compile(th *mock.TestHelper) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s:%s", err, out)
 	}
-	bin, err := ioutil.ReadFile(target)
+	bin, err := os.ReadFile(target)
 	if err != nil {
 		return nil, err
 	}

@@ -10,9 +10,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	lru "github.com/hashicorp/golang-lru"
-	"github.com/syndtr/goleveldb/leveldb/storage"
-	"io/ioutil"
 	"log"
 	"math/rand"
 	"os"
@@ -20,6 +17,9 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 var errFileOpen = errors.New("leveldb/storage: file still open")
@@ -82,13 +82,13 @@ func NewS3Storage(opt OpenOption) (storage.Storage, error) {
 }
 
 func (ms *S3Storage) uploadFiles() error {
-	logFiles, _ := ioutil.ReadDir(ms.opt.LocalCacheDir)
+	logFiles, _ := os.ReadDir(ms.opt.LocalCacheDir)
 	for _, logF := range logFiles {
 		if logF.Name() == "LOCK" {
 			continue
 		}
 		fullName := path.Join(ms.opt.LocalCacheDir, logF.Name())
-		content, err := ioutil.ReadFile(fullName)
+		content, err := os.ReadFile(fullName)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func (ms *S3Storage) Lock() (storage.Locker, error) {
 	if ms.slock != nil {
 		return nil, storage.ErrLocked
 	}
-	cacheDir, _ := ioutil.ReadDir(ms.opt.LocalCacheDir)
+	cacheDir, _ := os.ReadDir(ms.opt.LocalCacheDir)
 	if len(cacheDir) > 0 {
 		current, _ := ms.objStore.GetBytes("CURRENT")
 		if len(current) == 0 {
@@ -125,7 +125,7 @@ func (ms *S3Storage) Lock() (storage.Locker, error) {
 	}
 	locked, _ := ms.objStore.GetBytes("LOCK")
 	lockFileName := path.Join(ms.opt.LocalCacheDir, "LOCK")
-	localSession, _ := ioutil.ReadFile(lockFileName)
+	localSession, _ := os.ReadFile(lockFileName)
 	if string(locked) != string(localSession) && len(locked) > 0 {
 		log.Println("miss match", string(locked), string(localSession))
 		return nil, storage.ErrLocked
@@ -145,7 +145,7 @@ func (ms *S3Storage) Lock() (storage.Locker, error) {
 		log.Println("LOCK fail", err)
 		return nil, storage.ErrLocked
 	}
-	err = ioutil.WriteFile(lockFileName, []byte(newSession), 0644)
+	err = os.WriteFile(lockFileName, []byte(newSession), 0644)
 	if err != nil {
 		log.Println("LOCK fail", err)
 		return nil, storage.ErrLocked
@@ -231,7 +231,7 @@ func (ms *S3Storage) Open(fd storage.FileDesc) (storage.Reader, error) {
 	fname := fd.String()
 	data, err := ms.objStore.GetBytes(fname)
 	if err != nil {
-		data, err = ioutil.ReadFile(path.Join(ms.opt.LocalCacheDir, fd.String()))
+		data, err = os.ReadFile(path.Join(ms.opt.LocalCacheDir, fd.String()))
 		if err != nil {
 			return nil, os.ErrNotExist
 		}

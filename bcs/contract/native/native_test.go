@@ -2,7 +2,6 @@ package native
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +30,7 @@ func compile(th *mock.TestHelper, runtime string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s:%s", err, out)
 	}
-	bin, err := ioutil.ReadFile(target)
+	bin, err := os.ReadFile(target)
 	if err != nil {
 		return nil, err
 	}

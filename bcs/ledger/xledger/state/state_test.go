@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -209,7 +208,7 @@ func transfer(from string, to string, t *testing.T, stateHandle *State, ledger *
 }
 
 func TestStateWorkWithLedger(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}
@@ -329,7 +328,7 @@ func TestStateWorkWithLedger(t *testing.T) {
 	t.Logf("bob balance: %s, alice balance: %s", bobBalance.String(), aliceBalance.String())
 
 	//再创建一个新账本，从前面一个账本复制数据
-	workspace2, dirErr := ioutil.TempDir("/tmp", "")
+	workspace2, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}
@@ -456,7 +455,7 @@ func TestCheckCylic(t *testing.T) {
 }
 
 func TestFrozenHeight(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}
@@ -575,7 +574,7 @@ func TestFrozenHeight(t *testing.T) {
 }
 
 func TestGetSnapShotWithBlock(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}

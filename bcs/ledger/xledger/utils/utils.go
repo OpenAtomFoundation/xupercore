@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 
@@ -32,7 +31,7 @@ func CreateLedger(bcName, genesisConf string, envCfg *xconf.EnvConf) error {
 	if bcName == "" || genesisConf == "" || envCfg == nil {
 		return fmt.Errorf("param set error")
 	}
-	data, err := ioutil.ReadFile(genesisConf)
+	data, err := os.ReadFile(genesisConf)
 	if err != nil {
 		return err
 	}
@@ -58,7 +57,7 @@ func createLedger(bcName string, data []byte, envCfg *xconf.EnvConf) error {
 		return err
 	}
 	rootfile := filepath.Join(fullpath, fmt.Sprintf("%s.json", bcName))
-	err = ioutil.WriteFile(rootfile, data, 0666)
+	err = os.WriteFile(rootfile, data, 0666)
 	if err != nil {
 		os.RemoveAll(fullpath)
 		return err

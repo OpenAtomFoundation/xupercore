@@ -3,7 +3,6 @@ package xmodel
 import (
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -26,7 +25,7 @@ const (
 )
 
 func TestGet(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}

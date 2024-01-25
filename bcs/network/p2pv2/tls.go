@@ -5,8 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"io/ioutil"
 	"net"
+	"os"
 	"path/filepath"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -29,7 +29,7 @@ var _ sec.SecureTransport = &Transport{}
 
 func NewTLS(path, serviceName string) func(key crypto.PrivKey) (*Transport, error) {
 	return func(key crypto.PrivKey) (*Transport, error) {
-		bs, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
+		bs, err := os.ReadFile(filepath.Join(path, "cacert.pem"))
 		if err != nil {
 			return nil, err
 		}

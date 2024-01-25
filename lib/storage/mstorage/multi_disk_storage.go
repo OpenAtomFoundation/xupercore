@@ -12,9 +12,7 @@ package mstorage
 import (
 	"errors"
 	"fmt"
-	"github.com/syndtr/goleveldb/leveldb/storage"
 	"io"
-	"io/ioutil"
 	"os"
 	pt "path"
 	"path/filepath"
@@ -24,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/syndtr/goleveldb/leveldb/storage"
 )
 
 const (
@@ -140,7 +140,7 @@ func OpenFile(path string, readOnly bool, dataPaths []string) (storage.Storage, 
 		if err != nil {
 			return nil, err
 		}
-		logSize, err = logw.Seek(0, os.SEEK_END)
+		logSize, err = logw.Seek(0, io.SeekEnd)
 		if err != nil {
 			logw.Close()
 			return nil, err
@@ -269,7 +269,7 @@ func (fs *MultiDiskStorage) setMeta(fd storage.FileDesc) error {
 	// Check and backup old CURRENT file.
 	currentPath := filepath.Join(fs.path, "CURRENT")
 	if _, err := os.Stat(currentPath); err == nil {
-		b, err := ioutil.ReadFile(currentPath)
+		b, err := os.ReadFile(currentPath)
 		if err != nil {
 			fs.log(fmt.Sprintf("backup CURRENT: %v", err))
 			return err
@@ -350,7 +350,7 @@ func (fs *MultiDiskStorage) GetMeta() (storage.FileDesc, error) {
 		fd   storage.FileDesc
 	}
 	tryCurrent := func(name string) (*currentFile, error) {
-		b, err := ioutil.ReadFile(filepath.Join(fs.path, name))
+		b, err := os.ReadFile(filepath.Join(fs.path, name))
 		if err != nil {
 			if os.IsNotExist(err) {
 				err = os.ErrNotExist
