@@ -1,7 +1,6 @@
 package utxo_test
 
 import (
-	"io/ioutil"
 	"math/big"
 	"os"
 	"testing"
@@ -61,7 +60,7 @@ var GenesisConf = []byte(`
     `)
 
 func TestBasicFunc(t *testing.T) {
-	workspace, dirErr := ioutil.TempDir("/tmp", "")
+	workspace, dirErr := os.MkdirTemp("/tmp", "")
 	if dirErr != nil {
 		t.Fatal(dirErr)
 	}

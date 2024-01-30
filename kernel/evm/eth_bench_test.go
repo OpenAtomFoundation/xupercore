@@ -1,18 +1,20 @@
 package evm
 
 import (
+	"os"
+
 	_ "github.com/xuperchain/xupercore/bcs/contract/evm"
 	_ "github.com/xuperchain/xupercore/bcs/contract/native"
 	_ "github.com/xuperchain/xupercore/bcs/contract/xvm"
 
 	"encoding/hex"
+	"testing"
+
 	"github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract"
 	_ "github.com/xuperchain/xupercore/kernel/contract/kernel"
 	_ "github.com/xuperchain/xupercore/kernel/contract/manager"
 	"github.com/xuperchain/xupercore/kernel/contract/mock"
-	"io/ioutil"
-	"testing"
 )
 
 func BenchmarkEVM(b *testing.B) {
@@ -35,12 +37,12 @@ func BenchmarkEVM(b *testing.B) {
 	th := mock.NewTestHelper(contractConfig)
 	defer th.Close()
 
-	bin, err := ioutil.ReadFile("testdata/counter.bin")
+	bin, err := os.ReadFile("testdata/counter.bin")
 	if err != nil {
 		b.Error(err)
 		return
 	}
-	abi, err := ioutil.ReadFile("testdata/counter.abi")
+	abi, err := os.ReadFile("testdata/counter.abi")
 	if err != nil {
 		b.Error(err)
 		return

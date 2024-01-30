@@ -2,7 +2,7 @@ package abi
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 )
 
@@ -10,7 +10,7 @@ func TestNewAbi(t *testing.T) {
 	abiFile := "abi_test.bin"
 	method := "getUint"
 
-	abiBuf, err := ioutil.ReadFile(abiFile)
+	abiBuf, err := os.ReadFile(abiFile)
 	if err != nil {
 		t.Error(err)
 	}

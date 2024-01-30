@@ -1,7 +1,6 @@
 package xvm
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -44,14 +43,14 @@ func (f *fakeCode) NewContext(cfg *exec.ContextConfig) (exec.Context, error) {
 func (f *fakeCode) Release() {}
 
 func TestGetCacheExecCode(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "xvm-test")
+	tmpdir, err := os.MkdirTemp("", "xvm-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(tmpdir)
 
 	compileFunc := func(code []byte, output string) error {
-		return ioutil.WriteFile(output, code, 0700)
+		return os.WriteFile(output, code, 0700)
 	}
 
 	makeExecCodeFunc := func(libpath string) (exec.Code, error) {
@@ -104,7 +103,7 @@ func TestGetCacheExecCode(t *testing.T) {
 }
 
 func TestMakeCacheBlocking(t *testing.T) {
-	tmpdir, err := ioutil.TempDir("", "xvm-test")
+	tmpdir, err := os.MkdirTemp("", "xvm-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +111,7 @@ func TestMakeCacheBlocking(t *testing.T) {
 
 	compileFunc := func(code []byte, output string) error {
 		time.Sleep(time.Second)
-		return ioutil.WriteFile(output, code, 0700)
+		return os.WriteFile(output, code, 0700)
 	}
 
 	makeExecCodeFunc := func(libpath string) (exec.Code, error) {

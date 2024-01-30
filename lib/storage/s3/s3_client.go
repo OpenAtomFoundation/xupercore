@@ -3,13 +3,14 @@ package levels3
 import (
 	"bytes"
 	"fmt"
+	"io"
+	"path"
+
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/syndtr/goleveldb/leveldb/storage"
-	"io/ioutil"
-	"path"
 )
 
 type S3Client struct {
@@ -58,7 +59,7 @@ func (client *S3Client) GetBytes(key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	data, err := ioutil.ReadAll(rsps.Body)
+	data, err := io.ReadAll(rsps.Body)
 	return data, err
 }
 

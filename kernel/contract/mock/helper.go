@@ -3,10 +3,10 @@ package mock
 import (
 	"crypto/rand"
 	"encoding/json"
-	"github.com/xuperchain/xupercore/kernel/contract/bridge"
-	"io/ioutil"
 	"math/big"
 	"os"
+
+	"github.com/xuperchain/xupercore/kernel/contract/bridge"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/xuperchain/xupercore/kernel/contract"
@@ -31,7 +31,7 @@ type TestHelper struct {
 }
 
 func NewTestHelper(cfg *contract.ContractConfig) *TestHelper {
-	basedir, err := ioutil.TempDir("", "contract-test")
+	basedir, err := os.MkdirTemp("", "contract-test")
 	if err != nil {
 		panic(err)
 	}

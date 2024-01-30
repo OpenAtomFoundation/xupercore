@@ -3,7 +3,7 @@ package xaddress
 import (
 	"crypto/ecdsa"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	cryptoClinet "github.com/xuperchain/xupercore/lib/crypto/client/base"
@@ -18,7 +18,7 @@ type Address struct {
 }
 
 func LoadAddress(keyDir string) (string, error) {
-	addr, err := ioutil.ReadFile(filepath.Join(keyDir, "address"))
+	addr, err := os.ReadFile(filepath.Join(keyDir, "address"))
 	if err != nil {
 		return "", fmt.Errorf("read address error: %v", err)
 	}
@@ -27,12 +27,12 @@ func LoadAddress(keyDir string) (string, error) {
 }
 
 func LoadAddrInfo(keyDir string, crypto cryptoClinet.CryptoClient) (*Address, error) {
-	addr, err := ioutil.ReadFile(filepath.Join(keyDir, "address"))
+	addr, err := os.ReadFile(filepath.Join(keyDir, "address"))
 	if err != nil {
 		return nil, fmt.Errorf("read address error: %v", err)
 	}
 
-	priKey, err := ioutil.ReadFile(filepath.Join(keyDir, "private.key"))
+	priKey, err := os.ReadFile(filepath.Join(keyDir, "private.key"))
 	if err != nil {
 		return nil, fmt.Errorf("read private.key error: %v", err)
 	}
@@ -41,7 +41,7 @@ func LoadAddrInfo(keyDir string, crypto cryptoClinet.CryptoClient) (*Address, er
 		return nil, fmt.Errorf("decode private.key error: %v", err)
 	}
 
-	pubKey, err := ioutil.ReadFile(filepath.Join(keyDir, "public.key"))
+	pubKey, err := os.ReadFile(filepath.Join(keyDir, "public.key"))
 	if err != nil {
 		return nil, fmt.Errorf("read public.key error: %v", err)
 	}

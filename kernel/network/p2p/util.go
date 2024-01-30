@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
-	"io/ioutil"
 	math_rand "math/rand"
 	"os"
 	"path/filepath"
@@ -21,7 +20,7 @@ import (
 )
 
 func NewTLS(path, serviceName string) (credentials.TransportCredentials, error) {
-	bs, err := ioutil.ReadFile(filepath.Join(path, "cacert.pem"))
+	bs, err := os.ReadFile(filepath.Join(path, "cacert.pem"))
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +67,7 @@ func GenerateKeyPairWithPath(path string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filepath.Join(path, "net_private.key"), []byte(base64.StdEncoding.EncodeToString(privData)), 0700)
+	return os.WriteFile(filepath.Join(path, "net_private.key"), []byte(base64.StdEncoding.EncodeToString(privData)), 0700)
 }
 
 // GetPeerIDFromPath return peer id of given private key path
@@ -91,7 +90,7 @@ func GetKeyPairFromPath(path string) (crypto.PrivKey, error) {
 		path = config.DefaultNetKeyPath
 	}
 
-	data, err := ioutil.ReadFile(filepath.Join(path, "net_private.key"))
+	data, err := os.ReadFile(filepath.Join(path, "net_private.key"))
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +108,7 @@ func GetPemKeyPairFromPath(path string) (crypto.PrivKey, error) {
 		path = config.DefaultNetKeyPath
 	}
 
-	keyFile, err := ioutil.ReadFile(filepath.Join(path, "private.key"))
+	keyFile, err := os.ReadFile(filepath.Join(path, "private.key"))
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +133,7 @@ func GeneratePemKeyFromNetKey(path string) error {
 		Type:  "RSA PRIVATE KEY",
 		Bytes: bytes,
 	}
-	return ioutil.WriteFile(filepath.Join(path, "private.key"), pem.EncodeToMemory(block), 0700)
+	return os.WriteFile(filepath.Join(path, "private.key"), pem.EncodeToMemory(block), 0700)
 }
 
 // GenerateNetKeyFromPemKey get net private key from pem format private key
@@ -153,7 +152,7 @@ func GenerateNetKeyFromPemKey(path string) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filepath.Join(path, "net_private.key"), []byte(base64.StdEncoding.EncodeToString(privData)), 0700)
+	return os.WriteFile(filepath.Join(path, "net_private.key"), []byte(base64.StdEncoding.EncodeToString(privData)), 0700)
 }
 
 // GenerateUniqueRandList get a random unique number list

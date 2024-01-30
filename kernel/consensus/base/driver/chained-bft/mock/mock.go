@@ -1,7 +1,6 @@
 package mock
 
 import (
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +23,7 @@ type TestHelper struct {
 }
 
 func NewTestHelper() (*TestHelper, error) {
-	basedir, err := ioutil.TempDir("", "chainedBFT-test")
+	basedir, err := os.MkdirTemp("", "chainedBFT-test")
 	if err != nil {
 		panic(err)
 	}

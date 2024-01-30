@@ -3,23 +3,22 @@ package gm
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
 )
 
 func readKey(path string) ([]byte, []byte, []byte, error) {
-	addr, err := ioutil.ReadFile(path + "/address")
+	addr, err := os.ReadFile(path + "/address")
 	if err != nil {
 		fmt.Printf("GetAccInfoFromFile error load address error = %v", err)
 		return nil, nil, nil, err
 	}
-	pubkey, err := ioutil.ReadFile(path + "/public.key")
+	pubkey, err := os.ReadFile(path + "/public.key")
 	if err != nil {
 		fmt.Printf("GetAccInfoFromFile error load pubkey error = %v", err)
 		return nil, nil, nil, err
 	}
-	prikey, err := ioutil.ReadFile(path + "/private.key")
+	prikey, err := os.ReadFile(path + "/private.key")
 	if err != nil {
 		fmt.Printf("GetAccInfoFromFile error load prikey error = %v", err)
 		return nil, nil, nil, err
