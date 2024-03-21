@@ -190,7 +190,7 @@ func TestMetaGetFunc(t *testing.T) {
 		DiskRate: 1,
 		XfeeRate: 1,
 	}
-	err = metaHadler.UpdateGasPrice(gasPrice, batch)
+	err = metaHadler.UpdateGasPrice(metaHadler.GetGasPrice(), gasPrice, batch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestMetaGetFunc(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = metaHadler.UpdateMaxBlockSize(64, batch)
+	err = metaHadler.UpdateMaxBlockSize(metaHadler.GetMaxBlockSize(), 64, batch)
 	if err != nil {
 		t.Fatal(err)
 	}
