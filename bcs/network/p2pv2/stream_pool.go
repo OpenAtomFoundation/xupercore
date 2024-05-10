@@ -55,7 +55,10 @@ func (sp *StreamPool) Get(ctx xctx.XContext, peerId peer.ID) (*Stream, error) {
 			if stream.Valid() {
 				return stream, nil
 			} else {
-				sp.DelStream(stream)
+				err := sp.DelStream(stream)
+				if err != nil {
+					return nil, err
+				}
 				ctx.GetLog().Warn("stream not valid, create new stream", "peerId", peerId)
 			}
 		}
@@ -68,7 +71,10 @@ func (sp *StreamPool) Get(ctx xctx.XContext, peerId peer.ID) (*Stream, error) {
 			if stream.Valid() {
 				return stream, nil
 			} else {
-				sp.DelStream(stream)
+				err := sp.DelStream(stream)
+				if err != nil {
+					return nil, err
+				}
 				ctx.GetLog().Warn("stream not valid, create new stream", "peerId", peerId)
 			}
 		}
@@ -117,7 +123,10 @@ func (sp *StreamPool) AddStream(ctx xctx.XContext, stream *Stream) error {
 	if v, ok := sp.streams.Get(stream.id.Pretty()); ok {
 		ctx.GetLog().Warn("replace stream", "peerID", peerID, "multiAddr", multiAddr)
 		if s, ok := v.(*Stream); ok {
-			sp.DelStream(s)
+			err := sp.DelStream(s)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
