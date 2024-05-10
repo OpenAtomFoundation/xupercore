@@ -2,12 +2,13 @@ package p2pv2
 
 import (
 	"fmt"
+	"testing"
+
 	xctx "github.com/xuperchain/xupercore/kernel/common/xcontext"
 	"github.com/xuperchain/xupercore/kernel/mock"
 	nctx "github.com/xuperchain/xupercore/kernel/network/context"
 	"github.com/xuperchain/xupercore/kernel/network/p2p"
 	pb "github.com/xuperchain/xupercore/protos"
-	"testing"
 )
 
 func Handler(ctx xctx.XContext, msg *pb.XuperMessage) (*pb.XuperMessage, error) {
@@ -52,10 +53,8 @@ func startNode1(t *testing.T) {
 	}
 
 	go func(t *testing.T) {
-		select {
-		case msg := <-ch:
-			t.Logf("recv msg: log_id=%v, msgType=%s\n", msg.GetHeader().GetLogid(), msg.GetHeader().GetType())
-		}
+		msg := <-ch
+		t.Logf("recv msg: log_id=%v, msgType=%s\n", msg.GetHeader().GetLogid(), msg.GetHeader().GetType())
 	}(t)
 }
 
@@ -106,7 +105,10 @@ func startNode3(t *testing.T) {
 }
 
 func TestP2PServerV2(t *testing.T) {
-	mock.InitLogForTest()
+	err := mock.InitLogForTest()
+	if err != nil {
+		t.Errorf("init log error: %v", err)
+	}
 
 	go startNode1(t)
 	startNode2(t)
