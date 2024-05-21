@@ -3,8 +3,8 @@ package p2pv2
 import (
 	"math/rand"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	kbucket "github.com/libp2p/go-libp2p-kbucket"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 // PeerFilter the interface for filter peers
