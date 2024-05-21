@@ -28,6 +28,9 @@ logs/
 # Go test binaries
 *.test
 
+kernel/mock/data/tmp/
+kernel/mock/p2pv2/node1/data/blockchain/
+
 # idea
 .idea
 

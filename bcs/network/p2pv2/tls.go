@@ -9,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/sec"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/core/sec"
 )
 
 // ID is the protocol ID (used when negotiating with multistream)
@@ -64,8 +66,12 @@ func NewTLS(path, serviceName string) func(key crypto.PrivKey) (*Transport, erro
 	}
 }
 
+func (t *Transport) ID() protocol.ID {
+	return ID
+}
+
 // SecureInbound runs the TLS handshake as a server.
-func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn) (sec.SecureConn, error) {
+func (t *Transport) SecureInbound(ctx context.Context, insecure net.Conn, p peer.ID) (sec.SecureConn, error) {
 	conn := tls.Server(insecure, t.config.Clone())
 	if err := conn.Handshake(); err != nil {
 		insecure.Close()
@@ -115,7 +121,6 @@ func (t *Transport) setupConn(tlsConn *tls.Conn, remotePubKey crypto.PubKey) (se
 	if err != nil {
 		return nil, err
 	}
-
 	return &conn{
 		Conn:         tlsConn,
 		localPeer:    t.localPeer,
@@ -132,8 +137,9 @@ type conn struct {
 	localPeer peer.ID
 	privKey   crypto.PrivKey
 
-	remotePeer   peer.ID
-	remotePubKey crypto.PubKey
+	remotePeer      peer.ID
+	remotePubKey    crypto.PubKey
+	connectionState network.ConnectionState
 }
 
 var _ sec.SecureConn = &conn{}
@@ -152,4 +158,8 @@ func (c *conn) RemotePeer() peer.ID {
 
 func (c *conn) RemotePublicKey() crypto.PubKey {
 	return c.remotePubKey
+}
+
+func (c *conn) ConnState() network.ConnectionState {
+	return c.connectionState
 }

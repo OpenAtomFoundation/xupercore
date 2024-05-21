@@ -9,17 +9,16 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	ipfsAddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p"
-	circuit "github.com/libp2p/go-libp2p-circuit"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
-	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	record "github.com/libp2p/go-libp2p-record"
-	secIO "github.com/libp2p/go-libp2p-secio"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/core/routing"
+	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
+	tls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/patrickmn/go-cache"
 	prom "github.com/prometheus/client_golang/prometheus"
@@ -118,7 +117,7 @@ func (p *P2PServerV2) Init(ctx *netCtx.NetCtx) error {
 		return ErrGenerateOpts
 	}
 
-	ho, err := libp2p.New(ctx, opts...)
+	ho, err := libp2p.New(opts...)
 	if err != nil {
 		p.log.Error("Create p2p host error", "error", err)
 		if strings.Contains(err.Error(), "bind: cannot assign requested address") {
@@ -191,7 +190,8 @@ func genHostOption(ctx *netCtx.NetCtx) ([]libp2p.Option, error) {
 
 	opts := []libp2p.Option{
 		libp2p.ListenAddrs(muAddr),
-		libp2p.EnableRelay(circuit.OptHop),
+		// libp2p.EnableRelay(circuit.OptHop),
+		libp2p.EnableRelay(),
 	}
 
 	if cfg.IsNat {
@@ -204,14 +204,14 @@ func genHostOption(ctx *netCtx.NetCtx) ([]libp2p.Option, error) {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.Security(ID, NewTLS(cfg.KeyPath, cfg.ServiceName)))
+		opts = append(opts, libp2p.Security(tls.ID, tls.New))
 	} else {
 		priv, err := p2p.GetKeyPairFromPath(cfg.KeyPath)
 		if err != nil {
 			return nil, err
 		}
 		opts = append(opts, libp2p.Identity(priv))
-		opts = append(opts, libp2p.Security(secIO.ID, secIO.New))
+		opts = append(opts, libp2p.Security(noise.ID, noise.New))
 	}
 
 	return opts, nil
@@ -428,15 +428,9 @@ func (p *P2PServerV2) connectPeerByAddress(addresses []string) int {
 func (p *P2PServerV2) getAddrInfos(addresses []string) []peer.AddrInfo {
 	addrInfos := make([]peer.AddrInfo, 0, len(addresses))
 	for _, addr := range addresses {
-		peerAddr, err := ipfsAddr.ParseString(addr)
+		addrInfo, err := peer.AddrInfoFromString(addr)
 		if err != nil {
-			p.log.Error("p2p: parse peer address error", "peerAddr", peerAddr, "error", err)
-			continue
-		}
-
-		addrInfo, err := peer.AddrInfoFromP2pAddr(peerAddr.Multiaddr())
-		if err != nil {
-			p.log.Error("p2p: get peer node info error", "peerAddr", peerAddr, "error", err)
+			p.log.Error("p2p: get peer node info error", "peerAddr", addr, "error", err)
 			continue
 		}
 

@@ -16,7 +16,7 @@ import (
 	pb "github.com/xuperchain/xupercore/protos"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p/core/peer"
 	prom "github.com/prometheus/client_golang/prometheus"
 )
 
