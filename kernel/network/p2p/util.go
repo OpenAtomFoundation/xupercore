@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"time"
 
-	iaddr "github.com/ipfs/go-ipfs-addr"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"google.golang.org/grpc/credentials"
@@ -170,13 +169,9 @@ func GenerateUniqueRandList(size int, max int) []int {
 
 // GetPeerIDByAddress return peer ID corresponding to peerAddr
 func GetPeerIDByAddress(peerAddr string) (peer.ID, error) {
-	addr, err := iaddr.ParseString(peerAddr)
+	addrInfo, err := peer.AddrInfoFromString(peerAddr)
 	if err != nil {
 		return "", err
 	}
-	peerinfo, err := peer.AddrInfoFromP2pAddr(addr.Multiaddr())
-	if err != nil {
-		return "", err
-	}
-	return peerinfo.ID, nil
+	return addrInfo.ID, nil
 }
