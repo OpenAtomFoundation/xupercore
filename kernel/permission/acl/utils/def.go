@@ -43,8 +43,8 @@ func MakeContractMethodKey(contractName string, methodName string) string {
 }
 
 // MakeAccountKey generate account key using blockchain name and account number
-func MakeAccountKey(bcname string, accountName string) string {
-	return accountPrefix + accountName + accountBcnameSep + bcname
+func MakeAccountKey(bcName string, number string) string {
+	return accountPrefix + number + accountBcnameSep + bcName
 }
 
 // MakeAK2AccountKey generate key mixed ak with account as prefix key
